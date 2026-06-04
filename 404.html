@@ -357,7 +357,7 @@
 </div>
 
 
-<div class="demobar" style="background:#e8f2eb;color:#144726;border-bottom:1px solid #cfe3d6;">✓ LIVE — Employees, Dashboard & Worksites show your real data. Other modules are designed previews, filling in next.</div>
+<div class="demobar" style="background:#e8f2eb;color:#144726;border-bottom:1px solid #cfe3d6;">✓ LIVE — Dashboard, Employees, Worksites & Manning (by Sales Coordinator) show your real data. Other modules are designed previews, filling in next.</div>
 
 <div class="app">
 
@@ -1959,8 +1959,10 @@ const esc = (s)=> (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":
 const fmtDate=(d)=>{ if(!d) return "—"; const x=new Date(d+"T00:00:00"); return isNaN(x)?d:x.toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"}); };
 
 let EMPLOYEES=[];
+let BRANCHES=[];
 let CURRENT_USER=null;
 let empFilter="All";
+let scFilter="All";
 
 /* ---------- AUTH ---------- */
 async function init(){
@@ -1995,12 +1997,17 @@ function patchSidebarFoot(user){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const { data, error } = await sb.from("employees").select("*").order("full_name");
-  if(error){ alert("Could not load employees: "+error.message); return; }
-  EMPLOYEES=data||[];
+  const [emp, br] = await Promise.all([
+    sb.from("employees").select("*").order("full_name"),
+    sb.from("branches").select("*").order("name")
+  ]);
+  if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
+  EMPLOYEES=emp.data||[];
+  BRANCHES=br.data||[];
   renderDashboardKPIs();
   renderEmployeesPage();
   renderBranchesPage();
+  renderManning();
   wireGlobalSearch();
 }
 const isActive=(e)=>e.status==="Active";
@@ -2146,34 +2153,94 @@ function openRecord(e){
   $("#recEdit").addEventListener("click",()=>openForm(e));
 }
 
-/* ---------- WORKSITES (Branches page) ---------- */
+/* ---------- WORKSITES (Branches page) — real store list from Branch Directory ---------- */
+const catPill=(c)=> c==="CN"?'<span class="pill cn">Concession</span>':(c==="CO"?'<span class="pill co">Company-Op</span>':'<span class="pill ho">'+esc(c||"—")+'</span>');
+const statusBranchPill=(s)=> s==="Open"?'<span class="pill open">Open</span>':'<span class="pill closed">Closed</span>';
 function renderBranchesPage(){
-  const A=EMPLOYEES.filter(e=>isActive(e)&&e.worksite);
-  const map={}; A.forEach(e=>{ (map[e.worksite]=map[e.worksite]||[]).push(e); });
-  const sites=Object.entries(map).sort((a,b)=>b[1].length-a[1].length);
   const pg=$("#page-branches");
+  const open=BRANCHES.filter(b=>b.status==="Open");
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
-      <h2>Worksites</h2>
-      <div class="psub">${sites.length} worksites with active staff · ${A.length} people placed · click a worksite to see its people</div>
-      <input id="wsSearch" class="search" style="width:100%;margin:10px 0;" placeholder="Search worksite…">
+      <h2>Worksites — every store</h2>
+      <div class="psub">${BRANCHES.length} stores · ${open.length} open · each broken out individually, with its Sales Coordinator</div>
+      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
+        <div class="kpi"><div class="k-l">Open Stores</div><div class="k-n">${open.length}</div></div>
+        <div class="kpi"><div class="k-l">Concession</div><div class="k-n">${open.filter(b=>b.category==="CN").length}</div></div>
+        <div class="kpi"><div class="k-l">Company-Operated</div><div class="k-n">${open.filter(b=>b.category==="CO").length}</div></div>
+        <div class="kpi"><div class="k-l">Sales Coordinators</div><div class="k-n">${new Set(open.map(b=>b.sc).filter(x=>x&&x!=='Unassigned')).size}</div></div>
+      </div>
+      <input id="wsSearch" class="search" style="width:100%;margin:10px 0;" placeholder="Search store, city, SC…">
       <table>
-        <thead><tr><th>Worksite</th><th>Group</th><th>Active Staff</th></tr></thead>
+        <thead><tr><th>Store</th><th>Sales Coordinator</th><th>City · Area</th><th>Type</th><th>Status</th><th>Approved HC</th></tr></thead>
         <tbody id="wsRows"></tbody>
       </table>
+      <div id="wsCount" style="font-size:12px;color:var(--muted);margin-top:10px;"></div>
     </div>`;
   const paint=()=>{
     const q=($("#wsSearch").value||"").trim().toLowerCase();
-    const shown=sites.filter(([n])=>n.toLowerCase().includes(q));
-    $("#wsRows").innerHTML=shown.map(([n,arr])=>`
-      <tr class="clickable" data-ws="${esc(n)}"><td><b>${esc(n)}</b></td><td>${esc(arr[0].group_name||"—")}</td>
-      <td><span class="pill di">${arr.length}</span></td></tr>`).join("");
-    $("#wsRows tr").forEach(tr=>tr.addEventListener("click",()=>{
-      empFilter="All"; window.go("employees");
-      setTimeout(()=>{ const s=$("#empSearch"); if(s){ s.value=tr.dataset.ws; paintEmpRows(); } },30);
-    }));
+    const shown=BRANCHES.filter(b=>!q || [b.name,b.city,b.sc,b.area].join(" ").toLowerCase().includes(q))
+      .sort((a,b)=> (a.status===b.status?0:(a.status==="Open"?-1:1)) || a.name.localeCompare(b.name));
+    $("#wsRows").innerHTML=shown.map(b=>`
+      <tr><td><b>${esc(b.name)}</b></td><td>${esc(b.sc||"—")}</td><td>${esc(b.city||"—")}${b.area?" · "+esc(b.area):""}</td>
+      <td>${catPill(b.category)}</td><td>${statusBranchPill(b.status)}</td>
+      <td><span class="pill di">${b.ahc_stationary}</span> stationary${b.ahc_reliever?` · ${b.ahc_reliever} reliever`:""}</td></tr>`).join("");
+    $("#wsCount").textContent=`${shown.length} of ${BRANCHES.length} stores`;
   };
   $("#wsSearch").addEventListener("input",paint); paint();
+}
+
+/* ---------- MANNING / HEADCOUNT — grouped by Sales Coordinator ---------- */
+function renderManning(){
+  const pg=$("#page-manning"); if(!pg) return;
+  const open=BRANCHES.filter(b=>b.status==="Open");
+  const SCs=[...new Set(open.map(b=>b.sc).filter(x=>x&&x!=='Unassigned'))].sort();
+  const totAHC=open.reduce((s,b)=>s+b.ahc_stationary+b.ahc_reliever,0);
+  const totCHC=open.reduce((s,b)=>s+(b.chc||0),0);
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Manning / Headcount <span class="count-tag">by Sales Coordinator</span></h2>
+      <div class="psub">Every Sales Coordinator → their stores → approved vs. confirmed headcount. Store sales and live attendance plug in here once PayPlus and the sales system are connected.</div>
+      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
+        <div class="kpi"><div class="k-l">Sales Coordinators</div><div class="k-n">${SCs.length}</div></div>
+        <div class="kpi"><div class="k-l">Open Stores</div><div class="k-n">${open.length}</div></div>
+        <div class="kpi"><div class="k-l">Approved HC (AHC)</div><div class="k-n">${totAHC}</div></div>
+        <div class="kpi warn"><div class="k-l">Confirmed HC (CHC)</div><div class="k-n">${totCHC}</div><div class="k-s">matched from active list</div></div>
+      </div>
+      <div class="filterbar" id="scChips">
+        ${["All",...SCs].map(s=>`<div class="chip${s===scFilter?' active':''}" data-sc="${esc(s)}">${esc(s)}${s!=="All"?` (${open.filter(b=>b.sc===s).length})`:""}</div>`).join("")}
+      </div>
+      <div id="scBlocks"></div>
+    </div>`;
+  const paint=()=>{
+    const list=(scFilter==="All"?SCs:[scFilter]);
+    $("#scBlocks").innerHTML=list.map(sc=>{
+      const stores=open.filter(b=>b.sc===sc).sort((a,b)=>a.name.localeCompare(b.name));
+      const ahc=stores.reduce((s,b)=>s+b.ahc_stationary+b.ahc_reliever,0);
+      const chc=stores.reduce((s,b)=>s+(b.chc||0),0);
+      const def=Math.max(0,ahc-chc);
+      return `<div class="panel" style="margin-top:14px;">
+        <div class="sc-card">
+          <div class="sc-av">${esc(sc[0])}</div>
+          <div style="flex:1;"><div class="sc-l">Sales Coordinator</div><div class="sc-n">${esc(sc)}</div></div>
+          <div style="text-align:center;"><div class="sc-l">Stores</div><div class="sc-n">${stores.length}</div></div>
+          <div style="text-align:center;"><div class="sc-l">Approved</div><div class="sc-n">${ahc}</div></div>
+          <div style="text-align:center;"><div class="sc-l">Confirmed</div><div class="sc-n">${chc}</div></div>
+          <div style="text-align:center;"><div class="sc-l">Shortfall</div><div class="sc-n" style="color:${def>0?'var(--red)':'var(--green-dark)'}">${def}</div></div>
+        </div>
+        <table>
+          <thead><tr><th>Store</th><th>City · Area</th><th>Type</th><th>AHC</th><th>CHC</th><th>Shortfall</th><th>Store Sales</th><th>Attendance</th></tr></thead>
+          <tbody>${stores.map(b=>{
+            const a=b.ahc_stationary+b.ahc_reliever, c=b.chc||0, d=Math.max(0,a-c);
+            return `<tr><td><b>${esc(b.name)}</b></td><td>${esc(b.city||"—")}${b.area?" · "+esc(b.area):""}</td><td>${catPill(b.category)}</td>
+              <td>${a}</td><td>${c}</td><td>${d>0?`<span class="pill awol">${d}</span>`:`<span class="pill active">0</span>`}</td>
+              <td><span style="color:var(--muted);font-size:12px;">— PayPlus</span></td><td><span style="color:var(--muted);font-size:12px;">— PayPlus</span></td></tr>`;
+          }).join("")}</tbody>
+        </table>
+      </div>`;
+    }).join("");
+  };
+  $("#scChips .chip").forEach(c=>c.addEventListener("click",()=>{ scFilter=c.dataset.sc; renderManning(); }));
+  paint();
 }
 
 /* ---------- GLOBAL SEARCH (topbar) ---------- */

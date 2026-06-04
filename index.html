@@ -13,6 +13,7 @@
     --blue:#2c6e8f; --blue-bg:#e7f1f5; --blue-line:#bcd9e4;
     --rose-bg:#fbeef0; --rose-ink:#a04451; --rose-line:#e9c6cd;
     --shadow:0 1px 3px rgba(20,40,30,.08),0 4px 18px rgba(20,40,30,.06);
+    --sbw:228px;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--bg);color:var(--ink);
@@ -21,59 +22,82 @@
   button{font-family:inherit;cursor:pointer;}
   input,select,textarea{font-family:inherit;font-size:15px;}
   .hidden{display:none!important;}
+  a{color:inherit;text-decoration:none;}
 
   /* ---------- Login ---------- */
   #login{min-height:100vh;display:flex;align-items:center;justify-content:center;
     background:linear-gradient(150deg,var(--green-deep),var(--green));padding:24px;}
-  .login-card{background:#fff;border-radius:16px;box-shadow:var(--shadow);
-    width:100%;max-width:380px;padding:34px 30px;}
+  .login-card{background:#fff;border-radius:16px;box-shadow:var(--shadow);width:100%;max-width:380px;padding:34px 30px;}
   .login-card .brand{text-align:center;margin-bottom:22px;}
   .login-card .brand .mark{width:54px;height:54px;border-radius:13px;
     background:linear-gradient(150deg,var(--green-deep),var(--green));color:#fff;
-    display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;
-    letter-spacing:-1px;margin-bottom:12px;}
+    display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;letter-spacing:-1px;margin-bottom:12px;}
   .login-card h1{font-size:20px;color:var(--green-dark);}
   .login-card .sub{font-size:13px;color:var(--muted);margin-top:3px;}
   .field{margin-top:14px;}
-  .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);
-    text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
-  .field input,.field select,.field textarea{width:100%;padding:11px 13px;border:1px solid var(--line);
-    border-radius:9px;background:#fff;color:var(--ink);outline:none;transition:border .15s;}
+  .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
+  .field input,.field select,.field textarea{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);outline:none;transition:border .15s;}
   .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--green);}
-  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;
-    padding:11px 18px;border-radius:9px;border:1px solid transparent;font-weight:700;font-size:14px;}
-  .btn-primary{background:var(--green);color:#fff;width:100%;margin-top:20px;}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:11px 18px;border-radius:9px;border:1px solid transparent;font-weight:700;font-size:14px;}
+  .btn-primary{background:var(--green);color:#fff;}
   .btn-primary:hover{background:var(--green-dark);}
   .btn-primary:disabled{opacity:.6;cursor:default;}
   .btn-ghost{background:#fff;border:1px solid var(--line);color:var(--ink);}
   .btn-ghost:hover{background:var(--green-light);border-color:#c3decb;}
+  .btn-block{width:100%;margin-top:20px;}
   .msg{margin-top:14px;font-size:13px;padding:9px 12px;border-radius:8px;display:none;}
   .msg.err{display:block;background:var(--rose-bg);color:var(--rose-ink);border:1px solid var(--rose-line);}
   .msg.ok{display:block;background:var(--green-light);color:var(--green-dark);border:1px solid #c3decb;}
 
   /* ---------- App shell ---------- */
-  #app{min-height:100vh;display:flex;flex-direction:column;}
-  .topbar{background:var(--green-deep);color:#fff;padding:12px 18px;display:flex;
-    align-items:center;gap:12px;position:sticky;top:0;z-index:20;}
-  .topbar .mark{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.12);
-    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;letter-spacing:-1px;}
-  .topbar .title{font-weight:800;font-size:16px;letter-spacing:-.2px;}
-  .topbar .title small{display:block;font-weight:500;font-size:11px;opacity:.7;letter-spacing:.3px;}
-  .topbar .spacer{flex:1;}
-  .topbar .who{font-size:12.5px;opacity:.85;margin-right:4px;}
-  .topbar button{background:rgba(255,255,255,.14);color:#fff;border:none;padding:8px 13px;
-    border-radius:8px;font-size:13px;font-weight:600;}
-  .topbar button:hover{background:rgba(255,255,255,.24);}
+  #app{min-height:100vh;}
+  .sidebar{position:fixed;top:0;left:0;width:var(--sbw);height:100vh;background:var(--green-deep);color:#fff;
+    display:flex;flex-direction:column;z-index:40;transition:transform .2s;}
+  .sidebar .brand{padding:18px 18px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.1);}
+  .sidebar .brand .mark{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.13);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;letter-spacing:-1px;}
+  .sidebar .brand .t{font-weight:800;font-size:14.5px;line-height:1.15;}
+  .sidebar .brand .t small{display:block;font-weight:500;font-size:10.5px;opacity:.65;}
+  .nav{flex:1;overflow-y:auto;padding:10px 10px 20px;}
+  .nav .grp{font-size:10px;text-transform:uppercase;letter-spacing:.7px;opacity:.5;margin:14px 10px 5px;font-weight:700;}
+  .nav a{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;font-size:14px;color:rgba(255,255,255,.85);margin-bottom:1px;}
+  .nav a:hover{background:rgba(255,255,255,.08);color:#fff;}
+  .nav a.active{background:var(--green);color:#fff;font-weight:600;}
+  .nav a.soon{opacity:.4;cursor:default;}
+  .nav a.soon:hover{background:none;}
+  .nav a .ic{width:18px;text-align:center;font-size:15px;}
+  .nav a .badge{margin-left:auto;font-size:9px;background:rgba(255,255,255,.15);padding:2px 6px;border-radius:99px;letter-spacing:.3px;}
+  .sb-foot{padding:12px 14px;border-top:1px solid rgba(255,255,255,.1);font-size:12px;}
+  .sb-foot .em{opacity:.7;display:block;margin-bottom:7px;word-break:break-all;}
+  .sb-foot button{width:100%;background:rgba(255,255,255,.13);color:#fff;border:none;padding:8px;border-radius:8px;font-size:13px;font-weight:600;}
+  .sb-foot button:hover{background:rgba(255,255,255,.22);}
 
-  .wrap{max-width:1100px;width:100%;margin:0 auto;padding:18px;}
+  .main{margin-left:var(--sbw);min-height:100vh;}
+  .topbar{display:none;align-items:center;gap:12px;background:var(--green-deep);color:#fff;padding:12px 16px;position:sticky;top:0;z-index:30;}
+  .topbar .hamb{background:rgba(255,255,255,.14);border:none;color:#fff;width:38px;height:38px;border-radius:8px;font-size:18px;}
+  .topbar .tt{font-weight:800;}
+  .scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:35;}
 
-  /* KPI row */
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
-  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);}
-  .kpi .n{font-size:24px;font-weight:800;color:var(--green-dark);line-height:1;}
-  .kpi .l{font-size:12px;color:var(--muted);margin-top:5px;font-weight:600;}
+  .view{max-width:1080px;margin:0 auto;padding:22px;}
+  .vh{margin-bottom:16px;}
+  .vh h1{font-size:23px;color:var(--green-dark);letter-spacing:-.3px;}
+  .vh p{color:var(--muted);font-size:14px;margin-top:2px;}
 
-  /* Controls */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px 16px;box-shadow:var(--shadow);}
+  .kpi .n{font-size:25px;font-weight:800;color:var(--green-dark);line-height:1;}
+  .kpi .l{font-size:12px;color:var(--muted);margin-top:6px;font-weight:600;}
+  .kpi.click{cursor:pointer;transition:border .12s;}
+  .kpi.click:hover{border-color:var(--green);}
+
+  .panels{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow);}
+  .panel h3{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--green-dark);font-weight:800;margin-bottom:12px;}
+  .bar{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:14px;}
+  .bar .lbl{width:120px;flex-shrink:0;color:var(--ink);}
+  .bar .track{flex:1;height:9px;background:var(--green-light);border-radius:99px;overflow:hidden;}
+  .bar .fill{height:100%;background:var(--green);border-radius:99px;}
+  .bar .val{width:42px;text-align:right;color:var(--muted);font-weight:700;font-size:13px;}
+
   .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
   .search{flex:1;min-width:200px;position:relative;}
   .search input{width:100%;padding:11px 13px 11px 38px;border:1px solid var(--line);border-radius:10px;background:#fff;}
@@ -82,11 +106,9 @@
   .controls select{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);}
   .count{font-size:13px;color:var(--muted);margin-left:auto;font-weight:600;white-space:nowrap;}
 
-  /* Table (desktop) */
   .tablecard{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);}
   table.emp{width:100%;border-collapse:collapse;}
-  table.emp th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);
-    font-weight:700;text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);background:#fbfcfb;}
+  table.emp th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);background:#fbfcfb;}
   table.emp td{padding:12px 14px;border-bottom:1px solid var(--line);font-size:14px;}
   table.emp tr:last-child td{border-bottom:none;}
   table.emp tbody tr{cursor:pointer;transition:background .12s;}
@@ -101,18 +123,24 @@
   .pill.awol,.pill.susp{background:var(--rose-bg);color:var(--rose-ink);border:1px solid var(--rose-line);}
   .pill.grp{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-line);}
 
-  .empty{padding:50px 20px;text-align:center;color:var(--muted);}
-  .loading{padding:50px;text-align:center;color:var(--muted);}
+  .empty{padding:46px 20px;text-align:center;color:var(--muted);}
+  .loading{padding:46px;text-align:center;color:var(--muted);}
+
+  /* worksites grid */
+  .wgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;}
+  .wcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px 16px;box-shadow:var(--shadow);cursor:pointer;transition:border .12s;}
+  .wcard:hover{border-color:var(--green);}
+  .wcard .wn{font-weight:700;color:var(--ink);margin-bottom:3px;}
+  .wcard .wm{font-size:12.5px;color:var(--muted);}
+  .wcard .wc{margin-top:9px;font-size:22px;font-weight:800;color:var(--green-dark);}
+  .wcard .wc small{font-size:12px;font-weight:600;color:var(--muted);margin-left:4px;}
 
   /* Detail / form drawer */
-  .overlay{position:fixed;inset:0;background:rgba(14,50,25,.45);z-index:30;display:flex;justify-content:flex-end;}
-  .drawer{background:var(--bg);width:100%;max-width:560px;height:100%;overflow-y:auto;
-    box-shadow:-6px 0 30px rgba(0,0,0,.18);animation:slide .2s ease;}
+  .overlay{position:fixed;inset:0;background:rgba(14,50,25,.45);z-index:50;display:flex;justify-content:flex-end;}
+  .drawer{background:var(--bg);width:100%;max-width:560px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);animation:slide .2s ease;}
   @keyframes slide{from{transform:translateX(30px);opacity:.6;}to{transform:translateX(0);opacity:1;}}
-  .drawer-head{background:linear-gradient(135deg,var(--green-deep),var(--green));color:#fff;
-    padding:20px 22px;position:sticky;top:0;z-index:2;}
-  .drawer-head .x{position:absolute;top:16px;right:16px;background:rgba(255,255,255,.18);border:none;
-    color:#fff;width:32px;height:32px;border-radius:8px;font-size:18px;line-height:1;}
+  .drawer-head{background:linear-gradient(135deg,var(--green-deep),var(--green));color:#fff;padding:20px 22px;position:sticky;top:0;z-index:2;}
+  .drawer-head .x{position:absolute;top:16px;right:16px;background:rgba(255,255,255,.18);border:none;color:#fff;width:32px;height:32px;border-radius:8px;font-size:18px;line-height:1;}
   .drawer-head .x:hover{background:rgba(255,255,255,.3);}
   .drawer-head h2{font-size:21px;letter-spacing:-.3px;padding-right:40px;}
   .drawer-head .meta{font-size:13px;opacity:.9;margin-top:4px;}
@@ -120,8 +148,7 @@
   .drawer-head .tags .pill{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.25);}
   .drawer-body{padding:18px 22px 60px;}
   .sect{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:13px;}
-  .sect h3{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--green-dark);
-    font-weight:800;margin-bottom:11px;display:flex;align-items:center;gap:8px;}
+  .sect h3{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--green-dark);font-weight:800;margin-bottom:11px;display:flex;align-items:center;gap:8px;}
   .sect h3 .dot{width:7px;height:7px;border-radius:50%;background:var(--green);}
   .row{display:flex;justify-content:space-between;gap:14px;padding:6px 0;font-size:14px;border-bottom:1px dashed #eceeec;}
   .row:last-child{border-bottom:none;}
@@ -130,17 +157,19 @@
   .row .v.blank{color:#b7bfb9;font-weight:500;font-style:italic;}
   .drawer-actions{display:flex;gap:10px;margin-bottom:16px;}
   .drawer-actions .btn{flex:1;}
-
-  /* Form */
   .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
   .form-grid .field{margin-top:0;}
   .form-grid .full{grid-column:1/-1;}
   .fmsg{margin:4px 0 0;font-size:13px;padding:9px 12px;border-radius:8px;}
 
-  footer.appfoot{text-align:center;color:var(--muted);font-size:12px;padding:18px;}
-
-  @media(max-width:760px){
+  @media(max-width:860px){
+    .sidebar{transform:translateX(-100%);}
+    .sidebar.open{transform:translateX(0);}
+    .main{margin-left:0;}
+    .topbar{display:flex;}
+    .scrim.show{display:block;}
     .kpis{grid-template-columns:repeat(2,1fr);}
+    .panels{grid-template-columns:1fr;}
     table.emp thead{display:none;}
     table.emp,table.emp tbody,table.emp tr,table.emp td{display:block;width:100%;}
     table.emp tr{padding:12px 14px;border-bottom:1px solid var(--line);}
@@ -163,15 +192,11 @@
       <div class="sub">Roshan Commercial Corporation — HR</div>
     </div>
     <form id="loginForm">
-      <div class="field">
-        <label>Email</label>
-        <input type="email" id="liEmail" autocomplete="username" required placeholder="you@hassarams.com">
-      </div>
-      <div class="field">
-        <label>Password</label>
-        <input type="password" id="liPass" autocomplete="current-password" required placeholder="••••••••">
-      </div>
-      <button class="btn btn-primary" id="liBtn" type="submit">Sign in</button>
+      <div class="field"><label>Email</label>
+        <input type="email" id="liEmail" autocomplete="username" required placeholder="you@hassarams.com"></div>
+      <div class="field"><label>Password</label>
+        <input type="password" id="liPass" autocomplete="current-password" required placeholder="••••••••"></div>
+      <button class="btn btn-primary btn-block" id="liBtn" type="submit">Sign in</button>
       <div class="msg" id="liMsg"></div>
     </form>
   </div>
@@ -179,51 +204,40 @@
 
 <!-- ===================== APP ===================== -->
 <div id="app" class="hidden">
-  <div class="topbar">
-    <div class="mark">RCC</div>
-    <div class="title">RCC HRIS Portal<small>Employee Directory</small></div>
-    <div class="spacer"></div>
-    <span class="who" id="who"></span>
-    <button id="logoutBtn">Sign out</button>
-  </div>
-
-  <div class="wrap">
-    <div class="kpis" id="kpis"></div>
-
-    <div class="controls">
-      <div class="search">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        <input id="search" placeholder="Search name, position, worksite, department…">
-      </div>
-      <select id="fGroup">
-        <option value="">All groups</option>
-        <option>Head Office</option>
-        <option>Warehouse</option>
-        <option>Retail</option>
-      </select>
-      <select id="fStatus">
-        <option value="active">Active only</option>
-        <option value="">All statuses</option>
-        <option value="Separated">Separated</option>
-        <option value="On Leave">On Leave</option>
-        <option value="AWOL">AWOL</option>
-        <option value="Suspended">Suspended</option>
-      </select>
-      <button class="btn btn-ghost" id="addBtn">+ Add</button>
-      <span class="count" id="count"></span>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="mark">RCC</div>
+      <div class="t">RCC HRIS Portal<small>Roshan Commercial Corp.</small></div>
     </div>
-
-    <div class="tablecard">
-      <table class="emp">
-        <thead><tr><th>Name</th><th>Department / Position</th><th>Worksite</th><th>Group</th><th>Status</th></tr></thead>
-        <tbody id="rows"><tr><td colspan="5" class="loading">Loading…</td></tr></tbody>
-      </table>
+    <nav class="nav" id="nav">
+      <div class="grp">Workspace</div>
+      <a data-view="dashboard"><span class="ic">▣</span> Dashboard</a>
+      <div class="grp">Master Data</div>
+      <a data-view="employees"><span class="ic">☷</span> Employees <span class="badge" id="navEmpCount"></span></a>
+      <a data-view="worksites"><span class="ic">⌂</span> Worksites <span class="badge" id="navWsCount"></span></a>
+      <div class="grp">Coming soon</div>
+      <a class="soon"><span class="ic">◷</span> Loans</a>
+      <a class="soon"><span class="ic">◷</span> Contracts</a>
+      <a class="soon"><span class="ic">◷</span> Notices</a>
+      <a class="soon"><span class="ic">◷</span> Evaluations</a>
+      <a class="soon"><span class="ic">◷</span> Exit Clearance</a>
+    </nav>
+    <div class="sb-foot">
+      <span class="em" id="who"></span>
+      <button id="logoutBtn">Sign out</button>
     </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="hamb" id="hamb">☰</button>
+      <div class="tt">RCC HRIS Portal</div>
+    </div>
+    <div class="view" id="view"><div class="loading">Loading…</div></div>
   </div>
-  <footer class="appfoot">RCC HRIS Portal · Roshan Commercial Corporation</footer>
 </div>
 
-<!-- Detail / Form drawer mount -->
 <div id="drawerMount"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
@@ -239,24 +253,24 @@ window.RCC_CONFIG = {
 </script>
 <script>
 /* ===========================================================================
-   RCC HRIS Portal — Employee Directory (v1)
+   RCC HRIS Portal — multi-view app (Dashboard · Employees · Worksites)
    Vanilla JS + Supabase. One source of truth: public.employees.
    =========================================================================== */
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.RCC_CONFIG;
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 const $ = (id) => document.getElementById(id);
-const el = (sel) => document.querySelector(sel);
 
-let EMPLOYEES = [];   // full cache
+let EMPLOYEES = [];
 let CURRENT_USER = null;
+let VIEW = "dashboard";
+let listFilters = { q: "", group: "", status: "active", worksite: "" };
 
-/* ---------- Reference lists (match the locked data model) ---------- */
+/* ---------- Reference lists ---------- */
 const DEPARTMENTS = ["Accounting","Administration","E-Commerce","Finance","Human Resource",
   "Inventory","Logistics","Marketing","MIS","Product","Production","Purchasing","Sales",
   "Warehouse Solaris","Warehouse"];
 const WAREHOUSE_DEPTS = ["Warehouse Solaris","Warehouse"];
-const RETAIL_DEPTS = ["Sales"]; // sales/merchandising sits in Retail
+const RETAIL_DEPTS = ["Sales"];
 const STATUSES = ["Active","On Leave","AWOL","Suspended","Separated"];
 const CONTRACT_TYPES = ["Probationary","Regular","Project-Based","Seasonal/Fixed-Term","Casual","Agency"];
 const HIRE_SOURCES = ["Direct","Jell-on","M&G"];
@@ -265,103 +279,153 @@ const CIVIL = ["Single","Married","Widowed","Separated","Annulled"];
 const RELATIONS = ["Spouse","Parent","Sibling","Child","Relative","Friend"];
 const END_REASONS = ["Resigned","Terminated","End of Contract","AWOL","Retired","Deceased","Other"];
 
-/* Group auto-derived from department (locked rule) */
-function deriveGroup(dept){
-  if(!dept) return "";
-  if(WAREHOUSE_DEPTS.includes(dept)) return "Warehouse";
-  if(RETAIL_DEPTS.includes(dept)) return "Retail";
-  return "Head Office";
-}
-/* Bank auto from group (locked rule) */
-function deriveBank(group){
-  if(group==="Retail") return "Union Bank";
-  if(group==="Head Office"||group==="Warehouse") return "China Bank";
-  return "";
-}
+const deriveGroup = (d)=> !d?"":(WAREHOUSE_DEPTS.includes(d)?"Warehouse":(RETAIL_DEPTS.includes(d)?"Retail":"Head Office"));
+const deriveBank = (g)=> g==="Retail"?"Union Bank":((g==="Head Office"||g==="Warehouse")?"China Bank":"");
+const esc = (s)=> (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtDate=(d)=>{ if(!d) return ""; const x=new Date(d+"T00:00:00"); return isNaN(x)?d:x.toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"}); };
 
 /* ============================ AUTH ============================ */
 async function init(){
   const { data:{ session } } = await sb.auth.getSession();
-  if(session){ showApp(session.user); }
-  sb.auth.onAuthStateChange((_e, s)=>{ if(!s) showLogin(); });
+  if(session) showApp(session.user);
+  sb.auth.onAuthStateChange((_e,s)=>{ if(!s) showLogin(); });
 }
-
 $("loginForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
   const btn=$("liBtn"), msg=$("liMsg");
   msg.className="msg"; btn.disabled=true; btn.textContent="Signing in…";
-  const { data, error } = await sb.auth.signInWithPassword({
-    email: $("liEmail").value.trim(), password: $("liPass").value });
+  const { data, error } = await sb.auth.signInWithPassword({ email:$("liEmail").value.trim(), password:$("liPass").value });
   btn.disabled=false; btn.textContent="Sign in";
   if(error){ msg.className="msg err"; msg.textContent=error.message; return; }
   showApp(data.user);
 });
-
 $("logoutBtn").addEventListener("click", async ()=>{ await sb.auth.signOut(); showLogin(); });
-
-function showLogin(){
-  CURRENT_USER=null;
-  $("app").classList.add("hidden");
-  $("login").classList.remove("hidden");
-  $("liPass").value="";
-}
+function showLogin(){ CURRENT_USER=null; $("app").classList.add("hidden"); $("login").classList.remove("hidden"); $("liPass").value=""; }
 async function showApp(user){
-  CURRENT_USER=user;
-  $("login").classList.add("hidden");
-  $("app").classList.remove("hidden");
-  $("who").textContent = user.email;
+  CURRENT_USER=user; $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+  $("who").textContent=user.email;
   await loadEmployees();
+}
+
+/* ============================ NAV / ROUTER ============================ */
+$("nav").addEventListener("click",(e)=>{
+  const a=e.target.closest("a[data-view]"); if(!a) return;
+  go(a.dataset.view); closeSidebar();
+});
+$("hamb").addEventListener("click",()=>{ $("sidebar").classList.add("open"); $("scrim").classList.add("show"); });
+$("scrim").addEventListener("click",closeSidebar);
+function closeSidebar(){ $("sidebar").classList.remove("open"); $("scrim").classList.remove("show"); }
+function go(view){
+  VIEW=view;
+  document.querySelectorAll("#nav a[data-view]").forEach(a=>a.classList.toggle("active",a.dataset.view===view));
+  render();
 }
 
 /* ============================ DATA ============================ */
 async function loadEmployees(){
-  $("rows").innerHTML = `<tr><td colspan="5" class="loading">Loading…</td></tr>`;
+  $("view").innerHTML=`<div class="loading">Loading…</div>`;
   const { data, error } = await sb.from("employees").select("*").order("full_name");
-  if(error){
-    $("rows").innerHTML = `<tr><td colspan="5" class="empty">Could not load: ${error.message}</td></tr>`;
-    return;
-  }
-  EMPLOYEES = data || [];
-  renderKpis();
-  render();
+  if(error){ $("view").innerHTML=`<div class="empty">Could not load: ${esc(error.message)}</div>`; return; }
+  EMPLOYEES=data||[];
+  $("navEmpCount").textContent=EMPLOYEES.length;
+  $("navWsCount").textContent=new Set(EMPLOYEES.filter(e=>e.worksite).map(e=>e.worksite)).size;
+  go(VIEW);
 }
 
-function renderKpis(){
-  const total=EMPLOYEES.length;
-  const active=EMPLOYEES.filter(e=>e.status==="Active").length;
-  const retail=EMPLOYEES.filter(e=>e.group_name==="Retail"&&e.status==="Active").length;
-  const ho=EMPLOYEES.filter(e=>(e.group_name==="Head Office"||e.group_name==="Warehouse")&&e.status==="Active").length;
-  $("kpis").innerHTML = `
-    <div class="kpi"><div class="n">${total}</div><div class="l">Total records</div></div>
-    <div class="kpi"><div class="n">${active}</div><div class="l">Active employees</div></div>
-    <div class="kpi"><div class="n">${ho}</div><div class="l">Head Office + Warehouse</div></div>
-    <div class="kpi"><div class="n">${retail}</div><div class="l">Retail / merchandisers</div></div>`;
-}
-
-/* ============================ RENDER LIST ============================ */
-function statusPill(s){
-  const map={ "Active":"active","Separated":"sep","On Leave":"leave","AWOL":"awol","Suspended":"susp" };
-  return `<span class="pill ${map[s]||'sep'}">${s||"—"}</span>`;
-}
-function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
-
+/* ============================ RENDER DISPATCH ============================ */
 function render(){
-  const q=$("search").value.trim().toLowerCase();
-  const g=$("fGroup").value;
-  const st=$("fStatus").value;
-  let list=EMPLOYEES.filter(e=>{
-    if(g && e.group_name!==g) return false;
-    if(st==="active"){ if(e.status!=="Active") return false; }
-    else if(st && e.status!==st) return false;
-    if(q){
-      const hay=[e.full_name,e.position,e.department,e.worksite,e.agency_name,e.email].join(" ").toLowerCase();
-      if(!hay.includes(q)) return false;
-    }
+  if(VIEW==="dashboard") return renderDashboard();
+  if(VIEW==="worksites") return renderWorksites();
+  return renderEmployees();
+}
+
+/* ============================ DASHBOARD ============================ */
+function countBy(list,key){ const m={}; list.forEach(e=>{ const k=e[key]||"—"; m[k]=(m[k]||0)+1; }); return m; }
+function bars(map,total){
+  const entries=Object.entries(map).sort((a,b)=>b[1]-a[1]);
+  const max=Math.max(1,...entries.map(e=>e[1]));
+  return entries.map(([k,v])=>`<div class="bar"><span class="lbl">${esc(k)}</span>
+    <span class="track"><span class="fill" style="width:${Math.round(v/max*100)}%"></span></span>
+    <span class="val">${v}</span></div>`).join("");
+}
+function renderDashboard(){
+  const active=EMPLOYEES.filter(e=>e.status==="Active");
+  const total=EMPLOYEES.length;
+  const sep=EMPLOYEES.filter(e=>e.status==="Separated").length;
+  const ho=active.filter(e=>e.group_name==="Head Office").length;
+  const wh=active.filter(e=>e.group_name==="Warehouse").length;
+  const retail=active.filter(e=>e.group_name==="Retail").length;
+  const agency=active.filter(e=>e.hire_source && e.hire_source!=="Direct").length;
+  const probation=active.filter(e=>e.contract_type==="Probationary").length;
+  const hour=new Date().getHours();
+  const greet=hour<12?"Good morning":hour<18?"Good afternoon":"Good evening";
+  const name=(CURRENT_USER?.email||"").split("@")[0];
+
+  $("view").innerHTML=`
+    <div class="vh"><h1>${greet}, ${esc(name)} 👋</h1><p>Here's your workforce at a glance.</p></div>
+    <div class="kpis">
+      <div class="kpi click" data-go="employees"><div class="n">${active.length}</div><div class="l">Active employees</div></div>
+      <div class="kpi"><div class="n">${total}</div><div class="l">Total records</div></div>
+      <div class="kpi"><div class="n">${probation}</div><div class="l">On probation</div></div>
+      <div class="kpi"><div class="n">${sep}</div><div class="l">Separated</div></div>
+    </div>
+    <div class="panels">
+      <div class="panel"><h3>Active by group</h3>
+        ${bars({"Head Office":ho,"Warehouse":wh,"Retail":retail})}
+      </div>
+      <div class="panel"><h3>Active by hire source</h3>
+        ${bars(countBy(active,"hire_source"))}
+      </div>
+      <div class="panel"><h3>Head Office by department</h3>
+        ${bars(countBy(active.filter(e=>e.group_name==="Head Office"),"department"))}
+      </div>
+      <div class="panel"><h3>Top worksites (active)</h3>
+        ${bars(Object.fromEntries(Object.entries(countBy(active.filter(e=>e.worksite),"worksite")).sort((a,b)=>b[1]-a[1]).slice(0,8)))}
+      </div>
+    </div>`;
+  $("view").querySelectorAll(".kpi.click").forEach(k=>k.addEventListener("click",()=>go(k.dataset.go)));
+}
+
+/* ============================ EMPLOYEES ============================ */
+function statusPill(s){ const m={"Active":"active","Separated":"sep","On Leave":"leave","AWOL":"awol","Suspended":"susp"}; return `<span class="pill ${m[s]||'sep'}">${esc(s||"—")}</span>`; }
+function renderEmployees(){
+  $("view").innerHTML=`
+    <div class="vh"><h1>Employees</h1><p>Your full roster — searchable, filterable.</p></div>
+    <div class="controls">
+      <div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="search" placeholder="Search name, position, worksite, department…"></div>
+      <select id="fGroup"><option value="">All groups</option><option>Head Office</option><option>Warehouse</option><option>Retail</option></select>
+      <select id="fStatus"><option value="active">Active only</option><option value="">All statuses</option><option value="Separated">Separated</option><option value="On Leave">On Leave</option><option value="AWOL">AWOL</option><option value="Suspended">Suspended</option></select>
+      <button class="btn btn-ghost" id="addBtn">+ Add</button>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="tablecard"><table class="emp">
+      <thead><tr><th>Name</th><th>Department / Position</th><th>Worksite</th><th>Group</th><th>Status</th></tr></thead>
+      <tbody id="rows"></tbody></table></div>`;
+  const s=$("search"); s.value=listFilters.q; $("fGroup").value=listFilters.group; $("fStatus").value=listFilters.status;
+  $("addBtn").addEventListener("click",()=>openForm(null));
+  ["search","fGroup","fStatus"].forEach(id=>$(id).addEventListener("input",()=>{
+    listFilters.q=$("search").value; listFilters.group=$("fGroup").value; listFilters.status=$("fStatus").value; listFilters.worksite=""; paintRows();
+  }));
+  paintRows();
+}
+function filteredList(){
+  const q=listFilters.q.trim().toLowerCase();
+  return EMPLOYEES.filter(e=>{
+    if(listFilters.group && e.group_name!==listFilters.group) return false;
+    if(listFilters.worksite && e.worksite!==listFilters.worksite) return false;
+    if(listFilters.status==="active"){ if(e.status!=="Active") return false; }
+    else if(listFilters.status && e.status!==listFilters.status) return false;
+    if(q){ const hay=[e.full_name,e.position,e.department,e.worksite,e.agency_name,e.email].join(" ").toLowerCase(); if(!hay.includes(q)) return false; }
     return true;
   });
-  $("count").textContent = `${list.length} shown · ${EMPLOYEES.length} total`;
-  if(!list.length){ $("rows").innerHTML=`<tr><td colspan="5" class="empty">No matches.</td></tr>`; return; }
-  $("rows").innerHTML = list.map(e=>`
+}
+function paintRows(){
+  const list=filteredList();
+  if($("count")) $("count").textContent=`${list.length} shown · ${EMPLOYEES.length} total`;
+  const rows=$("rows"); if(!rows) return;
+  if(!list.length){ rows.innerHTML=`<tr><td colspan="5" class="empty">No matches.</td></tr>`; return; }
+  rows.innerHTML=list.map(e=>`
     <tr data-id="${e.id}">
       <td><div class="ename">${esc(e.full_name)}</div><div class="esub">${esc(e.email||"")}</div></td>
       <td class="tdpos"><div>${esc(e.department||"—")}</div><div class="esub">${esc(e.position||"")}</div></td>
@@ -369,101 +433,71 @@ function render(){
       <td><span class="pill grp">${esc(e.group_name||"—")}</span></td>
       <td class="tdright">${statusPill(e.status)}</td>
     </tr>`).join("");
-  $("rows").querySelectorAll("tr[data-id]").forEach(tr=>{
-    tr.addEventListener("click",()=>openDetail(tr.dataset.id));
-  });
+  rows.querySelectorAll("tr[data-id]").forEach(tr=>tr.addEventListener("click",()=>openDetail(tr.dataset.id)));
 }
-["search","fGroup","fStatus"].forEach(id=>$(id).addEventListener("input",render));
+
+/* ============================ WORKSITES ============================ */
+function renderWorksites(){
+  const active=EMPLOYEES.filter(e=>e.status==="Active"&&e.worksite);
+  const map={};
+  active.forEach(e=>{ (map[e.worksite]=map[e.worksite]||[]).push(e); });
+  const sites=Object.entries(map).sort((a,b)=>b[1].length-a[1].length);
+  $("view").innerHTML=`
+    <div class="vh"><h1>Worksites</h1><p>${sites.length} worksites with active staff. Tap one to see its people.</p></div>
+    <div class="controls">
+      <div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="wsearch" placeholder="Search worksite…"></div>
+      <span class="count">${sites.length} worksites</span>
+    </div>
+    <div class="wgrid" id="wgrid"></div>`;
+  const paint=()=>{
+    const q=$("wsearch").value.trim().toLowerCase();
+    const shown=sites.filter(([n])=>n.toLowerCase().includes(q));
+    $("wgrid").innerHTML=shown.map(([n,arr])=>{
+      const grp=arr[0].group_name||"";
+      return `<div class="wcard" data-ws="${esc(n)}">
+        <div class="wn">${esc(n)}</div><div class="wm">${esc(grp)}</div>
+        <div class="wc">${arr.length}<small>staff</small></div></div>`;
+    }).join("") || `<div class="empty">No worksites match.</div>`;
+    $("wgrid").querySelectorAll(".wcard").forEach(c=>c.addEventListener("click",()=>{
+      listFilters={ q:"", group:"", status:"active", worksite:c.dataset.ws };
+      go("employees");
+      // show a heading note via search box prefill
+      setTimeout(()=>{ if($("search")){ $("search").placeholder="Showing: "+c.dataset.ws; } },0);
+    }));
+  };
+  $("wsearch").addEventListener("input",paint); paint();
+}
 
 /* ============================ DETAIL DRAWER ============================ */
-function row(k,v,money){
-  const blank = v==null||v==="";
-  let val = blank ? "—" : esc(v);
-  if(!blank && money) val = "₱"+Number(v).toLocaleString();
-  return `<div class="row"><span class="k">${k}</span><span class="v ${blank?'blank':''}">${val}</span></div>`;
-}
-function fmtDate(d){ if(!d) return ""; const x=new Date(d+"T00:00:00"); return isNaN(x)?d:x.toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"}); }
-
+function row(k,v,money){ const blank=v==null||v===""; let val=blank?"—":esc(v); if(!blank&&money) val="₱"+Number(v).toLocaleString(); return `<div class="row"><span class="k">${k}</span><span class="v ${blank?'blank':''}">${val}</span></div>`; }
 function openDetail(id){
-  const e=EMPLOYEES.find(x=>String(x.id)===String(id));
-  if(!e) return;
-  const m=$("drawerMount");
-  m.innerHTML=`
-  <div class="overlay" id="ovl">
-    <div class="drawer" onclick="event.stopPropagation()">
-      <div class="drawer-head">
-        <button class="x" id="dX">×</button>
-        <h2>${esc(e.full_name)}</h2>
-        <div class="meta">${esc(e.position||"—")}${e.department?" · "+esc(e.department):""}</div>
-        <div class="tags">
-          <span class="pill">${esc(e.group_name||"—")}</span>
-          <span class="pill">${esc(e.status||"—")}</span>
-          ${e.hire_source&&e.hire_source!=="Direct"?`<span class="pill">${esc(e.hire_source)}</span>`:""}
-        </div>
-      </div>
-      <div class="drawer-body">
-        <div class="drawer-actions">
-          <button class="btn btn-primary" id="dEdit">Edit record</button>
-        </div>
-
-        <div class="sect"><h3><span class="dot"></span>Identity &amp; Status</h3>
-          ${row("PayPlus ID", e.employee_id)}
-          ${row("Group", e.group_name)}
-          ${row("Hire source", e.hire_source)}
-          ${e.agency_name?row("Agency", e.agency_name):""}
-          ${row("Status", e.status)}
-        </div>
-
-        <div class="sect"><h3><span class="dot"></span>Personal Details</h3>
-          ${row("Email", e.email)}
-          ${row("Mobile", e.phone)}
-          ${row("Date of birth", fmtDate(e.date_of_birth))}
-          ${row("Gender", e.gender)}
-          ${row("Civil status", e.civil_status)}
-          ${row("Permanent address", e.permanent_address)}
-          ${row("Current address", e.current_address)}
-        </div>
-
-        <div class="sect"><h3><span class="dot"></span>Emergency Contact</h3>
-          ${row("Name", e.emergency_contact_name)}
-          ${row("Relationship", e.emergency_contact_relation)}
-          ${row("Contact number", e.emergency_contact_number)}
-        </div>
-
-        <div class="sect"><h3><span class="dot"></span>Government Numbers</h3>
-          ${row("SSS", e.sss_number)}
-          ${row("PhilHealth", e.philhealth_number)}
-          ${row("Pag-IBIG", e.pagibig_number)}
-          ${row("TIN", e.tin_number)}
-        </div>
-
-        <div class="sect"><h3><span class="dot"></span>Bank</h3>
-          ${row("Bank name", e.bank_name)}
-          ${row("Account number", e.bank_account_number)}
-        </div>
-
-        <div class="sect"><h3><span class="dot"></span>Placement</h3>
-          ${row("Department", e.department)}
-          ${row("Position", e.position)}
-          ${row("Worksite", e.worksite)}
-          ${row("Supervisor", e.supervisor_name)}
-          ${row("Approver 2", e.approver2_name||e.approver2_email)}
-        </div>
-
-        <div class="sect"><h3><span class="dot"></span>Employment Terms, Pay &amp; Dates</h3>
-          ${row("Contract type", e.contract_type)}
-          ${row("Daily rate", e.daily_rate, true)}
-          ${row("Daily allowance", e.daily_allowance, true)}
-          ${row("Hire date", fmtDate(e.hire_date))}
-          ${row("Regularization date", fmtDate(e.regularization_date))}
-          ${row("End date", fmtDate(e.end_date))}
-          ${row("End reason", e.end_reason)}
-        </div>
-
-        ${e.notes?`<div class="sect"><h3><span class="dot"></span>Notes</h3><div style="font-size:14px;white-space:pre-wrap;">${esc(e.notes)}</div></div>`:""}
-      </div>
+  const e=EMPLOYEES.find(x=>String(x.id)===String(id)); if(!e) return;
+  $("drawerMount").innerHTML=`
+  <div class="overlay" id="ovl"><div class="drawer" onclick="event.stopPropagation()">
+    <div class="drawer-head"><button class="x" id="dX">×</button>
+      <h2>${esc(e.full_name)}</h2>
+      <div class="meta">${esc(e.position||"—")}${e.department?" · "+esc(e.department):""}</div>
+      <div class="tags"><span class="pill">${esc(e.group_name||"—")}</span><span class="pill">${esc(e.status||"—")}</span>${e.hire_source&&e.hire_source!=="Direct"?`<span class="pill">${esc(e.hire_source)}</span>`:""}</div>
     </div>
-  </div>`;
+    <div class="drawer-body">
+      <div class="drawer-actions"><button class="btn btn-primary" id="dEdit">Edit record</button></div>
+      <div class="sect"><h3><span class="dot"></span>Identity &amp; Status</h3>
+        ${row("PayPlus ID",e.employee_id)}${row("Group",e.group_name)}${row("Hire source",e.hire_source)}${e.agency_name?row("Agency",e.agency_name):""}${row("Status",e.status)}</div>
+      <div class="sect"><h3><span class="dot"></span>Personal Details</h3>
+        ${row("Email",e.email)}${row("Mobile",e.phone)}${row("Date of birth",fmtDate(e.date_of_birth))}${row("Gender",e.gender)}${row("Civil status",e.civil_status)}${row("Permanent address",e.permanent_address)}${row("Current address",e.current_address)}</div>
+      <div class="sect"><h3><span class="dot"></span>Emergency Contact</h3>
+        ${row("Name",e.emergency_contact_name)}${row("Relationship",e.emergency_contact_relation)}${row("Contact number",e.emergency_contact_number)}</div>
+      <div class="sect"><h3><span class="dot"></span>Government Numbers</h3>
+        ${row("SSS",e.sss_number)}${row("PhilHealth",e.philhealth_number)}${row("Pag-IBIG",e.pagibig_number)}${row("TIN",e.tin_number)}</div>
+      <div class="sect"><h3><span class="dot"></span>Bank</h3>
+        ${row("Bank name",e.bank_name)}${row("Account number",e.bank_account_number)}</div>
+      <div class="sect"><h3><span class="dot"></span>Placement</h3>
+        ${row("Department",e.department)}${row("Position",e.position)}${row("Worksite",e.worksite)}${row("Supervisor",e.supervisor_name)}${row("Approver 2",e.approver2_name||e.approver2_email)}</div>
+      <div class="sect"><h3><span class="dot"></span>Employment Terms, Pay &amp; Dates</h3>
+        ${row("Contract type",e.contract_type)}${row("Daily rate",e.daily_rate,true)}${row("Daily allowance",e.daily_allowance,true)}${row("Hire date",fmtDate(e.hire_date))}${row("Regularization date",fmtDate(e.regularization_date))}${row("End date",fmtDate(e.end_date))}${row("End reason",e.end_reason)}</div>
+      ${e.notes?`<div class="sect"><h3><span class="dot"></span>Notes</h3><div style="font-size:14px;white-space:pre-wrap;">${esc(e.notes)}</div></div>`:""}
+    </div></div></div>`;
   $("ovl").addEventListener("click",closeDrawer);
   $("dX").addEventListener("click",closeDrawer);
   $("dEdit").addEventListener("click",()=>openForm(e));
@@ -471,165 +505,104 @@ function openDetail(id){
 function closeDrawer(){ $("drawerMount").innerHTML=""; }
 
 /* ============================ ADD / EDIT FORM ============================ */
-$("addBtn").addEventListener("click",()=>openForm(null));
-
-function opts(arr,sel){ return ['<option value=""></option>'].concat(
-  arr.map(o=>`<option ${o===sel?"selected":""}>${esc(o)}</option>`)).join(""); }
-
+function opts(arr,sel){ return ['<option value=""></option>'].concat(arr.map(o=>`<option ${o===sel?"selected":""}>${esc(o)}</option>`)).join(""); }
 function openForm(e){
   const isNew=!e; e=e||{};
-  const m=$("drawerMount");
-  m.innerHTML=`
-  <div class="overlay" id="ovl">
-    <div class="drawer" onclick="event.stopPropagation()">
-      <div class="drawer-head">
-        <button class="x" id="fX">×</button>
-        <h2>${isNew?"Add Employee":"Edit Record"}</h2>
-        <div class="meta">${isNew?"New employee record":esc(e.full_name)}</div>
+  $("drawerMount").innerHTML=`
+  <div class="overlay" id="ovl"><div class="drawer" onclick="event.stopPropagation()">
+    <div class="drawer-head"><button class="x" id="fX">×</button>
+      <h2>${isNew?"Add Employee":"Edit Record"}</h2>
+      <div class="meta">${isNew?"New employee record":esc(e.full_name)}</div></div>
+    <div class="drawer-body"><form id="empForm">
+      <div class="sect"><h3><span class="dot"></span>Identity &amp; Status</h3><div class="form-grid">
+        <div class="field full"><label>Full name *</label><input id="f_full_name" required value="${esc(e.full_name||"")}"></div>
+        <div class="field"><label>Department</label><select id="f_department">${opts(DEPARTMENTS,e.department)}</select></div>
+        <div class="field"><label>Group (auto)</label><input id="f_group_name" readonly value="${esc(e.group_name||"")}" style="background:#f4f6f5;"></div>
+        <div class="field"><label>Position</label><input id="f_position" value="${esc(e.position||"")}"></div>
+        <div class="field"><label>Hire source</label><select id="f_hire_source">${opts(HIRE_SOURCES,e.hire_source)}</select></div>
+        <div class="field"><label>Status</label><select id="f_status">${opts(STATUSES,e.status||"Active")}</select></div>
+        <div class="field"><label>PayPlus ID</label><input id="f_employee_id" value="${esc(e.employee_id||"")}"></div>
+        <div class="field full"><label>Agency name (if agency)</label><input id="f_agency_name" value="${esc(e.agency_name||"")}"></div>
+      </div></div>
+      <div class="sect"><h3><span class="dot"></span>Personal Details</h3><div class="form-grid">
+        <div class="field"><label>Email</label><input id="f_email" type="email" value="${esc(e.email||"")}"></div>
+        <div class="field"><label>Mobile (09XXXXXXXXX)</label><input id="f_phone" value="${esc(e.phone||"")}"></div>
+        <div class="field"><label>Date of birth</label><input id="f_date_of_birth" type="date" value="${esc(e.date_of_birth||"")}"></div>
+        <div class="field"><label>Gender</label><select id="f_gender">${opts(GENDERS,e.gender)}</select></div>
+        <div class="field"><label>Civil status</label><select id="f_civil_status">${opts(CIVIL,e.civil_status)}</select></div>
+        <div class="field full"><label>Permanent address</label><input id="f_permanent_address" value="${esc(e.permanent_address||"")}"></div>
+        <div class="field full"><label>Current address</label><input id="f_current_address" value="${esc(e.current_address||"")}"></div>
+      </div></div>
+      <div class="sect"><h3><span class="dot"></span>Emergency Contact</h3><div class="form-grid">
+        <div class="field"><label>Name</label><input id="f_emergency_contact_name" value="${esc(e.emergency_contact_name||"")}"></div>
+        <div class="field"><label>Relationship</label><select id="f_emergency_contact_relation">${opts(RELATIONS,e.emergency_contact_relation)}</select></div>
+        <div class="field full"><label>Contact number</label><input id="f_emergency_contact_number" value="${esc(e.emergency_contact_number||"")}"></div>
+      </div></div>
+      <div class="sect"><h3><span class="dot"></span>Government Numbers</h3><div class="form-grid">
+        <div class="field"><label>SSS</label><input id="f_sss_number" value="${esc(e.sss_number||"")}"></div>
+        <div class="field"><label>PhilHealth</label><input id="f_philhealth_number" value="${esc(e.philhealth_number||"")}"></div>
+        <div class="field"><label>Pag-IBIG</label><input id="f_pagibig_number" value="${esc(e.pagibig_number||"")}"></div>
+        <div class="field"><label>TIN</label><input id="f_tin_number" value="${esc(e.tin_number||"")}"></div>
+      </div></div>
+      <div class="sect"><h3><span class="dot"></span>Bank</h3><div class="form-grid">
+        <div class="field"><label>Bank name (auto from group)</label><input id="f_bank_name" value="${esc(e.bank_name||"")}"></div>
+        <div class="field"><label>Account number</label><input id="f_bank_account_number" value="${esc(e.bank_account_number||"")}"></div>
+      </div></div>
+      <div class="sect"><h3><span class="dot"></span>Placement</h3><div class="form-grid">
+        <div class="field full"><label>Worksite</label><input id="f_worksite" value="${esc(e.worksite||"")}"></div>
+        <div class="field"><label>Supervisor</label><input id="f_supervisor_name" value="${esc(e.supervisor_name||"")}"></div>
+        <div class="field"><label>Approver 2</label><input id="f_approver2_name" value="${esc(e.approver2_name||"")}"></div>
+      </div></div>
+      <div class="sect"><h3><span class="dot"></span>Employment Terms, Pay &amp; Dates</h3><div class="form-grid">
+        <div class="field"><label>Contract type</label><select id="f_contract_type">${opts(CONTRACT_TYPES,e.contract_type)}</select></div>
+        <div class="field"><label>Daily rate (₱)</label><input id="f_daily_rate" type="number" step="0.01" value="${esc(e.daily_rate??"")}"></div>
+        <div class="field"><label>Daily allowance (₱)</label><input id="f_daily_allowance" type="number" step="0.01" value="${esc(e.daily_allowance??"")}"></div>
+        <div class="field"><label>Hire date</label><input id="f_hire_date" type="date" value="${esc(e.hire_date||"")}"></div>
+        <div class="field"><label>Regularization date</label><input id="f_regularization_date" type="date" value="${esc(e.regularization_date||"")}"></div>
+        <div class="field"><label>End date</label><input id="f_end_date" type="date" value="${esc(e.end_date||"")}"></div>
+        <div class="field full"><label>End reason</label><select id="f_end_reason">${opts(END_REASONS,e.end_reason)}</select></div>
+      </div></div>
+      <div class="sect"><h3><span class="dot"></span>Notes</h3><div class="field"><textarea id="f_notes" rows="3">${esc(e.notes||"")}</textarea></div></div>
+      <div id="fMsg"></div>
+      <div class="drawer-actions">
+        <button type="button" class="btn btn-ghost" id="fCancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="fSave">${isNew?"Create":"Save changes"}</button>
       </div>
-      <div class="drawer-body">
-        <form id="empForm">
-          <div class="sect"><h3><span class="dot"></span>Identity &amp; Status</h3>
-            <div class="form-grid">
-              <div class="field full"><label>Full name *</label><input id="f_full_name" required value="${esc(e.full_name||"")}"></div>
-              <div class="field"><label>Department</label><select id="f_department">${opts(DEPARTMENTS,e.department)}</select></div>
-              <div class="field"><label>Group (auto)</label><input id="f_group_name" readonly value="${esc(e.group_name||"")}" style="background:#f4f6f5;"></div>
-              <div class="field"><label>Position</label><input id="f_position" value="${esc(e.position||"")}"></div>
-              <div class="field"><label>Hire source</label><select id="f_hire_source">${opts(HIRE_SOURCES,e.hire_source)}</select></div>
-              <div class="field"><label>Status</label><select id="f_status">${opts(STATUSES,e.status||"Active")}</select></div>
-              <div class="field"><label>PayPlus ID</label><input id="f_employee_id" value="${esc(e.employee_id||"")}"></div>
-              <div class="field full"><label>Agency name (if agency)</label><input id="f_agency_name" value="${esc(e.agency_name||"")}"></div>
-            </div>
-          </div>
-
-          <div class="sect"><h3><span class="dot"></span>Personal Details</h3>
-            <div class="form-grid">
-              <div class="field"><label>Email</label><input id="f_email" type="email" value="${esc(e.email||"")}"></div>
-              <div class="field"><label>Mobile (09XXXXXXXXX)</label><input id="f_phone" value="${esc(e.phone||"")}"></div>
-              <div class="field"><label>Date of birth</label><input id="f_date_of_birth" type="date" value="${esc(e.date_of_birth||"")}"></div>
-              <div class="field"><label>Gender</label><select id="f_gender">${opts(GENDERS,e.gender)}</select></div>
-              <div class="field"><label>Civil status</label><select id="f_civil_status">${opts(CIVIL,e.civil_status)}</select></div>
-              <div class="field full"><label>Permanent address</label><input id="f_permanent_address" value="${esc(e.permanent_address||"")}"></div>
-              <div class="field full"><label>Current address</label><input id="f_current_address" value="${esc(e.current_address||"")}"></div>
-            </div>
-          </div>
-
-          <div class="sect"><h3><span class="dot"></span>Emergency Contact</h3>
-            <div class="form-grid">
-              <div class="field"><label>Name</label><input id="f_emergency_contact_name" value="${esc(e.emergency_contact_name||"")}"></div>
-              <div class="field"><label>Relationship</label><select id="f_emergency_contact_relation">${opts(RELATIONS,e.emergency_contact_relation)}</select></div>
-              <div class="field full"><label>Contact number</label><input id="f_emergency_contact_number" value="${esc(e.emergency_contact_number||"")}"></div>
-            </div>
-          </div>
-
-          <div class="sect"><h3><span class="dot"></span>Government Numbers</h3>
-            <div class="form-grid">
-              <div class="field"><label>SSS</label><input id="f_sss_number" value="${esc(e.sss_number||"")}"></div>
-              <div class="field"><label>PhilHealth</label><input id="f_philhealth_number" value="${esc(e.philhealth_number||"")}"></div>
-              <div class="field"><label>Pag-IBIG</label><input id="f_pagibig_number" value="${esc(e.pagibig_number||"")}"></div>
-              <div class="field"><label>TIN</label><input id="f_tin_number" value="${esc(e.tin_number||"")}"></div>
-            </div>
-          </div>
-
-          <div class="sect"><h3><span class="dot"></span>Bank</h3>
-            <div class="form-grid">
-              <div class="field"><label>Bank name (auto from group)</label><input id="f_bank_name" value="${esc(e.bank_name||"")}"></div>
-              <div class="field"><label>Account number</label><input id="f_bank_account_number" value="${esc(e.bank_account_number||"")}"></div>
-            </div>
-          </div>
-
-          <div class="sect"><h3><span class="dot"></span>Placement</h3>
-            <div class="form-grid">
-              <div class="field full"><label>Worksite</label><input id="f_worksite" value="${esc(e.worksite||"")}"></div>
-              <div class="field"><label>Supervisor</label><input id="f_supervisor_name" value="${esc(e.supervisor_name||"")}"></div>
-              <div class="field"><label>Approver 2</label><input id="f_approver2_name" value="${esc(e.approver2_name||"")}"></div>
-            </div>
-          </div>
-
-          <div class="sect"><h3><span class="dot"></span>Employment Terms, Pay &amp; Dates</h3>
-            <div class="form-grid">
-              <div class="field"><label>Contract type</label><select id="f_contract_type">${opts(CONTRACT_TYPES,e.contract_type)}</select></div>
-              <div class="field"><label>Daily rate (₱)</label><input id="f_daily_rate" type="number" step="0.01" value="${esc(e.daily_rate??"")}"></div>
-              <div class="field"><label>Daily allowance (₱)</label><input id="f_daily_allowance" type="number" step="0.01" value="${esc(e.daily_allowance??"")}"></div>
-              <div class="field"><label>Hire date</label><input id="f_hire_date" type="date" value="${esc(e.hire_date||"")}"></div>
-              <div class="field"><label>Regularization date</label><input id="f_regularization_date" type="date" value="${esc(e.regularization_date||"")}"></div>
-              <div class="field"><label>End date</label><input id="f_end_date" type="date" value="${esc(e.end_date||"")}"></div>
-              <div class="field full"><label>End reason</label><select id="f_end_reason">${opts(END_REASONS,e.end_reason)}</select></div>
-            </div>
-          </div>
-
-          <div class="sect"><h3><span class="dot"></span>Notes</h3>
-            <div class="field"><textarea id="f_notes" rows="3">${esc(e.notes||"")}</textarea></div>
-          </div>
-
-          <div id="fMsg"></div>
-          <div class="drawer-actions">
-            <button type="button" class="btn btn-ghost" id="fCancel">Cancel</button>
-            <button type="submit" class="btn btn-primary" id="fSave">${isNew?"Create":"Save changes"}</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>`;
-
+    </form></div></div></div>`;
   $("ovl").addEventListener("click",closeDrawer);
   $("fX").addEventListener("click",closeDrawer);
   $("fCancel").addEventListener("click",closeDrawer);
-
-  // auto-fill: group from department, bank from group
-  $("f_department").addEventListener("change",()=>{
-    const g=deriveGroup($("f_department").value);
-    $("f_group_name").value=g;
-    if(!$("f_bank_name").value) $("f_bank_name").value=deriveBank(g);
-  });
-
-  $("empForm").addEventListener("submit", async (ev)=>{
-    ev.preventDefault();
-    await saveEmployee(isNew?null:e.id);
-  });
+  $("f_department").addEventListener("change",()=>{ const g=deriveGroup($("f_department").value); $("f_group_name").value=g; if(!$("f_bank_name").value) $("f_bank_name").value=deriveBank(g); });
+  $("empForm").addEventListener("submit", async (ev)=>{ ev.preventDefault(); await saveEmployee(isNew?null:e.id); });
 }
-
-function val(id){ const v=$(id).value.trim(); return v===""?null:v; }
-function numv(id){ const v=$(id).value.trim(); return v===""?null:Number(v); }
-
+const val=(id)=>{ const v=$(id).value.trim(); return v===""?null:v; };
+const numv=(id)=>{ const v=$(id).value.trim(); return v===""?null:Number(v); };
 async function saveEmployee(id){
-  const msg=$("fMsg"); const btn=$("fSave");
-  // light normalization
+  const msg=$("fMsg"), btn=$("fSave");
   let phone=val("f_phone"); if(phone) phone=phone.replace(/[\s-]/g,"");
-  const payload={
+  const p={
     full_name:val("f_full_name"), department:val("f_department"),
-    group_name: val("f_group_name") || deriveGroup($("f_department").value) || null,
+    group_name: val("f_group_name")||deriveGroup($("f_department").value)||null,
     position:val("f_position"), hire_source:val("f_hire_source"), status:val("f_status")||"Active",
     employee_id:val("f_employee_id"), agency_name:val("f_agency_name"),
     email:val("f_email"), phone, date_of_birth:val("f_date_of_birth"), gender:val("f_gender"),
-    civil_status:val("f_civil_status"), permanent_address:val("f_permanent_address"),
-    current_address:val("f_current_address"),
-    emergency_contact_name:val("f_emergency_contact_name"),
-    emergency_contact_relation:val("f_emergency_contact_relation"),
-    emergency_contact_number:val("f_emergency_contact_number"),
-    sss_number:val("f_sss_number"), philhealth_number:val("f_philhealth_number"),
-    pagibig_number:val("f_pagibig_number"), tin_number:val("f_tin_number"),
+    civil_status:val("f_civil_status"), permanent_address:val("f_permanent_address"), current_address:val("f_current_address"),
+    emergency_contact_name:val("f_emergency_contact_name"), emergency_contact_relation:val("f_emergency_contact_relation"), emergency_contact_number:val("f_emergency_contact_number"),
+    sss_number:val("f_sss_number"), philhealth_number:val("f_philhealth_number"), pagibig_number:val("f_pagibig_number"), tin_number:val("f_tin_number"),
     bank_name:val("f_bank_name"), bank_account_number:val("f_bank_account_number"),
-    worksite:val("f_worksite"), supervisor_name:val("f_supervisor_name"),
-    approver2_name:val("f_approver2_name"),
-    contract_type:val("f_contract_type"), daily_rate:numv("f_daily_rate"),
-    daily_allowance:numv("f_daily_allowance"), hire_date:val("f_hire_date"),
-    regularization_date:val("f_regularization_date"), end_date:val("f_end_date"),
-    end_reason:val("f_end_reason"), notes:val("f_notes"),
-    updated_at:new Date().toISOString()
+    worksite:val("f_worksite"), supervisor_name:val("f_supervisor_name"), approver2_name:val("f_approver2_name"),
+    contract_type:val("f_contract_type"), daily_rate:numv("f_daily_rate"), daily_allowance:numv("f_daily_allowance"),
+    hire_date:val("f_hire_date"), regularization_date:val("f_regularization_date"), end_date:val("f_end_date"), end_reason:val("f_end_reason"),
+    notes:val("f_notes"), updated_at:new Date().toISOString()
   };
-  if(!payload.full_name){ msg.className="fmsg msg err"; msg.textContent="Full name is required."; return; }
+  if(!p.full_name){ msg.className="fmsg msg err"; msg.textContent="Full name is required."; return; }
   btn.disabled=true; btn.textContent="Saving…";
-  let res;
-  if(id){ res=await sb.from("employees").update(payload).eq("id",id); }
-  else  { res=await sb.from("employees").insert(payload); }
+  const res=id? await sb.from("employees").update(p).eq("id",id) : await sb.from("employees").insert(p);
   btn.disabled=false; btn.textContent=id?"Save changes":"Create";
   if(res.error){ msg.className="fmsg msg err"; msg.textContent=res.error.message; return; }
-  closeDrawer();
-  await loadEmployees();
+  closeDrawer(); await loadEmployees();
 }
 
-/* ============================ GO ============================ */
 init();
 
 </script>

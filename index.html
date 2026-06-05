@@ -1962,6 +1962,8 @@ let EMPLOYEES=[];
 let BRANCHES=[];
 let DISERS=[];
 let PREHIRE=[];
+let ONBOARDING=[];
+let ONBTASKS=[];
 let CURRENT_USER=null;
 let empFilter="All";
 let scFilter="All";
@@ -2000,22 +2002,27 @@ function patchSidebarFoot(user){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph] = await Promise.all([
+  const [emp, br, di, ph, oc, ot] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
-    sb.from("prehire").select("*").order("created_at")
+    sb.from("prehire").select("*").order("created_at"),
+    sb.from("onboarding_cases").select("*").order("created_at"),
+    sb.from("onboarding_tasks").select("*").order("sort_order")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
   BRANCHES=br.data||[];
   DISERS=di.data||[];
   PREHIRE=(ph&&ph.data)||[];
+  ONBOARDING=(oc&&oc.data)||[];
+  ONBTASKS=(ot&&ot.data)||[];
   renderDashboard();
   renderEmployeesPage();
   renderBranchesPage();
   renderManning();
   renderPrehire();
+  renderOnboarding();
   wireGlobalSearch();
 }
 const isActive=(e)=>e.status==="Active";
@@ -2710,6 +2717,141 @@ function newPrehire(){
     if(error){ document.getElementById("npMsg").textContent=error.message; return; }
     m.remove(); await loadEmployees(); window.go("prehire");
   });
+}
+
+/* ============================ ONBOARDING MODULE ============================ */
+function tasksFor(caseId){ return ONBTASKS.filter(t=>t.case_id===caseId).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)); }
+function caseProgress(caseId){ const ts=tasksFor(caseId); const done=ts.filter(t=>t.status==="Done").length; return {done, total:ts.length}; }
+function defaultOnbTasks(c){
+  const bank=(c.group_name==="Retail")?"Union Bank":"China Bank";
+  return [
+    {task_key:"schedule",label:"Set onboarding schedule (Day 1 plan)",owner_role:"HR",sort_order:1},
+    {task_key:"bank",label:"Process bank account — "+bank,owner_role:"HR / Finance",sort_order:2},
+    {task_key:"uniform",label:"Issue / send uniform (capture deduction authorization)",owner_role:"HR / Admin",sort_order:3},
+    {task_key:"gov_forms",label:"Government registration (SSS R-1A · PhilHealth · Pag-IBIG · BIR 1902)",owner_role:"HR",sort_order:4},
+    {task_key:"payplus",label:"Encode in PayPlus",owner_role:"Payroll",sort_order:5},
+    {task_key:"employee_id",label:"Assign Employee ID",owner_role:"HR",sort_order:6},
+    {task_key:"orientation",label:"Orientation / product training",owner_role:"HR / Supervisor",sort_order:7}
+  ];
+}
+function renderOnboarding(){
+  const pg=$("#page-onboarding"); if(!pg) return;
+  const active=ONBOARDING.filter(c=>c.status!=="Complete");
+  const done=ONBOARDING.filter(c=>c.status==="Complete").length;
+  const pendingTasks=ONBTASKS.filter(t=>t.status!=="Done").length;
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Onboarding Tasks</h2>
+      <div class="psub">After a contract is signed, each hire becomes an onboarding case — schedule, bank, uniform, government forms, PayPlus, Employee ID, orientation. Auto-flows from Pre-hire.</div>
+      <div class="actionbar"><button class="btn" id="onbNew">+ Start onboarding</button></div>
+      <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
+        <div class="kpi"><div class="k-l">In Progress</div><div class="k-n">${active.length}</div></div>
+        <div class="kpi"><div class="k-l">Completed</div><div class="k-n">${done}</div></div>
+        <div class="kpi warn"><div class="k-l">Open Tasks</div><div class="k-n">${pendingTasks}</div><div class="k-s">across all cases</div></div>
+      </div>
+      ${ONBOARDING.length? `<table><thead><tr><th>New hire</th><th>Group · Worksite</th><th>Employee ID</th><th>Progress</th><th>Status</th></tr></thead>
+        <tbody id="onbRows"></tbody></table>`
+        : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M3 12l5 5L21 5"/></svg></div><h2>No onboarding cases yet</h2><p>Click “Start onboarding” to create a case from a pre-hire who has reached the contract stage.</p></div>`}
+    </div>`;
+  $("#onbNew").addEventListener("click",pickPrehireForOnboarding);
+  const rows=$("#onbRows");
+  if(rows){
+    rows.innerHTML=ONBOARDING.map(c=>{ const p=caseProgress(c.id); const pct=p.total?Math.round(p.done/p.total*100):0;
+      return `<tr class="clickable" data-id="${c.id}"><td><b>${esc(c.employee_name)}</b><div class="esub">${esc(c.position||"")}</div></td>
+        <td>${esc(c.group_name||"—")}${c.worksite?" · "+esc(c.worksite):""}</td>
+        <td>${c.assigned_employee_id?`<span class="pill di">${esc(c.assigned_employee_id)}</span>`:'<span class="note" style="color:var(--muted);">unassigned</span>'}</td>
+        <td><div class="barrow"><div class="bartrack"><div class="bar${pct===100?'':' def'}" style="width:${pct}%"></div></div><span style="font-size:11.5px;color:var(--muted);">${p.done}/${p.total}</span></div></td>
+        <td>${c.status==="Complete"?'<span class="pill active">Complete</span>':'<span class="pill probation">In Progress</span>'}</td></tr>`;
+    }).join("");
+    $$("#onbRows tr").forEach(tr=>tr.addEventListener("click",()=>openOnboardingCase(tr.dataset.id)));
+  }
+}
+function pickPrehireForOnboarding(){
+  const has=new Set(ONBOARDING.map(c=>c.prehire_id).filter(Boolean));
+  const eligible=PREHIRE.filter(p=>["READY_FOR_CONTRACT","CONTRACT_PIPELINE","ONBOARDING"].includes(p.phase)&&!has.has(p.id));
+  let m=document.getElementById("onbPick"); if(!m){ m=document.createElement("div"); m.id="onbPick"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;max-height:80vh;overflow-y:auto;padding:22px;">
+    <h2 style="color:var(--green-dark);font-size:17px;margin-bottom:4px;">Start onboarding</h2>
+    <div class="psub">Pick a candidate who has reached the contract stage:</div>
+    ${eligible.length? eligible.map(p=>`<div class="task clickable" data-id="${p.id}"><div class="dot g"></div><div><div class="tt">${esc(p.full_name)}</div><div class="td">${esc(p.position||"—")} · ${esc(p.hire_source||"Direct")} · ${esc(phLabel(p.phase))}</div></div></div>`).join("")
+      : '<div class="psub" style="margin-top:10px;">No pre-hires at the contract stage right now. Advance a candidate to “Ready for Contract” first.</div>'}
+    <div style="display:flex;justify-content:flex-end;margin-top:14px;"><button class="btn ghost" id="onbPickClose">Close</button></div>
+  </div>`;
+  $("#onbPickClose").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  $$("#onbPick .task.clickable").forEach(el=>el.addEventListener("click",()=>{ m.remove(); createOnboardingCase(PREHIRE.find(p=>p.id===el.dataset.id)); }));
+}
+async function createOnboardingCase(pre){
+  if(!pre) return;
+  const grp=deriveGroup(pre.department);
+  const c={ prehire_id:pre.id, employee_name:pre.full_name, group_name:grp||null, hire_source:pre.hire_source||null,
+    worksite:pre.worksite||null, position:pre.position||null, deployment_date:pre.start_date||null, pay_method:"GCash", status:"In Progress" };
+  const { data, error } = await sb.from("onboarding_cases").insert(c).select().single();
+  if(error){ alert(error.message); return; }
+  const tasks=defaultOnbTasks(data).map(t=>Object.assign({case_id:data.id},t));
+  await sb.from("onboarding_tasks").insert(tasks);
+  // advance the pre-hire to ONBOARDING
+  if(pre.phase!=="ONBOARDING") await sb.from("prehire").update({phase:"ONBOARDING"}).eq("id",pre.id);
+  await loadEmployees(); window.go("onboarding"); openOnboardingCase(data.id);
+}
+function openOnboardingCase(id){
+  const c=ONBOARDING.find(x=>String(x.id)===String(id)); if(!c) return;
+  const ts=tasksFor(c.id); const p=caseProgress(c.id);
+  const scheme=c.group_name==="Retail"?"DISER":"RCC";
+  let m=document.getElementById("onbModal"); if(!m){ m=document.createElement("div"); m.id="onbModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:580px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0e3219,#1f6b3a);color:#fff;padding:18px 22px;position:sticky;top:0;">
+      <div style="font-size:21px;font-weight:800;">${esc(c.employee_name)}</div>
+      <div style="font-size:12.5px;opacity:.9;margin-top:3px;">${esc(c.position||"—")} · ${esc(c.group_name||"—")}${c.worksite?" · "+esc(c.worksite):""} · ${p.done}/${p.total} tasks done</div>
+    </div>
+    <div style="padding:18px 22px 60px;">
+      <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
+        <div class="kpi"><div class="k-l">Employee ID</div><div class="k-n" style="font-size:18px;">${c.assigned_employee_id?esc(c.assigned_employee_id):"—"}</div><div class="k-s">${scheme} scheme</div></div>
+        <div class="kpi"><div class="k-l">Pay method</div><div class="k-n" style="font-size:18px;">${esc(c.pay_method||"GCash")}</div></div>
+        <div class="kpi"><div class="k-l">Deployment</div><div class="k-n" style="font-size:18px;">${c.deployment_date?fmtDate(c.deployment_date):"—"}</div></div>
+      </div>
+      ${!c.assigned_employee_id?`<button class="btn" id="onbAssignId" style="margin-top:12px;">Assign ${scheme} Employee ID →</button>`:""}
+      <div class="panel" style="margin-top:14px;"><h2>Onboarding checklist</h2>
+        <div class="psub">Tap a task to mark it done. Bank auto-set to ${c.group_name==="Retail"?"Union Bank":"China Bank"} by group.</div>
+        ${ts.map(t=>`<div class="task clickable" data-tid="${t.id}" style="cursor:pointer;">
+          <div class="dot ${t.status==="Done"?"g":"a"}"></div>
+          <div style="flex:1;"><div class="tt">${esc(t.label)}</div><div class="td">${esc(t.owner_role||"")}${t.is_mandatory?"":" · optional"}</div></div>
+          <div class="due ${t.status==="Done"?"g":"a"}">${t.status==="Done"?"✓ Done":"Pending"}</div></div>`).join("")}
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        ${c.status!=="Complete"&&p.done===p.total&&p.total>0?'<button class="btn" id="onbComplete">Mark onboarding complete</button>':''}
+        <button class="btn ghost" id="onbClose" style="margin-left:auto;">Close</button>
+      </div>
+    </div></div>`;
+  $("#onbClose").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  const aid=document.getElementById("onbAssignId"); if(aid) aid.addEventListener("click",()=>assignEmployeeId(c));
+  const cmp=document.getElementById("onbComplete"); if(cmp) cmp.addEventListener("click",()=>completeOnboarding(c));
+  $$("#onbModal .task.clickable").forEach(el=>el.addEventListener("click",()=>toggleOnbTask(ts.find(t=>t.id===el.dataset.tid))));
+}
+async function toggleOnbTask(t){
+  if(!t) return;
+  const ns=t.status==="Done"?"Pending":"Done";
+  const { error } = await sb.from("onboarding_tasks").update({status:ns}).eq("id",t.id);
+  if(error){ alert(error.message); return; }
+  await loadEmployees(); openOnboardingCase(t.case_id);
+}
+async function assignEmployeeId(c){
+  const scheme=c.group_name==="Retail"?"DISER":"RCC";
+  const { data, error } = await sb.rpc("next_employee_id",{ p_scheme:scheme });
+  if(error){ alert(error.message); return; }
+  await sb.from("onboarding_cases").update({assigned_employee_id:data, updated_at:new Date().toISOString()}).eq("id",c.id);
+  const t=ONBTASKS.find(x=>x.case_id===c.id&&x.task_key==="employee_id");
+  if(t) await sb.from("onboarding_tasks").update({status:"Done"}).eq("id",t.id);
+  await loadEmployees(); window.go("onboarding"); openOnboardingCase(c.id);
+}
+async function completeOnboarding(c){
+  await sb.from("onboarding_cases").update({status:"Complete", updated_at:new Date().toISOString()}).eq("id",c.id);
+  if(c.prehire_id) await sb.from("prehire").update({phase:"COMPLETE", assigned_employee_id:c.assigned_employee_id}).eq("id",c.prehire_id);
+  const md=document.getElementById("onbModal"); if(md) md.remove();
+  await loadEmployees(); window.go("onboarding");
 }
 
 init();

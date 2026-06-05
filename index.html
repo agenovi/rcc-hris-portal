@@ -1964,6 +1964,7 @@ let DISERS=[];
 let PREHIRE=[];
 let ONBOARDING=[];
 let ONBTASKS=[];
+let EXITCASES=[];
 let CURRENT_USER=null;
 let empFilter="All";
 let scFilter="All";
@@ -2002,13 +2003,14 @@ function patchSidebarFoot(user){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
     sb.from("prehire").select("*").order("created_at"),
     sb.from("onboarding_cases").select("*").order("created_at"),
-    sb.from("onboarding_tasks").select("*").order("sort_order")
+    sb.from("onboarding_tasks").select("*").order("sort_order"),
+    sb.from("exit_clearance").select("*").order("created_at")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2017,12 +2019,14 @@ async function loadEmployees(){
   PREHIRE=(ph&&ph.data)||[];
   ONBOARDING=(oc&&oc.data)||[];
   ONBTASKS=(ot&&ot.data)||[];
+  EXITCASES=(ex&&ex.data)||[];
   renderDashboard();
   renderEmployeesPage();
   renderBranchesPage();
   renderManning();
   renderPrehire();
   renderOnboarding();
+  renderExit();
   wireGlobalSearch();
 }
 const isActive=(e)=>e.status==="Active";
@@ -2852,6 +2856,200 @@ async function completeOnboarding(c){
   if(c.prehire_id) await sb.from("prehire").update({phase:"COMPLETE", assigned_employee_id:c.assigned_employee_id}).eq("id",c.prehire_id);
   const md=document.getElementById("onbModal"); if(md) md.remove();
   await loadEmployees(); window.go("onboarding");
+}
+
+/* ============================ EXIT CLEARANCE MODULE ============================ */
+const EXIT_STAGES=[
+  {key:"supervisor",label:"Supervisor",s:"supervisor_status",c:"supervisor_charges"},
+  {key:"admin",label:"Admin",s:"admin_status",c:"admin_charges"},
+  {key:"finance_receivables",label:"Finance — Receivables",s:"finance_receivables_status",c:"finance_receivables_charges"},
+  {key:"finance_disbursement",label:"Finance — Disbursement",s:"finance_disbursement_status",c:"finance_disbursement_charges"},
+  {key:"finance_inventory",label:"Finance — Inventory",s:"finance_inventory_status",c:"finance_inventory_charges"},
+  {key:"finance_payroll",label:"Finance — Payroll",s:"finance_payroll_status",c:"finance_payroll_charges"},
+  {key:"accounting",label:"Accounting",s:"accounting_status",c:null},
+  {key:"hr",label:"HR",s:"hr_status",c:"hr_charges"}
+];
+const EXIT_STATUSES=["Pending","Cleared","With Charges"];
+const SEPARATION_TYPES=["Resignation","End of Contract","Termination","AWOL","Retirement","Redundancy"];
+function monthsBetween(a,b){ if(!a||!b) return null; const d1=new Date(a), d2=new Date(b); if(isNaN(d1)||isNaN(d2)) return null; return Math.max(0, (d2.getFullYear()-d1.getFullYear())*12 + (d2.getMonth()-d1.getMonth()) - (d2.getDate()<d1.getDate()?1:0)); }
+function exitStagesDone(x){ return EXIT_STAGES.filter(s=>x[s.s]&&x[s.s]!=="Pending").length; }
+function exitDeductions(x){ let d=Number(x.uniform_deduction||0); EXIT_STAGES.forEach(s=>{ if(s.c) d+=Number(x[s.c]||0); }); return d; }
+function exitPayables(x){ return Number(x.outstanding_salary||0)+Number(x.sil_payment||0)+Number(x.thirteenth_month||0)+Number(x.tax_refund||0)+Number(x.pending_commission||0); }
+function exitNet(x){ return exitPayables(x)-exitDeductions(x); }
+const peso=(n)=>"₱"+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2});
+
+function renderExit(){
+  const pg=$("#page-exit"); if(!pg) return;
+  const open=EXITCASES.filter(x=>x.overall_status!=="Complete");
+  const done=EXITCASES.filter(x=>x.overall_status==="Complete").length;
+  const charges=EXITCASES.filter(x=>EXIT_STAGES.some(s=>x[s.s]==="With Charges")).length;
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Exit Clearance</h2>
+      <div class="psub">Multi-department sign-off + lawful final-pay computation. On completion, the employee's status flips to Separated. Uniform cost (&lt;6 months) only deducts where the signed contract authorizes it (Art. 113).</div>
+      <div class="actionbar"><button class="btn" id="exNew">+ New exit clearance</button></div>
+      <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
+        <div class="kpi"><div class="k-l">In Progress</div><div class="k-n">${open.length}</div></div>
+        <div class="kpi warn"><div class="k-l">With Charges</div><div class="k-n">${charges}</div><div class="k-s">a dept flagged a charge</div></div>
+        <div class="kpi"><div class="k-l">Completed</div><div class="k-n">${done}</div></div>
+      </div>
+      ${EXITCASES.length? `<table><thead><tr><th>Employee</th><th>Last day · Tenure</th><th>Separation</th><th>Sign-offs</th><th>Net pay</th><th>Status</th></tr></thead>
+        <tbody id="exRows"></tbody></table>`
+        : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M14 3H5v18h9"/><path d="M10 12h11M17 8l4 4-4 4"/></svg></div><h2>No exit clearances yet</h2><p>Click “New exit clearance” to start an employee's offboarding.</p></div>`}
+    </div>`;
+  $("#exNew").addEventListener("click",pickEmployeeForExit);
+  const rows=$("#exRows");
+  if(rows){
+    rows.innerHTML=EXITCASES.map(x=>{ const dn=exitStagesDone(x); const t=x.tenure_months;
+      return `<tr class="clickable" data-id="${x.id}"><td><b>${esc(x.employee_name)}</b><div class="esub">${esc(x.position||"")}</div></td>
+        <td>${x.last_working_day?fmtDate(x.last_working_day):"—"}${t!=null?` · ${t} mo`:""}</td>
+        <td>${esc(x.separation_type||"—")}</td>
+        <td><div class="barrow"><div class="bartrack"><div class="bar${dn===8?'':' def'}" style="width:${Math.round(dn/8*100)}%"></div></div><span style="font-size:11.5px;color:var(--muted);">${dn}/8</span></div></td>
+        <td><b>${peso(exitNet(x))}</b></td>
+        <td>${x.overall_status==="Complete"?'<span class="pill closed">Separated</span>':'<span class="pill probation">In Progress</span>'}</td></tr>`;
+    }).join("");
+    $$("#exRows tr").forEach(tr=>tr.addEventListener("click",()=>openExitCase(tr.dataset.id)));
+  }
+}
+function pickEmployeeForExit(){
+  const active=EMPLOYEES.filter(e=>e.status==="Active").slice().sort((a,b)=>a.full_name.localeCompare(b.full_name));
+  let m=document.getElementById("exPick"); if(!m){ m=document.createElement("div"); m.id="exPick"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;max-height:80vh;overflow-y:auto;padding:22px;">
+    <h2 style="color:var(--green-dark);font-size:17px;">Start exit clearance</h2>
+    <div class="psub">Search and pick the separating employee:</div>
+    <input id="exPickSearch" class="search" style="width:100%;margin:10px 0;" placeholder="Search name…">
+    <div id="exPickList"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button class="btn ghost" id="exPickClose">Close</button></div>
+  </div>`;
+  const paint=()=>{ const q=($("#exPickSearch").value||"").toLowerCase();
+    $("#exPickList").innerHTML=active.filter(e=>e.full_name.toLowerCase().includes(q)).slice(0,40).map(e=>`<div class="task clickable" data-id="${e.id}"><div class="dot a"></div><div><div class="tt">${esc(e.full_name)}</div><div class="td">${esc(e.position||"—")} · ${esc(e.group_name||"—")}</div></div></div>`).join("");
+    $$("#exPickList .task.clickable").forEach(el=>el.addEventListener("click",()=>{ m.remove(); createExitCase(EMPLOYEES.find(e=>e.id===el.dataset.id)); }));
+  };
+  $("#exPickSearch").addEventListener("input",paint); paint();
+  $("#exPickClose").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+}
+async function createExitCase(emp){
+  if(!emp) return;
+  const today=new Date().toISOString().slice(0,10);
+  const tenure=monthsBetween(emp.hire_date, today);
+  const stamp=today.replace(/-/g,"");
+  const c={ clearance_id:"EXIT-"+stamp+"-"+String(Math.abs(emp.full_name.split("").reduce((a,ch)=>a*31+ch.charCodeAt(0),5))%1000).padStart(3,"0"),
+    employee_id:emp.id, employee_name:emp.full_name, position:emp.position, department:emp.department,
+    hire_date:emp.hire_date||null, last_working_day:today, tenure_months:tenure, separation_type:"Resignation",
+    overall_status:"In Progress" };
+  EXIT_STAGES.forEach(s=>{ c[s.s]="Pending"; });
+  const { data, error } = await sb.from("exit_clearance").insert(c).select().single();
+  if(error){ alert(error.message); return; }
+  await loadEmployees(); window.go("exit"); openExitCase(data.id);
+}
+function exNumField(id,label,val){ return `<div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px;">${label}</label><input id="${id}" type="number" step="0.01" value="${val??""}" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;"></div>`; }
+function openExitCase(id){
+  const x=EXITCASES.find(v=>String(v.id)===String(id)); if(!x) return;
+  const t=x.tenure_months; const under6=t!=null&&t<6;
+  let m=document.getElementById("exModal"); if(!m){ m=document.createElement("div"); m.id="exModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0e3219,#1f6b3a);color:#fff;padding:18px 22px;position:sticky;top:0;">
+      <div style="font-size:21px;font-weight:800;">${esc(x.employee_name)}</div>
+      <div style="font-size:12.5px;opacity:.9;margin-top:3px;">${esc(x.position||"—")} · ${esc(x.department||"—")} · ${esc(x.clearance_id)}</div>
+    </div>
+    <div style="padding:18px 22px 60px;">
+      <div class="panel" style="margin-top:0;"><h2>Separation</h2>
+        <div class="form-grid">
+          <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Last working day</label><input id="ex_lwd" type="date" value="${esc(x.last_working_day||"")}" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"></div>
+          <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Separation type</label><select id="ex_septype" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;background:#fff;">${opt(SEPARATION_TYPES,x.separation_type)}</select></div>
+        </div>
+        <div class="psub">Tenure: <b>${t!=null?t+" months":"—"}</b>${under6?' · <span style="color:var(--red);font-weight:700;">under 6 months</span>':""}</div>
+      </div>
+
+      <div class="panel"><h2>Department sign-offs <span class="count-tag">${exitStagesDone(x)}/8</span></h2>
+        ${EXIT_STAGES.map(s=>`<div class="task" style="align-items:center;">
+          <div class="dot ${x[s.s]==='Cleared'?'g':(x[s.s]==='With Charges'?'r':'a')}"></div>
+          <div style="flex:1;"><div class="tt">${s.label}</div></div>
+          <select data-stage="${s.s}" style="padding:5px 8px;border:1px solid #e2e7e4;border-radius:6px;font-size:12px;background:#fff;">${opt(EXIT_STATUSES,x[s.s]||"Pending")}</select>
+          ${s.c?`<input data-charge="${s.c}" type="number" step="0.01" placeholder="charges ₱" value="${x[s.c]??""}" style="width:96px;padding:5px 8px;border:1px solid #e2e7e4;border-radius:6px;font-size:12px;margin-left:6px;">`:''}
+        </div>`).join("")}
+      </div>
+
+      ${under6?`<div class="madv"><div class="madv-h">⚖️ Uniform deduction — tenure under 6 months</div>
+        <div style="font-size:12.5px;color:#5c4720;">Per RCC policy the uniform cost is recoverable, but a deduction from final pay is lawful <b>only with the employee's signed authorization</b> (the employment-contract clause, Art. 113) and never below minimum wage.</div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;align-items:center;">
+          <label style="font-size:12.5px;"><input type="checkbox" id="ex_uniform_returned" ${x.uniform_returned?"checked":""}> Uniform returned in good condition</label>
+          <label style="font-size:12.5px;"><input type="checkbox" id="ex_uniform_auth" ${x.uniform_auth_on_file?"checked":""}> Signed authorization on file (contract clause)</label>
+        </div>
+        ${exNumField("ex_uniform_deduction","Uniform deduction (₱)",x.uniform_deduction)}
+        </div>`:""}
+
+      <div class="panel"><h2>Final pay computation</h2>
+        <div class="psub">Amounts owed to the employee, less lawful deductions. (Salary is entered manually — not stored as a queryable field.)</div>
+        <div class="form-grid">
+          ${exNumField("ex_outstanding_salary","Outstanding salary",x.outstanding_salary)}
+          ${exNumField("ex_sil_payment","SIL conversion",x.sil_payment)}
+          ${exNumField("ex_thirteenth_month","13th-month pro-rata",x.thirteenth_month)}
+          ${exNumField("ex_tax_refund","Tax refund",x.tax_refund)}
+          ${exNumField("ex_pending_commission","Pending commission",x.pending_commission)}
+        </div>
+        <div id="ex_netbox" style="background:var(--green-light);border-radius:9px;padding:12px 14px;margin-top:6px;font-size:13.5px;"></div>
+      </div>
+
+      <div class="panel"><h2>Closeout</h2>
+        <label style="display:block;font-size:13px;margin:5px 0;"><input type="checkbox" id="ex_exit_interview" ${x.exit_interview_done?"checked":""}> Exit interview done</label>
+        <label style="display:block;font-size:13px;margin:5px 0;"><input type="checkbox" id="ex_hmo" ${x.hmo_cancelled?"checked":""}> HMO / insurance cancellation queued</label>
+        <label style="display:block;font-size:13px;margin:5px 0;"><input type="checkbox" id="ex_coe" ${x.coe_issued?"checked":""}> Certificate of Employment issued <span style="color:var(--muted);">(DOLE: within 3 days of request)</span></label>
+      </div>
+
+      <div id="exMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
+        <button class="btn" id="exSave">Save</button>
+        ${x.overall_status!=="Complete"?'<button class="btn blue" id="exComplete">Complete &amp; mark Separated</button>':'<span class="pill closed">Separated</span>'}
+        <button class="btn ghost" id="exClose" style="margin-left:auto;">Close</button>
+      </div>
+    </div></div>`;
+  const recompute=()=>{
+    const tmp=collectExit(x);
+    $("#ex_netbox").innerHTML=`Payables <b>${peso(exitPayables(tmp))}</b> − Deductions <b>${peso(exitDeductions(tmp))}</b> = <b style="color:var(--green-dark);font-size:15px;">Net ${peso(exitNet(tmp))}</b>`;
+  };
+  m.querySelectorAll("input,select").forEach(el=>el.addEventListener("input",recompute));
+  recompute();
+  $("#exClose").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  $("#exSave").addEventListener("click",()=>saveExitCase(x,m,false));
+  const cmp=document.getElementById("exComplete"); if(cmp) cmp.addEventListener("click",()=>saveExitCase(x,m,true));
+}
+function collectExit(x){
+  const m=document.getElementById("exModal");
+  const num=(id)=>{ const e=m.querySelector("#"+id); return e&&e.value.trim()!==""?Number(e.value):0; };
+  const o={ last_working_day:m.querySelector("#ex_lwd").value||null, separation_type:m.querySelector("#ex_septype").value,
+    outstanding_salary:num("ex_outstanding_salary"), sil_payment:num("ex_sil_payment"), thirteenth_month:num("ex_thirteenth_month"),
+    tax_refund:num("ex_tax_refund"), pending_commission:num("ex_pending_commission"),
+    uniform_deduction:num("ex_uniform_deduction"),
+    uniform_returned:!!(m.querySelector("#ex_uniform_returned")&&m.querySelector("#ex_uniform_returned").checked),
+    uniform_auth_on_file:!!(m.querySelector("#ex_uniform_auth")&&m.querySelector("#ex_uniform_auth").checked),
+    exit_interview_done:m.querySelector("#ex_exit_interview").checked, hmo_cancelled:m.querySelector("#ex_hmo").checked, coe_issued:m.querySelector("#ex_coe").checked };
+  m.querySelectorAll("[data-stage]").forEach(el=>{ o[el.dataset.stage]=el.value; });
+  m.querySelectorAll("[data-charge]").forEach(el=>{ o[el.dataset.charge]=el.value.trim()!==""?Number(el.value):0; });
+  if(o.last_working_day) o.tenure_months=monthsBetween(x.hire_date,o.last_working_day);
+  return o;
+}
+async function saveExitCase(x,modal,complete){
+  const o=collectExit(x);
+  // fairness guard: uniform deduction needs signed authorization
+  if(Number(o.uniform_deduction||0)>0 && !o.uniform_auth_on_file){
+    document.getElementById("exMsg").textContent="Uniform deduction requires the signed authorization (contract clause) on file — tick the box or set the deduction to 0.";
+    return;
+  }
+  o.total_payable=exitPayables(o); o.total_deductions=exitDeductions(o); o.net_payable=exitNet(o); o.updated_at=new Date().toISOString();
+  if(complete){ o.overall_status="Complete"; o.completion_date=new Date().toISOString(); }
+  const { error } = await sb.from("exit_clearance").update(o).eq("id",x.id);
+  if(error){ document.getElementById("exMsg").textContent=error.message; return; }
+  if(complete && x.employee_id){
+    const er=o.separation_type==="AWOL"?"AWOL":(o.separation_type==="Termination"?"Terminated":(o.separation_type==="End of Contract"?"End of Contract":(o.separation_type==="Retirement"?"Retired":"Resigned")));
+    await sb.from("employees").update({status:"Separated", end_date:o.last_working_day, end_reason:er}).eq("id",x.employee_id);
+  }
+  if(modal) modal.remove();
+  await loadEmployees(); window.go("exit");
 }
 
 init();

@@ -2007,7 +2007,7 @@ async function loadEmployees(){
   EMPLOYEES=emp.data||[];
   BRANCHES=br.data||[];
   DISERS=di.data||[];
-  renderDashboardKPIs();
+  renderDashboard();
   renderEmployeesPage();
   renderBranchesPage();
   renderManning();
@@ -2024,7 +2024,112 @@ const statusPill=(s)=>{
   return `<span class="pill ${m[s]||'active'}">${esc(s||"—")}</span>`;
 };
 
-/* ---------- DASHBOARD ---------- */
+/* ---------- DASHBOARD (workforce intelligence) ---------- */
+function chartRows(obj, max){
+  const ents=Object.entries(obj).filter(([k])=>k&&k!=="—").sort((a,b)=>b[1]-a[1]);
+  const mx=max||Math.max(1,...ents.map(e=>e[1]));
+  return ents.map(([k,v])=>`<div class="barrow" style="margin:8px 0;">
+    <div style="width:150px;font-size:13px;flex-shrink:0;">${esc(k)}</div>
+    <div class="bartrack"><div class="bar" style="width:${Math.round(v/mx*100)}%"></div></div>
+    <div style="width:42px;text-align:right;font-weight:800;font-size:13px;color:var(--green-dark);">${v}</div></div>`).join("");
+}
+function tenureYears(d){ if(!d) return null; const y=(Date.parse(d)); if(isNaN(y)) return null; return (Date.now()-y)/(365.25*24*3600*1000); }
+function renderDashboard(){
+  const A=EMPLOYEES.filter(isActive);
+  const hr=new Date().getHours(); const greet=hr<12?"Good morning":hr<18?"Good afternoon":"Good evening";
+  const nm=(CURRENT_USER?.email||"").split("@")[0];
+  const ho=A.filter(e=>e.group_name==="Head Office").length, wh=A.filter(e=>e.group_name==="Warehouse").length, rt=A.filter(e=>e.group_name==="Retail").length;
+  const prob=A.filter(e=>e.contract_type==="Probationary").length, sep=EMPLOYEES.filter(e=>e.status==="Separated").length;
+  const open=BRANCHES.filter(b=>b.status==="Open");
+  const SCs=[...new Set(open.map(b=>b.sc).filter(x=>x&&x!=='Unassigned'))];
+  const totAHC=open.reduce((s,b)=>s+b.ahc_stationary+b.ahc_reliever,0);
+  const totCHC=open.reduce((s,b)=>s+chcFor(b.name),0);
+  const merchDef=Math.max(0,totAHC-totCHC);
+  // composition
+  const byGroup={"Head Office":ho,"Warehouse":wh,"Retail":rt};
+  const byDept={}; A.filter(e=>e.group_name==="Head Office").forEach(e=>{const d=e.department||"—";byDept[d]=(byDept[d]||0)+1;});
+  const byArea={}; open.forEach(b=>{const a=b.area||"—";byArea[a]=(byArea[a]||0)+1;});
+  const bySC={}; SCs.forEach(s=>bySC[s]=open.filter(b=>b.sc===s).length);
+  const bySource={}; A.forEach(e=>{const s=e.hire_source||"Direct";bySource[s]=(bySource[s]||0)+1;});
+  // merchandiser pay
+  const rates=DISERS.filter(d=>(d.status||'').toLowerCase().startsWith('active')&&d.total_rate).map(d=>Number(d.total_rate));
+  const avgRate=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):0;
+  const minRate=rates.length?Math.min(...rates):0, maxRate=rates.length?Math.max(...rates):0;
+  // tenure
+  const ten=A.map(e=>tenureYears(e.hire_date)).filter(x=>x!=null);
+  const avgTen=ten.length?(ten.reduce((a,b)=>a+b,0)/ten.length).toFixed(1):"—";
+  const concession=open.filter(b=>b.category==="CN").length, coOp=open.filter(b=>b.category==="CO").length;
+
+  const pg=$("#page-dashboard");
+  pg.innerHTML=`
+    <div class="hello">
+      <div class="hd">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"}).toUpperCase()}</div>
+      <div class="hh">${greet}, <span>${esc(nm)}.</span></div>
+      <div class="hsub">Your whole workforce, live from the database — ${A.length} active people across ${open.length} stores.</div>
+    </div>
+    <div class="grid kpis">
+      <div class="kpi"><div class="k-l">Active Employees</div><div class="k-n">${A.length}</div><div class="k-s">of ${EMPLOYEES.length} records</div></div>
+      <div class="kpi"><div class="k-l">Head Office + Warehouse</div><div class="k-n">${ho+wh}</div><div class="k-s">internal staff</div></div>
+      <div class="kpi"><div class="k-l">Retail / Merchandisers</div><div class="k-n">${rt}</div><div class="k-s">in stores</div></div>
+      <div class="kpi"><div class="k-l">Open Stores</div><div class="k-n">${open.length}</div><div class="k-s">${concession} concession · ${coOp} company-op</div></div>
+    </div>
+    <div class="grid kpis" style="margin-top:13px;">
+      <div class="kpi"><div class="k-l">Sales Coordinators</div><div class="k-n">${SCs.length}</div><div class="k-s">covering all stores</div></div>
+      <div class="kpi"><div class="k-l">Approved Headcount</div><div class="k-n">${totAHC}</div><div class="k-s">merchandiser slots</div></div>
+      <div class="kpi warn"><div class="k-l">On Probation</div><div class="k-n">${prob}</div><div class="k-s">regularization reviews ahead</div></div>
+      <div class="kpi"><div class="k-l">Avg Tenure</div><div class="k-n">${avgTen}<span style="font-size:14px;"> yrs</span></div><div class="k-s">across active staff</div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="panel" style="margin-top:0;">
+        <h2>Needs attention <span class="count-tag">live</span></h2>
+        <div class="psub">Computed from your data — what HR should act on</div>
+        <div class="task"><div class="dot a"></div><div><div class="tt">${prob} employees on probation</div><div class="td">3rd / 5th-month evaluations &amp; regularization reviews due over the coming weeks</div></div><div class="due a">review</div></div>
+        <div class="task"><div class="dot r"></div><div><div class="tt">${merchDef} merchandiser slots to confirm</div><div class="td">${totAHC} approved vs ${totCHC} confirmed on file — live count completes when PayPlus connects</div></div><div class="due r">staffing</div></div>
+        <div class="task"><div class="dot g"></div><div><div class="tt">${sep} separated employees on record</div><div class="td">Retained for history / final-pay &amp; COE; exit clearance tracking</div></div><div class="due g">archive</div></div>
+        <div class="task"><div class="dot a"></div><div><div class="tt">Onboarding data to complete</div><div class="td">Government numbers, bank &amp; personal details fill in as records are onboarded into the portal</div></div><div class="due a">data</div></div>
+      </div>
+      <div class="panel" style="margin-top:0;">
+        <h2>Workforce composition</h2>
+        <div class="psub">Active staff by group</div>
+        ${chartRows(byGroup)}
+        <div class="psub" style="margin-top:14px;">By hire source</div>
+        ${chartRows(bySource)}
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="panel" style="margin-top:0;">
+        <h2>Store network by Sales Coordinator</h2>
+        <div class="psub">Open stores under each SC</div>
+        ${chartRows(bySC)}
+      </div>
+      <div class="panel" style="margin-top:0;">
+        <h2>Store footprint by region</h2>
+        <div class="psub">Open stores per area</div>
+        ${chartRows(byArea)}
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="panel" style="margin-top:0;">
+        <h2>Head Office by department</h2>
+        <div class="psub">${ho} head-office staff across ${Object.keys(byDept).length} departments</div>
+        ${chartRows(byDept)}
+      </div>
+      <div class="panel" style="margin-top:0;">
+        <h2>Merchandiser pay</h2>
+        <div class="psub">Daily rate across ${rates.length} merchandisers on file</div>
+        <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
+          <div class="kpi"><div class="k-l">Average</div><div class="k-n">₱${avgRate.toLocaleString()}</div></div>
+          <div class="kpi"><div class="k-l">Lowest</div><div class="k-n">₱${minRate.toLocaleString()}</div></div>
+          <div class="kpi"><div class="k-l">Highest</div><div class="k-n">₱${maxRate.toLocaleString()}</div></div>
+        </div>
+        <div class="task" style="margin-top:10px;"><div class="dot g"></div><div><div class="tt">${DISERS.length} active merchandisers tracked</div><div class="td">With type, position, rate, contract dates &amp; status — drill in from Manning or Worksites</div></div></div>
+      </div>
+    </div>`;
+}
+/* legacy KPI-only updater (unused, kept for safety) */
 function renderDashboardKPIs(){
   const A=EMPLOYEES.filter(isActive);
   const ho=A.filter(e=>e.group_name==="Head Office").length;

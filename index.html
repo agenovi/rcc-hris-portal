@@ -2865,11 +2865,11 @@ async function completeOnboarding(c){
 /* ============================ CONTRACTS MODULE (7-signature stepper) ============================ */
 const CONTRACT_STEPS=[
   {key:"recruiter",label:"Recruiter inputs data",actor:"Recruiter",done:c=>!!c.recruiter_data_at},
-  {key:"hr_salary",label:"HR adds salary",actor:"HR",done:c=>!!c.salary_entered_at||(c.hr_review_status&&c.hr_review_status!=="Pending")},
-  {key:"employee",label:"Employee signs",actor:"Employee",done:c=>!!c.employee_sign_date||(c.employee_sign_status&&c.employee_sign_status!=="Pending")},
-  {key:"se",label:"SE signs (sets deployment date)",actor:"Sales Coordinator",done:c=>!!c.se_date||(c.se_status&&c.se_status!=="Pending")},
-  {key:"supervisor",label:"Supervisor",actor:"Supervisor",done:c=>!!c.supervisor_date||(c.supervisor_status&&c.supervisor_status!=="Pending")},
-  {key:"management",label:"Management (Griselle)",actor:"Management",done:c=>!!c.mgmt_date||(c.mgmt_status&&c.mgmt_status!=="Pending")},
+  {key:"hr_salary",label:"HR adds salary",actor:"HR",done:c=>!!c.salary_entered_at},
+  {key:"employee",label:"Employee signs",actor:"Employee",done:c=>!!c.employee_sign_date},
+  {key:"se",label:"SE signs (sets deployment date)",actor:"Sales Coordinator",done:c=>!!c.se_date},
+  {key:"supervisor",label:"Supervisor",actor:"Supervisor",done:c=>!!c.supervisor_date},
+  {key:"management",label:"Management (Griselle)",actor:"Management",done:c=>!!c.mgmt_date},
   {key:"employee_id",label:"Employee ID assignment",actor:"HR",done:c=>!!c.employee_id_assigned}
 ];
 function contractCurrentStep(c){ const i=CONTRACT_STEPS.findIndex(s=>!s.done(c)); return i<0?CONTRACT_STEPS.length:i; }

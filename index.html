@@ -1954,7 +1954,7 @@ window.RCC_CONFIG = {
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.RCC_CONFIG;
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const $ = (s, r=document) => r.querySelector(s);
-const $ = (s, r=document) => [...r.querySelectorAll(s)];
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
 const esc = (s)=> (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmtDate=(d)=>{ if(!d) return "—"; const x=new Date(d+"T00:00:00"); return isNaN(x)?d:x.toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"}); };
 
@@ -2033,7 +2033,7 @@ function renderDashboardKPIs(){
   const ag=A.filter(e=>e.hire_source&&e.hire_source!=="Direct").length;
   const prob=A.filter(e=>e.contract_type==="Probationary").length;
   const sep=EMPLOYEES.filter(e=>e.status==="Separated").length;
-  const grids=$("#page-dashboard .kpis");
+  const grids=$$("#page-dashboard .kpis");
   if(grids[0]) grids[0].innerHTML=`
     <div class="kpi"><div class="k-l">Total Employees</div><div class="k-n">${A.length}</div><div class="k-s">Head Office ${ho} · Warehouse ${wh} · Retail ${rt}</div></div>
     <div class="kpi"><div class="k-l">Agency Merchandisers</div><div class="k-n">${ag}</div><div class="k-break"><span>Jell-on<b>${A.filter(e=>e.hire_source==="Jell-on").length}</b></span><span>M&amp;G<b>${A.filter(e=>e.hire_source==="M&G").length}</b></span></div></div>
@@ -2085,7 +2085,7 @@ function renderEmployeesPage(){
     <div id="empCount" style="font-size:12px;color:var(--muted);margin-top:10px;"></div>`;
   $("#addEmp").addEventListener("click",()=>openForm(null));
   $("#exportEmp").addEventListener("click",exportCSV);
-  $("#empChips .chip").forEach(c=>c.addEventListener("click",()=>{ empFilter=c.dataset.f; renderEmployeesPage(); }));
+  $$("#empChips .chip").forEach(c=>c.addEventListener("click",()=>{ empFilter=c.dataset.f; renderEmployeesPage(); }));
   $("#empSearch").addEventListener("input",paintEmpRows);
   paintEmpRows();
 }
@@ -2107,7 +2107,7 @@ function paintEmpRows(){
       <td><b>${esc(e.full_name)}</b></td><td>${esc(e.position||"—")}</td><td>${esc(e.department||"—")}</td>
       <td>${esc(e.worksite||"—")}</td><td>${typePill(e)}</td><td>${statusPill(e.status)}</td></tr>`).join("");
   $("#empCount").textContent=`Showing ${Math.min(list.length,400)} of ${list.length} matching · ${EMPLOYEES.length} total`;
-  $("#empRows tr").forEach(tr=>tr.addEventListener("click",()=>openRecord(EMPLOYEES[+tr.dataset.idx])));
+  $$("#empRows tr").forEach(tr=>tr.addEventListener("click",()=>openRecord(EMPLOYEES[+tr.dataset.idx])));
 }
 function exportCSV(){
   const cols=["full_name","department","position","worksite","group_name","hire_source","status","contract_type","email","phone","hire_date"];
@@ -2223,7 +2223,7 @@ function renderBranchesPage(){
       <td>${catPill(b.category)}</td><td>${statusBranchPill(b.status)}</td>
       <td><span class="pill di">${b.ahc_stationary}</span> stationary${b.ahc_reliever?` · ${b.ahc_reliever} reliever`:""}</td></tr>`).join("");
     $("#wsCount").textContent=`${shown.length} of ${BRANCHES.length} stores · click a store to see its merchandisers`;
-    $("#wsRows tr").forEach(tr=>tr.addEventListener("click",()=>openStore(BRANCHES[+tr.dataset.bi])));
+    $$("#wsRows tr").forEach(tr=>tr.addEventListener("click",()=>openStore(BRANCHES[+tr.dataset.bi])));
   };
   $("#wsSearch").addEventListener("input",paint); paint();
 }
@@ -2277,9 +2277,9 @@ function renderManning(){
         </table>
       </div>`;
     }).join("");
-    $("#scBlocks tr.clickable").forEach(tr=>tr.addEventListener("click",()=>openStore(BRANCHES[+tr.dataset.bi])));
+    $$("#scBlocks tr.clickable").forEach(tr=>tr.addEventListener("click",()=>openStore(BRANCHES[+tr.dataset.bi])));
   };
-  $("#scChips .chip").forEach(c=>c.addEventListener("click",()=>{ scFilter=c.dataset.sc; renderManning(); }));
+  $$("#scChips .chip").forEach(c=>c.addEventListener("click",()=>{ scFilter=c.dataset.sc; renderManning(); }));
   paint();
 }
 

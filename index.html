@@ -412,7 +412,7 @@
       </div>
       <div class="nav-item" data-page="onboarding" onclick="go('onboarding')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l5 5L21 5"/></svg>
-        Onboarding Tasks<span class="nav-badge tbd">TBD</span>
+        Onboarding Tasks
       </div>
 
       <div class="nav-sec">Employee Life</div>
@@ -452,7 +452,7 @@
       <div class="nav-sec">Merchandiser Ops</div>
       <div class="nav-item" data-page="manning" onclick="go('manning')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="9" r="2.5"/><circle cx="17" cy="9" r="2.5"/><circle cx="12" cy="9" r="2.5"/><path d="M3 18c0-2.5 1.5-4 4-4M21 18c0-2.5-1.5-4-4-4M8 18c0-2.5 1.5-4 4-4s4 1.5 4 4"/></svg>
-        Manning / Headcount<span class="nav-badge tbd">TBD</span>
+        Manning / Headcount
       </div>
       <div class="nav-item" data-page="agencysubs" onclick="go('agencysubs')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M16 6l4 4M16 18l4-4"/><path d="M20 4v16"/></svg>
@@ -1965,6 +1965,7 @@ let PREHIRE=[];
 let ONBOARDING=[];
 let ONBTASKS=[];
 let EXITCASES=[];
+let CONTRACTS=[];
 let CURRENT_USER=null;
 let empFilter="All";
 let scFilter="All";
@@ -2003,14 +2004,15 @@ function patchSidebarFoot(user){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
     sb.from("prehire").select("*").order("created_at"),
     sb.from("onboarding_cases").select("*").order("created_at"),
     sb.from("onboarding_tasks").select("*").order("sort_order"),
-    sb.from("exit_clearance").select("*").order("created_at")
+    sb.from("exit_clearance").select("*").order("created_at"),
+    sb.from("contracts").select("*").order("created_at")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2020,6 +2022,7 @@ async function loadEmployees(){
   ONBOARDING=(oc&&oc.data)||[];
   ONBTASKS=(ot&&ot.data)||[];
   EXITCASES=(ex&&ex.data)||[];
+  CONTRACTS=(ct&&ct.data)||[];
   renderDashboard();
   renderEmployeesPage();
   renderBranchesPage();
@@ -2027,6 +2030,7 @@ async function loadEmployees(){
   renderPrehire();
   renderOnboarding();
   renderExit();
+  renderContracts();
   wireGlobalSearch();
 }
 const isActive=(e)=>e.status==="Active";
@@ -2856,6 +2860,144 @@ async function completeOnboarding(c){
   if(c.prehire_id) await sb.from("prehire").update({phase:"COMPLETE", assigned_employee_id:c.assigned_employee_id}).eq("id",c.prehire_id);
   const md=document.getElementById("onbModal"); if(md) md.remove();
   await loadEmployees(); window.go("onboarding");
+}
+
+/* ============================ CONTRACTS MODULE (7-signature stepper) ============================ */
+const CONTRACT_STEPS=[
+  {key:"recruiter",label:"Recruiter inputs data",actor:"Recruiter",done:c=>!!c.recruiter_data_at},
+  {key:"hr_salary",label:"HR adds salary",actor:"HR",done:c=>!!c.salary_entered_at||(c.hr_review_status&&c.hr_review_status!=="Pending")},
+  {key:"employee",label:"Employee signs",actor:"Employee",done:c=>!!c.employee_sign_date||(c.employee_sign_status&&c.employee_sign_status!=="Pending")},
+  {key:"se",label:"SE signs (sets deployment date)",actor:"Sales Coordinator",done:c=>!!c.se_date||(c.se_status&&c.se_status!=="Pending")},
+  {key:"supervisor",label:"Supervisor",actor:"Supervisor",done:c=>!!c.supervisor_date||(c.supervisor_status&&c.supervisor_status!=="Pending")},
+  {key:"management",label:"Management (Griselle)",actor:"Management",done:c=>!!c.mgmt_date||(c.mgmt_status&&c.mgmt_status!=="Pending")},
+  {key:"employee_id",label:"Employee ID assignment",actor:"HR",done:c=>!!c.employee_id_assigned}
+];
+function contractCurrentStep(c){ const i=CONTRACT_STEPS.findIndex(s=>!s.done(c)); return i<0?CONTRACT_STEPS.length:i; }
+function contractDoneCount(c){ return CONTRACT_STEPS.filter(s=>s.done(c)).length; }
+function deployDue(c){ if(!c.employee_sign_date) return null; const d=new Date(c.employee_sign_date); d.setDate(d.getDate()+5); return d; }
+function deployDaysLeft(c){ const due=deployDue(c); if(!due) return null; return Math.ceil((due-new Date(new Date().toISOString().slice(0,10)))/86400000); }
+
+function renderContracts(){
+  const pg=$("#page-contracts"); if(!pg) return;
+  const inPipe=CONTRACTS.filter(c=>contractDoneCount(c)<7 && c.stage!=="REJECTED" && !c.rejected_at);
+  const awaitingMgmt=CONTRACTS.filter(c=>contractCurrentStep(c)===5).length;
+  const fullyExec=CONTRACTS.filter(c=>contractDoneCount(c)===7).length;
+  const deployRisk=CONTRACTS.filter(c=>{ const dl=deployDaysLeft(c); return contractCurrentStep(c)===3 && dl!=null && dl<=2; }).length;
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Contracts</h2>
+      <div class="psub">Seven signatures, in strict order: Recruiter → HR (salary) → Employee → SE (deployment date) → Supervisor → Management → Employee ID. A 5-day deployment window protects the candidate.</div>
+      <div class="actionbar"><button class="btn" id="ctNew">+ New contract</button></div>
+      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
+        <div class="kpi"><div class="k-l">In Pipeline</div><div class="k-n">${inPipe.length}</div></div>
+        <div class="kpi warn"><div class="k-l">Awaiting Management</div><div class="k-n">${awaitingMgmt}</div></div>
+        <div class="kpi ${deployRisk?'alert':''}"><div class="k-l">Deployment Due ≤2d</div><div class="k-n">${deployRisk}</div><div class="k-s">5-day window</div></div>
+        <div class="kpi"><div class="k-l">Fully Executed</div><div class="k-n">${fullyExec}</div></div>
+      </div>
+      ${CONTRACTS.length? `<table><thead><tr><th>Employee</th><th>Position</th><th>Stage</th><th>Deployment</th><th>Progress</th></tr></thead>
+        <tbody id="ctRows"></tbody></table>`
+        : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/></svg></div><h2>No contracts yet</h2><p>Click “New contract” to generate one from a pre-hire who reached “Ready for Contract”.</p></div>`}
+    </div>`;
+  $("#ctNew").addEventListener("click",pickPrehireForContract);
+  const rows=$("#ctRows");
+  if(rows){
+    rows.innerHTML=CONTRACTS.map(c=>{ const dn=contractDoneCount(c); const cs=contractCurrentStep(c); const stepLbl=cs<7?CONTRACT_STEPS[cs].label:"Fully executed"; const dl=deployDaysLeft(c);
+      return `<tr class="clickable" data-id="${c.id}"><td><b>${esc(c.employee_name)}</b></td><td>${esc(c.position||"—")}</td>
+        <td>${c.rejected_at?'<span class="pill awol">Rejected</span>':(dn===7?'<span class="pill active">Executed</span>':esc(stepLbl))}</td>
+        <td>${c.deployment_date?fmtDate(c.deployment_date):(cs===3&&dl!=null?`<span class="pill ${dl<=2?'awol':'cn'}">${dl}d to set</span>`:"—")}</td>
+        <td><div class="barrow"><div class="bartrack"><div class="bar${dn===7?'':' def'}" style="width:${Math.round(dn/7*100)}%"></div></div><span style="font-size:11.5px;color:var(--muted);">${dn}/7</span></div></td></tr>`;
+    }).join("");
+    $$("#ctRows tr").forEach(tr=>tr.addEventListener("click",()=>openContract(tr.dataset.id)));
+  }
+}
+function pickPrehireForContract(){
+  const has=new Set(CONTRACTS.map(c=>c.prehire_id).filter(Boolean));
+  const eligible=PREHIRE.filter(p=>["READY_FOR_CONTRACT","CONTRACT_PIPELINE"].includes(p.phase)&&!has.has(p.id));
+  let m=document.getElementById("ctPick"); if(!m){ m=document.createElement("div"); m.id="ctPick"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;max-height:80vh;overflow-y:auto;padding:22px;">
+    <h2 style="color:var(--green-dark);font-size:17px;">New contract</h2>
+    <div class="psub">Pick a candidate at “Ready for Contract”:</div>
+    ${eligible.length? eligible.map(p=>`<div class="task clickable" data-id="${p.id}"><div class="dot g"></div><div><div class="tt">${esc(p.full_name)}</div><div class="td">${esc(p.position||"—")} · ${esc(p.hire_source||"Direct")}</div></div></div>`).join("")
+      : '<div class="psub" style="margin-top:10px;">No candidates at “Ready for Contract”. Advance a pre-hire there first.</div>'}
+    <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button class="btn ghost" id="ctPickClose">Close</button></div>
+  </div>`;
+  $("#ctPickClose").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  $$("#ctPick .task.clickable").forEach(el=>el.addEventListener("click",()=>{ m.remove(); createContract(PREHIRE.find(p=>p.id===el.dataset.id)); }));
+}
+async function createContract(pre){
+  if(!pre) return;
+  const stamp=new Date().toISOString().slice(0,10).replace(/-/g,"");
+  const c={ contract_id:"CON-"+stamp+"-"+String(Math.abs((pre.full_name||"").split("").reduce((a,ch)=>a*31+ch.charCodeAt(0),3))%1000).padStart(3,"0"),
+    prehire_id:pre.id, employee_name:pre.full_name, employee_email:pre.email, position:pre.position, department:pre.department,
+    group_name:deriveGroup(pre.department)||null, contract_type:pre.contract_type||"Probationary", daily_rate:pre.daily_rate||null,
+    recruiter_data_at:new Date().toISOString(), stage:"hr_review" };
+  const { data, error } = await sb.from("contracts").insert(c).select().single();
+  if(error){ alert(error.message); return; }
+  if(pre.phase!=="CONTRACT_PIPELINE") await sb.from("prehire").update({phase:"CONTRACT_PIPELINE", contract_id:data.contract_id}).eq("id",pre.id);
+  await loadEmployees(); window.go("contracts"); openContract(data.id);
+}
+function openContract(id){
+  const c=CONTRACTS.find(v=>String(v.id)===String(id)); if(!c) return;
+  const cs=contractCurrentStep(c); const dn=contractDoneCount(c); const dl=deployDaysLeft(c);
+  const scheme=c.group_name==="Retail"?"DISER":"RCC";
+  let m=document.getElementById("ctModal"); if(!m){ m=document.createElement("div"); m.id="ctModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:580px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0e3219,#1f6b3a);color:#fff;padding:18px 22px;position:sticky;top:0;">
+      <div style="font-size:21px;font-weight:800;">${esc(c.employee_name)}</div>
+      <div style="font-size:12.5px;opacity:.9;margin-top:3px;">${esc(c.position||"—")} · ${esc(c.contract_id)} · ${dn}/7 signatures</div>
+    </div>
+    <div style="padding:18px 22px 60px;">
+      ${cs===3?`<div class="${dl!=null&&dl<0?'restrict-s':'madv'}" style="margin-top:0;">${dl!=null&&dl<0?`<b>Deployment window expired</b> — it has been more than 5 days since the employee signed. Candidate drop-off risk; set the deployment date now or log a reason.`:`<div class="madv-h">⏱ Deployment window</div><div style="font-size:12.5px;color:#5c4720;">SE must set a deployment date within <b>5 days</b> of the employee's signature${dl!=null?` — <b>${dl} day${dl===1?'':'s'} left</b>`:""}.</div>`}</div>`:""}
+      <div class="panel" style="margin-top:14px;"><h2>Signature sequence</h2>
+        <div class="psub">Strict order — each unlocks the next. Advance the current step only.</div>
+        ${CONTRACT_STEPS.map((s,i)=>{ const done=s.done(c); const current=i===cs;
+          return `<div class="task" style="align-items:center;${current?'background:var(--green-light);border-radius:8px;padding:8px 6px;':''}">
+            <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;${done?'background:var(--green);color:#fff;':(current?'background:#fff;border:2px solid var(--green);color:var(--green-dark);':'background:#eef0ef;color:var(--muted);')}">${done?'✓':(i+1)}</div>
+            <div style="flex:1;margin-left:10px;"><div class="tt">${s.label}</div><div class="td">${esc(s.actor)}${done?'':(current?' · current step':'')}</div></div>
+            ${done?'<span class="pill active">Done</span>':(current?'':'<span class="pill" style="background:#eef0ef;color:var(--muted);">Waiting</span>')}
+          </div>`;
+        }).join("")}
+      </div>
+      ${cs===3?`<div class="panel"><h2>Set deployment date</h2><div class="psub">Required for the SE signature (within 5 days of employee signing).</div>
+        <input id="ct_deploy" type="date" value="${esc(c.deployment_date||"")}" style="width:100%;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;"></div>`:""}
+      ${cs===6?`<div class="panel"><h2>Employee ID</h2><div class="psub">Final step — mint the ${scheme} Employee ID, then this contract is fully executed.</div></div>`:""}
+      <div id="ctMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
+        ${dn<7&&!c.rejected_at?`<button class="btn" id="ctAdvance">${cs===6?`Assign ${scheme} ID & execute`:'Advance — '+esc(CONTRACT_STEPS[cs].label)}</button>`:(dn===7?'<span class="pill active">Fully executed ✓</span>':'')}
+        ${!c.rejected_at&&dn<7?'<button class="btn ghost" id="ctReject" style="color:var(--red);border-color:#f1c9c5;">Reject</button>':''}
+        <button class="btn ghost" id="ctClose" style="margin-left:auto;">Close</button>
+      </div>
+    </div></div>`;
+  $("#ctClose").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  const adv=document.getElementById("ctAdvance"); if(adv) adv.addEventListener("click",()=>advanceContract(c,cs,m));
+  const rej=document.getElementById("ctReject"); if(rej) rej.addEventListener("click",()=>{ const r=prompt("Rejection reason?"); if(r!=null) rejectContract(c,r,m); });
+}
+async function advanceContract(c,step,modal){
+  const now=new Date().toISOString();
+  let patch={updated_at:now};
+  if(step===0){ patch.recruiter_data_at=now; }
+  else if(step===1){ patch.salary_entered_at=now; patch.hr_review_status="Completed"; patch.hr_review_date=now; }
+  else if(step===2){ patch.employee_sign_status="Signed"; patch.employee_sign_date=now; }
+  else if(step===3){ const d=document.getElementById("ct_deploy"); const dv=d&&d.value; if(!dv){ document.getElementById("ctMsg").textContent="Set the deployment date first."; return; }
+    const due=deployDue(c); if(due && new Date(dv) > due){ if(!confirm("Deployment date is beyond the 5-day window. Continue anyway (logged)?")) return; }
+    patch.se_status="Signed"; patch.se_date=now; patch.deployment_date=dv; }
+  else if(step===4){ patch.supervisor_status="Approved"; patch.supervisor_date=now; }
+  else if(step===5){ patch.mgmt_status="Approved"; patch.mgmt_date=now; }
+  else if(step===6){ const scheme=c.group_name==="Retail"?"DISER":"RCC"; const { data, error } = await sb.rpc("next_employee_id",{p_scheme:scheme}); if(error){ document.getElementById("ctMsg").textContent=error.message; return; } patch.employee_id_assigned=data; patch.employee_id_assigned_at=now; patch.stage="fully_executed";
+    if(c.prehire_id) await sb.from("prehire").update({assigned_employee_id:data}).eq("id",c.prehire_id); }
+  const { error } = await sb.from("contracts").update(patch).eq("id",c.id);
+  if(error){ document.getElementById("ctMsg").textContent=error.message; return; }
+  if(modal) modal.remove();
+  await loadEmployees(); window.go("contracts"); openContract(c.id);
+}
+async function rejectContract(c,reason,modal){
+  await sb.from("contracts").update({rejected_at:new Date().toISOString(), rejection_reason:reason, stage:"rejected"}).eq("id",c.id);
+  if(modal) modal.remove();
+  await loadEmployees(); window.go("contracts");
 }
 
 /* ============================ EXIT CLEARANCE MODULE ============================ */

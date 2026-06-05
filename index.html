@@ -1961,9 +1961,11 @@ const fmtDate=(d)=>{ if(!d) return "—"; const x=new Date(d+"T00:00:00"); retur
 let EMPLOYEES=[];
 let BRANCHES=[];
 let DISERS=[];
+let PREHIRE=[];
 let CURRENT_USER=null;
 let empFilter="All";
 let scFilter="All";
+let prehireTab="pipeline";
 
 /* ---------- AUTH ---------- */
 async function init(){
@@ -1998,19 +2000,22 @@ function patchSidebarFoot(user){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di] = await Promise.all([
+  const [emp, br, di, ph] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
-    sb.from("disers").select("*").order("name")
+    sb.from("disers").select("*").order("name"),
+    sb.from("prehire").select("*").order("created_at")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
   BRANCHES=br.data||[];
   DISERS=di.data||[];
+  PREHIRE=(ph&&ph.data)||[];
   renderDashboard();
   renderEmployeesPage();
   renderBranchesPage();
   renderManning();
+  renderPrehire();
   wireGlobalSearch();
 }
 const isActive=(e)=>e.status==="Active";
@@ -2484,6 +2489,227 @@ async function saveEmployee(id,modal){
   btn.disabled=false; btn.textContent=id?"Save changes":"Create";
   if(res.error){ msg.textContent=res.error.message; return; }
   modal.remove(); await loadEmployees();
+}
+
+/* ============================ PRE-HIRE MODULE ============================ */
+const PH_PHASES=[
+  {key:"APPLICATION",label:"Applied",actor:"Recruiter"},
+  {key:"ASSESSMENT_SENT",label:"Assessment Sent",actor:"Recruiter"},
+  {key:"ASSESSMENT_COMPLETE",label:"Assessed",actor:"Recruiter"},
+  {key:"OFFER_EXTENDED",label:"Offer Extended",actor:"HR Officer"},
+  {key:"COLLECTING_DOCS",label:"Collecting Docs",actor:"Candidate + HR"},
+  {key:"READY_FOR_CONTRACT",label:"Ready for Contract",actor:"Juvelyn sign-off"},
+  {key:"CONTRACT_PIPELINE",label:"→ Contracts",actor:"Contracts module"},
+  {key:"ONBOARDING",label:"Onboarding",actor:"HR + PayPlus"},
+  {key:"COMPLETE",label:"Complete",actor:"— becomes Employee"}
+];
+const phLabel=(k)=> (PH_PHASES.find(p=>p.key===k)||{}).label || (k==="REJECTED"?"Rejected":k);
+const srcPill=(s)=> s&&s!=="Direct" ? `<span class="pill ag">${esc(s)}</span>` : `<span class="pill di">Direct</span>`;
+
+function renderPrehire(){
+  const pg=$("#page-prehire"); if(!pg) return;
+  const inPipe=PREHIRE.filter(p=>p.phase!=="COMPLETE"&&p.phase!=="REJECTED");
+  const docs=PREHIRE.filter(p=>p.phase==="COLLECTING_DOCS").length;
+  const ready=PREHIRE.filter(p=>p.phase==="READY_FOR_CONTRACT").length;
+  const rejected=PREHIRE.filter(p=>p.phase==="REJECTED").length;
+  const bySrc=(s)=>inPipe.filter(p=>(s==="Direct"?(!p.hire_source||p.hire_source==="Direct"):p.hire_source===s)).length;
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Pre-hire &amp; Recruiting</h2>
+      <div class="psub">Applicant pipeline — from application through screening, documents, and into a contract. This module carries its own architecture &amp; data model (tabs below).</div>
+      <div class="actionbar">
+        <button class="btn" id="phNew">+ New Application</button>
+        <button class="btn blue" id="phExport">Export CSV</button>
+      </div>
+      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
+        <div class="kpi"><div class="k-l">In Pipeline</div><div class="k-n">${inPipe.length}</div>
+          <div class="k-break"><span>Direct<b>${bySrc("Direct")}</b></span><span>Jell-on<b>${bySrc("Jell-on")}</b></span><span>M&amp;G<b>${bySrc("M&G")}</b></span></div></div>
+        <div class="kpi warn"><div class="k-l">Collecting Docs</div><div class="k-n">${docs}</div><div class="k-s">awaiting uploads</div></div>
+        <div class="kpi"><div class="k-l">Ready for Contract</div><div class="k-n">${ready}</div><div class="k-s">Juvelyn signed off</div></div>
+        <div class="kpi ${rejected?'':''}"><div class="k-l">Rejected</div><div class="k-n">${rejected}</div><div class="k-s">pipeline closed</div></div>
+      </div>
+      <div class="tabs" id="phTabs" style="margin-top:14px;">
+        <div class="tab ${prehireTab==='pipeline'?'active':''}" data-t="pipeline">Pipeline</div>
+        <div class="tab ${prehireTab==='arch'?'active':''}" data-t="arch">How it works (Architecture)</div>
+        <div class="tab ${prehireTab==='data'?'active':''}" data-t="data">Data model</div>
+      </div>
+      <div id="phBody"></div>
+    </div>`;
+  $("#phNew").addEventListener("click",newPrehire);
+  $("#phExport").addEventListener("click",()=>{
+    const cols=["prehire_id","full_name","phase","position","department","hire_source","worksite","contract_type","daily_rate","email"];
+    const csv=cols.join(",")+"\n"+PREHIRE.map(p=>cols.map(c=>`"${(p[c]==null?"":String(p[c])).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="prehire.csv";a.click();
+  });
+  $$("#phTabs .tab").forEach(t=>t.addEventListener("click",()=>{ prehireTab=t.dataset.t; renderPrehire(); }));
+  if(prehireTab==="arch") phBodyArch();
+  else if(prehireTab==="data") phBodyData();
+  else phBodyPipeline();
+}
+
+function phBodyPipeline(){
+  const cols=PH_PHASES.map(ph=>{
+    const cards=PREHIRE.filter(p=>p.phase===ph.key);
+    return `<div class="col"><div class="col-h">${ph.label}<span>${cards.length} · ${esc(ph.actor)}</span></div>
+      ${cards.map(c=>`<div class="ccard clickable" data-id="${c.id}" ${ph.key==="READY_FOR_CONTRACT"?'style="border-color:#bcdcc7;background:var(--green-light);"':''}>
+        <div class="cn">${esc(c.full_name)}</div>
+        <div class="cd">${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")}${c.assessment_score!=null?` · exam ${c.assessment_score}`:""}${c.sm_acceptance&&c.sm_acceptance!=="NA"?` · SM ${esc(c.sm_acceptance)}`:""}</div></div>`).join("")
+       || `<div style="font-size:11.5px;color:var(--muted);padding:6px 2px;">—</div>`}
+    </div>`;
+  }).join("");
+  const rej=PREHIRE.filter(p=>p.phase==="REJECTED");
+  $("#phBody").innerHTML=`
+    <div class="psub" style="margin-top:12px;">Nine stages, left → right. Click any card to open the candidate and advance the stage.</div>
+    <div class="pipe">${cols}</div>
+    <div class="two-col" style="margin-top:14px;">
+      <div class="panel" style="margin-top:0;"><h2>Agency Submissions — the two-way loop</h2>
+        <div class="psub">RCC posts an open slot → Jell-on &amp; M&amp;G propose candidates → RCC approves → candidate enters this pipeline</div>
+        <div class="task"><div class="dot g"></div><div><div class="tt">How it connects</div><div class="td">An approved agency candidate is created here at <b>Applied</b>, with Hire Source = the proposing agency. The agency login only sees its own submissions.</div></div></div>
+      </div>
+      <div class="panel" style="margin-top:0;"><h2>Hard Gate — SM / Retail-Ops Acceptance</h2>
+        <div class="psub">For consigned (concession) merchandisers, the host store must accept before pre-hire can close</div>
+        ${PREHIRE.filter(p=>p.sm_acceptance&&p.sm_acceptance!=="NA").map(p=>`<div class="task"><div class="dot ${p.sm_acceptance==='Accepted'?'g':(p.sm_acceptance==='Rejected'?'r':'a')}"></div><div><div class="tt">${esc(p.full_name)} · ${esc(p.worksite||"—")}</div><div class="td">SM acceptance: ${esc(p.sm_acceptance)}</div></div></div>`).join("")||'<div class="psub">No consigned candidates awaiting SM acceptance.</div>'}
+      </div>
+    </div>
+    ${rej.length?`<div class="panel"><h2>Rejected <span class="count-tag">${rej.length}</span></h2>${rej.map(c=>`<div class="task clickable" data-id="${c.id}"><div class="dot r"></div><div><div class="tt">${esc(c.full_name)}</div><div class="td">${esc(c.position||"—")} · ${esc(c.rejection_reason||"no reason recorded")}</div></div></div>`).join("")}</div>`:""}`;
+  $$("#phBody .clickable").forEach(el=>el.addEventListener("click",()=>openPrehire(PREHIRE.find(p=>String(p.id)===el.dataset.id))));
+}
+
+function phBodyArch(){
+  const stages=[
+    ["1 · Application","Recruiter / applicant","Candidate applies (direct link or agency submission). Core identity captured.","full_name, email, phone, position, department, hire_source, resume_url","Auto-create pre-hire record; per-candidate Drive folder provisioned"],
+    ["2 · Assessment Sent","Recruiter","Aptitude/skills test sent to the candidate.","assessment_type, assessment_sent_date","Assessment link emailed automatically"],
+    ["3 · Assessed","Recruiter","Result recorded; pass/fail gate.","assessment_score, assessment_passed → assessments table","Auto-score; fail can auto-reject"],
+    ["4 · Offer Extended","HR Officer","Position, rate and terms offered.","contract_type, daily_rate, daily_allowance, start_date, supervisor","Offer letter generated"],
+    ["5 · Collecting Docs","Candidate + HR","Candidate uploads the 6 required documents; HR verifies each.","prehire_documents (one row per doc: status PENDING/RECEIVED/REJECTED)","Upload reminders; completeness check"],
+    ["6 · Ready for Contract","Juvelyn (sign-off)","Final HR review and sign-off. Gov numbers + bank confirmed.","hr_officer_notes, juvelyn_notes, juvelyn_review_date, sss/philhealth/pagibig/tin, bank","Sign-off unlocks contract generation"],
+    ["7 · → Contracts","Contracts module","Employment contract generated and routed for e-signature.","contract_id (links to Contracts 7-stage pipeline)","Contract auto-generated from pre-hire data"],
+    ["8 · Onboarding","HR + PayPlus","PayPlus setup, Employee ID issued, uniform, orientation.","payplus_setup, assigned_employee_id, uniform_issued, orientation_complete","PayPlus ID sync; onboarding checklist"],
+    ["9 · Complete","System","Pre-hire closes — the record becomes a full Employee.","assigned_employee_id → creates employees row","Promotes pre-hire → employees automatically"]
+  ];
+  $("#phBody").innerHTML=`
+    <div class="panel" style="margin-top:14px;"><h2>The pipeline — stage by stage</h2>
+      <div class="psub">Each stage names who acts, what happens, the data it captures, and the automation behind it.</div>
+      <table><thead><tr><th>Stage</th><th>Who acts</th><th>What happens</th><th>Data captured</th><th>Automation</th></tr></thead>
+        <tbody>${stages.map(s=>`<tr><td><b>${s[0]}</b></td><td>${s[1]}</td><td>${s[2]}</td><td style="font-size:12px;color:var(--muted);">${s[3]}</td><td style="font-size:12px;">${s[4]}</td></tr>`).join("")}</tbody></table>
+    </div>
+    <div class="two-col">
+      <div class="panel" style="margin-top:0;"><h2>Two gates that can block a close</h2>
+        <div class="task"><div class="dot a"></div><div><div class="tt">Agency Submissions loop</div><div class="td">Agency-sourced candidates enter at Applied (Hire Source = Jell-on / M&amp;G). The agency sees only its own.</div></div></div>
+        <div class="task"><div class="dot a"></div><div><div class="tt">SM / Retail-Ops hard gate</div><div class="td">Consigned merchandisers cannot reach Complete until the host store (SM / retail-ops) accepts — <code>sm_acceptance</code>.</div></div></div>
+      </div>
+      <div class="panel" style="margin-top:0;"><h2>Where the data lives &amp; what it connects to</h2>
+        <div class="task"><div class="dot g"></div><div><div class="tt">prehire</div><div class="td">One row per candidate — the spine of this module (the full lifecycle above).</div></div></div>
+        <div class="task"><div class="dot g"></div><div><div class="tt">prehire_documents</div><div class="td">The 6-document checklist, one row per document, per candidate.</div></div></div>
+        <div class="task"><div class="dot g"></div><div><div class="tt">assessments</div><div class="td">Each exam attempt — score, pass/fail, answers.</div></div></div>
+        <div class="task"><div class="dot g"></div><div><div class="tt">→ employees · contracts</div><div class="td">On Complete, becomes an <b>employees</b> record; the contract links to the <b>Contracts</b> module.</div></div></div>
+      </div>
+    </div>`;
+}
+
+function phBodyData(){
+  const groups=[
+    ["Identity & Stage","prehire_id, phase (9 stages + Rejected), full_name, email, phone, date_of_birth, civil_status, permanent_address, current_address, emergency_contact_name / _relation / _number, hire_source, worksite"],
+    ["Assessment","assessment_type, assessment_sent_date, assessment_score, assessment_passed, assessment_notes"],
+    ["Position & Compensation","position, department, contract_type, daily_rate, daily_allowance, start_date, end_date, supervisor_name, supervisor_email"],
+    ["Approvals & Review","approver1_email, approver2_email, hr_officer_notes, hr_officer_review_date, juvelyn_notes, juvelyn_review_date, amendment_request, sm_acceptance (hard gate), rejection_reason, reviewed_by"],
+    ["Government & Bank","sss_number, philhealth_number, pagibig_number, tin_number, bank_name, bank_account_number"],
+    ["Contract & Onboarding","contract_id, payplus_setup (+date), assigned_employee_id (+date), uniform_issued (+date), orientation_complete (+date), drive_folder_url, docs_folder_url"],
+    ["System","id (uuid), created_at, updated_at"]
+  ];
+  $("#phBody").innerHTML=`
+    <div class="panel" style="margin-top:14px;"><h2>prehire — the candidate record</h2>
+      <div class="psub">${groups.reduce((n,g)=>n+g[1].split(",").length,0)} fields across ${groups.length} groups. Already built in Supabase.</div>
+      ${groups.map(g=>`<div class="subhead">${esc(g[0])}</div><div style="font-size:13px;color:#3a4540;line-height:1.7;">${esc(g[1])}</div>`).join("")}
+    </div>
+    <div class="two-col">
+      <div class="panel" style="margin-top:0;"><h2>prehire_documents</h2>
+        <div class="psub">The document checklist — one row per required doc, per candidate</div>
+        <div style="font-size:13px;color:#3a4540;line-height:1.7;">document_key, document_label, is_mandatory, status (PENDING / RECEIVED / REJECTED), file_url, rejection_reason, submitted_at, verified_by, verified_at</div>
+      </div>
+      <div class="panel" style="margin-top:0;"><h2>assessments</h2>
+        <div class="psub">Each exam attempt for a candidate</div>
+        <div style="font-size:13px;color:#3a4540;line-height:1.7;">assessment_type, is_timed, time_limit_minutes, started_at, completed_at, score, total_questions, correct_answers, passing_score, passed, answers (jsonb)</div>
+      </div>
+    </div>`;
+}
+
+function phRow(k,v){ const blank=v==null||v===""; return `<div class="efield"><div class="el">${k}</div><div class="ev">${blank?'<span class="note">—</span>':esc(v)}</div><div class="em"></div></div>`; }
+function openPrehire(c){
+  if(!c) return;
+  const idx=PH_PHASES.findIndex(p=>p.key===c.phase);
+  const next=idx>=0&&idx<PH_PHASES.length-1?PH_PHASES[idx+1]:null;
+  let m=document.getElementById("phModal"); if(!m){ m=document.createElement("div"); m.id="phModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:580px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0e3219,#1f6b3a);color:#fff;padding:18px 22px;position:sticky;top:0;">
+      <div style="font-size:21px;font-weight:800;">${esc(c.full_name)}</div>
+      <div style="font-size:12.5px;opacity:.9;margin-top:3px;">${esc(c.prehire_id)} · ${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")} · <b>${esc(phLabel(c.phase))}</b></div>
+    </div>
+    <div style="padding:18px 22px 60px;">
+      <div class="panel" style="margin-top:0;">
+        <div class="esec-h"><span class="esec-n">i</span><span class="esec-t">Application</span></div>
+        ${phRow("Email",c.email)}${phRow("Phone",c.phone)}${phRow("Position",c.position)}${phRow("Department",c.department)}${phRow("Worksite",c.worksite)}${phRow("Hire source",c.hire_source||"Direct")}
+      </div>
+      <div class="panel">
+        <div class="esec-h"><span class="esec-n">ii</span><span class="esec-t">Assessment &amp; Offer</span></div>
+        ${phRow("Assessment",c.assessment_type)}${phRow("Score",c.assessment_score)}${phRow("Passed",c.assessment_passed==null?"":(c.assessment_passed?"Yes":"No"))}${phRow("Contract type",c.contract_type)}${phRow("Daily rate",c.daily_rate?("₱"+Number(c.daily_rate).toLocaleString()):"")}
+      </div>
+      <div class="panel">
+        <div class="esec-h"><span class="esec-n">iii</span><span class="esec-t">Review, Gates &amp; Onboarding</span></div>
+        ${phRow("HR officer notes",c.hr_officer_notes)}${phRow("Juvelyn sign-off",c.juvelyn_review_date?"Signed":"")}${phRow("SM acceptance (hard gate)",c.sm_acceptance)}${phRow("Contract ID",c.contract_id)}${phRow("PayPlus setup",c.payplus_setup?"Done":"")}${phRow("Assigned Employee ID",c.assigned_employee_id)}
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+        ${next?`<button class="btn" id="phAdvance">Advance → ${esc(next.label)}</button>`:'<span class="pill active">Pipeline complete</span>'}
+        ${c.phase!=="REJECTED"?'<button class="btn ghost" id="phReject" style="color:var(--red);border-color:#f1c9c5;">Reject</button>':''}
+        <button class="btn ghost" id="phClose" style="margin-left:auto;">Close</button>
+      </div>
+    </div></div>`;
+  $("#phClose").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  if(next) $("#phAdvance").addEventListener("click",()=>setPhase(c,next.key,m));
+  const rej=document.getElementById("phReject"); if(rej) rej.addEventListener("click",()=>{ const reason=prompt("Rejection reason?"); if(reason!=null) setPhase(c,"REJECTED",m,{rejection_reason:reason}); });
+}
+async function setPhase(c,phase,modal,extra){
+  const patch=Object.assign({phase, updated_at:new Date().toISOString()}, extra||{});
+  const { error } = await sb.from("prehire").update(patch).eq("id",c.id);
+  if(error){ alert(error.message); return; }
+  if(modal) modal.remove();
+  await loadEmployees(); window.go("prehire");
+}
+function newPrehire(){
+  const e={};
+  let m=document.getElementById("phModal"); if(!m){ m=document.createElement("div"); m.id="phModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:520px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0e3219,#1f6b3a);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">New Application</div><div style="font-size:12.5px;opacity:.85;">Enters the pipeline at “Applied”.</div></div>
+    <div style="padding:18px 22px;"><div class="panel" style="margin-top:0;">
+      ${fld("np_full_name","Full name *",e.full_name)}
+      ${sel("np_department","Department",DEPARTMENTS,e.department)}
+      ${fld("np_position","Position",e.position)}
+      ${sel("np_hire_source","Hire source",HIRE_SOURCES,"Direct")}
+      ${fld("np_worksite","Worksite (if store)",e.worksite)}
+      ${fld("np_email","Email",e.email,"email")}
+      ${fld("np_phone","Phone",e.phone)}
+      ${sel("np_contract_type","Contract type",CONTRACT_TYPES,"Probationary")}
+      ${fld("np_daily_rate","Daily rate (₱)",e.daily_rate,"number")}
+      <div id="npMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
+      <div style="display:flex;gap:10px;"><button class="btn ghost" id="npCancel" style="flex:1;">Cancel</button><button class="btn" id="npSave" style="flex:1;">Create</button></div>
+    </div></div></div>`;
+  $("#npCancel").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  $("#npSave").addEventListener("click",async()=>{
+    const fullname=document.getElementById("np_full_name").value.trim();
+    if(!fullname){ document.getElementById("npMsg").textContent="Full name is required."; return; }
+    const stamp=new Date().toISOString().slice(0,10).replace(/-/g,"");
+    const rnd=Math.abs(fullname.split("").reduce((a,ch)=>a*31+ch.charCodeAt(0),7))%1000;
+    const payload={ prehire_id:"PH-"+stamp+"-"+String(rnd).padStart(3,"0"), phase:"APPLICATION", full_name:fullname,
+      department:v("np_department"), position:v("np_position"), hire_source:v("np_hire_source"), worksite:v("np_worksite"),
+      email:v("np_email"), phone:v("np_phone"), contract_type:v("np_contract_type"), daily_rate:nv("np_daily_rate") };
+    const { error } = await sb.from("prehire").insert(payload);
+    if(error){ document.getElementById("npMsg").textContent=error.message; return; }
+    m.remove(); await loadEmployees(); window.go("prehire");
+  });
 }
 
 init();

@@ -1970,6 +1970,7 @@ let CURRENT_USER=null;
 let empFilter="All";
 let scFilter="All";
 let prehireTab="pipeline";
+let landed=false;
 
 /* ---------- AUTH ---------- */
 async function init(){
@@ -2032,6 +2033,7 @@ async function loadEmployees(){
   renderExit();
   renderContracts();
   wireGlobalSearch();
+  if(!landed){ landed=true; if(typeof window.go==="function") window.go("dashboard"); }
 }
 const isActive=(e)=>e.status==="Active";
 const typePill=(e)=>{
@@ -2079,6 +2081,13 @@ function renderDashboard(){
   const ten=A.map(e=>tenureYears(e.hire_date)).filter(x=>x!=null);
   const avgTen=ten.length?(ten.reduce((a,b)=>a+b,0)/ten.length).toFixed(1):"—";
   const concession=open.filter(b=>b.category==="CN").length, coOp=open.filter(b=>b.category==="CO").length;
+  const agJellon=A.filter(e=>e.hire_source==="Jell-on").length, agMG=A.filter(e=>e.hire_source==="M&G").length, agency=agJellon+agMG;
+  const awol=EMPLOYEES.filter(e=>e.status==="AWOL").length;
+  const phPipe=PREHIRE.filter(p=>!["COMPLETE","REJECTED"].includes(p.phase)).length;
+  const phReady=PREHIRE.filter(p=>["READY_FOR_CONTRACT","CONTRACT_PIPELINE"].includes(p.phase)).length;
+  const onbOpen=ONBOARDING.filter(c=>c.status!=="Complete").length;
+  const onbTasksOpen=ONBTASKS.filter(t=>t.status!=="Done").length;
+  const exitOpen=EXITCASES.filter(x=>x.overall_status!=="Complete").length;
 
   const pg=$("#page-dashboard");
   pg.innerHTML=`
@@ -2088,26 +2097,27 @@ function renderDashboard(){
       <div class="hsub">Your whole workforce, live from the database — ${A.length} active people across ${open.length} stores.</div>
     </div>
     <div class="grid kpis">
-      <div class="kpi"><div class="k-l">Active Employees</div><div class="k-n">${A.length}</div><div class="k-s">of ${EMPLOYEES.length} records</div></div>
-      <div class="kpi"><div class="k-l">Head Office + Warehouse</div><div class="k-n">${ho+wh}</div><div class="k-s">internal staff</div></div>
-      <div class="kpi"><div class="k-l">Retail / Merchandisers</div><div class="k-n">${rt}</div><div class="k-s">in stores</div></div>
-      <div class="kpi"><div class="k-l">Open Stores</div><div class="k-n">${open.length}</div><div class="k-s">${concession} concession · ${coOp} company-op</div></div>
+      <div class="kpi"><div class="k-l">Active Employees</div><div class="k-n">${A.length}</div><div class="k-break"><span>HO+WH<b>${ho+wh}</b></span><span>Retail<b>${rt}</b></span></div></div>
+      <div class="kpi"><div class="k-l">Agency Merchandisers</div><div class="k-n">${agency}</div><div class="k-break"><span>Jell-on<b>${agJellon}</b></span><span>M&amp;G<b>${agMG}</b></span></div></div>
+      <div class="kpi warn"><div class="k-l">On Probation</div><div class="k-n">${prob}</div><div class="k-s">regularization reviews ahead</div></div>
+      <div class="kpi ${awol?'alert':''}"><div class="k-l">AWOL Cases</div><div class="k-n">${awol}</div><div class="k-s">${awol?'NTE / due process':'none open'}</div></div>
     </div>
     <div class="grid kpis" style="margin-top:13px;">
-      <div class="kpi"><div class="k-l">Sales Coordinators</div><div class="k-n">${SCs.length}</div><div class="k-s">covering all stores</div></div>
-      <div class="kpi"><div class="k-l">Approved Headcount</div><div class="k-n">${totAHC}</div><div class="k-s">merchandiser slots</div></div>
-      <div class="kpi warn"><div class="k-l">On Probation</div><div class="k-n">${prob}</div><div class="k-s">regularization reviews ahead</div></div>
-      <div class="kpi"><div class="k-l">Avg Tenure</div><div class="k-n">${avgTen}<span style="font-size:14px;"> yrs</span></div><div class="k-s">across active staff</div></div>
+      <div class="kpi" style="cursor:pointer;" onclick="go('prehire')"><div class="k-l">Pre-hire in Pipeline</div><div class="k-n">${phPipe}</div><div class="k-s">${phReady} ready for contract</div></div>
+      <div class="kpi" style="cursor:pointer;" onclick="go('onboarding')"><div class="k-l">Onboarding in Progress</div><div class="k-n">${onbOpen}</div><div class="k-s">${onbTasksOpen} open tasks</div></div>
+      <div class="kpi warn" style="cursor:pointer;" onclick="go('manning')"><div class="k-l">Headcount Deficiency</div><div class="k-n">${merchDef}</div><div class="k-s">unfilled merchandiser slots</div></div>
+      <div class="kpi" style="cursor:pointer;" onclick="go('exit')"><div class="k-l">Exit Clearances Open</div><div class="k-n">${exitOpen}</div><div class="k-s">offboarding in progress</div></div>
     </div>
 
     <div class="two-col">
       <div class="panel" style="margin-top:0;">
-        <h2>Needs attention <span class="count-tag">live</span></h2>
-        <div class="psub">Computed from your data — what HR should act on</div>
-        <div class="task"><div class="dot a"></div><div><div class="tt">${prob} employees on probation</div><div class="td">3rd / 5th-month evaluations &amp; regularization reviews due over the coming weeks</div></div><div class="due a">review</div></div>
-        <div class="task"><div class="dot r"></div><div><div class="tt">${merchDef} merchandiser slots to confirm</div><div class="td">${totAHC} approved vs ${totCHC} confirmed on file — live count completes when PayPlus connects</div></div><div class="due r">staffing</div></div>
-        <div class="task"><div class="dot g"></div><div><div class="tt">${sep} separated employees on record</div><div class="td">Retained for history / final-pay &amp; COE; exit clearance tracking</div></div><div class="due g">archive</div></div>
-        <div class="task"><div class="dot a"></div><div><div class="tt">Onboarding data to complete</div><div class="td">Government numbers, bank &amp; personal details fill in as records are onboarded into the portal</div></div><div class="due a">data</div></div>
+        <h2>Your pending tasks <span class="count-tag">live · click to act</span></h2>
+        <div class="psub">Computed from your data — most actionable first</div>
+        ${phReady?`<div class="task" style="cursor:pointer;" onclick="go('prehire')"><div class="dot r"></div><div><div class="tt">${phReady} candidate(s) ready for contract / onboarding</div><div class="td">Move them into an onboarding case</div></div><div class="due r">hiring</div></div>`:''}
+        ${onbTasksOpen?`<div class="task" style="cursor:pointer;" onclick="go('onboarding')"><div class="dot a"></div><div><div class="tt">${onbTasksOpen} open onboarding task(s)</div><div class="td">${onbOpen} case(s) in progress — bank, uniform, gov forms, Employee ID</div></div><div class="due a">onboarding</div></div>`:''}
+        ${exitOpen?`<div class="task" style="cursor:pointer;" onclick="go('exit')"><div class="dot a"></div><div><div class="tt">${exitOpen} exit clearance(s) in progress</div><div class="td">Department sign-offs &amp; final-pay computation</div></div><div class="due a">offboarding</div></div>`:''}
+        <div class="task" style="cursor:pointer;" onclick="go('employees')"><div class="dot a"></div><div><div class="tt">${prob} employees on probation</div><div class="td">3rd / 5th-month evaluations &amp; regularization reviews</div></div><div class="due a">review</div></div>
+        <div class="task" style="cursor:pointer;" onclick="go('manning')"><div class="dot r"></div><div><div class="tt">${merchDef} merchandiser slots to fill</div><div class="td">${totAHC} approved vs ${totCHC} confirmed — across ${SCs.length} Sales Coordinators</div></div><div class="due r">staffing</div></div>
       </div>
       <div class="panel" style="margin-top:0;">
         <h2>Workforce composition</h2>

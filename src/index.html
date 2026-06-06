@@ -1,0 +1,1941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RCC HRIS Portal — Visual Mockup v2</title>
+<style>
+  :root{
+    --green:#1f6b3a; --green-dark:#144726; --green-deep:#0e3219; --green-light:#e8f2eb;
+    --ink:#1c2521; --muted:#6a766f; --line:#e2e7e4; --bg:#f1f4f2; --card:#ffffff;
+    --amber:#c89b29; --amber-bg:#fdf6e3; --amber-ink:#8a6a14;
+    --red:#c0392b; --red-bg:#fdeceb; --red-ink:#a4322a;
+    --blue:#2c6e8f; --blue-bg:#e7f1f5;
+    --purple:#6b4ea0; --purple-bg:#f0ebf7;
+    --gold:#c8a86a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); font-size:15px; line-height:1.55;
+  }
+  .demobar{
+    background:var(--amber-bg); color:var(--amber-ink); text-align:center;
+    font-size:12.5px; font-weight:600; padding:5px 10px; border-bottom:1px solid #ecdca6;
+  }
+  .app{display:flex; min-height:calc(100vh - 27px);}
+
+  /* SIDEBAR */
+  .sidebar{
+    width:240px; background:linear-gradient(180deg,var(--green-dark),var(--green-deep));
+    color:#dce8e0; flex-shrink:0; display:flex; flex-direction:column;
+  }
+  .brand{padding:20px 20px 16px; border-bottom:1px solid rgba(255,255,255,.1);}
+  .brand .logo{
+    width:34px;height:34px;border-radius:9px;background:var(--green);
+    display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:16px;
+  }
+  .brand .nm{font-weight:700;color:#fff;font-size:15px;margin-top:8px;}
+  .brand .tag{font-size:11px;opacity:.6;letter-spacing:.5px;}
+  nav{padding:8px 0; flex:1;}
+  .nav-sec{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;opacity:.45;padding:13px 20px 5px;}
+  .nav-item{
+    display:flex;align-items:center;gap:11px;padding:8px 20px;cursor:pointer;
+    font-size:13.5px;color:#cad9d0;border-left:3px solid transparent;
+  }
+  .nav-item:hover{background:rgba(255,255,255,.06);color:#fff;}
+  .nav-item.active{background:rgba(255,255,255,.1);color:#fff;border-left-color:#7fc99b;font-weight:600;}
+  .nav-item svg{width:17px;height:17px;flex-shrink:0;}
+  .sidebar-foot{
+    padding:14px 20px;border-top:1px solid rgba(255,255,255,.1);
+    display:flex;align-items:center;gap:10px;font-size:12.5px;
+  }
+  .av{width:30px;height:30px;border-radius:50%;background:var(--green);
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;}
+
+  /* MAIN */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;}
+  .topbar{
+    background:var(--card);border-bottom:1px solid var(--line);
+    padding:13px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  }
+  .topbar h1{font-size:18px;color:var(--green-dark);}
+  .search{
+    background:var(--bg);border:1px solid var(--line);border-radius:8px;
+    padding:7px 12px;font-size:13px;color:var(--muted);min-width:240px;
+  }
+  .content{padding:22px 28px;overflow-y:auto;}
+  .page{display:none;}
+  .page.active{display:block;}
+
+  /* GREETING */
+  .hello{
+    background:linear-gradient(135deg,var(--green-deep),var(--green));
+    color:#fff;border-radius:14px;padding:24px 28px;margin-bottom:18px;
+  }
+  .hello .hd{font-size:12px;letter-spacing:1.5px;font-weight:700;opacity:.8;display:flex;align-items:center;gap:8px;}
+  .hello .hd::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--gold);}
+  .hello .hh{font-size:30px;font-weight:800;margin-top:8px;line-height:1.15;}
+  .hello .hh span{color:var(--gold);}
+  .hello .hsub{font-size:13.5px;opacity:.85;margin-top:6px;}
+
+  /* SHARED */
+  .grid{display:grid;gap:13px;}
+  .kpis{grid-template-columns:repeat(4,1fr);}
+  .kpi{
+    background:var(--card);border:1px solid var(--line);border-radius:11px;padding:14px 16px;
+  }
+  .kpi .k-l{font-size:12px;color:var(--muted);font-weight:600;}
+  .kpi .k-n{font-size:26px;font-weight:800;color:var(--green-dark);line-height:1.2;margin-top:2px;}
+  .kpi .k-s{font-size:11.5px;color:var(--muted);margin-top:1px;}
+  .kpi.alert .k-n{color:var(--red);}
+  .kpi.warn .k-n{color:var(--amber-ink);}
+  .k-break{display:flex;gap:6px;margin-top:8px;}
+  .k-break span{
+    flex:1;background:var(--bg);border-radius:6px;padding:4px 7px;font-size:11px;
+    color:var(--ink);font-weight:600;text-align:center;
+  }
+  .k-break span b{display:block;font-size:14px;color:var(--green-dark);}
+
+  .panel{
+    background:var(--card);border:1px solid var(--line);border-radius:11px;
+    padding:17px 19px;margin-top:14px;
+  }
+  .panel h2{font-size:15px;color:var(--green-dark);margin-bottom:3px;display:flex;align-items:center;gap:8px;}
+  .panel .psub{font-size:12.5px;color:var(--muted);margin-bottom:11px;}
+  .count-tag{
+    background:var(--green-light);color:var(--green-dark);font-size:11px;font-weight:700;
+    padding:2px 8px;border-radius:999px;
+  }
+  .two-col{display:grid;grid-template-columns:1.35fr 1fr;gap:14px;margin-top:14px;}
+  @media(max-width:820px){.two-col{grid-template-columns:1fr;}.kpis{grid-template-columns:repeat(2,1fr);}}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{
+    text-align:left;padding:9px 10px;background:var(--green-dark);color:#fff;
+    font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:700;
+  }
+  td{padding:10px;border-bottom:1px solid var(--line);}
+  tbody tr:hover{background:#fafbfa;}
+  tr.clickable{cursor:pointer;}
+
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;}
+  .pill.ho{background:var(--blue-bg);color:var(--blue);}
+  .pill.di{background:var(--green-light);color:var(--green-dark);}
+  .pill.ag{background:var(--purple-bg);color:var(--purple);}
+  .pill.active{background:var(--green-light);color:var(--green-dark);}
+  .pill.probation{background:var(--amber-bg);color:var(--amber-ink);}
+  .pill.awol{background:var(--red-bg);color:var(--red-ink);}
+  .pill.co{background:var(--blue-bg);color:var(--blue);}
+  .pill.cn{background:var(--amber-bg);color:var(--amber-ink);}
+  .pill.open{background:var(--green-light);color:var(--green-dark);}
+  .pill.closed{background:#eef0ef;color:var(--muted);}
+
+  /* TASK LIST */
+  .task{
+    display:flex;gap:11px;padding:10px 0;border-bottom:1px solid var(--line);align-items:flex-start;
+  }
+  .task:last-child{border-bottom:none;}
+  .dot{width:9px;height:9px;border-radius:50%;margin-top:5px;flex-shrink:0;}
+  .dot.r{background:var(--red);} .dot.a{background:var(--amber);} .dot.g{background:var(--green);}
+  .task .tt{font-size:13px;font-weight:600;}
+  .task .td{font-size:12px;color:var(--muted);}
+  .task .due{font-size:11px;font-weight:700;margin-left:auto;white-space:nowrap;padding-left:8px;}
+  .due.r{color:var(--red);} .due.a{color:var(--amber-ink);} .due.g{color:var(--muted);}
+
+  .nudge-item{
+    display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);
+  }
+  .nudge-item:last-child{border-bottom:none;}
+  .nudge-item .ni{flex:1;}
+  .nudge-item .nt{font-size:12.5px;font-weight:600;}
+  .nudge-item .nd{font-size:11.5px;color:var(--muted);}
+  .nbtn{
+    background:#fff;border:1px solid var(--green);color:var(--green-dark);
+    font-size:11.5px;font-weight:700;padding:5px 12px;border-radius:7px;cursor:pointer;white-space:nowrap;
+  }
+  .nbtn:hover{background:var(--green);color:#fff;}
+
+  .team-row{
+    display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:12.5px;
+  }
+  .team-row:last-child{border-bottom:none;}
+  .team-row .tn{flex:1;}
+  .mini{font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;}
+  .mini.ok{background:var(--green-light);color:var(--green-dark);}
+  .mini.bad{background:var(--red-bg);color:var(--red-ink);}
+
+  .btn{
+    background:var(--green);color:#fff;border:none;border-radius:8px;
+    padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer;
+  }
+  .btn.ghost{background:#fff;color:var(--green-dark);border:1px solid var(--line);}
+  .btn.blue{background:var(--blue);}
+  .actionbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0;}
+
+  .toggle{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .toggle div{padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--muted);background:#fff;}
+  .toggle div.active{background:var(--green-dark);color:#fff;}
+
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px;}
+  .tab{padding:8px 14px;font-size:13px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;}
+  .tab.active{color:var(--green-dark);font-weight:700;border-bottom-color:var(--green);}
+
+  .filterbar{display:flex;gap:6px;margin:12px 0;flex-wrap:wrap;}
+  .chip{
+    padding:6px 13px;border-radius:999px;font-size:12.5px;cursor:pointer;
+    background:#fff;border:1px solid var(--line);color:var(--muted);font-weight:600;
+  }
+  .chip.active{background:var(--green);color:#fff;border-color:var(--green);}
+
+  /* employee record */
+  .emp-head{display:flex;align-items:center;gap:16px;margin-bottom:6px;}
+  .emp-av{
+    width:62px;height:62px;border-radius:14px;background:var(--green-light);
+    display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:var(--green-dark);
+  }
+  .emp-head .en{font-size:20px;font-weight:800;color:var(--green-dark);}
+  .emp-head .em{font-size:13px;color:var(--muted);}
+  .back{font-size:12.5px;color:var(--green);cursor:pointer;margin-bottom:12px;display:inline-block;font-weight:600;}
+  .field-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px 22px;}
+  @media(max-width:780px){.field-grid{grid-template-columns:repeat(2,1fr);}}
+  .field .fl{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;}
+  .field .fv{font-size:14px;margin-top:1px;}
+  .field .fv.new{color:var(--green);font-weight:700;}
+  .sech{font-size:12px;font-weight:800;color:var(--green-dark);text-transform:uppercase;letter-spacing:.4px;margin:18px 0 10px;}
+
+  /* pipeline */
+  .pipe{display:flex;gap:9px;overflow-x:auto;padding-bottom:6px;}
+  .col{background:#fafbfa;border:1px solid var(--line);border-radius:10px;min-width:148px;flex:1;padding:9px;}
+  .col-h{font-size:11px;font-weight:800;color:var(--green-dark);text-transform:uppercase;margin-bottom:8px;padding:0 2px;}
+  .col-h span{display:block;font-size:10px;color:var(--muted);font-weight:600;}
+  .ccard{background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-bottom:7px;font-size:12px;}
+  .ccard .cn{font-weight:700;font-size:12.5px;}
+  .ccard .cd{color:var(--muted);font-size:11px;}
+
+  .cascade{counter-reset:s;list-style:none;}
+  .cascade li{
+    position:relative;padding:9px 12px 9px 40px;margin:7px 0;background:#fafbfa;
+    border:1px solid var(--line);border-radius:8px;font-size:12.5px;
+  }
+  .cascade li::before{
+    counter-increment:s;content:counter(s);position:absolute;left:10px;top:50%;
+    transform:translateY(-50%);width:21px;height:21px;background:var(--green);color:#fff;
+    border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;
+  }
+  .cascade li.hot{background:var(--red-bg);border-color:#f1c9c5;}
+  .cascade li.hot::before{background:var(--red);}
+
+  .barrow{display:flex;align-items:center;gap:8px;}
+  .bartrack{flex:1;height:8px;border-radius:5px;background:#eef0ef;overflow:hidden;}
+  .bar{height:8px;border-radius:5px;background:var(--green);}
+  .bar.def{background:var(--amber);}
+  .bar.bad{background:var(--red);}
+
+  .placeholder{text-align:center;padding:50px 20px;color:var(--muted);}
+  .placeholder .pi{
+    width:54px;height:54px;border-radius:14px;background:var(--green-light);
+    display:flex;align-items:center;justify-content:center;margin:0 auto 14px;
+  }
+  .placeholder h2{color:var(--green-dark);font-size:17px;margin-bottom:6px;justify-content:center;}
+
+  .sc-card{
+    display:flex;align-items:center;gap:13px;background:var(--green-light);
+    border-radius:10px;padding:13px 16px;margin:12px 0;
+  }
+  .sc-card .sc-av{
+    width:44px;height:44px;border-radius:50%;background:var(--green);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;
+  }
+  .sc-card .sc-l{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--green-dark);font-weight:700;}
+  .sc-card .sc-n{font-size:16px;font-weight:800;color:var(--green-dark);}
+
+  /* employee record — locked design */
+  .erec-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:12px;flex-wrap:wrap;}
+  .role-pre{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:11.5px;background:#fff;}
+  .role-pre div{padding:6px 12px;cursor:pointer;color:var(--muted);font-weight:600;}
+  .role-pre div.active{background:var(--green);color:#fff;}
+  .efield{display:grid;grid-template-columns:170px 1fr 96px;gap:14px;align-items:center;padding:9px 8px;border-bottom:1px solid var(--line);}
+  .efield:hover{background:#fafbfa;}
+  .efield:last-child{border-bottom:none;}
+  .efield .el{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+  .efield .ev{font-size:14px;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .efield .ev .note{font-size:11.5px;color:var(--muted);font-style:italic;}
+  .efield .em{display:flex;justify-content:flex-end;align-items:center;gap:5px;}
+  .tag-s{display:inline-block;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:2px 7px;border-radius:999px;}
+  .tag-s.hr{background:var(--green-light);color:var(--green-dark);}
+  .tag-s.emp{background:var(--blue-bg);color:var(--blue);}
+  .tag-s.auto{background:var(--amber-bg);color:var(--amber-ink);}
+  .lock-s{font-size:11px;color:var(--muted);}
+  .verified-s{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--green-dark);background:var(--green-light);padding:2px 8px;border-radius:999px;}
+  .esec{border-top:1px solid var(--line);margin-top:18px;padding-top:14px;}
+  .esec.first{border-top:none;margin-top:6px;padding-top:0;}
+  .esec-h{display:flex;align-items:center;gap:9px;margin-bottom:8px;}
+  .esec-n{width:22px;height:22px;background:var(--green);color:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:800;}
+  .esec-t{font-size:13.5px;font-weight:800;color:var(--green-dark);}
+  .restrict-s{background:var(--red-bg);border:1px solid #f1c9c5;color:var(--red-ink);padding:11px 14px;border-radius:9px;font-size:12.5px;margin:14px 0;text-align:center;}
+  .restrict-s b{display:block;margin-bottom:2px;font-size:13px;}
+
+  /* family & emergency contact cards */
+  .ecards{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:6px;}
+  .ecard{border:1px solid var(--line);border-radius:9px;padding:11px 13px;background:#fafbfa;position:relative;}
+  .ecard .en2{font-size:13.5px;font-weight:700;color:var(--ink);}
+  .ecard .er2{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;font-weight:700;margin-top:2px;}
+  .ecard .ec2{font-size:13px;color:var(--ink);margin-top:5px;}
+  .ecard .ev3{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .ecard .primary-tag{position:absolute;top:9px;right:11px;background:var(--green-light);color:var(--green-dark);font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:999px;text-transform:uppercase;letter-spacing:.4px;}
+  .subhead{font-size:11.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:14px 0 6px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .subhead .sh-note{text-transform:none;font-weight:500;color:var(--muted);font-size:11.5px;letter-spacing:0;}
+  .subhead .addbtn{background:#fff;border:1px solid var(--line);color:var(--green-dark);font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;cursor:pointer;}
+  .subhead .addbtn:hover{background:var(--green-light);}
+  @media(max-width:680px){.ecards{grid-template-columns:1fr;}}
+
+  /* nav badges */
+  .nav-badge{margin-left:auto;font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:999px;background:#7fc99b;color:var(--green-deep);}
+  .nav-badge.tbd{background:rgba(255,255,255,.13);color:rgba(255,255,255,.55);}
+
+  /* claim status pipeline */
+  .clmpipe{display:flex;gap:4px;margin:8px 0;font-size:10.5px;align-items:center;flex-wrap:wrap;}
+  .clmpipe .pstep{padding:4px 9px;border-radius:6px;background:#eef0ee;color:var(--muted);font-weight:700;}
+  .clmpipe .pstep.done{background:var(--green-light);color:var(--green-dark);}
+  .clmpipe .pstep.current{background:var(--green);color:#fff;}
+  .clmpipe .parrow{color:var(--muted);font-size:12px;}
+
+  /* maternity advance card */
+  .madv{background:#fdfaf3;border:1px solid #ead9b0;border-radius:9px;padding:14px 16px;margin-top:12px;}
+  .madv-h{font-size:11.5px;font-weight:800;color:var(--amber-ink);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+  .madv-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px 22px;font-size:12.5px;}
+  .madv-grid .ml{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.3px;}
+  .madv-grid .mv{font-weight:700;font-size:13.5px;margin-top:1px;}
+  .madv-grid .mv.g{color:var(--green-dark);}
+
+  /* signature rows */
+  .sigrow{display:flex;gap:13px;padding:12px 4px;border-bottom:1px solid var(--line);align-items:center;}
+  .sigrow:last-child{border-bottom:none;}
+  .sigicon{width:36px;height:36px;border-radius:9px;background:var(--green-light);color:var(--green-dark);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;}
+  .sigicon.contract{background:var(--blue-bg);color:var(--blue);}
+  .sigicon.advance{background:var(--amber-bg);color:var(--amber-ink);}
+  .sigicon.memo{background:var(--purple-bg);color:var(--purple);}
+  .sigbody{flex:1;min-width:0;}
+  .sig-t{font-size:13.5px;font-weight:700;color:var(--ink);}
+  .sig-m{font-size:11.5px;color:var(--muted);margin-top:2px;}
+
+  /* compliance status cards */
+  .cmpc{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px;}
+  @media(max-width:780px){.cmpc{grid-template-columns:1fr 1fr;}}
+  .cmpc .ct{background:#fafbfa;border:1px solid var(--line);border-radius:9px;padding:11px 13px;}
+  .cmpc .ct .ctl{font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
+  .cmpc .ct .ctv{font-size:14.5px;font-weight:800;color:var(--green-dark);margin-top:3px;}
+  .cmpc .ct .ctv.r{color:var(--red);}
+  .cmpc .ct .ctv.a{color:var(--amber-ink);}
+  .cmpc .ct .cts{font-size:11px;color:var(--muted);margin-top:1px;}
+
+  /* anchor jump within page */
+  .anchor-nav{display:flex;gap:6px;padding:11px 0;border-bottom:1px solid var(--line);margin-bottom:12px;flex-wrap:wrap;}
+  .anchor-nav a{font-size:12.5px;font-weight:600;color:var(--muted);text-decoration:none;padding:5px 11px;border-radius:7px;background:#fafbfa;border:1px solid var(--line);}
+  .anchor-nav a:hover{background:var(--green-light);color:var(--green-dark);}
+</style>
+</head>
+<body>
+
+<div id="login" style="position:fixed;inset:0;z-index:9999;background:linear-gradient(150deg,#0e3219,#1f6b3a);display:flex;align-items:center;justify-content:center;padding:24px;">
+  <div style="background:#fff;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.3);width:100%;max-width:380px;padding:34px 30px;">
+    <div style="text-align:center;margin-bottom:22px;">
+      <div style="width:54px;height:54px;border-radius:13px;background:linear-gradient(150deg,#0e3219,#1f6b3a);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;margin-bottom:12px;">R</div>
+      <h1 style="font-size:20px;color:#144726;margin:0;">RCC HRIS Portal</h1>
+      <div style="font-size:13px;color:#6a766f;margin-top:3px;">Roshan Commercial Corporation &mdash; HR</div>
+    </div>
+    <form id="loginForm">
+      <label style="display:block;font-size:12px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">Email</label>
+      <input id="liEmail" type="email" autocomplete="username" required style="width:100%;padding:11px 13px;border:1px solid #e2e7e4;border-radius:9px;margin-bottom:14px;font-size:15px;">
+      <label style="display:block;font-size:12px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">Password</label>
+      <input id="liPass" type="password" autocomplete="current-password" required style="width:100%;padding:11px 13px;border:1px solid #e2e7e4;border-radius:9px;font-size:15px;">
+      <button id="liBtn" type="submit" style="width:100%;margin-top:20px;background:#1f6b3a;color:#fff;border:none;padding:12px;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;">Sign in</button>
+      <div id="liMsg" style="margin-top:12px;font-size:13px;color:#a4322a;"></div>
+    </form>
+  </div>
+</div>
+
+
+<div class="demobar" style="background:#e8f2eb;color:#144726;border-bottom:1px solid #cfe3d6;">✓ LIVE — Dashboard, Employees, Worksites & Manning (by Sales Coordinator) show your real data. Other modules are designed previews, filling in next.</div>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">R</div>
+      <div class="nm">RCC HRIS Portal</div>
+      <div class="tag">ROSHAN COMMERCIAL CORP.</div>
+    </div>
+    <nav>
+      <div class="nav-sec">Workspace</div>
+      <div class="nav-item active" data-page="wherewe" onclick="go('wherewe')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5l3 2"/></svg>
+        Where We Are
+      </div>
+      <div class="nav-item" data-page="dashboard" onclick="go('dashboard')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-item" data-page="signatures" onclick="go('signatures')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17c4-1 4-7 8-7s4 6 8 7"/><path d="M3 21h18"/></svg>
+        Signatures<span class="nav-badge">3</span>
+      </div>
+
+      <div class="nav-sec">Master Data</div>
+      <div class="nav-item" data-page="employees" onclick="go('employees')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><path d="M16 5.5a3 3 0 0 1 0 6M17.5 20c0-2.6-1-4.4-2.5-5.4"/></svg>
+        Employees
+      </div>
+      <div class="nav-item" data-page="branches" onclick="go('branches')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/><path d="M3 21h18"/></svg>
+        Worksites
+      </div>
+      <div class="nav-item" data-page="positions" onclick="go('positions')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>
+        Positions &amp; JD<span class="nav-badge tbd">TBD</span>
+      </div>
+      <div class="nav-item" data-page="agencies" onclick="go('agencies')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13"/><path d="M9 21V10h6v11"/><path d="M4 21h16"/></svg>
+        Agencies<span class="nav-badge tbd">TBD</span>
+      </div>
+
+      <div class="nav-sec">Hiring</div>
+      <div class="nav-item" data-page="prehire" onclick="go('prehire')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="8" r="3.2"/><path d="M4 20c0-3.3 2.7-5.5 6-5.5"/><path d="M18 13v6M15 16h6"/></svg>
+        Pre-hire &amp; Recruiting
+      </div>
+      <div class="nav-item" data-page="contracts" onclick="go('contracts')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 17h7"/></svg>
+        Contracts
+      </div>
+      <div class="nav-item" data-page="onboarding" onclick="go('onboarding')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l5 5L21 5"/></svg>
+        Onboarding Tasks
+      </div>
+
+      <div class="nav-sec">Employee Life</div>
+      <div class="nav-item" data-page="timekeeping" onclick="go('timekeeping')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg>
+        Timekeeping
+      </div>
+      <div class="nav-item" data-page="memos" onclick="go('memos')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+        Notices
+      </div>
+      <div class="nav-item" data-page="evaluations" onclick="go('evaluations')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 17l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg>
+        Evaluations
+      </div>
+      <div class="nav-item" data-page="loans" onclick="go('loans')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9 9c0-1.5 1.3-2.5 3-2.5s3 1 3 2.5-1.5 2-3 2.5-3 1-3 2.5 1.3 2.5 3 2.5 3-1 3-2.5"/><path d="M12 5v2M12 17v2"/></svg>
+        Loans
+      </div>
+      <div class="nav-item" data-page="hmo" onclick="go('hmo')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.5-7-11a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 6.5-7 11-7 11z"/></svg>
+        HMO Coverage
+      </div>
+      <div class="nav-item" data-page="insurance" onclick="go('insurance')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7z"/></svg>
+        Insurance
+      </div>
+      <div class="nav-item" data-page="purchases" onclick="go('purchases')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h2l3.4 11.5a2 2 0 0 0 2 1.5h7.6a2 2 0 0 0 2-1.4L21.5 9H6"/><circle cx="10" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/></svg>
+        Employee Purchases<span class="nav-badge tbd">TBD</span>
+      </div>
+      <div class="nav-item" data-page="claims" onclick="go('claims')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16v4a4 4 0 0 0 0 8v-4H4v4a4 4 0 0 0 0-8z"/></svg>
+        Government Claims
+      </div>
+
+      <div class="nav-sec">Merchandiser Ops</div>
+      <div class="nav-item" data-page="manning" onclick="go('manning')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="9" r="2.5"/><circle cx="17" cy="9" r="2.5"/><circle cx="12" cy="9" r="2.5"/><path d="M3 18c0-2.5 1.5-4 4-4M21 18c0-2.5-1.5-4-4-4M8 18c0-2.5 1.5-4 4-4s4 1.5 4 4"/></svg>
+        Manning / Headcount
+      </div>
+      <div class="nav-item" data-page="agencysubs" onclick="go('agencysubs')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M16 6l4 4M16 18l4-4"/><path d="M20 4v16"/></svg>
+        Agency Submissions<span class="nav-badge tbd">TBD</span>
+      </div>
+
+      <div class="nav-sec">Exit</div>
+      <div class="nav-item" data-page="exit" onclick="go('exit')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H5v18h9"/><path d="M10 12h11M17 8l4 4-4 4"/></svg>
+        Exit Clearance
+      </div>
+      <div class="nav-item" data-page="exitinterview" onclick="go('exitinterview')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a8 8 0 1 1-3-6.2L21 3"/><path d="M21 3v6h-6"/></svg>
+        Exit Interview<span class="nav-badge tbd">TBD</span>
+      </div>
+
+      <div class="nav-sec">Compliance</div>
+      <div class="nav-item" data-page="compliance" onclick="go('compliance')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7z"/><path d="M9 12l2 2 4-4"/></svg>
+        Compliance Overview
+      </div>
+
+      <div class="nav-sec">System</div>
+      <div class="nav-item" data-page="hractivity" onclick="go('hractivity')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 17V9M11 17v-5M15 17V7M19 17v-3"/></svg>
+        HR Activity &amp; Expense
+      </div>
+      <div class="nav-item" data-page="audit" onclick="go('audit')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4h18v4H3z"/><path d="M3 10h18v4H3z"/><path d="M3 16h18v4H3z"/></svg>
+        Audit Log<span class="nav-badge tbd">TBD</span>
+      </div>
+      <div class="nav-item" data-page="settings" onclick="go('settings')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        Settings<span class="nav-badge tbd">TBD</span>
+      </div>
+      <div class="nav-item" data-page="parking" onclick="go('parking')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/></svg>
+        Parking Lot
+      </div>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="av">JB</div>
+      <div><div style="color:#fff;font-weight:600;">Juvelyn Belvistre</div><div style="opacity:.55;font-size:11px;">HR Staff</div></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <h1 id="pageTitle">Where We Are</h1>
+      <input class="search" placeholder="Search employees, branches, contracts...">
+    </div>
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <section class="page active" id="page-wherewe">
+        <div class="panel" style="margin-top:0;">
+          <h2>Where we are — and where this is going</h2>
+          <div class="psub">The honest picture, so the rest of the mockup makes sense.</div>
+          <p style="font-size:14px;margin:6px 0 0;">The RCC HRIS Portal <strong>does not exist yet</strong> — it is in design. Every other screen here shows the <strong>target</strong>: where we are headed. This screen shows <strong>where things stand today</strong>, so you can see the whole journey, not only the destination.</p>
+        </div>
+
+        <div class="two-col">
+          <div class="panel" style="margin-top:0;">
+            <h2>Today — how RCC HR runs now</h2>
+            <div class="psub">Scattered across several tools</div>
+            <div class="task"><div class="dot a"></div><div><div class="tt">Google Sheets</div><div class="td">The Employee Directory, the Manning Sheet, the 44-column Contract Tracker — separate files, kept in sync by hand.</div></div></div>
+            <div class="task"><div class="dot a"></div><div><div class="tt">Google Apps Script</div><div class="td">The Rose HR bot, the contract pipeline, memo generation — automation bolted onto the sheets.</div></div></div>
+            <div class="task"><div class="dot a"></div><div><div class="tt">The Tally-Portal</div><div class="td">Some employee and branch master data lives in the separate company portal.</div></div></div>
+            <div class="task"><div class="dot a"></div><div><div class="tt">Manual tracking</div><div class="td">Timekeeping, exit clearance and more — handled by hand.</div></div></div>
+          </div>
+          <div class="panel" style="margin-top:0;">
+            <h2>The portal — the target</h2>
+            <div class="psub">What we are building toward</div>
+            <div class="task"><div class="dot g"></div><div><div class="tt">One system, one database</div><div class="td">A single home for every employee, branch and record — one source of truth.</div></div></div>
+            <div class="task"><div class="dot g"></div><div><div class="tt">Role-aware logins</div><div class="td">Each person sees what they should — plus a limited login for each agency.</div></div></div>
+            <div class="task"><div class="dot g"></div><div><div class="tt">Connected modules</div><div class="td">One fact updates everything — the "3 absences" cascade runs on its own.</div></div></div>
+            <div class="task"><div class="dot g"></div><div><div class="tt">PayPlus connected</div><div class="td">Payroll data flows in as a continuous cross-check.</div></div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>The journey — three phases</h2>
+          <div class="psub">Where we are right now</div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:200px;border:1px solid var(--line);border-left:4px solid var(--green);border-radius:9px;padding:13px 15px;background:#fafbfa;">
+              <div style="font-size:11.5px;font-weight:800;color:var(--green);text-transform:uppercase;">&#10003; Phase 1 — Done</div>
+              <div style="font-size:13.5px;font-weight:700;margin-top:3px;">Foundation</div>
+              <div style="font-size:12px;color:var(--muted);">The Supabase database is set up — 22 tables reviewed.</div>
+            </div>
+            <div style="flex:1;min-width:200px;border:1px solid var(--amber);border-left:4px solid var(--amber);border-radius:9px;padding:13px 15px;background:var(--amber-bg);">
+              <div style="font-size:11.5px;font-weight:800;color:var(--amber-ink);text-transform:uppercase;">&#9679; Phase 2 — Now</div>
+              <div style="font-size:13.5px;font-weight:700;margin-top:3px;">Design the structure</div>
+              <div style="font-size:12px;color:var(--muted);">Designing the data and the screens — starting with the employee record.</div>
+            </div>
+            <div style="flex:1;min-width:200px;border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:9px;padding:13px 15px;background:#fafbfa;">
+              <div style="font-size:11.5px;font-weight:800;color:var(--muted);text-transform:uppercase;">&#9675; Phase 3 — Next</div>
+              <div style="font-size:13.5px;font-weight:700;margin-top:3px;">Build</div>
+              <div style="font-size:12px;color:var(--muted);">Build the portal module by module.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Where each module stands</h2>
+          <div class="psub">What runs it today, and how far along it is toward the portal</div>
+          <table>
+            <thead><tr><th>Module</th><th>How it runs today</th><th>Toward the portal</th></tr></thead>
+            <tbody>
+              <tr><td><b>Employee Records</b></td><td>Google Sheet directory</td><td><span class="pill di">Database ready</span> <span style="font-size:11px;color:var(--muted);">in design now</span></td></tr>
+              <tr><td><b>Contracts</b></td><td>Apps Script automation</td><td><span class="pill di">Database ready</span></td></tr>
+              <tr><td><b>Pre-hire &amp; Recruiting</b></td><td>Apps Script</td><td><span class="pill di">Database ready</span></td></tr>
+              <tr><td><b>Notices &amp; Memos</b></td><td>Apps Script</td><td><span class="pill di">Database ready</span></td></tr>
+              <tr><td><b>Evaluations</b></td><td>Apps Script (not deployed)</td><td><span class="pill di">Database ready</span></td></tr>
+              <tr><td><b>Exit Clearance</b></td><td>Apps Script + paper forms</td><td><span class="pill di">Database ready</span></td></tr>
+              <tr><td><b>Loans</b></td><td>Paper forms</td><td><span class="pill di">Database ready</span></td></tr>
+              <tr><td><b>Employee Purchases</b></td><td>A monitoring sheet</td><td><span class="pill di">Database ready</span></td></tr>
+              <tr><td><b>Timekeeping &amp; Attendance</b></td><td>SM biometrics + manual</td><td><span class="pill probation">To build — no table yet</span></td></tr>
+              <tr><td><b>Branches / Manning</b></td><td>The Manning Sheet</td><td><span class="pill probation">To build — no table yet</span></td></tr>
+              <tr><td><b>Agency Staffing</b></td><td>Email &amp; phone</td><td><span class="pill probation">To build — no table yet</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <h2>Your ideas — parked for later</h2>
+          <div class="psub">Captured in the Parking Lot — not yet designed, but not forgotten</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            <span class="chip">IPO tracker</span><span class="chip">Store compliance tracker</span>
+            <span class="chip">Onboarding &amp; annual tracking</span><span class="chip">Store inventory schedule</span>
+            <span class="chip">Inventory loss tracker</span><span class="chip">JD &amp; deliverables</span>
+            <span class="chip">Compliance calendar</span><span class="chip">Admin requisition</span>
+            <span class="chip">HR requisition</span><span class="chip">HR expense tracking</span>
+            <span class="chip">Process compiler</span><span class="chip">Government forms versioning</span>
+            <span class="chip">HR lagging &#8594; month-end KPI</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-dashboard">
+        <div class="hello">
+          <div class="hd">SUNDAY, MAY 24, 2026</div>
+          <div class="hh">Good morning, <span>Juvelyn.</span></div>
+          <div class="hsub">Here is what needs you today. You are seeing the HR Staff view — every person sees their own pending tasks; HR and Management also see the team panels.</div>
+        </div>
+
+        <div class="grid kpis">
+          <div class="kpi"><div class="k-l">Total Employees</div><div class="k-n">368</div><div class="k-s">Head Office 128 · Direct 163 · Agency 77</div></div>
+          <div class="kpi">
+            <div class="k-l">Agency Merchandisers</div><div class="k-n">77</div>
+            <div class="k-break"><span>Jell-on<b>42</b></span><span>M&amp;G<b>35</b></span></div>
+          </div>
+          <div class="kpi warn">
+            <div class="k-l">Evaluations Due</div><div class="k-n">6</div>
+            <div class="k-break"><span>3rd month<b>4</b></span><span>5th month<b>2</b></span></div>
+          </div>
+          <div class="kpi alert"><div class="k-l">Open AWOL Cases</div><div class="k-n">2</div><div class="k-s">NTE auto-issued, awaiting reply</div></div>
+        </div>
+        <div class="grid kpis" style="margin-top:13px;">
+          <div class="kpi warn"><div class="k-l">Contracts in Pipeline</div><div class="k-n">9</div><div class="k-s">3 awaiting Management</div></div>
+          <div class="kpi warn"><div class="k-l">Headcount Deficiency</div><div class="k-n">34</div><div class="k-s">unfilled merchandiser slots</div></div>
+          <div class="kpi"><div class="k-l">Pre-hire In Progress</div><div class="k-n">5</div><div class="k-s">1 ready for HR review</div></div>
+          <div class="kpi"><div class="k-l">Exit Clearances Open</div><div class="k-n">3</div><div class="k-s">1 stuck on a sign-off</div></div>
+        </div>
+
+        <div class="two-col">
+          <div class="panel" style="margin-top:0;">
+            <h2>Your pending tasks <span class="count-tag">5 · by urgency</span></h2>
+            <div class="psub">What needs you — most urgent first</div>
+            <div class="task">
+              <div class="dot r"></div>
+              <div><div class="tt">Prepare Certificate of Employment — Pedro Bautista</div>
+              <div class="td">DOLE rule: must issue within 3 days</div></div>
+              <div class="due r">Overdue 1d</div>
+            </div>
+            <div class="task">
+              <div class="dot r"></div>
+              <div><div class="tt">Issue Notice of Decision — Juan Dela Cruz</div>
+              <div class="td">NTE response received · twin-notice rule</div></div>
+              <div class="due r">Today</div>
+            </div>
+            <div class="task">
+              <div class="dot a"></div>
+              <div><div class="tt">Review pre-hire submission — R. Cruz</div>
+              <div class="td">Documents complete · ready for HR review</div></div>
+              <div class="due a">In 2 days</div>
+            </div>
+            <div class="task">
+              <div class="dot a"></div>
+              <div><div class="tt">3rd-month evaluation — Rosa Mendoza</div>
+              <div class="td">Probationary review</div></div>
+              <div class="due a">In 4 days</div>
+            </div>
+            <div class="task">
+              <div class="dot g"></div>
+              <div><div class="tt">Finalize exit clearance — L. Garcia</div>
+              <div class="td">Awaiting HR sign-off</div></div>
+              <div class="due g">In 6 days</div>
+            </div>
+          </div>
+
+          <div>
+            <div class="panel" style="margin-top:0;">
+              <h2>Waiting on others <span class="count-tag">nudge</span></h2>
+              <div class="psub">Sent out — now stuck with someone else</div>
+              <div class="nudge-item">
+                <div class="ni"><div class="nt">Contract — Maria Santos</div><div class="nd">With Management · 5 days</div></div>
+                <button class="nbtn">Nudge</button>
+              </div>
+              <div class="nudge-item">
+                <div class="ni"><div class="nt">Contract — T. Flores</div><div class="nd">With Supervisor · 3 days</div></div>
+                <button class="nbtn">Nudge</button>
+              </div>
+              <div class="nudge-item">
+                <div class="ni"><div class="nt">Employee signature — J. Ramos</div><div class="nd">Sent 2 days ago</div></div>
+                <button class="nbtn">Nudge</button>
+              </div>
+              <div class="nudge-item">
+                <div class="ni"><div class="nt">Exit sign-off — IT/MIS</div><div class="nd">D. Ocampo clearance · 4 days</div></div>
+                <button class="nbtn">Nudge</button>
+              </div>
+            </div>
+            <div class="panel">
+              <h2>HR team — where we are lagging</h2>
+              <div class="psub">Open items per HR member</div>
+              <div class="team-row"><div class="tn">Juvelyn Belvistre</div><span class="mini bad">1 overdue</span><span class="mini ok">5 open</span></div>
+              <div class="team-row"><div class="tn">Grazel Agulto</div><span class="mini bad">1 overdue</span><span class="mini ok">3 open</span></div>
+              <div class="team-row"><div class="tn">Vinamae Batomalaque</div><span class="mini ok">2 open</span></div>
+              <div class="team-row"><div class="tn">Paola Manuel</div><span class="mini ok">1 open</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- EMPLOYEES -->
+      <section class="page" id="page-employees">
+        <div class="panel" style="margin-top:0;">
+          <h2>Employee Master</h2>
+          <div class="psub">368 active employees · click any row to open the record</div>
+          <div class="actionbar">
+            <div class="toggle">
+              <div class="active">Portal</div><div>PayPlus (Live)</div><div>Compare</div>
+            </div>
+            <button class="btn">+ Add Employee</button>
+            <button class="btn ghost">↻ Sync from PayPlus</button>
+            <button class="btn blue">Export Excel</button>
+          </div>
+          <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
+            <div class="kpi"><div class="k-l">Active</div><div class="k-n">368</div></div>
+            <div class="kpi"><div class="k-l">Head Office</div><div class="k-n">128</div></div>
+            <div class="kpi"><div class="k-l">Direct</div><div class="k-n">163</div></div>
+            <div class="kpi"><div class="k-l">Agency</div><div class="k-n">77</div></div>
+            <div class="kpi"><div class="k-l">On Probation</div><div class="k-n">31</div></div>
+          </div>
+          <div class="filterbar">
+            <div class="chip active">All (368)</div>
+            <div class="chip">Head Office (128)</div>
+            <div class="chip">Direct (163)</div>
+            <div class="chip">Jell-on (42)</div>
+            <div class="chip">M&amp;G (35)</div>
+          </div>
+          <table>
+            <thead><tr><th>Emp ID</th><th>Name</th><th>Job Title</th><th>Department</th><th>Branch / Account</th><th>Type</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr class="clickable" onclick="go('employee')"><td>RCC-0142</td><td><b>Maria Santos</b></td><td>Accounting Staff</td><td>Accounting</td><td>Head Office</td><td><span class="pill ho">Head Office</span></td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable" onclick="go('employee')"><td>RCC-0291</td><td><b>Juan Dela Cruz</b></td><td>Merchandiser</td><td>Sales</td><td>Spyder SM North EDSA</td><td><span class="pill di">Direct</span></td><td><span class="pill awol">Inactive — AWOL</span></td></tr>
+              <tr class="clickable" onclick="go('employee')"><td>RCC-0318</td><td><b>Rosa Mendoza</b></td><td>Merchandiser</td><td>Sales</td><td>Spyder Trinoma</td><td><span class="pill di">Direct</span></td><td><span class="pill probation">On Probation</span></td></tr>
+              <tr class="clickable" onclick="go('employee')"><td>PP-4471</td><td><b>Carlo Reyes</b></td><td>Merchandiser</td><td>Sales</td><td>Spyder SM MOA</td><td><span class="pill ag">Jell-on</span></td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable" onclick="go('employee')"><td>RCC-0087</td><td><b>Ana Lim</b></td><td>HR Officer</td><td>Human Resources</td><td>Head Office</td><td><span class="pill ho">Head Office</span></td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable" onclick="go('employee')"><td>RCC-0205</td><td><b>Pedro Bautista</b></td><td>Warehouse Staff</td><td>Warehouse</td><td>Head Office</td><td><span class="pill di">Direct</span></td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable" onclick="go('employee')"><td>PP-4490</td><td><b>Liza Tan</b></td><td>Merchandiser</td><td>Sales</td><td>Spyder Seaside</td><td><span class="pill ag">M&amp;G</span></td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable" onclick="go('employee')"><td>RCC-0260</td><td><b>Mark Villanueva</b></td><td>IT Staff</td><td>MIS / IT</td><td>Head Office</td><td><span class="pill ho">Head Office</span></td><td><span class="pill active">Active</span></td></tr>
+            </tbody>
+          </table>
+          <div style="font-size:12px;color:var(--muted);margin-top:10px;">Showing 7 of 368 — use search to narrow down</div>
+        </div>
+      </section>
+
+      <!-- EMPLOYEE RECORD — locked design (May 25, 2026) -->
+      <section class="page" id="page-employee">
+        <div class="erec-bar">
+          <span class="back" onclick="go('employees')">← Back to Employee Master</span>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:11.5px;color:var(--muted);font-weight:600;">Preview as:</span>
+            <div class="role-pre" id="rolePre">
+              <div class="active" data-role="hr">HR</div>
+              <div data-role="agency">Agency login</div>
+            </div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:0;">
+          <div class="emp-head">
+            <div class="emp-av">MS</div>
+            <div style="flex:1;">
+              <div class="en">Maria Santos</div>
+              <div class="em">RCC-0142 · Accounting Staff · Head Office · Direct hire</div>
+            </div>
+            <span class="pill ho" style="font-size:12px;padding:5px 12px;">Head Office</span>
+            <span class="pill active" style="font-size:12px;padding:5px 12px;">Active</span>
+          </div>
+          <div class="tabs">
+            <div class="tab active">Profile</div>
+            <div class="tab">Contract</div>
+            <div class="tab">Memos</div>
+            <div class="tab">Evaluations</div>
+            <div class="tab">Documents</div>
+          </div>
+
+          <!-- 1 Identity & Status -->
+          <div class="esec first">
+            <div class="esec-h"><span class="esec-n">1</span><span class="esec-t">Identity &amp; Status</span></div>
+            <div class="efield"><div class="el">Name</div><div class="ev">Maria Santos <span class="note">— first / middle / last / suffix (auto-assembled)</span></div><div class="em"><span class="tag-s emp">Employee</span></div></div>
+            <div class="efield"><div class="el">PayPlus Employee ID</div><div class="ev">RCC-0142</div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">iTime ID</div><div class="ev">IT-0142 <span class="note">— set when iTime entry happens (Stage 3 of the lifecycle)</span></div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">Acumatica ID</div><div class="ev">A-0142 <span class="note">— open question: Stage 3 or Stage 5</span></div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">Group</div><div class="ev">Head Office <span class="note">— auto from Department</span></div><div class="em"><span class="tag-s auto">Auto</span><span class="lock-s">🔒</span></div></div>
+            <div class="efield"><div class="el">Hire Source</div><div class="ev">Direct <span class="note">— from direct-hire application link</span></div><div class="em"><span class="tag-s auto">Auto</span><span class="lock-s">🔒</span></div></div>
+            <div class="efield"><div class="el">Status</div><div class="ev">Active</div><div class="em"><span class="tag-s hr">HR</span></div></div>
+          </div>
+
+          <!-- 2 Personal Details -->
+          <div class="esec">
+            <div class="esec-h"><span class="esec-n">2</span><span class="esec-t">Personal Details</span></div>
+            <div class="efield"><div class="el">Email</div><div class="ev">maria.santos@hassarams.com</div><div class="em"><span class="tag-s emp">Employee</span></div></div>
+            <div class="efield"><div class="el">Mobile</div><div class="ev">0917 555 0142 <span class="note">— stored as <code style="font-family:'SF Mono',Menlo,monospace;font-size:12px;background:#f1f4f2;padding:1px 5px;border-radius:4px;">09175550142</code></span></div><div class="em"><span class="tag-s emp">Employee</span></div></div>
+            <div class="efield"><div class="el">Date of Birth</div><div class="ev">June 12, 1995</div><div class="em"><span class="tag-s emp">Employee</span></div></div>
+            <div class="efield"><div class="el">Gender</div><div class="ev">Female <span class="note">— maps to "Sex" on government forms</span></div><div class="em"><span class="tag-s emp">Employee</span></div></div>
+            <div class="efield"><div class="el">Civil Status</div><div class="ev">Single</div><div class="em"><span class="tag-s emp">Employee</span></div></div>
+            <div class="efield"><div class="el">Permanent Address</div><div class="ev">Blk 12 Lot 6, Sampaguita St., Brgy. San Antonio, Pasig City</div><div class="em"><span class="tag-s emp">Employee</span></div></div>
+            <div class="efield"><div class="el">Current Address</div><div class="ev">Same as permanent</div><div class="em"><span class="tag-s emp">Employee</span></div></div>
+          </div>
+
+          <!-- 3 Family & Emergency Contacts -->
+          <div class="esec">
+            <div class="esec-h"><span class="esec-n">3</span><span class="esec-t">Family &amp; Emergency Contacts</span></div>
+
+            <div class="subhead">
+              <span>Emergency Contacts <span class="sh-note">— who to call, in order</span></span>
+              <button class="addbtn">+ Add contact</button>
+            </div>
+            <div class="ecards">
+              <div class="ecard">
+                <span class="primary-tag">Primary</span>
+                <div class="en2">Rosario Santos</div>
+                <div class="er2">Mother</div>
+                <div class="ec2">(02) 8638 6556</div>
+                <div class="ev3">Landline · Pasig</div>
+              </div>
+              <div class="ecard">
+                <div class="en2">Eduardo Santos</div>
+                <div class="er2">Father</div>
+                <div class="ec2">0917 234 5678</div>
+                <div class="ev3">Mobile</div>
+              </div>
+              <div class="ecard">
+                <div class="en2">Maria Cruz</div>
+                <div class="er2">Sister</div>
+                <div class="ec2">0918 765 4321</div>
+                <div class="ev3">Mobile</div>
+              </div>
+            </div>
+
+            <div class="subhead">
+              <span>Dependents <span class="sh-note">— for HMO, government records &amp; tax</span></span>
+              <button class="addbtn">+ Add dependent</button>
+            </div>
+            <div class="ecards">
+              <div class="ecard">
+                <div class="en2">Rosario Santos</div>
+                <div class="er2">Mother · b. 1968</div>
+                <div class="ec2">Claimed dependent · BIR 1902</div>
+                <div class="ev3">No additional notes</div>
+              </div>
+              <div class="ecard">
+                <div class="en2">Eduardo Santos</div>
+                <div class="er2">Father · b. 1965</div>
+                <div class="ec2">Claimed dependent · BIR 1902</div>
+                <div class="ev3">No additional notes</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4 Government Numbers (hidden for agency) -->
+          <div class="esec" data-restricted="agency">
+            <div class="esec-h"><span class="esec-n">4</span><span class="esec-t">Government Numbers</span></div>
+            <div class="efield"><div class="el">SSS</div><div class="ev">34-1234567-8 <span class="note">— auto-formatted</span></div><div class="em"><span class="tag-s emp">Employee</span><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">PhilHealth</div><div class="ev">12-345678901-2</div><div class="em"><span class="tag-s emp">Employee</span><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">Pag-IBIG (MID)</div><div class="ev">1234-5678-9012</div><div class="em"><span class="tag-s emp">Employee</span><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">TIN</div><div class="ev">123-456-789-000</div><div class="em"><span class="tag-s emp">Employee</span><span class="tag-s hr">HR</span></div></div>
+          </div>
+          <div class="restrict-s" data-restricted-banner="4" style="display:none;"><b>Section 4 — Government Numbers — hidden</b>Agency logins never see RCC's sensitive identifiers (SSS · PhilHealth · Pag-IBIG · TIN).</div>
+
+          <!-- 5 Bank (hidden for agency) -->
+          <div class="esec" data-restricted="agency">
+            <div class="esec-h"><span class="esec-n">5</span><span class="esec-t">Bank</span></div>
+            <div class="efield"><div class="el">GCash Number</div><div class="ev">09175550142 <span class="note">— same as mobile</span></div><div class="em"><span class="tag-s emp">Employee</span></div></div>
+            <div class="efield"><div class="el">GCash Account Name</div><div class="ev">Maria Santos <span class="verified-s">✓ matches</span></div><div class="em"><span class="tag-s emp">Employee</span></div></div>
+            <div class="efield"><div class="el">GCash Verified</div><div class="ev"><span class="verified-s">✓ Verified by Juvelyn · 12 Apr 2026</span></div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">Bank Name</div><div class="ev">China Bank <span class="note">— auto from Group (Head Office)</span></div><div class="em"><span class="tag-s auto">Auto</span><span class="lock-s">🔒</span></div></div>
+            <div class="efield"><div class="el">Bank Account No.</div><div class="ev">1234567890</div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">Payout Method</div><div class="ev">Bank</div><div class="em"><span class="tag-s hr">HR</span></div></div>
+          </div>
+          <div class="restrict-s" data-restricted-banner="5" style="display:none;"><b>Section 5 — Bank — hidden</b>Agency logins never see payout details (GCash · bank).</div>
+
+          <!-- 6 Placement -->
+          <div class="esec">
+            <div class="esec-h"><span class="esec-n">6</span><span class="esec-t">Placement</span></div>
+            <div class="efield"><div class="el">Department</div><div class="ev">Accounting</div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">Position</div><div class="ev">Accounting Staff <span class="note">— JD &amp; pay grade linked</span></div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">Worksite</div><div class="ev">RCC Center · 3rd Floor</div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">Supervisor</div><div class="ev">Frenzy Manzano <span class="note">— linked employee record</span></div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">Department Head</div><div class="ev">Frenzy Manzano <span class="note">— auto from Department</span></div><div class="em"><span class="tag-s auto">Auto</span><span class="lock-s">🔒</span></div></div>
+            <div class="efield"><div class="el">Approver 2</div><div class="ev">Anj Genomal <span class="note">— auto from Group (Head Office)</span></div><div class="em"><span class="tag-s auto">Auto</span><span class="lock-s">🔒</span></div></div>
+          </div>
+
+          <!-- 7 Employment Terms, Pay & Key Dates -->
+          <div class="esec">
+            <div class="esec-h"><span class="esec-n">7</span><span class="esec-t">Employment Terms, Pay &amp; Key Dates</span></div>
+            <div class="efield"><div class="el">Contract Type</div><div class="ev">Regular <span class="note">— auto-updated on regularization</span></div><div class="em"><span class="tag-s hr">HR</span><span class="tag-s auto">Auto</span></div></div>
+            <div class="efield paydetail"><div class="el">Daily Rate</div><div class="ev">₱ 1,020.00 <span class="note">— within pay grade range</span></div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield paydetail"><div class="el">Daily Allowance</div><div class="ev">₱ 0.00 <span class="note">— discretionary</span></div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">Hire Date</div><div class="ev">March 4, 2024</div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">Regularization Date</div><div class="ev">September 4, 2024</div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">End Date</div><div class="ev"><span class="note">— blank (still employed)</span></div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">End Reason</div><div class="ev"><span class="note">— n/a</span></div><div class="em"><span class="tag-s hr">HR</span></div></div>
+          </div>
+
+          <!-- 8 System Fields (hidden for agency) -->
+          <div class="esec" data-restricted="agency">
+            <div class="esec-h"><span class="esec-n">8</span><span class="esec-t">System Fields</span></div>
+            <div class="efield"><div class="el">Drive Folder</div><div class="ev"><a href="#" style="color:var(--blue);text-decoration:none;">Open documents folder ↗</a></div><div class="em"><span class="tag-s auto">Auto</span></div></div>
+            <div class="efield"><div class="el">Notes</div><div class="ev">—</div><div class="em"><span class="tag-s hr">HR</span></div></div>
+            <div class="efield"><div class="el">Created at</div><div class="ev">4 Mar 2024, 09:14</div><div class="em"><span class="tag-s auto">Auto</span><span class="lock-s">🔒</span></div></div>
+            <div class="efield"><div class="el">Updated at</div><div class="ev">12 Apr 2026, 16:42</div><div class="em"><span class="tag-s auto">Auto</span><span class="lock-s">🔒</span></div></div>
+          </div>
+          <div class="restrict-s" data-restricted-banner="8" style="display:none;"><b>Section 8 — System Fields — hidden</b>Agency logins never see internal system metadata.</div>
+
+          <div style="margin-top:18px;display:flex;gap:8px;">
+            <button class="btn">Edit Record</button>
+            <button class="btn ghost">Generate Document</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- BRANCHES -->
+      <section class="page" id="page-branches">
+        <div class="panel" style="margin-top:0;">
+          <h2>Branch Master</h2>
+          <div class="psub">110 open branches · click a branch to see its merchandisers and sales coordinator</div>
+          <div class="actionbar">
+            <button class="btn">+ Add Branch</button>
+            <button class="btn blue">Export Excel</button>
+          </div>
+          <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
+            <div class="kpi"><div class="k-l">All Branches</div><div class="k-n">149</div></div>
+            <div class="kpi"><div class="k-l">Open</div><div class="k-n">110</div></div>
+            <div class="kpi"><div class="k-l">Company (CO)</div><div class="k-n">42</div></div>
+            <div class="kpi"><div class="k-l">Concession (CN)</div><div class="k-n">107</div></div>
+            <div class="kpi alert"><div class="k-l">HC Deficiency</div><div class="k-n">34</div></div>
+          </div>
+          <div class="filterbar">
+            <div class="chip active">All open (110)</div>
+            <div class="chip">Company — CO</div>
+            <div class="chip">Concession — CN</div>
+            <div class="chip">With deficiency</div>
+          </div>
+          <table>
+            <thead><tr><th>Branch</th><th>Type</th><th>City</th><th>Area</th><th>Tier</th><th>AHC</th><th>CHC</th><th>Deficiency</th><th>Fill</th></tr></thead>
+            <tbody>
+              <tr class="clickable" onclick="go('store')"><td><b>Spyder SM North EDSA</b></td><td><span class="pill co">CO</span></td><td>Quezon City</td><td>GMA</td><td>A</td><td>4</td><td>4</td><td>0</td><td><div class="bartrack"><div class="bar" style="width:100%"></div></div></td></tr>
+              <tr class="clickable" onclick="go('store')"><td><b>Spyder SM Megamall</b></td><td><span class="pill co">CO</span></td><td>Mandaluyong</td><td>GMA</td><td>A</td><td>4</td><td>3</td><td>1</td><td><div class="bartrack"><div class="bar def" style="width:75%"></div></div></td></tr>
+              <tr class="clickable" onclick="go('store')"><td><b>Spyder SM MOA</b></td><td><span class="pill co">CO</span></td><td>Pasay</td><td>GMA</td><td>A</td><td>4</td><td>2</td><td>2</td><td><div class="bartrack"><div class="bar bad" style="width:50%"></div></div></td></tr>
+              <tr class="clickable" onclick="go('store')"><td><b>Spyder Trinoma</b></td><td><span class="pill co">CO</span></td><td>Quezon City</td><td>GMA</td><td>B</td><td>3</td><td>2</td><td>1</td><td><div class="bartrack"><div class="bar def" style="width:67%"></div></div></td></tr>
+              <tr class="clickable" onclick="go('store')"><td><b>Spyder Seaside</b></td><td><span class="pill co">CO</span></td><td>Cebu City</td><td>VIS</td><td>B</td><td>3</td><td>3</td><td>0</td><td><div class="bartrack"><div class="bar" style="width:100%"></div></div></td></tr>
+              <tr class="clickable" onclick="go('store')"><td><b>Tiongsan Harrison</b></td><td><span class="pill cn">CN</span></td><td>Baguio</td><td>NL</td><td>C</td><td>2</td><td>1</td><td>1</td><td><div class="bartrack"><div class="bar bad" style="width:50%"></div></div></td></tr>
+              <tr class="clickable" onclick="go('store')"><td><b>Spyder Taytay</b></td><td><span class="pill co">CO</span></td><td>Taytay</td><td>GMA</td><td>B</td><td>2</td><td>2</td><td>0</td><td><div class="bartrack"><div class="bar" style="width:100%"></div></div></td></tr>
+              <tr class="clickable" onclick="go('store')"><td><b>Spyder Zamboanga</b></td><td><span class="pill co">CO</span></td><td>Zamboanga</td><td>MIN</td><td>B</td><td>2</td><td>1</td><td>1</td><td><div class="bartrack"><div class="bar bad" style="width:50%"></div></div></td></tr>
+            </tbody>
+          </table>
+          <div style="font-size:12px;color:var(--muted);margin-top:10px;">Showing 8 of 110 · AHC = approved · CHC = current · numbers are sample placeholders</div>
+        </div>
+      </section>
+
+      <!-- STORE DETAIL -->
+      <section class="page" id="page-store">
+        <span class="back" onclick="go('branches')">← Back to Branch Master</span>
+        <div class="panel" style="margin-top:0;">
+          <div class="emp-head">
+            <div class="emp-av">SM</div>
+            <div style="flex:1;">
+              <div class="en">Spyder SM North EDSA</div>
+              <div class="em">Company-operated (CO) · Mall — SM · Quezon City · Area GMA · Tier A</div>
+            </div>
+            <span class="pill open" style="font-size:12px;padding:5px 12px;">Open</span>
+          </div>
+
+          <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);margin-top:14px;">
+            <div class="kpi"><div class="k-l">Approved Head Count</div><div class="k-n">4</div></div>
+            <div class="kpi"><div class="k-l">Current Head Count</div><div class="k-n">4</div></div>
+            <div class="kpi"><div class="k-l">Deficiency</div><div class="k-n">0</div></div>
+          </div>
+
+          <div class="sc-card">
+            <div class="sc-av">AP</div>
+            <div>
+              <div class="sc-l">Sales Coordinator</div>
+              <div class="sc-n">Aldrin Pascual</div>
+              <div style="font-size:12px;color:var(--muted);">Covers SM North EDSA, Trinoma &amp; Fairview</div>
+            </div>
+          </div>
+
+          <div class="sech">Merchandisers in this store</div>
+          <table>
+            <thead><tr><th>Name</th><th>Assignment</th><th>Type</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td><b>Cristina Flores</b></td><td>Stationary</td><td><span class="pill di">Direct</span></td><td><span class="pill active">Active</span></td></tr>
+              <tr><td><b>Mark Aguilar</b></td><td>Stationary</td><td><span class="pill ag">Jell-on</span></td><td><span class="pill active">Active</span></td></tr>
+              <tr><td><b>Joy Ramirez</b></td><td>Reliever</td><td><span class="pill di">Direct</span></td><td><span class="pill active">Active</span></td></tr>
+              <tr><td><b>Dexter Lim</b></td><td>Stationary</td><td><span class="pill di">Direct</span></td><td><span class="pill probation">On Probation</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- CONTRACTS -->
+      <section class="page" id="page-contracts">
+        <div class="panel" style="margin-top:0;">
+          <h2>Contracts — Approval Pipeline</h2>
+          <div class="psub">The 7-stage pipeline. Each contract moves left to right as approvals come in.</div>
+          <div class="pipe">
+            <div class="col"><div class="col-h">HR Review<span>1 contract</span></div>
+              <div class="ccard"><div class="cn">R. Cruz</div><div class="cd">Probationary · Sales</div></div>
+            </div>
+            <div class="col"><div class="col-h">Employee Sign<span>2 contracts</span></div>
+              <div class="ccard"><div class="cn">L. Garcia</div><div class="cd">Regular · Warehouse</div></div>
+              <div class="ccard"><div class="cn">J. Ramos</div><div class="cd">Project-Based</div></div>
+            </div>
+            <div class="col"><div class="col-h">Supervisor<span>1 contract</span></div>
+              <div class="ccard"><div class="cn">T. Flores</div><div class="cd">Probationary · MIS</div></div>
+            </div>
+            <div class="col"><div class="col-h">Dept Head<span>2 contracts</span></div>
+              <div class="ccard"><div class="cn">B. Aquino</div><div class="cd">Regular · Accounting</div></div>
+              <div class="ccard"><div class="cn">M. Cruz</div><div class="cd">Seasonal</div></div>
+            </div>
+            <div class="col"><div class="col-h">Management<span>3 contracts</span></div>
+              <div class="ccard" style="border-color:#f1c9c5;background:var(--red-bg);"><div class="cn">Maria Santos</div><div class="cd">Stalled 5 days ⚠</div></div>
+              <div class="ccard"><div class="cn">D. Ocampo</div><div class="cd">Regular</div></div>
+              <div class="ccard"><div class="cn">F. Lopez</div><div class="cd">Casual</div></div>
+            </div>
+            <div class="col"><div class="col-h">Onboarding<span>0 contracts</span></div></div>
+            <div class="col"><div class="col-h">Executed<span>this month</span></div>
+              <div class="ccard"><div class="cn">A. Reyes</div><div class="cd">✓ Fully executed</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TIMEKEEPING -->
+      <section class="page" id="page-timekeeping">
+        <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
+          <div class="kpi"><div class="k-l">Present Today</div><div class="k-n">331</div><div class="k-s">of 368</div></div>
+          <div class="kpi warn"><div class="k-l">Absent Today</div><div class="k-n">29</div><div class="k-s">on leave or absent</div></div>
+          <div class="kpi alert"><div class="k-l">AWOL Watch</div><div class="k-n">2</div><div class="k-s">3+ consecutive absences</div></div>
+        </div>
+        <div class="panel">
+          <h2>AWOL detection — live example</h2>
+          <div class="psub">One absence triggers the whole chain automatically. Here is Juan Dela Cruz, today:</div>
+          <ol class="cascade">
+            <li class="hot">Portal pulls attendance and detects <b>3 consecutive absences</b> — Juan Dela Cruz, Spyder SM North EDSA.</li>
+            <li class="hot">HR and the Sales Coordinator are alerted; a <b>Notice to Explain (NTE)</b> is auto-issued.</li>
+            <li>Juan is sent a portal link to <b>submit his reason</b> — HR reviews and decides (twin-notice rule).</li>
+            <li>If confirmed AWOL → status changes to <b>Inactive — AWOL</b>.</li>
+            <li>The branch's Current Head Count <b>drops by one</b>; the deficiency rises.</li>
+            <li>An agency opening can be raised to <b>backfill the slot</b>.</li>
+          </ol>
+          <div style="font-size:12px;color:var(--muted);margin-top:6px;">The portal automates the paperwork and alerts — HR always makes the final decision.</div>
+        </div>
+        <div class="panel">
+          <h2>Note on SM-deployed merchandisers</h2>
+          <div class="psub">SM-branch merchandisers clock in on SM's biometrics, uploaded every 15 days — so their absences appear after the next upload, not in real time. The timekeeping screen shows this clearly so nothing looks "missed."</div>
+        </div>
+      </section>
+
+      <!-- LOANS -->
+      <section class="page" id="page-loans">
+        <div class="panel" style="margin-top:0;">
+          <h2>Loans</h2>
+          <div class="psub">Employee loans for Head Office &amp; Warehouse staff — five loan types per RCC's loan policy. Backed by the Loan Portal prototype.</div>
+          <div class="actionbar">
+            <button class="btn">+ New Loan Application</button>
+            <a href="Reference%20Material/LOAN/RCC_Loan_Portal.html" target="_blank" class="btn ghost" style="text-decoration:none;display:inline-block;">Open Full Loan Portal ↗</a>
+            <button class="btn blue">Export Excel</button>
+          </div>
+          <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
+            <div class="kpi"><div class="k-l">Loan Fund Cap</div><div class="k-n">₱1.0M</div></div>
+            <div class="kpi"><div class="k-l">Disbursed / Committed</div><div class="k-n">₱600K</div><div class="k-s">60% used</div></div>
+            <div class="kpi"><div class="k-l">Available</div><div class="k-n" style="color:var(--green-dark);">₱400K</div></div>
+            <div class="kpi warn"><div class="k-l">In Review</div><div class="k-n">3</div><div class="k-s">awaiting decision</div></div>
+            <div class="kpi"><div class="k-l">Active Loans</div><div class="k-n">18</div><div class="k-s">currently repaying</div></div>
+          </div>
+          <div class="filterbar">
+            <div class="chip active">All (21)</div>
+            <div class="chip">Active (18)</div>
+            <div class="chip">In Review (3)</div>
+            <div class="chip">Educational</div>
+            <div class="chip">Moto</div>
+            <div class="chip">Vehicle Repair</div>
+            <div class="chip">Medical</div>
+            <div class="chip">Others</div>
+          </div>
+          <table>
+            <thead><tr><th>Loan Ref</th><th>Employee</th><th>Type</th><th>Amount</th><th>Term</th><th>Stage</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr class="clickable"><td>LN-2026-0042</td><td><b>Maria Santos</b></td><td>Educational</td><td>₱15,000</td><td>6 mo</td><td>Active · month 2 of 6</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable"><td>LN-2026-0041</td><td><b>Ritchie Abenir</b></td><td>Moto Loan</td><td>₱60,000</td><td>24 mo</td><td>HR Review</td><td><span class="pill probation">In Review</span></td></tr>
+              <tr class="clickable"><td>LN-2026-0040</td><td><b>Andrea Villanueva</b></td><td>Medical</td><td>₱15,000</td><td>6 mo</td><td>Mgmt Approval — with Anj</td><td><span class="pill probation">In Review</span></td></tr>
+              <tr class="clickable"><td>LN-2026-0039</td><td><b>Cherry Jacinto</b></td><td>Vehicle Repair</td><td>₱25,000</td><td>8 mo</td><td>Active · month 3 of 8</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable"><td>LN-2026-0038</td><td><b>Joseph Ramirez</b></td><td>Educational</td><td>₱20,000</td><td>12 mo</td><td>Active · month 9 of 12</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable"><td>LN-2026-0037</td><td><b>Frenzy Manzano</b></td><td>Others / Unforeseen</td><td>₱30,000</td><td>6 mo</td><td>Awaiting documents</td><td><span class="pill probation">In Review</span></td></tr>
+              <tr class="clickable"><td>LN-2026-0036</td><td><b>Andrea Villanueva</b></td><td>Moto Loan</td><td>₱48,000</td><td>18 mo</td><td>Active · month 4 of 18</td><td><span class="pill active">Active</span></td></tr>
+            </tbody>
+          </table>
+          <div style="font-size:12px;color:var(--muted);margin-top:10px;">Showing 7 of 21 · numbers match your Loan Portal prototype's CONFIG block</div>
+        </div>
+
+        <div class="two-col">
+          <div class="panel" style="margin-top:0;">
+            <h2>Loan Fund Utilization</h2>
+            <div class="psub">₱600K of ₱1.0M committed</div>
+            <div class="barrow" style="margin-top:10px;">
+              <div class="bartrack" style="height:14px;"><div class="bar" style="width:60%;height:14px;background:var(--green);"></div></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:6px;">
+              <span>0</span><span>₱1.0M cap</span>
+            </div>
+            <div class="sech" style="margin-top:18px;">By Loan Type</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:2px;"><span>Educational <span style="font-weight:400;color:var(--muted);font-size:11px;">· 0% · no cap</span></span><span>₱195K · 9 loans</span></div>
+                <div class="bartrack"><div class="bar" style="width:33%;background:var(--blue);"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:2px;"><span>Moto Loan <span style="font-weight:400;color:var(--muted);font-size:11px;">· 6% · max ₱100K</span></span><span>₱220K · 4 loans</span></div>
+                <div class="bartrack"><div class="bar" style="width:37%;background:var(--amber);"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:2px;"><span>Vehicle Repair <span style="font-weight:400;color:var(--muted);font-size:11px;">· 12% · max ₱50K</span></span><span>₱85K · 3 loans</span></div>
+                <div class="bartrack"><div class="bar" style="width:14%;background:var(--purple);"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:2px;"><span>Others <span style="font-weight:400;color:var(--muted);font-size:11px;">· 12% · max ₱50K</span></span><span>₱55K · 2 loans</span></div>
+                <div class="bartrack"><div class="bar" style="width:9%;background:var(--red);"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:2px;"><span>Medical <span style="font-weight:400;color:var(--muted);font-size:11px;">· 12% · max ₱20K</span></span><span>₱45K · 3 loans</span></div>
+                <div class="bartrack"><div class="bar" style="width:7%;background:#7faec4;"></div></div>
+              </div>
+            </div>
+            <div style="font-size:11.5px;color:var(--muted);margin-top:12px;font-style:italic;">Eligibility per RCC policy: Head Office &amp; Warehouse only — Retail / Merchandiser staff are not loan-eligible.</div>
+          </div>
+
+          <div class="panel" style="margin-top:0;">
+            <h2>Recent Activity</h2>
+            <div class="task"><div class="dot g"></div><div><div class="tt">LN-2026-0039 · Repayment received</div><div class="td">Cherry Jacinto · ₱3,406.25 · auto-deducted from payroll</div></div><div class="due g">today</div></div>
+            <div class="task"><div class="dot a"></div><div><div class="tt">LN-2026-0040 · Awaiting management approval</div><div class="td">Andrea Villanueva · ₱15,000 medical · with Anj · 2 days</div></div><div class="due a">2d</div></div>
+            <div class="task"><div class="dot a"></div><div><div class="tt">LN-2026-0037 · Documents pending</div><div class="td">Frenzy Manzano · 1 of 3 documents missing</div></div><div class="due a">3d</div></div>
+            <div class="task"><div class="dot g"></div><div><div class="tt">LN-2026-0038 · 9th payment received</div><div class="td">Joseph Ramirez · 3 payments remaining</div></div><div class="due g">5d</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PLACEHOLDERS -->
+      <section class="page" id="page-prehire">
+        <div class="panel" style="margin-top:0;">
+          <h2>Pre-hire &amp; Recruiting</h2>
+          <div class="psub">Applicant pipeline — from application through screening, documents, and into a contract.</div>
+          <div class="actionbar">
+            <button class="btn">+ New Application</button>
+            <button class="btn ghost">Open Pre-hire Form ↗</button>
+            <button class="btn blue">Export Excel</button>
+          </div>
+          <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
+            <div class="kpi"><div class="k-l">In Pipeline</div><div class="k-n">12</div><div class="k-s">across all stages</div></div>
+            <div class="kpi">
+              <div class="k-l">Applied This Month</div><div class="k-n">18</div>
+              <div class="k-break"><span>Direct<b>11</b></span><span>Jell-on<b>4</b></span><span>M&amp;G<b>3</b></span></div>
+            </div>
+            <div class="kpi warn"><div class="k-l">Documents Pending</div><div class="k-n">2</div><div class="k-s">awaiting uploads</div></div>
+            <div class="kpi"><div class="k-l">Ready for Contract</div><div class="k-n">1</div><div class="k-s">Juvelyn signed off</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Pipeline — Applied → Contract</h2>
+          <div class="psub">Six stages. Click any card to open the candidate.</div>
+          <div class="pipe">
+            <div class="col"><div class="col-h">Applied<span>4 candidates</span></div>
+              <div class="ccard"><div class="cn">Roselle Cruz</div><div class="cd">Merchandiser · Direct</div></div>
+              <div class="ccard"><div class="cn">Jay Manalo</div><div class="cd">Warehouse · Direct</div></div>
+              <div class="ccard"><div class="cn">Carla Aquino</div><div class="cd">Accounting · Direct</div></div>
+              <div class="ccard"><div class="cn">Mark Lee</div><div class="cd">Merchandiser · Jell-on</div></div>
+            </div>
+            <div class="col"><div class="col-h">Screening<span>3 candidates</span></div>
+              <div class="ccard"><div class="cn">Lyn Gomez</div><div class="cd">Merchandiser · M&amp;G · exam done</div></div>
+              <div class="ccard"><div class="cn">Ben Cua</div><div class="cd">MIS Staff · Direct · interview Wed</div></div>
+              <div class="ccard"><div class="cn">Marie Reyes</div><div class="cd">Sales Coordinator · Direct · exam scheduled</div></div>
+            </div>
+            <div class="col"><div class="col-h">Documents<span>2 candidates</span></div>
+              <div class="ccard"><div class="cn">Toni Ramos</div><div class="cd">Merchandiser · Direct · 4 of 6 docs</div></div>
+              <div class="ccard"><div class="cn">Joanna Lim</div><div class="cd">Lead Merchandiser · M&amp;G · 5 of 6 docs</div></div>
+            </div>
+            <div class="col"><div class="col-h">Paola Review<span>2 candidates</span></div>
+              <div class="ccard"><div class="cn">Vera Cruz</div><div class="cd">Merchandiser · Jell-on · 2 days</div></div>
+              <div class="ccard"><div class="cn">Bryan Yu</div><div class="cd">Merchandiser · Direct · today</div></div>
+            </div>
+            <div class="col"><div class="col-h">Juvelyn Sign-off<span>1 candidate</span></div>
+              <div class="ccard" style="border-color:#bcdcc7;background:var(--green-light);"><div class="cn">Theresa Ng</div><div class="cd">HR Officer · Direct · ready ✓</div></div>
+            </div>
+            <div class="col"><div class="col-h">→ Contracts<span>5 this month</span></div>
+              <div class="ccard"><div class="cn">A. Reyes</div><div class="cd">✓ Contract generated</div></div>
+              <div class="ccard"><div class="cn">D. Ocampo</div><div class="cd">✓ Contract generated</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="panel" style="margin-top:0;">
+            <h2>Agency Submissions — Open Slots</h2>
+            <div class="psub">The two-way loop: RCC posts a slot → agencies propose candidates → RCC approves</div>
+            <div class="task"><div class="dot a"></div><div><div class="tt">Spyder SM MOA · 2 slots open</div><div class="td">Posted to Jell-on &amp; M&amp;G · 3 days</div></div><span class="count-tag">3 proposed</span></div>
+            <div class="task"><div class="dot a"></div><div><div class="tt">Spyder Trinoma · 1 slot open</div><div class="td">Posted to Jell-on &amp; M&amp;G · 1 day</div></div><span class="count-tag">1 proposed</span></div>
+            <div class="task"><div class="dot r"></div><div><div class="tt">Spyder Zamboanga · 1 slot</div><div class="td">Open 5 days · no candidates yet</div></div></div>
+          </div>
+          <div class="panel" style="margin-top:0;">
+            <h2>Hard Gate — SM / Retail-Ops Acceptance</h2>
+            <div class="psub">For consigned merchandisers, the host store must accept before pre-hire closes</div>
+            <div class="task"><div class="dot a"></div><div><div class="tt">Joanna Lim · Spyder Megamall</div><div class="td">Awaiting SM acceptance · 2 days</div></div><div class="due a">2d</div></div>
+            <div class="task"><div class="dot g"></div><div><div class="tt">Vera Cruz · Spyder SM MOA</div><div class="td">SM accepted ✓</div></div><div class="due g">today</div></div>
+            <div class="task"><div class="dot r"></div><div><div class="tt">L. Tan · Tiongsan Harrison</div><div class="td">Retail-ops rejected — pipeline closed</div></div></div>
+          </div>
+        </div>
+      </section>
+      <section class="page" id="page-memos">
+        <div class="panel" style="margin-top:0;">
+          <h2>Notices</h2>
+          <div class="psub">All employee memos — the seven standard types plus an on-the-spot Custom memo for one-offs. Every memo routes through the Signatures flow.</div>
+          <div class="actionbar">
+            <button class="btn">+ New Memo</button>
+            <button class="btn blue">Export Excel</button>
+          </div>
+          <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
+            <div class="kpi"><div class="k-l">Memos This Month</div><div class="k-n">17</div></div>
+            <div class="kpi warn"><div class="k-l">NTEs Open</div><div class="k-n">3</div><div class="k-s">awaiting reply</div></div>
+            <div class="kpi"><div class="k-l">COEs This Month</div><div class="k-n">4</div><div class="k-s">delivered ≤ 3 days</div></div>
+            <div class="kpi"><div class="k-l">Awaiting Signature</div><div class="k-n">5</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Choose a memo type</h2>
+          <div class="psub">Seven standard templates + Custom / Ad-hoc for everything else.</div>
+          <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:10px;margin-top:6px;">
+            <div class="ccard" style="cursor:pointer;border-left:3px solid var(--green);"><div class="cn">Written Warning</div><div class="cd">For policy violations</div></div>
+            <div class="ccard" style="cursor:pointer;border-left:3px solid var(--amber);"><div class="cn">Notice to Explain</div><div class="cd">First notice · twin-notice rule</div></div>
+            <div class="ccard" style="cursor:pointer;border-left:3px solid var(--amber);"><div class="cn">Notice of Decision</div><div class="cd">Second notice · after NTE reply</div></div>
+            <div class="ccard" style="cursor:pointer;border-left:3px solid var(--red);"><div class="cn">Termination Letter</div><div class="cd">After full due process</div></div>
+            <div class="ccard" style="cursor:pointer;border-left:3px solid var(--blue);"><div class="cn">Acceptance of Resignation</div><div class="cd">30-day notice acknowledged</div></div>
+            <div class="ccard" style="cursor:pointer;border-left:3px solid var(--blue);"><div class="cn">End of Contract</div><div class="cd">Non-renewal · fixed-term ending</div></div>
+            <div class="ccard" style="cursor:pointer;border-left:3px solid var(--green);"><div class="cn">Certificate of Employment</div><div class="cd">DOLE · within 3 days of request</div></div>
+            <div class="ccard" style="cursor:pointer;border-left:3px solid var(--purple);background:var(--purple-bg);"><div class="cn">Custom / Ad-hoc Memo ⬅ new</div><div class="cd">RCC letterhead + employee auto-fill · you type the body</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Recent Memos</h2>
+          <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Employee</th><th>Subject</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>May 24</td><td><span class="pill probation">NTE</span></td><td>Juan Dela Cruz</td><td>3 consecutive absences (AWOL cascade)</td><td><span class="pill probation">Awaiting reply · day 2 of 5</span></td></tr>
+              <tr><td>May 23</td><td><span class="pill active">COE</span></td><td>Lisa Reyes</td><td>Certificate of Employment — visa application</td><td><span class="pill active">Delivered</span></td></tr>
+              <tr><td>May 22</td><td><span class="pill" style="background:var(--purple-bg);color:var(--purple);">Custom</span></td><td>Mark Villanueva</td><td>Commendation — IT troubleshooting</td><td><span class="pill active">Signed</span></td></tr>
+              <tr><td>May 20</td><td><span class="pill probation">Written Warning</span></td><td>Rosa Mendoza</td><td>Late attendance pattern (4× in 2 weeks)</td><td><span class="pill active">Signed</span></td></tr>
+              <tr><td>May 18</td><td><span class="pill active">Acceptance of Resignation</span></td><td>D. Ocampo</td><td>30-day notice acknowledged</td><td><span class="pill active">Signed</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="page" id="page-evaluations">
+        <div class="panel" style="margin-top:0;"><div class="placeholder">
+          <div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 17l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg></div>
+          <h2>Evaluations</h2>
+          <p>Probationary reviews (3rd and 5th month) and annual evaluations,<br>scored across eight areas. We will design this screen together.</p>
+        </div></div>
+      </section>
+      <section class="page" id="page-exit">
+        <div class="panel" style="margin-top:0;"><div class="placeholder">
+          <div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M14 3H5v18h9"/><path d="M10 12h11M17 8l4 4-4 4"/></svg></div>
+          <h2>Exit Clearance</h2>
+          <p>The departmental sign-off when someone leaves — including the mandatory<br>Exit Interview and final-pay computation. To design next session.</p>
+        </div></div>
+      </section>
+
+      <!-- SIGNATURES -->
+      <section class="page" id="page-signatures">
+        <div class="panel" style="margin-top:0;">
+          <h2>Signatures</h2>
+          <div class="psub">Your sign-this inbox. RA 8792 compliant · works on mobile + personal email · every signature audit-logged. One place for contracts, memos, advance releases, claim authorizations.</div>
+          <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
+            <div class="kpi alert"><div class="k-l">Pending Your Signature</div><div class="k-n">3</div></div>
+            <div class="kpi warn"><div class="k-l">Sent — Awaiting Others</div><div class="k-n">6</div></div>
+            <div class="kpi"><div class="k-l">Signed This Month</div><div class="k-n">28</div></div>
+            <div class="kpi"><div class="k-l">Avg. Sign Time</div><div class="k-n">11h</div></div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="panel" style="margin-top:0;">
+            <h2>Pending your signature <span class="count-tag">3</span></h2>
+            <div class="psub">Open each, review the document, sign.</div>
+            <div class="sigrow">
+              <div class="sigicon contract">C</div>
+              <div class="sigbody"><div class="sig-t">Probationary contract — Theresa Ng</div><div class="sig-m">From Juvelyn (HR) · sent 1 day ago</div></div>
+              <button class="btn">Review &amp; Sign</button>
+            </div>
+            <div class="sigrow">
+              <div class="sigicon advance">A</div>
+              <div class="sigbody"><div class="sig-t">Maternity Advance Release — Andrea Villanueva</div><div class="sig-m">From Juvelyn (HR) · ₱8,500 · sent today</div></div>
+              <button class="btn">Review &amp; Sign</button>
+            </div>
+            <div class="sigrow">
+              <div class="sigicon memo">M</div>
+              <div class="sigbody"><div class="sig-t">Written Warning — Rosa Mendoza</div><div class="sig-m">From Juvelyn (HR) · employee acknowledgment</div></div>
+              <button class="btn">Review &amp; Sign</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="panel" style="margin-top:0;">
+              <h2>Sent — waiting on others</h2>
+              <div class="psub">Things you sent, now stuck with someone else.</div>
+              <div class="nudge-item"><div class="ni"><div class="nt">Contract — Maria Santos · Management</div><div class="nd">With Anj · 5 days</div></div><button class="nbtn">Nudge</button></div>
+              <div class="nudge-item"><div class="ni"><div class="nt">NTE — Juan Dela Cruz · Employee</div><div class="nd">Sent 2 days ago · 3 days remaining</div></div><button class="nbtn">Nudge</button></div>
+              <div class="nudge-item"><div class="ni"><div class="nt">Termination Letter — F. Lopez · Mgmt</div><div class="nd">With Pervin · 1 day</div></div><button class="nbtn">Nudge</button></div>
+            </div>
+            <div class="panel">
+              <h2>History</h2>
+              <div class="psub">Things you've signed · audit log visible</div>
+              <div class="task"><div class="dot g"></div><div><div class="tt">Acceptance of Resignation — D. Ocampo</div><div class="td">Signed 18 May 2026 · IP 192.0.2.4 · iPhone</div></div></div>
+              <div class="task"><div class="dot g"></div><div><div class="tt">Probationary contract — A. Reyes</div><div class="td">Signed 15 May 2026 · IP 192.0.2.4 · MacBook</div></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- GOVERNMENT CLAIMS -->
+      <section class="page" id="page-claims">
+        <div class="panel" style="margin-top:0;">
+          <h2>Government Claims</h2>
+          <div class="psub">SSS sickness, maternity, paternity, funeral, disability, retirement + PhilHealth reimbursement. Each claim tracked from notification to release. Maternity claims include the 15%-cap Advance Release.</div>
+          <div class="actionbar">
+            <button class="btn">+ New Claim</button>
+            <button class="btn blue">Export Excel</button>
+          </div>
+          <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
+            <div class="kpi"><div class="k-l">Claims YTD</div><div class="k-n">42</div></div>
+            <div class="kpi warn"><div class="k-l">In Process</div><div class="k-n">7</div></div>
+            <div class="kpi"><div class="k-l">Released This Month</div><div class="k-n">5</div></div>
+            <div class="kpi"><div class="k-l">Total Released YTD</div><div class="k-n">₱312K</div></div>
+            <div class="kpi alert"><div class="k-l">Advance Pending Recovery</div><div class="k-n">1</div><div class="k-s">SSS released direct</div></div>
+          </div>
+          <div class="filterbar">
+            <div class="chip active">All</div>
+            <div class="chip">Sickness</div>
+            <div class="chip">Maternity</div>
+            <div class="chip">Paternity</div>
+            <div class="chip">Funeral / Death</div>
+            <div class="chip">PhilHealth</div>
+          </div>
+          <table>
+            <thead><tr><th>Ref</th><th>Employee</th><th>Type</th><th>Triggered</th><th>Filed</th><th>Status</th><th>Amount</th></tr></thead>
+            <tbody>
+              <tr class="clickable"><td>CLM-2026-0007</td><td><b>Andrea Villanueva</b></td><td>Maternity</td><td>Due Feb 2026</td><td>15 May</td><td><span class="pill probation">Filed with SSS</span></td><td>est ₱56,800</td></tr>
+              <tr class="clickable"><td>CLM-2026-0006</td><td><b>Maria Santos</b></td><td>Sickness</td><td>Dec 12–18 2025</td><td>—</td><td><span class="pill probation">Documents Collecting</span></td><td>est ₱4,200</td></tr>
+              <tr class="clickable"><td>CLM-2026-0005</td><td><b>Joseph Ramirez</b></td><td>Paternity</td><td>Wife due Mar 2026</td><td>—</td><td><span class="pill probation">Notified</span></td><td>est ₱4,600</td></tr>
+              <tr class="clickable"><td>CLM-2026-0004</td><td><b>Cherry Jacinto</b></td><td>Sickness</td><td>Nov 22–26 2025</td><td>2 Dec</td><td><span class="pill active">Released</span></td><td>₱2,400</td></tr>
+              <tr class="clickable"><td>CLM-2026-0003</td><td><b>Ritchie Abenir</b></td><td>PhilHealth</td><td>Hospitalization Oct</td><td>5 Nov</td><td><span class="pill active">Released</span></td><td>₱5,200</td></tr>
+              <tr class="clickable"><td>CLM-2026-0002</td><td><b>Liza Mercado</b></td><td>Maternity</td><td>Dec 2025 birth</td><td>10 Oct</td><td><span class="pill awol">Advance Pending Recovery</span></td><td>₱8,400 advance out</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <h2>Maternity Advance Release — Andrea Villanueva (CLM-2026-0007)</h2>
+          <div class="psub">Sub-feature of every Maternity claim · 15% cap · documented, signed, audit-logged. Protects RCC if SSS releases direct to the employee.</div>
+
+          <div class="madv">
+            <div class="madv-h">Calculation</div>
+            <div class="madv-grid">
+              <div><div class="ml">Monthly Salary Credit</div><div class="mv">₱20,000</div></div>
+              <div><div class="ml">Expected SSS Benefit (105 days)</div><div class="mv">₱56,800</div></div>
+              <div><div class="ml">Maximum Allowed (15%)</div><div class="mv g">₱8,520</div></div>
+              <div><div class="ml">Requested Amount</div><div class="mv">₱8,500</div></div>
+            </div>
+          </div>
+
+          <div class="clmpipe" style="margin-top:18px;">
+            <span class="pstep done">✓ Calculated</span><span class="parrow">›</span>
+            <span class="pstep done">✓ Agreement generated</span><span class="parrow">›</span>
+            <span class="pstep current">○ Awaiting employee signature</span><span class="parrow">›</span>
+            <span class="pstep">Management (Anj)</span><span class="parrow">›</span>
+            <span class="pstep">Cash released</span><span class="parrow">›</span>
+            <span class="pstep">Reconcile at SSS release</span>
+          </div>
+
+          <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn ghost">View Advance Release Agreement</button>
+            <button class="btn ghost">View signing audit log</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- COMPLIANCE -->
+      <section class="page" id="page-compliance">
+        <div class="anchor-nav">
+          <a href="#cmp-forms">Government Forms</a>
+          <a href="#cmp-store">Store Compliance</a>
+          <a href="#cmp-cal">Compliance Calendar</a>
+          <a href="#cmp-labor">Labor Code Reference</a>
+        </div>
+
+        <div id="cmp-forms" class="panel" style="margin-top:0;">
+          <h2>Government Forms</h2>
+          <div class="psub">Registry of forms RCC files — each tagged with its version / year so you never use a stale template (from the Parking Lot).</div>
+          <table>
+            <thead><tr><th>Agency</th><th>Form</th><th>Version / Year</th><th>Last Filed</th><th>Next Due</th><th>Owner</th></tr></thead>
+            <tbody>
+              <tr><td>BIR</td><td>1902 — TIN Application</td><td>Oct 2025 (ENCS)</td><td>Mar 2026</td><td>per new hire</td><td>Juvelyn</td></tr>
+              <tr><td>BIR</td><td>2316 — Annual Withholding</td><td>2024</td><td>Jan 2026</td><td>Jan 2027</td><td>Grazel</td></tr>
+              <tr><td>SSS</td><td>R-1A — Employment Report</td><td>2023</td><td>monthly</td><td>10 Jun 2026</td><td>Grazel</td></tr>
+              <tr><td>SSS</td><td>R-3 — Contribution Report</td><td>2023</td><td>May 2026</td><td>10 Jun 2026</td><td>Grazel</td></tr>
+              <tr><td>PhilHealth</td><td>PMRF — Member Registration</td><td>2024</td><td>per new hire</td><td>per new hire</td><td>Juvelyn</td></tr>
+              <tr><td>PhilHealth</td><td>RF-1 — Employer Report</td><td>2024</td><td>monthly</td><td>11 Jun 2026</td><td>Grazel</td></tr>
+              <tr><td>Pag-IBIG</td><td>M-1A — Membership Registration</td><td>2022</td><td>per new hire</td><td>per new hire</td><td>Juvelyn</td></tr>
+              <tr><td>Pag-IBIG</td><td>M-4 — Contribution Report</td><td>2022</td><td>May 2026</td><td>10 Jun 2026</td><td>Grazel</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="cmp-store" class="panel">
+          <h2>Store Compliance — Pending Across All Stores</h2>
+          <div class="psub">Portfolio view first — what needs attention right now, pulled from the per-store rows below.</div>
+          <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
+            <div class="kpi alert"><div class="k-l">Expired</div><div class="k-n">1</div><div class="k-s">Zamboanga · Mayor's permit</div></div>
+            <div class="kpi warn"><div class="k-l">Renewing ≤ 60d</div><div class="k-n">3</div><div class="k-s">2 permits · 1 fire · 1 sanitary</div></div>
+            <div class="kpi alert"><div class="k-l">OSH Unassigned</div><div class="k-n">2</div><div class="k-s">Trinoma · Zamboanga</div></div>
+            <div class="kpi"><div class="k-l">Stores Current</div><div class="k-n">3 of 5</div></div>
+            <div class="kpi alert"><div class="k-l">Action Required</div><div class="k-n">6</div></div>
+          </div>
+          <div class="sech" style="margin-top:16px;">Pending items — sorted by urgency</div>
+          <div class="task"><div class="dot r"></div><div><div class="tt">Spyder Zamboanga · Mayor's Permit (EXPIRED May 1)</div><div class="td">Admin · 24 days overdue</div></div><div class="due r">OVERDUE</div></div>
+          <div class="task"><div class="dot r"></div><div><div class="tt">Spyder Trinoma · OSH Officer not assigned</div><div class="td">DOLE requirement · Admin</div></div><div class="due r">URGENT</div></div>
+          <div class="task"><div class="dot r"></div><div><div class="tt">Spyder Zamboanga · OSH Officer not assigned</div><div class="td">DOLE requirement · Admin</div></div><div class="due r">URGENT</div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">Spyder Trinoma · Sanitary Permit renewal</div><div class="td">Admin</div></div><div class="due a">21d</div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">Spyder SM MOA · Fire Safety renewal</div><div class="td">Admin</div></div><div class="due a">30d</div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">Spyder SM Megamall · Mayor's Permit renewal</div><div class="td">Admin</div></div><div class="due a">45d</div></div>
+        </div>
+
+        <div class="panel">
+          <h2>Store Compliance — Per Branch</h2>
+          <div class="psub">Full checklist by branch. Green = current · Amber = within 60 days · Red = expired or missing.</div>
+          <table>
+            <thead><tr><th>Branch</th><th>Mayor's Permit</th><th>BIR CoR</th><th>Fire Safety</th><th>Sanitary</th><th>OSH Officer</th></tr></thead>
+            <tbody>
+              <tr><td><b>Spyder SM North EDSA</b></td><td><span class="pill active">Until Dec 2026</span></td><td><span class="pill active">Valid</span></td><td><span class="pill active">Until Nov 2026</span></td><td><span class="pill active">Valid</span></td><td><span class="pill active">A. Pascual</span></td></tr>
+              <tr><td><b>Spyder SM Megamall</b></td><td><span class="pill probation">Renew in 45d</span></td><td><span class="pill active">Valid</span></td><td><span class="pill active">Until Sep 2026</span></td><td><span class="pill active">Valid</span></td><td><span class="pill active">A. Pascual</span></td></tr>
+              <tr><td><b>Spyder SM MOA</b></td><td><span class="pill active">Until Dec 2026</span></td><td><span class="pill active">Valid</span></td><td><span class="pill probation">Renew in 30d</span></td><td><span class="pill active">Valid</span></td><td><span class="pill active">L. Tan</span></td></tr>
+              <tr><td><b>Spyder Trinoma</b></td><td><span class="pill active">Until Dec 2026</span></td><td><span class="pill active">Valid</span></td><td><span class="pill active">Valid</span></td><td><span class="pill probation">Renew in 21d</span></td><td><span class="pill awol">Not assigned</span></td></tr>
+              <tr><td><b>Spyder Zamboanga</b></td><td><span class="pill awol">Expired May 1</span></td><td><span class="pill active">Valid</span></td><td><span class="pill active">Valid</span></td><td><span class="pill active">Valid</span></td><td><span class="pill awol">Not assigned</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="cmp-cal" class="panel">
+          <h2>Compliance Calendar</h2>
+          <div class="psub">Filing and renewal deadlines, in order.</div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">SSS R-3 + R-5 · May contributions</div><div class="td">SSS · monthly · Grazel</div></div><div class="due a">10 Jun</div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">PhilHealth RF-1 · May contributions</div><div class="td">PhilHealth · monthly · Grazel</div></div><div class="due a">11 Jun</div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">Pag-IBIG M-4 · May contributions</div><div class="td">Pag-IBIG · monthly · Grazel</div></div><div class="due a">10 Jun</div></div>
+          <div class="task"><div class="dot g"></div><div><div class="tt">BIR 2550M · April</div><div class="td">BIR · monthly · Frenzy</div></div><div class="due g">Filed 20 May</div></div>
+          <div class="task"><div class="dot r"></div><div><div class="tt">Spyder Megamall · Mayor's permit renewal</div><div class="td">Quezon City · annual · Admin</div></div><div class="due r">45 days</div></div>
+          <div class="task"><div class="dot r"></div><div><div class="tt">Spyder Zamboanga · Mayor's permit (EXPIRED)</div><div class="td">Zamboanga City · was due May 1 · Admin</div></div><div class="due r">OVERDUE</div></div>
+        </div>
+
+        <div id="cmp-labor" class="panel">
+          <h2>Labor Code Reference</h2>
+          <div class="psub">Quick lookup for DOLE rules. Searchable by topic.</div>
+          <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:11px;">
+            <div class="ccard"><div class="cn">Twin-notice rule</div><div class="cd">NTE → 5-day reply → Notice of Decision · DOLE 147-15</div></div>
+            <div class="ccard"><div class="cn">Holiday pay</div><div class="cd">Regular · special non-working · pay computation</div></div>
+            <div class="ccard"><div class="cn">13th-month pay</div><div class="cd">By Dec 24 · pro-rated · who qualifies</div></div>
+            <div class="ccard"><div class="cn">Maternity Leave</div><div class="cd">105 days live birth · 60 miscarriage · RA 11210</div></div>
+            <div class="ccard"><div class="cn">Paternity Leave</div><div class="cd">7 days · RA 8187</div></div>
+            <div class="ccard"><div class="cn">Just-cause termination</div><div class="cd">Art. 297 · serious misconduct · willful disobedience · etc.</div></div>
+            <div class="ccard"><div class="cn">Authorized-cause termination</div><div class="cd">Art. 298–299 · redundancy · retrenchment · separation pay</div></div>
+            <div class="ccard"><div class="cn">Final pay</div><div class="cd">Within 30 days of separation · components</div></div>
+            <div class="ccard"><div class="cn">COE issuance</div><div class="cd">Within 3 days of request · neutral tone</div></div>
+            <div class="ccard"><div class="cn">SSS / PhilHealth / Pag-IBIG</div><div class="cd">Mandatory enrolment · contribution rates · filing deadlines</div></div>
+            <div class="ccard"><div class="cn">Retirement</div><div class="cd">Optional 60 · mandatory 65 · benefits computation</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PARKING LOT -->
+      <section class="page" id="page-parking">
+        <div class="panel" style="margin-top:0;">
+          <h2>Parking Lot</h2>
+          <div class="psub">Ideas captured but not yet designed. Pulled into the Build Plan when ready. Items marked ✓ have moved into a built module.</div>
+          <div class="task"><div class="dot g"></div><div><div class="tt">✓ HMO module</div><div class="td">Built into Employee Life &gt; HMO Coverage</div></div></div>
+          <div class="task"><div class="dot g"></div><div><div class="tt">✓ Insurance module</div><div class="td">Built into Employee Life &gt; Personal Insurance</div></div></div>
+          <div class="task"><div class="dot g"></div><div><div class="tt">✓ Government forms versioning</div><div class="td">Built into Compliance &gt; Government Forms</div></div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">Process compiler</div><div class="td">Home for RCC SOPs (banking, maternity, sickness)</div></div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">Dashboard — HR lagging panel + month-end KPI</div><div class="td">Visible to HR Manager + Management; auto-rolls into month-end KPI</div></div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">IPO module tracker</div><div class="td">From module brain-dump</div></div></div>
+          <div class="task"><div class="dot g"></div><div><div class="tt">✓ Store compliance tracker</div><div class="td">Built into Compliance &gt; Store Compliance</div></div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">Employee onboarding &amp; annual tracking</div><div class="td">Bank, uniform, ID at onboarding + annual re-check</div></div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">Store inventory schedule</div><div class="td">Last inventory date per store</div></div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">Inventory loss tracker</div><div class="td">Losses tied to the assigned merchandiser at the time</div></div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">JD &amp; deliverables per employee</div><div class="td">Scheduled vs own-initiative · automated reminders</div></div></div>
+          <div class="task"><div class="dot g"></div><div><div class="tt">✓ Compliance calendar</div><div class="td">Built into Compliance &gt; Compliance Calendar</div></div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">Admin supplies requisition</div><div class="td">Office supplies tracking</div></div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">HR supplies requisition</div><div class="td">HR-specific supplies (e.g. medicines)</div></div></div>
+          <div class="task"><div class="dot g"></div><div><div class="tt">✓ HR activity expense tracking</div><div class="td">Built into System &gt; HR Activity &amp; Expense — fixed annual plan, budget, expense log, cost-per-person guard rail</div></div></div>
+        </div>
+      </section>
+
+      <!-- HR ACTIVITY & EXPENSE -->
+      <section class="page" id="page-hractivity">
+        <div class="panel" style="margin-top:0;">
+          <h2>HR Activity &amp; Expense</h2>
+          <div class="psub">Annual HR activity plan and expense log — with <b>cost per person</b> showing on every request so asks stay proportionate to attendance.</div>
+          <div class="actionbar">
+            <button class="btn">+ Request New Activity</button>
+            <button class="btn ghost">+ Log Expense</button>
+            <button class="btn blue">Export Excel</button>
+          </div>
+          <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
+            <div class="kpi"><div class="k-l">Annual Budget 2026</div><div class="k-n">₱700K</div></div>
+            <div class="kpi warn"><div class="k-l">Spent YTD</div><div class="k-n">₱257K</div><div class="k-s">37% · as of May</div></div>
+            <div class="kpi"><div class="k-l">Remaining</div><div class="k-n" style="color:var(--green-dark);">₱443K</div></div>
+            <div class="kpi"><div class="k-l">Avg. Cost / Person YTD</div><div class="k-n">₱1,440</div></div>
+            <div class="kpi"><div class="k-l">Activities Done</div><div class="k-n">3 of 7</div></div>
+          </div>
+          <div class="barrow" style="margin-top:14px;">
+            <div class="bartrack" style="height:14px;"><div class="bar" style="width:37%;height:14px;background:var(--green);"></div></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:6px;">
+            <span>0</span><span>₱700K budget</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>2026 Activity Plan — fixed at start of year</h2>
+          <div class="psub">7 planned activities. Cost-per-person visible by default so you can see disparities at a glance.</div>
+          <table>
+            <thead><tr><th>Activity</th><th>Date</th><th>Audience</th><th>Budgeted</th><th>Spent</th><th>Cost / Person</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr class="clickable"><td><b>Valentines</b> <span style="color:var(--muted);font-weight:400;font-size:11.5px;">— decor only, no event</span></td><td>Feb 2026</td><td>Office decor</td><td>₱8,000</td><td>₱7,200</td><td>n/a (decor)</td><td><span class="pill active">Completed</span></td></tr>
+              <tr class="clickable"><td><b>SCC Bday Merienda</b></td><td>Mar 17, 2026</td><td>All staff invited · ~50</td><td>₱5,000</td><td>₱5,000</td><td>₱100</td><td><span class="pill active">Completed</span></td></tr>
+              <tr class="clickable"><td><b>Summer Outing</b></td><td>Apr–May 2026</td><td>HO + Warehouse + Lead Diser · ~125</td><td>₱250,000</td><td>₱245,000</td><td>₱1,960</td><td><span class="pill active">Completed</span></td></tr>
+              <tr class="clickable"><td><b>Basketball</b></td><td>TBD · date to confirm</td><td>TBD</td><td>₱40,000</td><td>—</td><td>TBD</td><td><span class="pill probation">Planned · TBD</span></td></tr>
+              <tr class="clickable"><td><b>LTC Bday Merienda</b></td><td>Sept 13, 2026</td><td>All staff invited · ~50</td><td>₱5,000</td><td>—</td><td>₱100</td><td><span class="pill probation">Planned</span></td></tr>
+              <tr class="clickable"><td><b>Halloween</b></td><td>Oct 2026</td><td>HO staff · ~90</td><td>₱40,000</td><td>—</td><td>₱444</td><td><span class="pill probation">Planned</span></td></tr>
+              <tr class="clickable"><td><b>Christmas Dinner</b></td><td>Dec 2026</td><td>All staff invited · ~130</td><td>₱350,000</td><td>—</td><td>₱2,692</td><td><span class="pill probation">Planned</span></td></tr>
+            </tbody>
+          </table>
+          <div style="font-size:12px;color:var(--muted);margin-top:10px;">Total budget: ₱698K · SCC = Sheila Chatlani (Mar 17) · LTC = Lal Chatlani (Sept 13) — owner birthdays celebrated office-wide · Basketball details to confirm next session</div>
+        </div>
+
+        <div class="panel">
+          <h2>Cost-per-person guard rail</h2>
+          <div class="psub">The system flags any request running well above the YTD average. This is the nudge that stops asks like the one below.</div>
+          <div class="madv">
+            <div class="madv-h">⚠ Example — what the system flags</div>
+            <div class="madv-grid">
+              <div><div class="ml">Requested</div><div class="mv">Wellness Day for HR Team</div></div>
+              <div><div class="ml">Total Cost</div><div class="mv">₱45,000</div></div>
+              <div><div class="ml">Attendees</div><div class="mv">8 (HR officers)</div></div>
+              <div><div class="ml">Cost / Person</div><div class="mv" style="color:var(--red);">₱5,625 ⚠</div></div>
+              <div><div class="ml">YTD Average / Person</div><div class="mv">₱1,047</div></div>
+              <div><div class="ml">vs. Average</div><div class="mv" style="color:var(--red);">5.4× higher</div></div>
+            </div>
+            <div style="font-size:12.5px;color:var(--amber-ink);margin-top:11px;font-style:italic;">System asks: "Cost-per-person is significantly above the year's average — reconsider scope, attendees, or supplier before submitting?" Request still goes through if you say yes; the guard rail just forces the question.</div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="panel" style="margin-top:0;">
+            <h2>Spending Breakdown — YTD</h2>
+            <div class="psub">Where the ₱257K has gone</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;margin-bottom:3px;"><span>Summer Outing</span><span>₱245,000 · 95%</span></div>
+                <div class="bartrack"><div class="bar" style="width:95%;background:var(--amber);"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;margin-bottom:3px;"><span>Valentines (decor)</span><span>₱7,200 · 3%</span></div>
+                <div class="bartrack"><div class="bar" style="width:3%;background:var(--green);"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;margin-bottom:3px;"><span>SCC Bday Merienda</span><span>₱5,000 · 2%</span></div>
+                <div class="bartrack"><div class="bar" style="width:2%;background:var(--purple);"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:0;">
+            <h2>Recent Expense Log</h2>
+            <div class="psub">Receipts logged against each activity · pulls into the YTD totals automatically</div>
+            <div class="task"><div class="dot g"></div><div><div class="tt">Summer Outing · Venue (resort)</div><div class="td">La Vista Pansol · ₱120,000 · 8 May · OR-4452</div></div></div>
+            <div class="task"><div class="dot g"></div><div><div class="tt">Summer Outing · Catering &amp; meals</div><div class="td">Catering Co. · ₱75,000 · 8 May · OR-4453</div></div></div>
+            <div class="task"><div class="dot g"></div><div><div class="tt">Summer Outing · Transport (2 buses)</div><div class="td">Tomas Bus Lines · ₱50,000 · 8 May · OR-4454</div></div></div>
+            <div class="task"><div class="dot g"></div><div><div class="tt">SCC Bday Merienda · Cake &amp; snacks</div><div class="td">Goldilocks · ₱5,000 · 17 Mar · OR-4302</div></div></div>
+            <div class="task"><div class="dot g"></div><div><div class="tt">Valentines · Decor purchases</div><div class="td">Office Warehouse · ₱7,200 · 12 Feb · OR-4198</div></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- HMO COVERAGE -->
+      <section class="page" id="page-hmo">
+        <div class="panel" style="margin-top:0;">
+          <h2>HMO Coverage — ICARE 2026</h2>
+          <div class="psub">Tier-based employer / employee premium sharing. Tiers driven by <b>tenure and position</b> — the system applies the right tier automatically and flags employees crossing the 8-year mark.</div>
+          <div class="actionbar">
+            <button class="btn">+ Enrol Employee</button>
+            <button class="btn ghost">+ Add Dependent</button>
+            <button class="btn ghost">Import Masterlist (xlsx)</button>
+            <button class="btn blue">Export Excel</button>
+          </div>
+          <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
+            <div class="kpi"><div class="k-l">Active Members</div><div class="k-n">54</div><div class="k-s">HO 49 · Lead Diser 5</div></div>
+            <div class="kpi"><div class="k-l">Total Annual Premium</div><div class="k-n">₱454K</div><div class="k-s">₱7,968.75 per head</div></div>
+            <div class="kpi"><div class="k-l">RCC Share</div><div class="k-n" style="color:var(--green-dark);">₱325K</div><div class="k-s">72% blended</div></div>
+            <div class="kpi"><div class="k-l">Employee Share</div><div class="k-n">₱129K</div><div class="k-s">28% blended</div></div>
+            <div class="kpi warn"><div class="k-l">8-Year Tier Crossings</div><div class="k-n">3</div><div class="k-s">due to move Cat 1 → Cat 2</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Tier Structure — ICARE 2026</h2>
+          <div class="psub">Premium per head: ₱7,968.75 · MBL ₱70,000 · Ward room · Group life ₱10,000 bundled</div>
+          <table>
+            <thead><tr><th>Cat.</th><th>Tier</th><th>Eligibility</th><th>Sharing (ER / EE)</th><th>ER ₱</th><th>EE ₱</th><th>Members</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td><b>General Staff</b></td><td>1–8 years tenure</td><td>60 / 40</td><td>₱4,781.25</td><td>₱3,187.50</td><td>25</td></tr>
+              <tr><td>2</td><td><b>General Staff</b></td><td>8+ years tenure</td><td>70 / 30</td><td>₱5,578.13</td><td>₱2,390.63</td><td>14</td></tr>
+              <tr><td>3</td><td><b>Supervisory</b></td><td>Position-based</td><td>80 / 20</td><td>₱6,375.00</td><td>₱1,593.75</td><td>6</td></tr>
+              <tr><td>4</td><td><b>Top Management</b></td><td>VP / AVP / Director / Consultant</td><td>100 / 0</td><td>₱7,968.75</td><td>₱0</td><td>4</td></tr>
+              <tr><td>L</td><td><b>Lead Diser</b></td><td>Lead Merchandiser / Sales Associate</td><td>50 / 50</td><td>₱3,984.38</td><td>₱3,984.38</td><td>5</td></tr>
+            </tbody>
+          </table>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:11px;font-style:italic;">System reads hire date + position from the employee record and applies the matching tier. Crossing 8 years of tenure auto-flags the move from Cat 1 to Cat 2; HR confirms and the ER cost-per-head bumps from ₱4,781.25 to ₱5,578.13.</div>
+        </div>
+
+        <div class="panel">
+          <h2>Members</h2>
+          <div class="filterbar">
+            <div class="chip active">All (54)</div>
+            <div class="chip">Cat 1 · 60/40 (25)</div>
+            <div class="chip">Cat 2 · 70/30 (14)</div>
+            <div class="chip">Cat 3 · 80/20 (6)</div>
+            <div class="chip">Cat 4 · 100/0 (4)</div>
+            <div class="chip">Lead Diser · 50/50 (5)</div>
+          </div>
+          <table>
+            <thead><tr><th>Emp ID</th><th>Name</th><th>Position</th><th>Hired</th><th>Tenure</th><th>Tier</th><th>Sharing</th><th>Dependents</th></tr></thead>
+            <tbody>
+              <tr class="clickable"><td>102014</td><td><b>Juvelyn Belvistre</b></td><td>HR Officer</td><td>Jul 2023</td><td>2.9y</td><td>Cat 1</td><td>60/40</td><td>0</td></tr>
+              <tr class="clickable"><td>100591</td><td><b>Jean Cruz</b></td><td>Accounting Staff</td><td>Feb 2019</td><td>7.3y</td><td>Cat 1</td><td>60/40</td><td>2</td></tr>
+              <tr class="clickable" style="background:#fff9ea;"><td>100485</td><td><b>Jolina Estabillo</b></td><td>Accounting Staff</td><td>Jun 2018</td><td>7.9y</td><td>Cat 1 ⚠</td><td>60/40 → 70/30 in ~1 mo</td><td>1</td></tr>
+              <tr class="clickable"><td>100181</td><td><b>Apolonio Buli Jr.</b></td><td>Warehouse Staff</td><td>Aug 2012</td><td>13.8y</td><td>Cat 2</td><td>70/30</td><td>3</td></tr>
+              <tr class="clickable"><td>100101</td><td><b>Rosbie Tabinas</b></td><td>Warehouse Coordinator</td><td>Jun 2006</td><td>19.9y</td><td>Cat 3</td><td>80/20</td><td>2</td></tr>
+              <tr class="clickable"><td>100140</td><td><b>Edilberto Murillo Jr.</b></td><td>MIS Analyst</td><td>Jan 2009</td><td>17.4y</td><td>Cat 3</td><td>80/20</td><td>3</td></tr>
+              <tr class="clickable"><td>100200</td><td><b>Pervin Chatlani</b></td><td>AVP, Admin &amp; Finance</td><td>Jan 2013</td><td>13.4y</td><td>Cat 4</td><td>100/0</td><td>4</td></tr>
+              <tr class="clickable"><td>100096</td><td><b>Sanjay Chatlani</b></td><td>VP, Sales &amp; Marketing</td><td>Jan 2013</td><td>13.4y</td><td>Cat 4</td><td>100/0</td><td>2</td></tr>
+              <tr class="clickable"><td>1011</td><td><b>Eric Asoy</b></td><td>Lead Diser</td><td>Oct 2022</td><td>3.6y</td><td>Lead</td><td>50/50</td><td>1</td></tr>
+            </tbody>
+          </table>
+          <div style="font-size:12px;color:var(--muted);margin-top:10px;">Showing 9 of 54 · ⚠ row = approaching tier transition · live tenure recalculated on every view · all sample data drawn from your ICARE 2026 masterlist</div>
+        </div>
+
+        <div class="two-col">
+          <div class="panel" style="margin-top:0;">
+            <h2>Tier Transition Alerts</h2>
+            <div class="psub">Employees crossing 8 years — Cat 1 → Cat 2 (ER share per head: ₱4,781 → ₱5,578)</div>
+            <div class="task"><div class="dot a"></div><div><div class="tt">Jolina Estabillo · Accounting Staff</div><div class="td">Hired Jun 2018 · crosses 8 years on 18 Jun 2026</div></div><div class="due a">~1 mo</div></div>
+            <div class="task"><div class="dot a"></div><div><div class="tt">Jean Cruz · Accounting Staff</div><div class="td">Hired Feb 2019 · crosses 8 years on 18 Feb 2027</div></div><div class="due a">~9 mo</div></div>
+            <div class="task"><div class="dot g"></div><div><div class="tt">Bryan Sabila · Sales Coordinator</div><div class="td">Hired Mar 2018 · crossed 8 years on 8 Mar 2026 — already migrated to Cat 2</div></div><div class="due g">Done</div></div>
+          </div>
+
+          <div class="panel" style="margin-top:0;">
+            <h2>Renewal &amp; Masterlist</h2>
+            <div class="psub">ICARE policy year: 2026</div>
+            <div class="task"><div class="dot g"></div><div><div class="tt">✓ 2026 enrolment locked</div><div class="td">Masterlist submitted Jan 2026 · 54 members</div></div><div class="due g">Done</div></div>
+            <div class="task"><div class="dot a"></div><div><div class="tt">Annual group renewal — ICARE</div><div class="td">All 54 members · contract negotiation due</div></div><div class="due a">Apr 2027</div></div>
+            <div class="task"><div class="dot g"></div><div><div class="tt">Group life ₱10,000 bundled</div><div class="td">Included in ICARE annual premium — also surfaces in Insurance module</div></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- INSURANCE -->
+      <section class="page" id="page-insurance">
+        <div class="anchor-nav">
+          <a href="#ins-summary">Portfolio Summary</a>
+          <a href="#ins-cancel">Cancellations &amp; Renewals</a>
+          <a href="#ins-pa">Personal Accident</a>
+          <a href="#ins-vehicle">Vehicle (CTPL + Comp)</a>
+          <a href="#ins-store">Store / Stock Fire</a>
+          <a href="#ins-property">Property / Building Fire</a>
+          <a href="#ins-claims">Claims Filed</a>
+        </div>
+
+        <div id="ins-summary" class="panel" style="margin-top:0;">
+          <h2>Insurance Portfolio</h2>
+          <div class="psub">Five categories across vehicles, employees, stores, properties, and family. <b>Lifecycle-aware</b>: when a store closes or an employee resigns, the system auto-flags the affected policies for cancellation — no more paying premium on what's already gone.</div>
+          <div class="actionbar">
+            <button class="btn">+ New Policy</button>
+            <button class="btn ghost">Import xlsx</button>
+            <button class="btn blue">Export Excel</button>
+          </div>
+          <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
+            <div class="kpi"><div class="k-l">Total Policies</div><div class="k-n">82</div><div class="k-s">across 5 categories</div></div>
+            <div class="kpi"><div class="k-l">Annual Premium</div><div class="k-n">₱1.42M</div></div>
+            <div class="kpi warn"><div class="k-l">Renewing ≤ 60d</div><div class="k-n">11</div></div>
+            <div class="kpi alert"><div class="k-l">Pending Cancellations</div><div class="k-n">5</div><div class="k-s">3 separations · 2 closed stores</div></div>
+            <div class="kpi"><div class="k-l">Beneficiaries Missing</div><div class="k-n">2</div></div>
+          </div>
+          <div class="sech" style="margin-top:18px;">Premium by Category</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:2px;"><span>Property / Building Fire</span><span>₱560K · 7 policies</span></div><div class="bartrack"><div class="bar" style="width:39%;background:var(--red);"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:2px;"><span>Store / Stock Fire</span><span>₱276K · 33 stores (Outlets + Concession)</span></div><div class="bartrack"><div class="bar" style="width:19%;background:var(--amber);"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:2px;"><span>Vehicle (CTPL + Comprehensive)</span><span>₱340K · 28 vehicles</span></div><div class="bartrack"><div class="bar" style="width:24%;background:var(--blue);"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:2px;"><span>Personal Accident</span><span>₱9.9K · 13 employees (drivers + delivery)</span></div><div class="bartrack"><div class="bar" style="width:1%;background:var(--green);"></div></div></div>
+          </div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:11px;font-style:italic;">Numbers drawn from your INSURANCE.xlsx · sample preview, will reconcile to the live file on import. The Chatlani family life policies in the spreadsheet are personal/family and tracked separately for accounting — not part of the employee insurance program.</div>
+        </div>
+
+        <!-- THE HEADLINE PANEL: Cancellations & Renewals -->
+        <div id="ins-cancel" class="panel">
+          <h2>Cancellations &amp; Renewals — the lifecycle hub</h2>
+          <div class="psub">The most important view: policies the system has flagged because a worksite closed or an employee separated. Catch the savings before the next premium runs.</div>
+
+          <div class="sech" style="margin-top:8px;">⚠ Pending cancellations — 5 policies</div>
+          <div class="task"><div class="dot r"></div><div><div class="tt">Spyder Zamboanga (CLOSED) — Outlet Fire policy DS-FGP-500298382 segment</div><div class="td">Sum insured ₱500K · CGL ₱500K · est annual premium saving ₱5,400 · cancel via Standard Insurance</div></div><button class="nbtn">Cancel</button></div>
+          <div class="task"><div class="dot r"></div><div><div class="tt">SM Bicutan concession (CLOSED) — Concession Fire DS-FGP-500301304 segment</div><div class="td">Stocks sum ₱200K · proportional premium refund · cancel before next renewal cycle</div></div><button class="nbtn">Cancel</button></div>
+          <div class="task"><div class="dot r"></div><div><div class="tt">D. Ocampo (RESIGNED 18 May) — Personal Accident DS-PAG-500620804</div><div class="td">With Moto Risk policy · remove at next renewal (Mar 2026) · est saving ₱836</div></div><button class="nbtn">Remove</button></div>
+          <div class="task"><div class="dot r"></div><div><div class="tt">F. Lopez (TERMINATED 24 May) — Personal Accident DS-PAG-500620768</div><div class="td">Without Moto Risk · remove at next renewal · est saving ₱590</div></div><button class="nbtn">Remove</button></div>
+          <div class="task"><div class="dot r"></div><div><div class="tt">L. Garcia (RESIGNED 16 May) — Personal Accident DS-PAG-500620804</div><div class="td">With Moto Risk · remove at next renewal · est saving ₱836</div></div><button class="nbtn">Remove</button></div>
+
+          <div class="sech" style="margin-top:18px;">⏰ Renewing in the next 60 days</div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">Vehicle CTPL · ZTL 149 (Toyota Corolla, Carl)</div><div class="td">Renew with Standard Insurance · ₱610.40 · also for vehicle re-registration</div></div><div class="due a">~9d</div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">Vehicle CTPL · PQU 679 (Isuzu NHR truck, Simon)</div><div class="td">Renew · ₱660.40 · also for re-registration</div></div><div class="due a">~9d</div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">All Outlets fire — group renewal Jan 2027</div><div class="td">Standard Insurance · 33 outlets · ~₱100K gross · negotiate after store-list reconcile</div></div><div class="due a">Q1 2027</div></div>
+          <div class="task"><div class="dot a"></div><div><div class="tt">Solaris Warehouse Stocks · 10000/11/23/000336</div><div class="td">SGI Philippines · ₱100M sum · ~₱183K premium · renew Aug 2026</div></div><div class="due a">90d</div></div>
+        </div>
+
+        <!-- PERSONAL ACCIDENT -->
+        <div id="ins-pa" class="panel">
+          <h2>Personal Accident — Standard Insurance</h2>
+          <div class="psub">RCC's safety net for <b>drivers and delivery staff</b> — they get personal accident coverage <b>even if they don't qualify for HMO</b>. Two group policies: <b>With Moto Risk</b> (₱8,350 / 10 employees in 2023; ₱7,535 / 9 in 2024) for staff using motorcycles or delivery trucks, and <b>Without Moto Risk</b> (₱1,770 → ₱2,360) for staff with lower vehicle exposure.</div>
+          <table>
+            <thead><tr><th>Policy</th><th>Provider</th><th>Period</th><th>Coverage</th><th>Insured</th><th>Premium</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>DS-PAG-500620804</td><td>Standard Insurance</td><td>Mar 2024 – Mar 2025</td><td>With Moto Risk</td><td>9 employees</td><td>₱7,535</td><td><span class="pill active">Active</span></td></tr>
+              <tr><td>DS-PAG-500620768</td><td>Standard Insurance</td><td>Mar 2024 – Mar 2025</td><td>Without Moto Risk</td><td>4 employees</td><td>₱2,360</td><td><span class="pill active">Active</span></td></tr>
+            </tbody>
+          </table>
+          <div class="sech" style="margin-top:16px;">Insured employees · With Moto Risk (sample)</div>
+          <table>
+            <thead><tr><th>Emp ID</th><th>Name</th><th>Job Title</th><th>Vehicle</th></tr></thead>
+            <tbody>
+              <tr><td>100169</td><td><b>Jay Dhon Calibat</b></td><td>Inventory Assistant</td><td>Motorcycle</td></tr>
+              <tr><td>100819</td><td><b>John Arnie Canlas</b></td><td>Warehouse Assistant</td><td>Delivery Truck</td></tr>
+              <tr><td>100753</td><td><b>Marvin Miranda</b></td><td>Warehouse Assistant</td><td>Delivery Truck</td></tr>
+              <tr><td>100676</td><td><b>Robin Ocampo</b></td><td>Graphic Artist</td><td>Car &amp; Motorcycle</td></tr>
+              <tr><td>100561</td><td><b>Macario Tabinas</b></td><td>Warehouse Assistant</td><td>Delivery Truck</td></tr>
+              <tr><td>100620</td><td><b>Stephen Tagaroma</b></td><td>Warehouse Assistant</td><td>Delivery Truck</td></tr>
+              <tr><td>100977</td><td><b>Erwin Valen</b></td><td>Sales Coordinator</td><td>Motorcycle</td></tr>
+            </tbody>
+          </table>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:10px;font-style:italic;">When any of these resigns, the system auto-flags them under "Pending Cancellations" above — the actual removal happens at the next annual renewal.</div>
+        </div>
+
+        <!-- VEHICLE INSURANCE -->
+        <div id="ins-vehicle" class="panel">
+          <h2>Vehicle Insurance — CTPL + Comprehensive</h2>
+          <div class="psub">Per-plate · 28 vehicles (cars, trucks, motorcycles) · Standard Insurance group policies · 1-year cycle for most, 3-year for new units. CTPL is mandatory at re-registration; Comprehensive is optional but RCC carries both.</div>
+          <div class="filterbar">
+            <div class="chip active">All Vehicles (28)</div>
+            <div class="chip">Cars (10)</div>
+            <div class="chip">Trucks (5)</div>
+            <div class="chip">Motorcycles (13)</div>
+            <div class="chip">CTPL needed</div>
+            <div class="chip">For renewal</div>
+          </div>
+          <table>
+            <thead><tr><th>Plate</th><th>Make / Model</th><th>Assigned</th><th>CTPL</th><th>Comprehensive</th><th>CTPL Renewal</th><th>Comp Premium</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr class="clickable"><td>MKE 127</td><td>Kia Carnival 2017</td><td>Danilo</td><td>DS-PCV-500515819</td><td>DS-PCV-500518261</td><td>Aug 2025</td><td>₱20,865.52</td><td><span class="pill active">Renewed</span></td></tr>
+              <tr class="clickable"><td>NBP 3975</td><td>Mazda CX5 2019</td><td>Aldren</td><td>DS-PMF-500625807</td><td>DS-PMF-500437792</td><td>Jun 2025</td><td>₱22,043.65</td><td><span class="pill active">Renewed</span></td></tr>
+              <tr class="clickable"><td>NHF 5995</td><td>Mazda CX8 2023</td><td>Danilo</td><td>—</td><td>DS-PCV-500790741</td><td>Jun 2027</td><td>₱37,275.00</td><td><span class="pill active">Valid (3yr / new)</span></td></tr>
+              <tr class="clickable"><td>ZTL 149</td><td>Toyota Corolla 2.0V</td><td>Carl</td><td>DS-PCP-500300362</td><td>—</td><td>Oct 2025</td><td>—</td><td><span class="pill probation">For renewal · re-reg</span></td></tr>
+              <tr class="clickable"><td>PQU 679</td><td>Isuzu 2010 NHR Truck</td><td>Simon</td><td>DS-CML-500300361</td><td>DS-CMM-500518179</td><td>Oct 2025</td><td>₱7,892.31</td><td><span class="pill probation">For renewal · re-reg</span></td></tr>
+              <tr class="clickable"><td>NIM 8495</td><td>Isuzu NLR85E (truck)</td><td>Regan</td><td>—</td><td>DS-CML-500790629</td><td>Apr 2026</td><td>₱35,750.58</td><td><span class="pill active">Valid (3yr / new)</span></td></tr>
+              <tr class="clickable"><td>IB 2029</td><td>Honda ANF100 motorcycle 2006</td><td>Aldren</td><td>DS-PMM-500300360</td><td>DS-PMM-500244596</td><td>Oct 2025</td><td>₱854.94</td><td><span class="pill probation">For renewal · re-reg</span></td></tr>
+              <tr class="clickable"><td>K055867</td><td>Honda motorcycle (ACG)</td><td>ACG</td><td>—</td><td>DS-PMM-500485938</td><td>—</td><td>₱1,699.32</td><td><span class="pill awol">For checking · docs from ACG</span></td></tr>
+            </tbody>
+          </table>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:10px;font-style:italic;">Driver column reflects current assignment — when assignment changes the system updates the driver but the vehicle policy carries on. CTPL renewal coincides with annual LTO re-registration.</div>
+        </div>
+
+        <!-- STORE / STOCK FIRE -->
+        <div id="ins-store" class="panel">
+          <h2>Store / Stock Fire — Outlets + Concession</h2>
+          <div class="psub">Two annual group policies: <b>Outlets</b> (DS-FGP-500298382 · own-branded stores including Spyder, Gear Up, Ridelab — 33 stores, ~₱22M sum insured + CGL) and <b>Concession</b> (DS-FGP-500301304 · stocks at SM concession outlets — 49+ branches). When a store closes, that store's segment is flagged for cancellation.</div>
+          <div class="filterbar">
+            <div class="chip active">All (82)</div>
+            <div class="chip">Spyder Outlets (28)</div>
+            <div class="chip">Gear Up (3)</div>
+            <div class="chip">Ridelab (2)</div>
+            <div class="chip">SM Concession (49)</div>
+            <div class="chip alert">Closed — cancel pending (2)</div>
+          </div>
+          <table>
+            <thead><tr><th>Brand</th><th>Branch</th><th>Coverage</th><th>Sum Insured</th><th>CGL Limit</th><th>Year</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr class="clickable"><td>Spyder</td><td>SM Megamall</td><td>Leasehold + Merchandise</td><td>₱500,000</td><td>₱200,000</td><td>2020</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable"><td>Spyder</td><td>Trinoma</td><td>Leasehold + Merchandise</td><td>₱1,000,000</td><td>₱1,000,000</td><td>2019</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable"><td>Spyder</td><td>SM Clark</td><td>Leasehold + Merchandise</td><td>₱500,000</td><td>₱500,000</td><td>2015</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable"><td>Spyder</td><td>SM Bacolod</td><td>Leasehold + Merchandise</td><td>₱500,000</td><td>₱500,000</td><td>2015</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable"><td>Spyder</td><td>Festival Mall</td><td>Leasehold + Merchandise</td><td>₱500,000</td><td>₱500,000</td><td>2014</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable" style="background:#fdeceb;"><td>Spyder</td><td>SM Zamboanga (Outlet)</td><td>Leasehold + Merchandise</td><td>₱500,000</td><td>₱500,000</td><td>2021</td><td><span class="pill awol">CLOSED · cancel pending</span></td></tr>
+              <tr class="clickable"><td>SM Concession</td><td>SM North Edsa stocks</td><td>On Stocks in Trade</td><td>₱800,000</td><td>—</td><td>—</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable" style="background:#fdeceb;"><td>SM Concession</td><td>SM Bicutan stocks</td><td>On Stocks in Trade</td><td>₱200,000</td><td>—</td><td>—</td><td><span class="pill awol">CLOSED · cancel pending</span></td></tr>
+              <tr class="clickable"><td>Gear Up</td><td>Pasig (Standalone)</td><td>Leasehold + Merchandise</td><td>₱1,200,000</td><td>₱500,000</td><td>2020</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable"><td>Gear Up</td><td>Cebu (Standalone)</td><td>Leasehold + Merchandise</td><td>₱1,200,000</td><td>₱500,000</td><td>2020</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable"><td>Ridelab</td><td>Cebu</td><td>Leasehold + Merchandise</td><td>₱500,000</td><td>₱500,000</td><td>2008</td><td><span class="pill active">Active</span></td></tr>
+            </tbody>
+          </table>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:10px;font-style:italic;">Showing 11 of 82 stores · pink rows are CLOSED — system pre-loaded them into the Cancellations queue above. Outlet group total: ₱22M sum insured + ₱19.1M CGL · annual basic premium ~₱76,600.</div>
+        </div>
+
+        <!-- PROPERTY / BUILDING FIRE -->
+        <div id="ins-property" class="panel">
+          <h2>Property / Building Fire</h2>
+          <div class="psub">Real-estate insurance for RCC-owned properties and warehouses. Different lifecycle from store/stock — these don't get cancelled when an outlet inside closes; they cancel when RCC sells or vacates the property.</div>
+          <table>
+            <thead><tr><th>Property</th><th>Provider</th><th>Policy No.</th><th>Sum Insured</th><th>Annual Premium</th><th>Period</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr class="clickable"><td><b>RCC Center · 104 Shaw Blvd (7-storey)</b></td><td>Standard Insurance</td><td>DS-FGP-500233244</td><td>₱107.4M</td><td>₱136,255.08</td><td>Jan 2024 – Jan 2025</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable"><td><b>Solaris Warehouse · Structure &amp; Contents</b></td><td>SGI Philippines</td><td>10000/11/23/000335</td><td>₱80.0M</td><td>₱146,972.87</td><td>Jul 2023 – Jul 2024</td><td><span class="pill probation">Renewal Jul</span></td></tr>
+              <tr class="clickable"><td><b>Solaris Warehouse · Stocks</b></td><td>SGI Philippines</td><td>10000/11/23/000336</td><td>₱100.0M</td><td>₱183,714.61</td><td>Aug 2023 – Aug 2024</td><td><span class="pill probation">Renewal Aug</span></td></tr>
+              <tr class="clickable"><td><b>85 San Agustin (Capitol) · L. Chatlani</b></td><td>Standard Insurance</td><td>DS-FRP-500309509</td><td>₱17.0M</td><td>₱19,385.10</td><td>Jan 2024 – Jan 2025</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable"><td><b>83 San Agustin (Capitol)</b></td><td>Standard Insurance</td><td>DS-FRP-500309512</td><td>₱9.0M</td><td>₱10,262.70</td><td>Jan 2024 – Jan 2025</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable"><td><b>Various Locations (Group)</b></td><td>Standard Insurance</td><td>DS-FGP-500240640</td><td>₱51.5M</td><td>₱62,250.50</td><td>Jan 2024 – Jan 2025</td><td><span class="pill active">Active</span></td></tr>
+              <tr class="clickable"><td><b>1692 Dasmariñas Avenue · L. Chatlani</b></td><td>Standard Insurance</td><td>DS-FRP-500255349</td><td>pending</td><td>—</td><td>not set</td><td><span class="pill awol">⚠ Missing period &amp; sum</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- CLAIMS FILED -->
+        <div id="ins-claims" class="panel">
+          <h2>Claims Filed — Store / Stock Insurance</h2>
+          <div class="psub">When something happens at a store — fire, theft, water damage, vandalism — RCC files a claim against the relevant policy. Track each claim from incident to payout.</div>
+          <div class="actionbar">
+            <button class="btn">+ New Claim</button>
+            <button class="btn ghost">Upload Incident Report</button>
+            <button class="btn blue">Export Excel</button>
+          </div>
+          <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
+            <div class="kpi"><div class="k-l">Claims YTD</div><div class="k-n">6</div></div>
+            <div class="kpi warn"><div class="k-l">Under Review</div><div class="k-n">2</div><div class="k-s">with the insurer</div></div>
+            <div class="kpi"><div class="k-l">Paid YTD</div><div class="k-n">₱677K</div></div>
+            <div class="kpi alert"><div class="k-l">Denied YTD</div><div class="k-n">1</div><div class="k-s">₱28K · vandalism</div></div>
+          </div>
+          <table>
+            <thead><tr><th>Claim Ref</th><th>Incident Date</th><th>Branch</th><th>Type</th><th>Policy</th><th>Claimed</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr class="clickable"><td>CLM-INS-2026-0003</td><td>Mar 12, 2026</td><td><b>Spyder SM Iloilo</b></td><td>Water damage · sprinkler malfunction</td><td>Outlets DS-FGP-500298382</td><td>₱85,000</td><td><span class="pill probation">Under review</span></td></tr>
+              <tr class="clickable"><td>CLM-INS-2026-0002</td><td>Jan 4, 2026</td><td><b>Spyder SM Davao</b></td><td>Theft · after-hours break-in</td><td>Outlets DS-FGP-500298382</td><td>₱42,000</td><td><span class="pill active">Paid · 8 Mar</span></td></tr>
+              <tr class="clickable"><td>CLM-INS-2025-0011</td><td>Oct 22, 2025</td><td><b>Spyder Pasig (Gear Up)</b></td><td>Fire · electrical short</td><td>Outlets DS-FGP-500298382</td><td>₱650,000</td><td><span class="pill active">Approved · ₱635K paid</span></td></tr>
+              <tr class="clickable"><td>CLM-INS-2025-0010</td><td>Sep 30, 2025</td><td><b>SM Cebu concession</b></td><td>Water damage · roof leak</td><td>Concession DS-FGP-500301304</td><td>₱115,000</td><td><span class="pill probation">Awaiting documents</span></td></tr>
+              <tr class="clickable"><td>CLM-INS-2025-0009</td><td>Sep 8, 2025</td><td><b>SM Megamall concession</b></td><td>Stock damage · flooding</td><td>Concession DS-FGP-500301304</td><td>₱28,500</td><td><span class="pill active">Paid · 4 Nov</span></td></tr>
+              <tr class="clickable"><td>CLM-INS-2025-0008</td><td>Aug 5, 2025</td><td><b>Spyder SM North Edsa</b></td><td>Vandalism · display case</td><td>Outlets DS-FGP-500298382</td><td>₱28,000</td><td><span class="pill awol">Denied · not covered peril</span></td></tr>
+            </tbody>
+          </table>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:11px;font-style:italic;">Same pattern can extend to Vehicle claims (accidents), Personal Accident claims (employee injuries), and Property claims (major incidents) — say the word and I'll add those tabs.</div>
+        </div>
+      </section>
+
+      <!-- TBD PLACEHOLDERS -->
+      <section class="page" id="page-positions"><div class="panel" style="margin-top:0;"><div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg></div><h2>Positions &amp; Job Descriptions</h2><p>Master list of every RCC position, each with its job description and pay grade. Position picked on the employee record links here.<br>To design next session.</p></div></div></section>
+      <section class="page" id="page-agencies"><div class="panel" style="margin-top:0;"><div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M4 21V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13"/></svg></div><h2>Agencies</h2><p>Jell-on and M&amp;G profiles, agreements, contact details, performance.<br>To design next session.</p></div></div></section>
+      <section class="page" id="page-onboarding"><div class="panel" style="margin-top:0;"><div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M3 12l5 5L21 5"/></svg></div><h2>Onboarding Tasks</h2><p>The new-hire checklist — ID setup, first uniform, bank-account app, iTime entry, Acumatica entry. Onboarding closes when every required field (including the four government numbers) is in.<br>To design next session.</p></div></div></section>
+      <section class="page" id="page-purchases"><div class="panel" style="margin-top:0;"><div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M3 5h2l3.4 11.5a2 2 0 0 0 2 1.5h7.6a2 2 0 0 0 2-1.4L21.5 9H6"/></svg></div><h2>Employee Purchases</h2><p>Currently parked. ₱7,000/year cap per employee · COD · 15-day settlement. Table already built in the database.</p></div></div></section>
+      <section class="page" id="page-manning"><div class="panel" style="margin-top:0;"><div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><circle cx="12" cy="9" r="2.5"/><path d="M3 18c0-2.5 1.5-4 4-4M21 18c0-2.5-1.5-4-4-4M8 18c0-2.5 1.5-4 4-4s4 1.5 4 4"/></svg></div><h2>Manning / Headcount</h2><p>Per-branch Approved vs Current head count, deficiency live calculation, MRF logging. From the Manning Sheet.<br>To design — comes right after this Phase 2 module.</p></div></div></section>
+      <section class="page" id="page-agencysubs"><div class="panel" style="margin-top:0;"><div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M4 12h16M16 6l4 4M16 18l4-4"/></svg></div><h2>Agency Submissions</h2><p>The two-way agency loop — RCC posts an opening, agencies propose candidates, RCC approves. Limited agency login surfaces here.<br>To design.</p></div></div></section>
+      <section class="page" id="page-exitinterview"><div class="panel" style="margin-top:0;"><div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M21 12a8 8 0 1 1-3-6.2L21 3"/></svg></div><h2>Exit Interview</h2><p>Mandatory exit interview — 8-item employee experience scoring + open-ended feedback. Part of the exit clearance requirements.<br>To design.</p></div></div></section>
+      <section class="page" id="page-audit"><div class="panel" style="margin-top:0;"><div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M3 4h18v4H3z"/><path d="M3 10h18v4H3z"/><path d="M3 16h18v4H3z"/></svg></div><h2>Audit Log</h2><p>Automatic record of every change in the system — who, what, when. Already built as a table.<br>To surface as a view.</p></div></div></section>
+      <section class="page" id="page-settings"><div class="panel" style="margin-top:0;"><div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg></div><h2>Settings</h2><p>Portal configuration — roles, integrations, PayPlus link, agency logins, master list maintenance.<br>To design.</p></div></div></section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  var TITLES={
+    wherewe:'Where We Are', dashboard:'Dashboard', employees:'Employee Master', employee:'Employee Record',
+    branches:'Branch Master', store:'Branch Detail',
+    prehire:'Pre-hire & Recruiting', contracts:'Contracts', memos:'Notices',
+    evaluations:'Evaluations', timekeeping:'Timekeeping & Attendance', exit:'Exit Clearance',
+    loans:'Loans', signatures:'Signatures', positions:'Positions & Job Descriptions',
+    agencies:'Agencies', onboarding:'Onboarding Tasks', purchases:'Employee Purchases',
+    claims:'Government Claims', manning:'Manning / Headcount', agencysubs:'Agency Submissions',
+    exitinterview:'Exit Interview', compliance:'Compliance', audit:'Audit Log',
+    settings:'Settings', parking:'Parking Lot', hractivity:'HR Activity & Expense',
+    hmo:'HMO Coverage', insurance:'Personal Insurance'
+  };
+  var NAVFOR={employee:'employees', store:'branches'};
+  function go(id){
+    document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+    var pg=document.getElementById('page-'+id);
+    if(pg) pg.classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
+    var navId=NAVFOR[id]||id;
+    var nav=document.querySelector('.nav-item[data-page="'+navId+'"]');
+    if(nav) nav.classList.add('active');
+    document.getElementById('pageTitle').textContent=TITLES[id]||'';
+    window.scrollTo(0,0);
+  }
+  document.querySelectorAll('.tab').forEach(function(t){
+    t.addEventListener('click',function(){
+      this.parentElement.querySelectorAll('.tab').forEach(function(x){x.classList.remove('active');});
+      this.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.chip').forEach(function(c){
+    c.addEventListener('click',function(){
+      this.parentElement.querySelectorAll('.chip').forEach(function(x){x.classList.remove('active');});
+      this.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.toggle div').forEach(function(d){
+    d.addEventListener('click',function(){
+      this.parentElement.querySelectorAll('div').forEach(function(x){x.classList.remove('active');});
+      this.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.nbtn').forEach(function(b){
+    b.addEventListener('click',function(){this.textContent='Nudged ✓';this.style.background='#1f6b3a';this.style.color='#fff';});
+  });
+
+  // Employee record — Preview role toggle (HR vs Agency login)
+  document.querySelectorAll('.role-pre').forEach(function(rp){
+    rp.addEventListener('click',function(e){
+      var btn=e.target.closest('div[data-role]');
+      if(!btn) return;
+      var role=btn.dataset.role;
+      rp.querySelectorAll('div').forEach(function(d){d.classList.toggle('active', d===btn);});
+      document.querySelectorAll('[data-restricted="agency"]').forEach(function(el){
+        el.style.display=(role==='agency')?'none':'';
+      });
+      document.querySelectorAll('[data-restricted-banner]').forEach(function(el){
+        el.style.display=(role==='agency')?'':'none';
+      });
+      document.querySelectorAll('.efield.paydetail').forEach(function(r){
+        r.style.display=(role==='agency')?'none':'grid';
+      });
+    });
+  });
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="./config.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>

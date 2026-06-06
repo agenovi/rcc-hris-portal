@@ -18,7 +18,9 @@ let ONBOARDING=[];
 let ONBTASKS=[];
 let EXITCASES=[];
 let CONTRACTS=[];
+let PHDOCS=[];
 let CURRENT_USER=null;
+const DEFAULT_PH_DOCS=[["nbi","NBI / Police Clearance",true],["birth","PSA Birth Certificate",false],["sss","SSS (E-1 / number)",false],["philhealth","PhilHealth",false],["pagibig","Pag-IBIG (MID)",false],["tin","TIN / BIR 1902",false],["photo","2×2 ID Photos",false],["diploma","Diploma / TOR",false],["medical","Medical / Health Certificate",false]];
 let empFilter="All";
 let scFilter="All";
 let prehireTab="pipeline";
@@ -57,7 +59,7 @@ function patchSidebarFoot(user){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -65,7 +67,8 @@ async function loadEmployees(){
     sb.from("onboarding_cases").select("*").order("created_at"),
     sb.from("onboarding_tasks").select("*").order("sort_order"),
     sb.from("exit_clearance").select("*").order("created_at"),
-    sb.from("contracts").select("*").order("created_at")
+    sb.from("contracts").select("*").order("created_at"),
+    sb.from("prehire_documents").select("*")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -76,6 +79,7 @@ async function loadEmployees(){
   ONBTASKS=(ot&&ot.data)||[];
   EXITCASES=(ex&&ex.data)||[];
   CONTRACTS=(ct&&ct.data)||[];
+  PHDOCS=(pd&&pd.data)||[];
   renderDashboard();
   renderEmployeesPage();
   renderBranchesPage();
@@ -741,6 +745,24 @@ function phBodyData(){
 }
 
 function phRow(k,v){ const blank=v==null||v===""; return `<div class="efield"><div class="el">${k}</div><div class="ev">${blank?'<span class="note">—</span>':esc(v)}</div><div class="em"></div></div>`; }
+function phDocFor(c,key){ return PHDOCS.find(d=>String(d.prehire_id)===String(c.id)&&d.document_key===key); }
+function phDocsReceived(c){ return DEFAULT_PH_DOCS.filter(([k])=>{const d=phDocFor(c,k); return d&&d.status==="RECEIVED";}).length; }
+function phDocsRows(c){
+  return DEFAULT_PH_DOCS.map(([k,lbl,tf])=>{ const d=phDocFor(c,k); const st=d?d.status:"PENDING"; const got=st==="RECEIVED";
+    return `<div class="task clickable" data-doc="${k}" data-label="${esc(lbl)}" data-tofollow="${tf?1:0}" style="cursor:pointer;align-items:center;">
+      <div class="dot ${got?'g':'a'}"></div>
+      <div style="flex:1;"><div class="tt">${esc(lbl)}</div></div>
+      ${tf?'<span class="pill cn" style="margin-right:6px;">to-follow OK</span>':''}
+      <span class="pill ${got?'active':'probation'}">${got?'Received':'Pending'}</span></div>`;
+  }).join("");
+}
+async function togglePhDoc(c,key,label,toFollow){
+  const d=phDocFor(c,key);
+  if(d){ const ns=d.status==="RECEIVED"?"PENDING":"RECEIVED"; await sb.from("prehire_documents").update({status:ns, submitted_at:ns==="RECEIVED"?new Date().toISOString():null}).eq("id",d.id); }
+  else { await sb.from("prehire_documents").insert({prehire_id:c.id, document_key:key, document_label:label, is_mandatory:!toFollow, is_to_follow:toFollow, status:"RECEIVED", submitted_at:new Date().toISOString()}); }
+  await loadEmployees();
+  openPrehire(PREHIRE.find(p=>String(p.id)===String(c.id)));
+}
 function openPrehire(c){
   if(!c) return;
   const idx=PH_PHASES.findIndex(p=>p.key===c.phase);
@@ -780,6 +802,10 @@ function openPrehire(c){
       <div class="panel">
         ${sec(8,"Review, Gates &amp; Onboarding", phRow("HR officer notes",c.hr_officer_notes)+phRow("Juvelyn sign-off",c.juvelyn_review_date?"Signed":"")+phRow("SM acceptance (hard gate)",c.sm_acceptance)+phRow("Contract ID",c.contract_id)+phRow("PayPlus setup",c.payplus_setup?"Done":"")+phRow("Assigned Employee ID",c.assigned_employee_id))}
       </div>
+      <div class="panel"><h2>Required Documents <span class="count-tag">${phDocsReceived(c)}/${DEFAULT_PH_DOCS.length}</span></h2>
+        <div class="psub">NBI / police clearance may be <b>"to follow"</b>; the rest are needed to close onboarding. Tap to mark received.</div>
+        ${phDocsRows(c)}
+      </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
         <button class="btn" id="phEdit">Edit applicant details</button>
         ${next?`<button class="btn blue" id="phAdvance">Advance → ${esc(next.label)}</button>`:'<span class="pill active">Pipeline complete</span>'}
@@ -790,6 +816,7 @@ function openPrehire(c){
   $("#phClose").addEventListener("click",()=>m.remove());
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   $("#phEdit").addEventListener("click",()=>editPrehire(c));
+  $$("#phModal [data-doc]").forEach(el=>el.addEventListener("click",()=>togglePhDoc(c, el.dataset.doc, el.dataset.label, el.dataset.tofollow==="1")));
   if(next) $("#phAdvance").addEventListener("click",()=>setPhase(c,next.key,m));
   const rej=document.getElementById("phReject"); if(rej) rej.addEventListener("click",()=>{ const reason=prompt("Rejection reason?"); if(reason!=null) setPhase(c,"REJECTED",m,{rejection_reason:reason}); });
 }

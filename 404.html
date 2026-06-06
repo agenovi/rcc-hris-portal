@@ -3037,7 +3037,7 @@ function phBodyPipeline(){
     return `<div class="col"><div class="col-h">${ph.label}<span>${cards.length} · ${esc(ph.actor)}</span></div>
       ${cards.map(c=>`<div class="ccard clickable" data-id="${c.id}" ${ph.key==="READY_FOR_CONTRACT"?'style="border-color:#bcdcc7;background:var(--green-light);"':''}>
         <div class="cn">${esc(c.full_name)}</div>
-        <div class="cd">${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")}${c.assessment_score!=null?` · exam ${c.assessment_score}`:""}${c.sm_acceptance&&c.sm_acceptance!=="NA"?` · SM ${esc(c.sm_acceptance)}`:""}</div></div>`).join("")
+        <div class="cd">${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")}${c.daily_rate?` · ₱${Number(c.daily_rate).toLocaleString()}/day`:""}${c.assessment_score!=null?` · exam ${c.assessment_score}`:""}${c.sm_acceptance&&c.sm_acceptance!=="NA"?` · SM ${esc(c.sm_acceptance)}`:""}</div></div>`).join("")
        || `<div style="font-size:11.5px;color:var(--muted);padding:6px 2px;">—</div>`}
     </div>`;
   }).join("");
@@ -3132,27 +3132,94 @@ function openPrehire(c){
     </div>
     <div style="padding:18px 22px 60px;">
       <div class="panel" style="margin-top:0;">
-        <div class="esec-h"><span class="esec-n">i</span><span class="esec-t">Application</span></div>
-        ${phRow("Email",c.email)}${phRow("Phone",c.phone)}${phRow("Position",c.position)}${phRow("Department",c.department)}${phRow("Worksite",c.worksite)}${phRow("Hire source",c.hire_source||"Direct")}
+        ${sec(1,"Application &amp; Stage", phRow("Pre-hire ID",c.prehire_id)+phRow("Stage",phLabel(c.phase))+phRow("Hire source",c.hire_source||"Direct")+phRow("Position",c.position)+phRow("Department",c.department)+phRow("Worksite",c.worksite))}
       </div>
       <div class="panel">
-        <div class="esec-h"><span class="esec-n">ii</span><span class="esec-t">Assessment &amp; Offer</span></div>
-        ${phRow("Assessment",c.assessment_type)}${phRow("Score",c.assessment_score)}${phRow("Passed",c.assessment_passed==null?"":(c.assessment_passed?"Yes":"No"))}${phRow("Contract type",c.contract_type)}${phRow("Daily rate",c.daily_rate?("₱"+Number(c.daily_rate).toLocaleString()):"")}
+        ${sec(2,"Personal Details", phRow("Email",c.email)+phRow("Mobile",c.phone)+phRow("Date of birth",c.date_of_birth?fmtDate(c.date_of_birth):"")+phRow("Civil status",c.civil_status)+phRow("Permanent address",c.permanent_address)+phRow("Current address",c.current_address))}
       </div>
       <div class="panel">
-        <div class="esec-h"><span class="esec-n">iii</span><span class="esec-t">Review, Gates &amp; Onboarding</span></div>
-        ${phRow("HR officer notes",c.hr_officer_notes)}${phRow("Juvelyn sign-off",c.juvelyn_review_date?"Signed":"")}${phRow("SM acceptance (hard gate)",c.sm_acceptance)}${phRow("Contract ID",c.contract_id)}${phRow("PayPlus setup",c.payplus_setup?"Done":"")}${phRow("Assigned Employee ID",c.assigned_employee_id)}
+        ${sec(3,"Emergency Contact", phRow("Name",c.emergency_contact_name)+phRow("Relationship",c.emergency_contact_relation)+phRow("Contact number",c.emergency_contact_number))}
+      </div>
+      <div class="panel">
+        ${sec(4,"Assessment", phRow("Type",c.assessment_type)+phRow("Sent",c.assessment_sent_date?fmtDate(c.assessment_sent_date):"")+phRow("Score",c.assessment_score)+phRow("Passed",c.assessment_passed==null?"":(c.assessment_passed?"Yes":"No"))+phRow("Notes",c.assessment_notes))}
+      </div>
+      <div class="panel">
+        ${sec(5,"Offer &amp; Compensation",
+          phRow("Contract type",c.contract_type)
+          + `<div class="efield"><div class="el">Daily rate (offered)</div><div class="ev">${c.daily_rate?("₱"+Number(c.daily_rate).toLocaleString()):'<span class="note">—</span>'} <span class="note">— may change at the contract stage</span></div><div class="em"></div></div>`
+          + phRow("Daily allowance",c.daily_allowance?("₱"+Number(c.daily_allowance).toLocaleString()):"")+phRow("Target start date",c.start_date?fmtDate(c.start_date):"")+phRow("Supervisor",c.supervisor_name)+phRow("Approver 2",c.approver2_email))}
+      </div>
+      <div class="panel">
+        ${sec(6,"Government Numbers", phRow("SSS",c.sss_number)+phRow("PhilHealth",c.philhealth_number)+phRow("Pag-IBIG",c.pagibig_number)+phRow("TIN",c.tin_number))}
+      </div>
+      <div class="panel">
+        ${sec(7,"Bank", phRow("Bank name",c.bank_name)+phRow("Account number",c.bank_account_number))}
+      </div>
+      <div class="panel">
+        ${sec(8,"Review, Gates &amp; Onboarding", phRow("HR officer notes",c.hr_officer_notes)+phRow("Juvelyn sign-off",c.juvelyn_review_date?"Signed":"")+phRow("SM acceptance (hard gate)",c.sm_acceptance)+phRow("Contract ID",c.contract_id)+phRow("PayPlus setup",c.payplus_setup?"Done":"")+phRow("Assigned Employee ID",c.assigned_employee_id))}
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
-        ${next?`<button class="btn" id="phAdvance">Advance → ${esc(next.label)}</button>`:'<span class="pill active">Pipeline complete</span>'}
+        <button class="btn" id="phEdit">Edit applicant details</button>
+        ${next?`<button class="btn blue" id="phAdvance">Advance → ${esc(next.label)}</button>`:'<span class="pill active">Pipeline complete</span>'}
         ${c.phase!=="REJECTED"?'<button class="btn ghost" id="phReject" style="color:var(--red);border-color:#f1c9c5;">Reject</button>':''}
         <button class="btn ghost" id="phClose" style="margin-left:auto;">Close</button>
       </div>
     </div></div>`;
   $("#phClose").addEventListener("click",()=>m.remove());
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  $("#phEdit").addEventListener("click",()=>editPrehire(c));
   if(next) $("#phAdvance").addEventListener("click",()=>setPhase(c,next.key,m));
   const rej=document.getElementById("phReject"); if(rej) rej.addEventListener("click",()=>{ const reason=prompt("Rejection reason?"); if(reason!=null) setPhase(c,"REJECTED",m,{rejection_reason:reason}); });
+}
+function editPrehire(c){
+  let m=document.getElementById("phEditModal"); if(!m){ m=document.createElement("div"); m.id="phEditModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.5);display:flex;justify-content:flex-end;";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:560px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0e3219,#1f6b3a);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">Edit applicant — ${esc(c.full_name)}</div><div style="font-size:12.5px;opacity:.85;">${esc(c.prehire_id)} · ${esc(phLabel(c.phase))}</div></div>
+    <div style="padding:18px 22px;">
+      <div class="panel" style="margin-top:0;"><div class="subhead">Identity</div>
+        ${fld("pe_full_name","Full name *",c.full_name)}${sel("pe_department","Department",DEPARTMENTS,c.department)}${fld("pe_position","Position",c.position)}${sel("pe_hire_source","Hire source",HIRE_SOURCES,c.hire_source||"Direct")}${fld("pe_worksite","Worksite (if store)",c.worksite)}
+      </div>
+      <div class="panel"><div class="subhead">Personal details</div>
+        ${fld("pe_email","Email",c.email,"email")}${fld("pe_phone","Mobile (09XXXXXXXXX)",c.phone)}${fld("pe_dob","Date of birth",c.date_of_birth,"date")}${sel("pe_civil","Civil status",CIVIL,c.civil_status)}${fld("pe_perm","Permanent address",c.permanent_address)}${fld("pe_curr","Current address",c.current_address)}
+      </div>
+      <div class="panel"><div class="subhead">Emergency contact</div>
+        ${fld("pe_ecn","Name",c.emergency_contact_name)}${sel("pe_ecr","Relationship",RELATIONS,c.emergency_contact_relation)}${fld("pe_ecnum","Contact number",c.emergency_contact_number)}
+      </div>
+      <div class="panel"><div class="subhead">Assessment</div>
+        ${fld("pe_atype","Type",c.assessment_type)}${fld("pe_ascore","Score",c.assessment_score,"number")}
+      </div>
+      <div class="panel"><div class="subhead">Offer &amp; compensation <span class="sh-note">daily rate may change at contract</span></div>
+        ${sel("pe_ctype","Contract type",CONTRACT_TYPES,c.contract_type)}${fld("pe_rate","Daily rate offered (₱)",c.daily_rate,"number")}${fld("pe_allow","Daily allowance (₱)",c.daily_allowance,"number")}${fld("pe_start","Target start date",c.start_date,"date")}${fld("pe_super","Supervisor",c.supervisor_name)}
+      </div>
+      <div class="panel"><div class="subhead">Government numbers &amp; bank</div>
+        ${fld("pe_sss","SSS",c.sss_number)}${fld("pe_phil","PhilHealth",c.philhealth_number)}${fld("pe_pag","Pag-IBIG",c.pagibig_number)}${fld("pe_tin","TIN",c.tin_number)}${fld("pe_bank","Bank name",c.bank_name)}${fld("pe_acct","Bank account number",c.bank_account_number)}
+      </div>
+      <div class="panel"><div class="subhead">HR notes &amp; gate</div>
+        <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">HR officer notes</label><textarea id="pe_notes" rows="2" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;">${esc(c.hr_officer_notes||"")}</textarea></div>
+        ${sel("pe_sm","SM / Retail-ops acceptance",["Pending","Accepted","Rejected","NA"],c.sm_acceptance)}
+      </div>
+      <div id="peMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
+      <div style="display:flex;gap:10px;"><button class="btn ghost" id="peCancel" style="flex:1;">Cancel</button><button class="btn" id="peSave" style="flex:1;">Save</button></div>
+    </div></div>`;
+  document.getElementById("peCancel").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("peSave").addEventListener("click",async()=>{
+    const name=document.getElementById("pe_full_name").value.trim();
+    if(!name){ document.getElementById("peMsg").textContent="Full name is required."; return; }
+    let phone=v("pe_phone"); if(phone) phone=phone.replace(/[\s-]/g,"");
+    const p={ full_name:name, department:v("pe_department"), position:v("pe_position"), hire_source:v("pe_hire_source"), worksite:v("pe_worksite"),
+      email:v("pe_email"), phone, date_of_birth:v("pe_dob"), civil_status:v("pe_civil"), permanent_address:v("pe_perm"), current_address:v("pe_curr"),
+      emergency_contact_name:v("pe_ecn"), emergency_contact_relation:v("pe_ecr"), emergency_contact_number:v("pe_ecnum"),
+      assessment_type:v("pe_atype"), assessment_score:nv("pe_ascore"),
+      contract_type:v("pe_ctype"), daily_rate:nv("pe_rate"), daily_allowance:nv("pe_allow"), start_date:v("pe_start"), supervisor_name:v("pe_super"),
+      sss_number:v("pe_sss"), philhealth_number:v("pe_phil"), pagibig_number:v("pe_pag"), tin_number:v("pe_tin"), bank_name:v("pe_bank"), bank_account_number:v("pe_acct"),
+      hr_officer_notes:v("pe_notes"), sm_acceptance:v("pe_sm"), updated_at:new Date().toISOString() };
+    const { error } = await sb.from("prehire").update(p).eq("id",c.id);
+    if(error){ document.getElementById("peMsg").textContent=error.message; return; }
+    m.remove(); const pm=document.getElementById("phModal"); if(pm) pm.remove();
+    await loadEmployees(); window.go("prehire");
+  });
 }
 async function setPhase(c,phase,modal,extra){
   const patch=Object.assign({phase, updated_at:new Date().toISOString()}, extra||{});

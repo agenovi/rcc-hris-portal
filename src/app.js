@@ -137,16 +137,14 @@ function renderDashboard(){
   const byArea={}; open.forEach(b=>{const a=b.area||"—";byArea[a]=(byArea[a]||0)+1;});
   const bySC={}; SCs.forEach(s=>bySC[s]=open.filter(b=>b.sc===s).length);
   const bySource={}; A.forEach(e=>{const s=e.hire_source||"Direct";bySource[s]=(bySource[s]||0)+1;});
-  // merchandiser pay (Manning Sheet) — Total = Basic + recorded allowances (COLA/SOLA/SA/LA)
+  // merchandiser pay (Manning Sheet) — basic is reliable; company allowances (mostly Lead Disers) come from PayPlus
   const actDi=DISERS.filter(d=>(d.status||'').toLowerCase().startsWith('active'));
-  const rates=actDi.filter(d=>d.total_rate).map(d=>Number(d.total_rate));
   const basics=actDi.filter(d=>d.basic_rate).map(d=>Number(d.basic_rate));
-  const allowVals=actDi.filter(d=>d.total_rate&&d.basic_rate&&Number(d.total_rate)>Number(d.basic_rate)).map(d=>Number(d.total_rate)-Number(d.basic_rate));
-  const avgRate=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):0;
   const avgBasic=basics.length?Math.round(basics.reduce((a,b)=>a+b,0)/basics.length):0;
-  const avgAllow=allowVals.length?Math.round(allowVals.reduce((a,b)=>a+b,0)/allowVals.length):0;
-  const withAllow=allowVals.length;
-  const minRate=rates.length?Math.min(...rates):0, maxRate=rates.length?Math.max(...rates):0;
+  const minBasic=basics.length?Math.min(...basics):0, maxBasic=basics.length?Math.max(...basics):0;
+  const posBasic={}; actDi.filter(d=>d.basic_rate).forEach(d=>{const p=d.position||'—'; (posBasic[p]=posBasic[p]||[]).push(Number(d.basic_rate));});
+  const posAvg={}; Object.entries(posBasic).forEach(([p,arr])=>{ posAvg[p]=Math.round(arr.reduce((a,b)=>a+b,0)/arr.length); });
+  const promoAvg=posAvg["Promo Diser"]||0, leadAvg=posAvg["Lead"]||0;
   // tenure
   const ten=A.map(e=>tenureYears(e.hire_date)).filter(x=>x!=null);
   const avgTen=ten.length?(ten.reduce((a,b)=>a+b,0)/ten.length).toFixed(1):"—";
@@ -239,14 +237,14 @@ function renderDashboard(){
         ${chartRows(byDept)}
       </div>
       <div class="panel" style="margin-top:0;">
-        <h2>Merchandiser pay <span class="count-tag">daily</span></h2>
-        <div class="psub">Basic + allowances across ${rates.length} merchandisers (from the Manning Sheet)</div>
+        <h2>Merchandiser pay <span class="count-tag">daily basic</span></h2>
+        <div class="psub">Basic daily rate across ${basics.length} merchandisers (Manning Sheet)</div>
         <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-          <div class="kpi"><div class="k-l">Avg Basic</div><div class="k-n">₱${avgBasic.toLocaleString()}</div></div>
-          <div class="kpi"><div class="k-l">Avg Allowance</div><div class="k-n">₱${avgAllow.toLocaleString()}</div><div class="k-s">where recorded (${withAllow})</div></div>
-          <div class="kpi"><div class="k-l">Avg Total (all-in)</div><div class="k-n">₱${avgRate.toLocaleString()}</div><div class="k-s">₱${minRate.toLocaleString()}–₱${maxRate.toLocaleString()}</div></div>
+          <div class="kpi"><div class="k-l">Avg Basic</div><div class="k-n">₱${avgBasic.toLocaleString()}</div><div class="k-s">₱${minBasic.toLocaleString()}–₱${maxBasic.toLocaleString()}</div></div>
+          <div class="kpi"><div class="k-l">Promo Diser</div><div class="k-n">₱${promoAvg.toLocaleString()}</div><div class="k-s">avg basic</div></div>
+          <div class="kpi"><div class="k-l">Lead Diser</div><div class="k-n">₱${leadAvg.toLocaleString()}</div><div class="k-s">higher basic + allowances</div></div>
         </div>
-        <div class="task" style="margin-top:10px;"><div class="dot a"></div><div><div class="tt">Most allowances aren't in the Manning Sheet yet</div><div class="td">Only ${withAllow} of ${rates.length} have an allowance recorded here — the complete COLA/SOLA/SA/LA figures come from <b>PayPlus</b> once connected.</div></div></div>
+        <div class="task" style="margin-top:10px;"><div class="dot a"></div><div><div class="tt">Company allowances (COLA / SOLA / SA / LA) — mostly for Lead Disers</div><div class="td">Not reliably recorded in the Manning Sheet, so they're not in the totals above. The actual per-person allowance comes from <b>PayPlus</b> once connected.</div></div></div>
       </div>
     </div>`;
 }

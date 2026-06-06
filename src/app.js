@@ -1202,7 +1202,7 @@ const EXIT_STAGES=[
   {key:"accounting",label:"Accounting",s:"accounting_status",c:null,items:"Taxes / tax refund computation"},
   {key:"hr",label:"Human Resources",s:"hr_status",c:"hr_charges",items:"Company ID · HMO / health card · locker key · uniform · staff handbook · breach / 30-day notice"}
 ];
-const HR_RETURN_ITEMS=[["id","Company ID"],["hmo_card","HMO / Health card"],["locker","Locker key"],["uniform","Uniform"],["handbook","Staff handbook"]];
+const HR_RETURN_ITEMS=[["id","Company ID"],["hmo_card","HMO / Health card"],["locker","Locker / cabinet keys"],["handbook","Staff handbook"],["laptop","Laptop / desktop"],["cellphone","Cellphone + charger"],["camera","Camera / devices"],["broadband","Broadband stick"],["vehicle","Company vehicle + keys"],["cards","Business cards"]];
 const EXIT_INTERVIEW_Q=[
   "What prompted your decision to leave the company?",
   "What aspects of your job did you find most satisfying / challenging?",
@@ -1318,20 +1318,20 @@ function openExitCase(id){
         </div>`).join("")}
       </div>
 
-      <div class="panel"><h2>Items returned to HR</h2>
-        <div class="psub">Company property surrendered by the leaving employee</div>
+      <div class="panel"><h2>Property to return</h2>
+        <div class="psub">Tick only what was <b>actually issued</b> to this employee (issuance varies per person). <b>Uniform is not collected back</b> — its cost is handled by the &lt;6-month rule below. Cash advances / loan balances settle under the Finance sign-offs above.</div>
         <div style="display:flex;flex-wrap:wrap;gap:10px 18px;">
           ${HR_RETURN_ITEMS.map(([k,lbl])=>`<label style="font-size:13px;"><input type="checkbox" data-return="${k}" ${(x.hr_returns&&x.hr_returns[k])?"checked":""}> ${esc(lbl)}</label>`).join("")}
         </div>
+        <div style="margin-top:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Other issued items / advances (specify)</label><input id="ex_other_return" value="${esc((x.hr_returns&&x.hr_returns.other)||"")}" placeholder="e.g. cellphone model, cash advance ₱___, tools, SIM…" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;"></div>
       </div>
 
-      ${under6?`<div class="madv"><div class="madv-h">⚖️ Uniform deduction — tenure under 6 months</div>
-        <div style="font-size:12.5px;color:#5c4720;">Per RCC policy the uniform cost is recoverable, but a deduction from final pay is lawful <b>only with the employee's signed authorization</b> (the employment-contract clause, Art. 113) and never below minimum wage.</div>
-        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;align-items:center;">
-          <label style="font-size:12.5px;"><input type="checkbox" id="ex_uniform_returned" ${x.uniform_returned?"checked":""}> Uniform returned in good condition</label>
+      ${under6?`<div class="madv"><div class="madv-h">⚖️ Uniform cost — tenure under 6 months</div>
+        <div style="font-size:12.5px;color:#5c4720;">The uniform is kept by the employee (not collected back), so its cost is recoverable for under-6-month tenure — lawful <b>only with the employee's signed authorization</b> (the employment-contract clause, Art. 113) and never below minimum wage.</div>
+        <div style="margin-top:8px;">
           <label style="font-size:12.5px;"><input type="checkbox" id="ex_uniform_auth" ${x.uniform_auth_on_file?"checked":""}> Signed authorization on file (contract clause)</label>
         </div>
-        ${exNumField("ex_uniform_deduction","Uniform deduction (₱)",x.uniform_deduction)}
+        ${exNumField("ex_uniform_deduction","Uniform cost to deduct (₱)",x.uniform_deduction)}
         </div>`:""}
 
       <div class="panel"><h2>Final pay computation</h2>
@@ -1406,6 +1406,7 @@ function collectExit(x){
     uniform_auth_on_file:!!(m.querySelector("#ex_uniform_auth")&&m.querySelector("#ex_uniform_auth").checked),
     hmo_cancelled:m.querySelector("#ex_hmo").checked, coe_issued:m.querySelector("#ex_coe").checked };
   const ret={}; m.querySelectorAll("[data-return]").forEach(el=>{ ret[el.dataset.return]=el.checked; });
+  const otherEl=m.querySelector("#ex_other_return"); if(otherEl) ret.other=otherEl.value.trim();
   o.hr_returns=ret;
   m.querySelectorAll("[data-stage]").forEach(el=>{ o[el.dataset.stage]=el.value; });
   m.querySelectorAll("[data-charge]").forEach(el=>{ o[el.dataset.charge]=el.value.trim()!==""?Number(el.value):0; });

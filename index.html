@@ -2526,6 +2526,12 @@ function renderDashboard(){
   const onbOpen=ONBOARDING.filter(c=>c.status!=="Complete").length;
   const onbTasksOpen=ONBTASKS.filter(t=>t.status!=="Done").length;
   const exitOpen=EXITCASES.filter(x=>x.overall_status!=="Complete").length;
+  // "Waiting on others" — items sent out / stuck with someone else (real data)
+  const waiting=[];
+  PREHIRE.filter(p=>p.phase==="CONTRACT_PIPELINE").slice(0,2).forEach(p=>waiting.push({t:"Contract — "+p.full_name, d:"In the signature pipeline", go:"prehire"}));
+  PREHIRE.filter(p=>p.phase==="OFFER_EXTENDED").slice(0,2).forEach(p=>waiting.push({t:"Offer — "+p.full_name, d:"Awaiting candidate acceptance", go:"prehire"}));
+  EXITCASES.filter(x=>x.overall_status!=="Complete").slice(0,2).forEach(x=>{const pend=EXIT_STAGES.filter(s=>x[s.s]==="Pending").length; waiting.push({t:"Exit sign-off — "+x.employee_name, d:pend+" department(s) still to clear", go:"exit"});});
+  ONBOARDING.filter(c=>c.status!=="Complete").slice(0,2).forEach(c=>{const op=tasksFor(c.id).filter(t=>t.status!=="Done").length; waiting.push({t:"Onboarding — "+c.employee_name, d:op+" task(s) outstanding", go:"onboarding"});});
 
   const pg=$("#page-dashboard");
   pg.innerHTML=`
@@ -2557,12 +2563,27 @@ function renderDashboard(){
         <div class="task" style="cursor:pointer;" onclick="go('employees')"><div class="dot a"></div><div><div class="tt">${prob} employees on probation</div><div class="td">3rd / 5th-month evaluations &amp; regularization reviews</div></div><div class="due a">review</div></div>
         <div class="task" style="cursor:pointer;" onclick="go('manning')"><div class="dot r"></div><div><div class="tt">${merchDef} merchandiser slots to fill</div><div class="td">${totAHC} approved vs ${totCHC} confirmed — across ${SCs.length} Sales Coordinators</div></div><div class="due r">staffing</div></div>
       </div>
-      <div class="panel" style="margin-top:0;">
-        <h2>Workforce composition</h2>
-        <div class="psub">Active staff by group</div>
-        ${chartRows(byGroup)}
-        <div class="psub" style="margin-top:14px;">By hire source</div>
-        ${chartRows(bySource)}
+      <div>
+        <div class="panel" style="margin-top:0;">
+          <h2>Waiting on others <span class="count-tag">nudge</span></h2>
+          <div class="psub">Sent out — now stuck with someone else</div>
+          ${waiting.length? waiting.map(w=>`<div class="nudge-item"><div class="ni"><div class="nt">${esc(w.t)}</div><div class="nd">${esc(w.d)}</div></div><button class="nbtn" onclick="event.stopPropagation();this.textContent='Nudged ✓';this.style.background='#1f6b3a';this.style.color='#fff';go('${w.go}')">Nudge</button></div>`).join("")
+            : '<div class="psub" style="margin-top:8px;">Nothing waiting on anyone right now. ✓</div>'}
+        </div>
+        <div class="panel">
+          <h2>Where we're lagging</h2>
+          <div class="psub">Open items by work area</div>
+          <div class="team-row"><div class="tn">Pre-hire pipeline</div>${phReady?`<span class="mini bad">${phReady} ready</span>`:''}<span class="mini ok">${phPipe} open</span></div>
+          <div class="team-row"><div class="tn">Onboarding</div><span class="mini ok">${onbTasksOpen} tasks</span></div>
+          <div class="team-row"><div class="tn">Exit clearances</div><span class="mini ${exitOpen?'bad':'ok'}">${exitOpen} open</span></div>
+          <div class="team-row"><div class="tn">Probation reviews</div><span class="mini ok">${prob} due</span></div>
+          <div class="team-row"><div class="tn">Merchandiser staffing</div><span class="mini bad">${merchDef} short</span></div>
+        </div>
+        <div class="panel">
+          <h2>Workforce composition</h2>
+          <div class="psub">Active staff by group</div>
+          ${chartRows(byGroup)}
+        </div>
       </div>
     </div>
 

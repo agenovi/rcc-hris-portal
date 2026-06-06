@@ -84,8 +84,16 @@ async function loadEmployees(){
   renderOnboarding();
   renderExit();
   renderContracts();
+  renderLoans();
   wireGlobalSearch();
   if(!landed){ landed=true; if(typeof window.go==="function") window.go("dashboard"); }
+}
+/* ---------- LOANS — embeds anj's preferred RCC Loan Portal (loans.html) ---------- */
+function renderLoans(){
+  const pg=$("#page-loans"); if(!pg||pg.dataset.loaded) return;
+  pg.dataset.loaded="1";
+  pg.innerHTML=`<iframe title="RCC Employee Loan Portal" src="https://agenovi.github.io/rcc-hris-portal/loans.html"
+    style="width:100%;height:calc(100vh - 96px);border:1px solid var(--line);border-radius:12px;display:block;background:#fff;"></iframe>`;
 }
 const isActive=(e)=>e.status==="Active";
 const typePill=(e)=>{

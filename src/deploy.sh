@@ -26,6 +26,9 @@ if(dupes>1){ console.error("BUILD ERROR: duplicate const $ — inlining corrupte
 console.log("build ok");
 ' "$APP_DIR" "$SITE_DIR"
 
+# 1a2. Publish anj's preferred Loan Portal as a standalone page (embedded by the Loans tab)
+[ -f "$APP_DIR/loans.html" ] && cp "$APP_DIR/loans.html" "$SITE_DIR/loans.html"
+
 # 1b. Also refresh the local double-clickable copy in the project folder (for easy viewing)
 cp "$SITE_DIR/index.html" "/Users/anj/Library/CloudStorage/Dropbox/CLAUDE/RCC HRIS Portal/RCC HRIS Portal - LIVE APP.html"
 

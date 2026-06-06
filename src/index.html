@@ -334,6 +334,82 @@
   .anchor-nav{display:flex;gap:6px;padding:11px 0;border-bottom:1px solid var(--line);margin-bottom:12px;flex-wrap:wrap;}
   .anchor-nav a{font-size:12.5px;font-weight:600;color:var(--muted);text-decoration:none;padding:5px 11px;border-radius:7px;background:#fafbfa;border:1px solid var(--line);}
   .anchor-nav a:hover{background:var(--green-light);color:var(--green-dark);}
+
+  /* LOANS — Deep Integration */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:5000;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+  .modal-overlay.active{opacity:1;pointer-events:auto;}
+  .modal-dialog{background:#fff;border-radius:13px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:620px;width:100%;max-height:90vh;overflow:auto;}
+  .modal-header{background:var(--green-dark);color:#fff;padding:16px 20px;border-bottom:1px solid rgba(0,0,0,.1);display:flex;justify-content:space-between;align-items:center;}
+  .modal-header h3{font-size:15px;font-weight:700;margin:0;}
+  .modal-close{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;padding:0;width:28px;height:28px;display:flex;align-items:center;justify-content:center;}
+  .modal-close:hover{opacity:0.8;}
+  .modal-body{padding:20px;}
+  .modal-footer{padding:12px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;}
+  
+  /* Loan Wizard */
+  .wizard-steps{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--line);padding-bottom:12px;}
+  .wizard-step{flex:1;padding:8px 0;font-size:11.5px;font-weight:600;color:var(--muted);text-align:center;cursor:pointer;border-bottom:3px solid transparent;}
+  .wizard-step.active{color:var(--green-dark);border-bottom-color:var(--green);}
+  .wizard-step.done{color:var(--green-dark);}
+  .wizard-content{display:none;}
+  .wizard-content.active{display:block;}
+  
+  /* Loan Forms */
+  .loan-form label{display:block;font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px;}
+  .loan-form input,.loan-form select,.loan-form textarea{width:100%;padding:8px 10px;font-size:13px;border:1px solid var(--line);border-radius:7px;font-family:inherit;margin-bottom:12px;}
+  .loan-form input:focus,.loan-form select:focus,.loan-form textarea:focus{outline:none;border-color:var(--green);background:#f9fdf8;}
+  .loan-form .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .loan-form .form-full{grid-column:1/-1;}
+  .loan-form .hint{font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:12px;}
+  .loan-form .required::after{content:" *";color:var(--red);}
+  
+  /* Loan Details Card */
+  .loan-card{border:1px solid var(--line);border-radius:9px;padding:13px;background:#fafbfa;margin-bottom:11px;}
+  .loan-card.clickable{cursor:pointer;transition:all 0.15s;}
+  .loan-card.clickable:hover{background:#f1f4f2;border-color:var(--green-light);}
+  .loan-card .lc-head{display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;}
+  .loan-card .lc-ref{font-size:12px;font-weight:800;color:var(--green-dark);}
+  .loan-card .lc-type{font-size:12.5px;font-weight:700;color:var(--ink);}
+  .loan-card .lc-meta{font-size:11px;color:var(--muted);margin-top:2px;}
+  .loan-card .lc-amount{font-size:14px;font-weight:800;color:var(--green-dark);}
+  
+  /* Approval Forms */
+  .approval-section{background:var(--green-light);border-left:4px solid var(--green);border-radius:7px;padding:12px 14px;margin-bottom:14px;}
+  .approval-section h4{font-size:12.5px;font-weight:700;color:var(--green-dark);margin-bottom:8px;text-transform:uppercase;}
+  .approval-checks{display:flex;flex-direction:column;gap:6px;}
+  .check-item{display:flex;align-items:flex-start;gap:8px;font-size:12px;}
+  .check-icon{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;margin-top:2px;}
+  .check-icon.pass{background:var(--green);}
+  .check-icon.fail{background:var(--red);}
+  .check-icon.warn{background:var(--amber-ink);}
+  
+  /* Eligibility Badge */
+  .elig-badge{display:inline-block;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;}
+  .elig-badge.qualified{background:var(--green-light);color:var(--green-dark);}
+  .elig-badge.review{background:var(--amber-bg);color:var(--amber-ink);}
+  .elig-badge.ineligible{background:var(--red-bg);color:var(--red);}
+  
+  /* Timeline / Status */
+  .status-timeline{margin:12px 0;}
+  .timeline-item{display:flex;gap:12px;margin-bottom:14px;position:relative;padding-left:36px;}
+  .timeline-item::before{content:'';position:absolute;left:8px;top:24px;bottom:-14px;width:2px;background:var(--line);}
+  .timeline-item:last-child::before{display:none;}
+  .timeline-dot{width:20px;height:20px;border-radius:50%;background:var(--line);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;position:absolute;left:0;top:0;}
+  .timeline-item.done .timeline-dot{background:var(--green);color:#fff;}
+  .timeline-item.current .timeline-dot{background:var(--green-dark);color:#fff;}
+  .timeline-item.current::before{background:var(--green-dark);}
+  .timeline-content{flex:1;}
+  .timeline-title{font-size:12.5px;font-weight:700;color:var(--ink);}
+  .timeline-meta{font-size:11px;color:var(--muted);margin-top:1px;}
+  
+  /* Capacity Gauge */
+  .capacity-gauge{margin:8px 0;}
+  .gauge-bar{height:12px;background:var(--line);border-radius:6px;overflow:hidden;margin-bottom:4px;}
+  .gauge-fill{height:100%;background:var(--green);border-radius:6px;transition:width 0.3s;}
+  .gauge-fill.warn{background:var(--amber-ink);}
+  .gauge-fill.bad{background:var(--red);}
+  .gauge-label{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);}
+  
 </style>
 </head>
 <body>
@@ -1043,7 +1119,7 @@
           <div class="psub">Employee loans for Head Office &amp; Warehouse staff — five loan types per RCC's loan policy. Backed by the Loan Portal prototype.</div>
           <div class="actionbar">
             <button class="btn">+ New Loan Application</button>
-            <a href="Reference%20Material/LOAN/RCC_Loan_Portal.html" target="_blank" class="btn ghost" style="text-decoration:none;display:inline-block;">Open Full Loan Portal ↗</a>
+            <a href="../Reference%20Material/LOAN/RCC_Loan_Portal.html" target="_blank" class="btn ghost" style="text-decoration:none;display:inline-block;">Open Full Loan Portal ↗</a>
             <button class="btn blue">Export Excel</button>
           </div>
           <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
@@ -1932,6 +2008,360 @@
       });
     });
   });
+</script>
+
+<!-- LOANS — Modals & Enhanced Integration -->
+<div id="loanModalOverlay" class="modal-overlay">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 id="loanModalTitle">Loan Application</h3>
+      <button class="modal-close" onclick="closeLoanModal()">✕</button>
+    </div>
+    <div class="modal-body" id="loanModalBody"></div>
+    <div class="modal-footer" id="loanModalFooter"></div>
+  </div>
+</div>
+
+<!-- LOANS — JavaScript Enhancement -->
+<script>
+/* Loan module state */
+const LOAN_STATE = {
+  loanTypes: {
+    educational: {name: 'Educational Loan', rate: 0, color: var(--blue)},
+    medical: {name: 'Medical Loan', rate: 12, color: var(--blue)},
+    vehicle: {name: 'Vehicle Repair', rate: 12, color: var(--purple)},
+    moto: {name: 'Moto Loan', rate: 6, color: var(--amber)},
+    others: {name: 'Others / Unforeseen', rate: 12, color: var(--red)}
+  },
+  modalOpen: false,
+  currentLoan: null
+};
+
+function openLoanModal(title, content, footer) {
+  const overlay = document.getElementById('loanModalOverlay');
+  const titleEl = document.getElementById('loanModalTitle');
+  const bodyEl = document.getElementById('loanModalBody');
+  const footerEl = document.getElementById('loanModalFooter');
+  
+  titleEl.textContent = title;
+  bodyEl.innerHTML = content;
+  footerEl.innerHTML = footer || '';
+  overlay.classList.add('active');
+  LOAN_STATE.modalOpen = true;
+}
+
+function closeLoanModal() {
+  const overlay = document.getElementById('loanModalOverlay');
+  overlay.classList.remove('active');
+  LOAN_STATE.modalOpen = false;
+}
+
+function openNewLoanApplication() {
+  const wizardHTML = `
+    <div class="wizard-steps">
+      <div class="wizard-step active done">1. Verify</div>
+      <div class="wizard-step">2. Type</div>
+      <div class="wizard-step">3. Details</div>
+      <div class="wizard-step">4. Docs</div>
+      <div class="wizard-step">5. Sign</div>
+    </div>
+    
+    <div class="wizard-content active">
+      <div class="loan-form">
+        <label class="required">Employee ID</label>
+        <input type="text" id="empId" placeholder="e.g., 100612">
+        <div class="hint">Demo: 100612 (eligible), 100531 (eligible), 200318 (not eligible)</div>
+        
+        <button class="btn" onclick="verifyEmployee()" style="margin-top:8px;">Verify Employee</button>
+        <div id="verifyStatus" style="margin-top:12px;"></div>
+      </div>
+    </div>
+  `;
+  
+  const footerHTML = `
+    <button class="btn ghost" onclick="closeLoanModal()">Cancel</button>
+    <button class="btn" onclick="nextWizardStep()">Next →</button>
+  `;
+  
+  openLoanModal('New Loan Application', wizardHTML, footerHTML);
+}
+
+function verifyEmployee() {
+  const empId = document.getElementById('empId').value.trim();
+  const statusDiv = document.getElementById('verifyStatus');
+  
+  if (!empId) {
+    statusDiv.innerHTML = '<div style="color:var(--red);">Please enter an Employee ID</div>';
+    return;
+  }
+  
+  // Mock eligibility check
+  const eligible = ['100612', '100531', '100544', '100502', '100487'].includes(empId);
+  const notRetail = !['200318', '200455'].includes(empId);
+  
+  if (eligible && notRetail) {
+    statusDiv.innerHTML = `
+      <div style="background:var(--green-light);border-left:4px solid var(--green);padding:12px;border-radius:6px;color:var(--green-dark);font-size:13px;">
+        ✓ <strong>Verified and Eligible</strong><br>
+        <span style="font-size:11px;margin-top:3px;display:block;">This employee is eligible to apply for company loans.</span>
+      </div>
+    `;
+  } else if (!notRetail) {
+    statusDiv.innerHTML = `
+      <div style="background:var(--red-bg);border-left:4px solid var(--red);padding:12px;border-radius:6px;color:var(--red);font-size:13px;">
+        ✗ Not Eligible<br>
+        <span style="font-size:11px;margin-top:3px;display:block;">Retail / Merchandiser staff are not eligible for company loans.</span>
+      </div>
+    `;
+  } else {
+    statusDiv.innerHTML = `
+      <div style="background:var(--red-bg);border-left:4px solid var(--red);padding:12px;border-radius:6px;color:var(--red);font-size:13px;">
+        ✗ Not Found<br>
+        <span style="font-size:11px;margin-top:3px;display:block;">Employee ID not found in directory.</span>
+      </div>
+    `;
+  }
+}
+
+function openLoanDetails(loanRef) {
+  // Mock loan data
+  const loan = {ref: loanRef, emp: 'Maria Santos', type: 'Educational', amount: 15000, term: 6, status: 'Active', stage: 'Month 2 of 6'};
+  
+  const content = `
+    <div style="margin-bottom:12px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;">Reference</div>
+          <div style="font-size:13px;font-weight:700;color:var(--green-dark);">${loan.ref}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;">Employee</div>
+          <div style="font-size:13px;font-weight:700;">${loan.emp}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;">Loan Type</div>
+          <div style="font-size:13px;font-weight:700;">${loan.type}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;">Amount</div>
+          <div style="font-size:13px;font-weight:700;color:var(--green-dark);">₱${loan.amount.toLocaleString()}</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="status-timeline">
+      <div class="timeline-item done">
+        <div class="timeline-dot">✓</div>
+        <div class="timeline-content">
+          <div class="timeline-title">Application Submitted</div>
+          <div class="timeline-meta">May 20, 2026</div>
+        </div>
+      </div>
+      <div class="timeline-item done">
+        <div class="timeline-dot">✓</div>
+        <div class="timeline-content">
+          <div class="timeline-title">HR Review</div>
+          <div class="timeline-meta">Recommended · May 22, 2026</div>
+        </div>
+      </div>
+      <div class="timeline-item done">
+        <div class="timeline-dot">✓</div>
+        <div class="timeline-content">
+          <div class="timeline-title">Supervisor Confirmation</div>
+          <div class="timeline-meta">Confirmed · May 23, 2026</div>
+        </div>
+      </div>
+      <div class="timeline-item current">
+        <div class="timeline-dot">✓</div>
+        <div class="timeline-content">
+          <div class="timeline-title">Management Approval</div>
+          <div class="timeline-meta">Approved for Release · May 25, 2026</div>
+        </div>
+      </div>
+      <div class="timeline-item done">
+        <div class="timeline-dot">✓</div>
+        <div class="timeline-content">
+          <div class="timeline-title">Loan Active</div>
+          <div class="timeline-meta">Month 2 of 6 · Repaying on schedule</div>
+        </div>
+      </div>
+    </div>
+    
+    <div style="background:var(--green-light);border:1px solid #bcdcc7;border-radius:9px;padding:12px;margin-top:14px;">
+      <div style="font-size:11.5px;font-weight:700;color:var(--green-dark);margin-bottom:6px;">Monthly Amortization</div>
+      <div style="font-size:14px;font-weight:800;color:var(--green-dark);">₱2,500.00</div>
+      <div style="font-size:11px;color:var(--green-dark);margin-top:2px;">Deducted semi-monthly: ₱1,250 per cut-off</div>
+      <div class="capacity-gauge" style="margin-top:8px;">
+        <div class="gauge-bar"><div class="gauge-fill" style="width:35%;"></div></div>
+        <div class="gauge-label"><span>Capacity: 35% of income</span><span>← Healthy</span></div>
+      </div>
+    </div>
+  `;
+  
+  const footer = `
+    <button class="btn ghost" onclick="closeLoanModal()">Close</button>
+    <button class="btn blue">View Full Agreement</button>
+  `;
+  
+  openLoanModal('Loan Details — ' + loanRef, content, footer);
+}
+
+function openHRReview(loanRef) {
+  const content = `
+    <div style="background:#fdfaf3;border-left:4px solid var(--amber);padding:12px;border-radius:7px;margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:700;color:var(--amber-ink);text-transform:uppercase;">HR Review</div>
+      <div style="font-size:12.5px;color:var(--amber-ink);margin-top:2px;">Verify payroll details & existing obligations from PayPlus, then recommend for Supervisor Review.</div>
+    </div>
+    
+    <div class="loan-form">
+      <div class="form-row">
+        <div>
+          <label class="required">RCC Loan Status</label>
+          <select><option>None</option><option>On-going</option><option>Fully Paid</option></select>
+        </div>
+        <div>
+          <label>RCC Balance</label>
+          <input type="number" value="0" placeholder="0">
+        </div>
+      </div>
+      
+      <div class="form-row">
+        <div>
+          <label>SSS Loan Status</label>
+          <select><option>None</option><option>On-going</option><option>Fully Paid</option></select>
+        </div>
+        <div>
+          <label>SSS Balance</label>
+          <input type="number" value="0" placeholder="0">
+        </div>
+      </div>
+      
+      <label class="required">HR Recommendation Notes</label>
+      <textarea placeholder="Document completeness, capacity to pay, and basis for recommendation" style="min-height:80px;"></textarea>
+      
+      <div class="approval-section">
+        <h4>Eligibility Checks</h4>
+        <div class="approval-checks">
+          <div class="check-item">
+            <div class="check-icon pass">✓</div>
+            <div>Tenure requirement met (5+ years)</div>
+          </div>
+          <div class="check-item">
+            <div class="check-icon pass">✓</div>
+            <div>Employment status is Regular</div>
+          </div>
+          <div class="check-item">
+            <div class="check-icon pass">✓</div>
+            <div>No other active RCC loans</div>
+          </div>
+          <div class="check-item">
+            <div class="check-icon pass">✓</div>
+            <div>Capacity to pay within limits</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  const footer = `
+    <button class="btn ghost" onclick="closeLoanModal()">Cancel</button>
+    <button class="btn danger">Decline</button>
+    <button class="btn" onclick="submitHRReview()">Recommend for Approval →</button>
+  `;
+  
+  openLoanModal('HR Review — ' + loanRef, content, footer);
+}
+
+function openManagementApproval(loanRef) {
+  const content = `
+    <div style="background:#ecdea4;border-left:4px solid var(--amber-ink);padding:12px;border-radius:7px;margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:700;color:var(--amber-ink);text-transform:uppercase;">Management Approval</div>
+      <div style="font-size:12px;color:var(--amber-ink);margin-top:2px;">
+        <b>HR Recommendation:</b> Recommended for Approval<br>
+        <b>Supervisor Check:</b> Confirmed in good standing
+      </div>
+    </div>
+    
+    <div class="loan-form">
+      <label class="required">Approved By (Name)</label>
+      <input type="text" placeholder="e.g., Anj Genomal">
+      
+      <label class="required">Feedback / Conditions</label>
+      <textarea placeholder="Release conditions or confirmation note" style="min-height:80px;"></textarea>
+      
+      <div class="approval-section">
+        <h4>Pre-Approval Checklist</h4>
+        <div class="approval-checks">
+          <div class="check-item">
+            <div class="check-icon pass">✓</div>
+            <div>Employee verif & fund availability confirmed</div>
+          </div>
+          <div class="check-item">
+            <div class="check-icon pass">✓</div>
+            <div>Loan agreement generated & ready for signature</div>
+          </div>
+          <div class="check-item">
+            <div class="check-icon pass">✓</div>
+            <div>Disbursement & payroll instruction prepared</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  const footer = `
+    <button class="btn ghost" onclick="closeLoanModal()">Cancel</button>
+    <button class="btn danger">Decline</button>
+    <button class="btn" onclick="submitManagementApproval()">Approve for Release ✓</button>
+  `;
+  
+  openLoanModal('Management Approval — ' + loanRef, content, footer);
+}
+
+function submitHRReview() {
+  alert('HR recommendation submitted. Application forwarded to Supervisor Review.');
+  closeLoanModal();
+}
+
+function submitManagementApproval() {
+  alert('Loan approved for release. Employee notified & disbursement instruction sent to Accounting.');
+  closeLoanModal();
+}
+
+function nextWizardStep() {
+  alert('Wizard step navigation — advances to next step');
+}
+
+// Wire up the "New Loan Application" button
+document.addEventListener('DOMContentLoaded', function() {
+  // Find and enhance the loans button
+  const loansBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('New Loan Application'));
+  if (loansBtn) {
+    loansBtn.onclick = function() { openNewLoanApplication(); return false; };
+  }
+  
+  // Wire loan table rows to show details
+  setTimeout(function() {
+    const loanRows = document.querySelectorAll('#page-loans table tbody tr.clickable');
+    loanRows.forEach(function(row, i) {
+      row.style.cursor = 'pointer';
+      row.onclick = function() {
+        const loanRef = row.querySelector('td:first-child').textContent.trim();
+        openLoanDetails(loanRef);
+      };
+    });
+  }, 500);
+});
+
+// Close modal on overlay click
+document.addEventListener('DOMContentLoaded', function() {
+  const overlay = document.getElementById('loanModalOverlay');
+  if (overlay) {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closeLoanModal();
+    });
+  }
+});
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>

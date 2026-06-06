@@ -1,0 +1,1850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RCC Employee Loan Portal</title>
+<style>
+  :root{
+    --navy:#1E3A5F; --navy-dark:#142a45;
+    --green:#1F6B52; --green-dark:#15543F; --green-soft:#E7F1ED;
+    --amber:#B7791F; --amber-soft:#FBF1DD;
+    --red:#B02A37; --red-soft:#FBE9EA;
+    --purple:#5B4B8A; --purple-soft:#ECE9F4;
+    --bg:#F4F6F8; --card:#FFFFFF; --ink:#1F2A37; --muted:#6B7785;
+    --line:#E3E8EF; --line-soft:#EEF1F5;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased;}
+  /* header */
+  header{background:linear-gradient(135deg,var(--navy),var(--navy-dark));color:#fff;padding:18px 28px;}
+  .hwrap{max-width:1120px;margin:0 auto;display:flex;align-items:center;gap:15px;}
+  .mark{width:44px;height:44px;flex:none;}
+  .htxt h1{font-size:16px;font-weight:700;letter-spacing:.04em;}
+  .htxt .sub{font-size:12.5px;color:#C5D2E2;margin-top:2px;}
+  .tagline{margin-left:auto;text-align:right;}
+  .tagline .big{font-size:12.5px;font-weight:600;letter-spacing:.16em;}
+  .tagline .small{font-size:10.5px;color:#9FB2C9;margin-top:2px;}
+  /* tabs */
+  .tabbar{background:var(--card);border-bottom:1px solid var(--line);}
+  .tabwrap{max-width:1120px;margin:0 auto;display:flex;gap:2px;padding:0 28px;flex-wrap:wrap;}
+  .tab{padding:13px 16px;font-size:13px;font-weight:600;color:var(--muted);
+    background:none;border:none;cursor:pointer;border-bottom:3px solid transparent;}
+  .tab.active{color:var(--navy);border-bottom-color:var(--green);}
+  .tab .cnt{display:inline-block;min-width:17px;height:17px;line-height:17px;font-size:10.5px;
+    background:var(--line);color:var(--muted);border-radius:9px;margin-left:5px;padding:0 4px;}
+  .tab.active .cnt{background:var(--green);color:#fff;}
+  main{max-width:1120px;margin:0 auto;padding:24px 28px 70px;}
+  /* stepper */
+  .stepper{display:flex;gap:5px;margin-bottom:22px;flex-wrap:wrap;}
+  .stepper .st{display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:8px;
+    font-size:11.8px;font-weight:600;color:var(--muted);background:var(--card);
+    border:1px solid var(--line);cursor:pointer;flex:1;min-width:115px;}
+  .stepper .st .dot{width:20px;height:20px;border-radius:50%;background:var(--line);
+    color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:11px;flex:none;}
+  .stepper .st.done .dot{background:var(--green);color:#fff;}
+  .stepper .st.current{border-color:var(--navy);color:var(--navy);}
+  .stepper .st.current .dot{background:var(--navy);color:#fff;}
+  /* cards */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:13px;
+    padding:22px 24px;margin-bottom:16px;}
+  .card h2{font-size:15.5px;color:var(--navy);margin-bottom:3px;}
+  .card .lead{font-size:12.5px;color:var(--muted);margin-bottom:16px;}
+  .secband{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--green-dark);background:var(--green-soft);display:inline-block;
+    padding:3px 10px;border-radius:5px;margin-bottom:10px;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:13px 18px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px 16px;}
+  .grid .full,.grid3 .full{grid-column:1/-1;}
+  @media(max-width:640px){.grid,.grid3{grid-template-columns:1fr;}}
+  label{display:block;font-size:12px;font-weight:600;color:var(--ink);margin-bottom:5px;}
+  label .req{color:var(--red);}
+  input,select,textarea{width:100%;padding:8px 10px;font-size:13px;font-family:inherit;
+    border:1px solid var(--line);border-radius:7px;color:var(--ink);background:#fff;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green);
+    box-shadow:0 0 0 3px var(--green-soft);}
+  textarea{resize:vertical;min-height:58px;}
+  input.ro,textarea.ro{background:#F2F5F8;color:#55606E;}
+  .hint{font-size:11px;color:var(--muted);margin-top:4px;}
+  .subhead{font-size:12.5px;font-weight:700;color:var(--navy);margin:6px 0 9px;
+    padding-bottom:5px;border-bottom:1px solid var(--line-soft);}
+  /* loan type cards */
+  .ltgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media(max-width:640px){.ltgrid{grid-template-columns:1fr;}}
+  .ltcard{border:1.5px solid var(--line);border-radius:11px;padding:14px;cursor:pointer;
+    display:flex;gap:12px;background:#fff;}
+  .ltcard:hover{border-color:var(--green);background:var(--green-soft);}
+  .ltcard.sel{border-color:var(--green);background:var(--green-soft);box-shadow:0 0 0 3px var(--green-soft);}
+  .ltnum{width:32px;height:32px;border-radius:8px;background:var(--navy);color:#fff;
+    font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;flex:none;}
+  .ltcard.sel .ltnum{background:var(--green);}
+  .ltname{font-size:13.5px;font-weight:700;color:var(--navy);}
+  .ltrate{font-size:11px;font-weight:700;color:var(--green-dark);margin:2px 0 4px;}
+  .ltdesc{font-size:11.3px;color:var(--muted);}
+  /* chips */
+  .chip{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;}
+  .chip.g{background:var(--green-soft);color:var(--green-dark);}
+  .chip.a{background:var(--amber-soft);color:var(--amber);}
+  .chip.r{background:var(--red-soft);color:var(--red);}
+  .chip.n{background:#EAF0F6;color:var(--navy);}
+  .chip.p{background:var(--purple-soft);color:var(--purple);}
+  /* radio group */
+  .radios{display:flex;gap:8px;flex-wrap:wrap;}
+  .radios label{display:flex;align-items:center;gap:6px;font-weight:500;font-size:12.5px;
+    border:1px solid var(--line);border-radius:7px;padding:7px 11px;cursor:pointer;margin:0;}
+  .radios input{width:auto;}
+  /* policy box */
+  .policy{background:#F8FAFC;border:1px dashed var(--line);border-radius:9px;
+    padding:12px 14px;font-size:11.5px;color:var(--muted);}
+  .policy b{color:var(--navy);}
+  .policy ul{margin:5px 0 0 15px;}
+  /* checks */
+  .check{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line-soft);}
+  .check:last-child{border-bottom:none;}
+  .ic{width:20px;height:20px;border-radius:50%;flex:none;display:flex;align-items:center;
+    justify-content:center;font-size:11px;font-weight:800;color:#fff;}
+  .ic.pass{background:var(--green);} .ic.fail{background:var(--red);} .ic.warn{background:var(--amber);}
+  .check .cl{font-size:12.5px;font-weight:600;}
+  .check .cd{font-size:11.3px;color:var(--muted);}
+  /* verdict */
+  .verdict{border-radius:11px;padding:14px 18px;margin-bottom:14px;}
+  .verdict .vt{font-size:14.5px;font-weight:800;}
+  .verdict .vs{font-size:12px;margin-top:2px;}
+  .verdict.ok{background:var(--green-soft);color:var(--green-dark);}
+  .verdict.review{background:var(--amber-soft);color:var(--amber);}
+  .verdict.no{background:var(--red-soft);color:var(--red);}
+  /* summary boxes */
+  .sumgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:12px 0;}
+  @media(max-width:640px){.sumgrid{grid-template-columns:1fr 1fr;}}
+  .sumbox{background:#F8FAFC;border:1px solid var(--line);border-radius:9px;padding:10px 12px;}
+  .sumbox .sl{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;}
+  .sumbox .sv{font-size:15.5px;font-weight:800;color:var(--navy);margin-top:3px;}
+  .sumbox .sv.green{color:var(--green-dark);}
+  /* definition rows */
+  .drow{display:flex;justify-content:space-between;gap:14px;padding:6px 0;
+    border-bottom:1px solid var(--line-soft);font-size:12.5px;}
+  .drow:last-child{border-bottom:none;}
+  .drow .dk{color:var(--muted);} .drow .dv{font-weight:600;text-align:right;}
+  /* tables */
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{text-align:left;padding:8px 9px;background:#F2F5F8;color:var(--muted);
+    font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--line);}
+  td{padding:8px 9px;border-bottom:1px solid var(--line-soft);}
+  tr:last-child td{border-bottom:none;}
+  .tnum{text-align:right;font-variant-numeric:tabular-nums;}
+  .atable input{padding:5px 7px;font-size:12px;text-align:center;}
+  /* buttons */
+  .nav{display:flex;justify-content:space-between;gap:10px;margin-top:4px;}
+  .btn{padding:10px 20px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer;
+    border:1px solid transparent;font-family:inherit;}
+  .btn.primary{background:var(--green);color:#fff;} .btn.primary:hover{background:var(--green-dark);}
+  .btn.ghost{background:#fff;color:var(--navy);border-color:var(--line);}
+  .btn.ghost:hover{border-color:var(--navy);}
+  .btn.dark{background:var(--navy);color:#fff;} .btn.dark:hover{background:var(--navy-dark);}
+  .btn.danger{background:#fff;color:var(--red);border-color:var(--red);}
+  .btn.danger:hover{background:var(--red-soft);}
+  .btn.sm{padding:7px 14px;font-size:12px;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  /* doc upload */
+  .docrow{display:flex;justify-content:space-between;align-items:center;gap:12px;
+    padding:12px 2px;border-bottom:1px solid var(--line-soft);}
+  .docrow:last-of-type{border-bottom:none;}
+  .docname{font-size:12.5px;font-weight:600;}
+  .docstatus{font-size:11px;color:var(--muted);margin-top:3px;}
+  .uploadbtn{flex:none;background:#fff;border:1px solid var(--green);color:var(--green-dark);
+    font-size:12px;font-weight:700;padding:7px 13px;border-radius:7px;cursor:pointer;white-space:nowrap;}
+  .uploadbtn:hover{background:var(--green-soft);}
+  /* queue */
+  .qcard{display:flex;align-items:center;gap:14px;border:1px solid var(--line);
+    border-radius:10px;padding:13px 15px;margin-bottom:9px;background:#fff;}
+  .qcard .qref{font-size:12px;font-weight:800;color:var(--navy);}
+  .qcard .qname{font-size:13.5px;font-weight:700;}
+  .qcard .qmeta{font-size:11.3px;color:var(--muted);margin-top:1px;}
+  .qcard .qamt{margin-left:auto;text-align:right;}
+  .qcard .qamt .qv{font-size:14px;font-weight:800;color:var(--navy);}
+  .empty{text-align:center;color:var(--muted);font-size:12.5px;padding:26px;}
+  /* kpis */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+  @media(max-width:640px){.kpis{grid-template-columns:1fr 1fr;}}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px 15px;}
+  .kpi .kl{font-size:11px;color:var(--muted);font-weight:600;}
+  .kpi .kv{font-size:20px;font-weight:800;color:var(--navy);margin-top:3px;}
+  .bar{height:11px;background:var(--line);border-radius:6px;overflow:hidden;margin:7px 0 4px;}
+  .bar > div{height:100%;border-radius:6px;}
+  .backlink{font-size:12px;font-weight:700;color:var(--green-dark);cursor:pointer;
+    display:inline-block;margin-bottom:12px;}
+  .hidden{display:none;}
+  .foot{font-size:11px;color:var(--muted);margin-top:26px;line-height:1.6;}
+  .auth{background:#F8FAFC;border:1px solid var(--line);border-radius:9px;
+    padding:13px 15px;font-size:11.8px;color:var(--ink);line-height:1.65;}
+  /* scrollable table */
+  .scrollbox{max-height:236px;overflow:auto;border:1px solid var(--line);border-radius:8px;}
+  .scrollbox table{font-size:11.5px;}
+  .scrollbox th{position:sticky;top:0;}
+  /* timeline */
+  .tl{margin:8px 0 2px;}
+  .tlrow{display:flex;gap:13px;}
+  .tlmark{display:flex;flex-direction:column;align-items:center;flex:none;}
+  .tldot{width:24px;height:24px;border-radius:50%;background:var(--line);color:var(--muted);
+    display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none;}
+  .tlrow.done .tldot{background:var(--green);color:#fff;}
+  .tlrow.current .tldot{background:var(--navy);color:#fff;}
+  .tlrow.bad .tldot{background:var(--red);color:#fff;}
+  .tlline{width:2px;flex:1;background:var(--line);min-height:16px;}
+  .tlrow.done .tlline{background:var(--green);}
+  .tlbody{padding-bottom:15px;}
+  .tlname{font-size:13px;font-weight:700;color:var(--navy);}
+  .tlmeta{font-size:11.3px;color:var(--muted);margin-top:1px;}
+  /* modal */
+  .modal-bg{position:fixed;inset:0;background:rgba(20,30,45,.55);display:flex;
+    align-items:flex-start;justify-content:center;padding:34px 16px;overflow:auto;z-index:60;}
+  .modal{background:#fff;border-radius:13px;max-width:720px;width:100%;overflow:hidden;
+    box-shadow:0 22px 60px rgba(0,0,0,.32);}
+  .modal-h{background:var(--navy);color:#fff;padding:14px 20px;display:flex;
+    justify-content:space-between;align-items:center;}
+  .modal-h h3{font-size:14px;font-weight:700;}
+  .modal-x{cursor:pointer;font-size:15px;color:#fff;background:none;border:none;font-weight:700;}
+  .modal-b{padding:20px;max-height:74vh;overflow:auto;}
+  .email{border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden;}
+  .email:last-child{margin-bottom:0;}
+  .email-h{background:#F2F5F8;padding:9px 14px;font-size:11.3px;border-bottom:1px solid var(--line);
+    color:var(--muted);line-height:1.7;}
+  .email-h b{color:var(--ink);}
+  .email-b{padding:14px;font-size:12px;line-height:1.6;}
+  .email-b p{margin-bottom:8px;}
+  .doc{border:1px solid var(--line);border-radius:8px;padding:13px 15px;margin-top:10px;background:#FCFCFD;}
+  .doc .doct{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--green-dark);margin-bottom:6px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hwrap">
+    <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="50" fill="#ffffff"/>
+      <g fill="#1F6B52">
+        <path d="M50 50 L50 12 A38 38 0 0 1 88 50 Z"/>
+        <path d="M50 50 L88 50 A38 38 0 0 1 50 88 Z" fill="#15543F"/>
+        <path d="M50 50 L50 88 A38 38 0 0 1 12 50 Z"/>
+        <path d="M50 50 L12 50 A38 38 0 0 1 50 12 Z" fill="#15543F"/>
+      </g>
+      <circle cx="50" cy="50" r="9" fill="#ffffff"/>
+    </svg>
+    <div class="htxt">
+      <h1>ROSHAN COMMERCIAL CORPORATION</h1>
+      <div class="sub">Employee Loan Portal</div>
+    </div>
+    <div class="tagline">
+      <div class="big">THE RIGHT MOVE</div>
+      <div class="small">Human Resources Department</div>
+    </div>
+  </div>
+</header>
+
+<div class="tabbar">
+  <div class="tabwrap" id="tabwrap"></div>
+</div>
+
+<main id="main"></main>
+
+<script>
+/* ============================================================
+   CONFIG  —  edit any figure here to retune the loan program
+   ============================================================ */
+const CONFIG = {
+  fundCap: 1000000,            // total loan fund cap (PHP)
+  fundUsedSeed: 310000,        // demo: already disbursed/committed
+  annualCap: 50000,            // per-employee cap / calendar year (non-exempt loans)
+  capacitySoftCapPct: 30,      // total deductions vs monthly income -> flag above this %
+  separationPenaltyPct: 24,    // p.a. penalty on unpaid balance after separation
+  today: new Date(2026,4,21),  // reference "today" for the demo
+
+  LOAN_TYPES: {
+    educational:{ no:1, name:"Educational Loan", rate:0, minTenure:5, maxTerm:12, stdTerm:6,
+      countsAnnualCap:false, maxAmount:null, employeeShare:0.5,
+      desc:"0% interest. College or vocational education for your children.",
+      policy:["Minimum 5 years of continuous service","Maximum of 3 children per employee",
+        "Disbursed directly to the school, per term/semester",
+        "Employee shoulders 50% via payroll; beneficiary owes the other 50% post-graduation",
+        "At least 50% of the parent loan must be repaid before a reloan"],
+      docs:["Official school invoice or SOA","Proof of repayment on your previous educational loan",
+        "Tuition assessment — previous term","Certificate of grades — previous term"]},
+    others:{ no:2, name:"Others / Unforeseen", rate:12, minTenure:0, maxTerm:12, stdTerm:6,
+      countsAnnualCap:true, maxAmount:50000, discretionary:true,
+      desc:"12% p.a. Funeral, natural calamity, house repair and other emergencies.",
+      policy:["Regular employee in good standing","Strictly for valid emergencies / exceptional needs",
+        "Subject to discretionary management approval"],
+      docs:["Written explanation of the situation","Police / fire report or medical certificate",
+        "Photos or damage documentation","Proof of loss or cost estimates",
+        "Death certificate (funeral-related)"]},
+    vehicle:{ no:3, name:"Vehicle Repair Loan", rate:12, minTenure:3, maxTerm:12, stdTerm:6,
+      countsAnnualCap:true, maxAmount:50000,
+      desc:"12% p.a. A percentage of the repair cost for an employee-owned vehicle.",
+      policy:["Minimum 3 years of service","For employee-owned vehicles only",
+        "Failure to submit documents before & after disqualifies future loans"],
+      docs:["Repair cost estimate","Proof of vehicle ownership",
+        "Statement of repair completion billed to RCC / proof of billing"]},
+    medical:{ no:4, name:"Medical Loan", rate:12, minTenure:1, maxTerm:12, stdTerm:6,
+      countsAnnualCap:true, maxAmount:20000,
+      desc:"12% p.a. For the employee, parents or minor children.",
+      policy:["Regular employees with at least 1 year of service",
+        "Covers the employee, parents, or minor children",
+        "No reloan until the existing balance is fully paid",
+        "PhilHealth and HMO coverage should be used first"],
+      docs:["Medical records or doctor's certificate","Hospital or clinic billing / cost estimate",
+        "Updated proof of payment (required for reloan)"]},
+    moto:{ no:5, name:"Moto Loan", rate:6, minTenure:3, maxTerm:36, stdTerm:24,
+      countsAnnualCap:false, maxAmount:100000, minDpPct:10, amortCapPctOfSalary:20,
+      desc:"6% p.a. Motorcycle purchased under RCC until fully paid.",
+      policy:["Minimum 3 years of tenure, valid driver's license",
+        "Vehicle owned by RCC until the loan is fully paid","Down payment of at least 10% of price",
+        "Amortization not over 20% of salary",
+        "Loan term up to 36 months; registration and insurance billed separately to the employee"],
+      docs:["Proof of capacity to pay","Dealer quotation","Valid driver's license",
+        "Agreement for insurance coverage through RCC"]}
+  }
+};
+
+const STAGES = {
+  PENDING_SUPERVISOR:{label:"Pending Supervisor",cls:"n"},
+  PENDING_HR:{label:"Pending HR Review",cls:"a"},
+  PENDING_MANAGEMENT:{label:"Pending Management",cls:"p"},
+  APPROVED:{label:"Approved for Release",cls:"g"},
+  DECLINED:{label:"Declined",cls:"r"}
+};
+
+/* RCC Employee Directory — source of truth for identity and loan eligibility.
+   loanEligible is false for Retail / Merchandiser staff (not part of the program). */
+const EMPLOYEE_DIRECTORY = {
+  "100612":{name:"Maria A. Santos",dept:"Accounting",position:"Accounting Staff",hireDate:"2020-03-01",status:"Regular",monthlyIncome:25000,dailyRate:960,existingDeduction:1500,email:"msantos@hassarams.com",group:"Head Office",loanEligible:true},
+  "100544":{name:"Ritchie Abenir",dept:"Warehouse",position:"Warehouse Assistant",hireDate:"2018-11-23",status:"Regular",monthlyIncome:19500,dailyRate:750,existingDeduction:2100,email:"rabenir@hassarams.com",group:"Warehouse",loanEligible:true},
+  "100531":{name:"Andrea Villanueva",dept:"Marketing",position:"Marketing Assistant",hireDate:"2019-07-15",status:"Regular",monthlyIncome:24000,dailyRate:923,existingDeduction:900,email:"avillanueva@hassarams.com",group:"Head Office",loanEligible:true},
+  "100487":{name:"Joseph Ramirez",dept:"Logistics",position:"Delivery Coordinator",hireDate:"2022-01-10",status:"Regular",monthlyIncome:21000,dailyRate:808,existingDeduction:1200,email:"jramirez@hassarams.com",group:"Head Office",loanEligible:true},
+  "100502":{name:"Cherry Jacinto",dept:"Admin",position:"Admin Staff",hireDate:"2017-03-01",status:"Regular",monthlyIncome:23000,dailyRate:885,existingDeduction:1400,email:"cjacinto@hassarams.com",group:"Head Office",loanEligible:true},
+  "100489":{name:"Liza Mercado",dept:"Finance",position:"Finance Staff",hireDate:"2023-09-01",status:"Probationary",monthlyIncome:20000,dailyRate:769,existingDeduction:600,email:"lmercado@hassarams.com",group:"Head Office",loanEligible:true},
+  "200318":{name:"Noel Bautista",dept:"Sales",position:"Store Merchandiser",hireDate:"2021-05-04",status:"Regular",monthlyIncome:16000,dailyRate:615,existingDeduction:0,email:"",group:"Retail / Merchandiser",loanEligible:false},
+  "200455":{name:"Grace Lim",dept:"Sales",position:"Store Lead Merchandiser",hireDate:"2019-02-18",status:"Regular",monthlyIncome:18000,dailyRate:692,existingDeduction:0,email:"",group:"Retail / Merchandiser",loanEligible:false}
+};
+
+/* RCC loan history (last 2 years) — pulled from loan records, shown to HR during review. */
+const LOAN_HISTORY = {
+  "100544":[{type:"Others / Unforeseen",amount:10000,date:"2026-02-04",status:"Fully Paid",
+             reason:"Funeral assistance for an immediate family member."}],
+  "100502":[{type:"Vehicle Repair Loan",amount:14000,date:"2025-08-15",status:"Fully Paid",
+             reason:"Engine tune-up and tire replacement on the family car."},
+            {type:"Medical Loan",amount:9000,date:"2024-11-10",status:"Fully Paid",
+             reason:"Outpatient treatment for a minor child."}],
+  "100612":[{type:"Educational Loan",amount:22500,date:"2025-06-01",status:"Fully Paid",
+             reason:"Son's college tuition — first semester."}]
+};
+function loanHistoryFor(id){return (LOAN_HISTORY[id]||[]).map(h=>Object.assign({},h));}
+
+/* ============================================================
+   LOAN AGREEMENT DOCUMENTS — printable Loan Application & Agreement Form
+   ============================================================ */
+/* Standard Terms & Conditions — general cash loans (per the RCC loan form). */
+const LOAN_TERMS=[
+  ["Resignation or Termination","If the Borrower resigns or is terminated for just cause, the outstanding balance of the loan must be paid in full within fifteen (15) days from the date of separation. Failure to comply will entitle the Lender to initiate legal action to recover the unpaid amount."],
+  ["Interest on Unpaid Balance","Should the Borrower fail to settle the outstanding loan upon separation or disconnection, an interest charge of twenty-four percent (24%) per annum shall be applied to the unpaid balance until full payment is made."],
+  ["Prepayment","The Borrower may prepay the loan, in full or in part, at any time without penalty."],
+  ["Amendment","Any amendment to this agreement must be made in writing and signed by both parties."],
+  ["Governing Law","This agreement shall be governed by and interpreted in accordance with the laws of the Republic of the Philippines, with venue in Pasig City."]
+];
+/* Tightened Vehicle Loan Agreement clauses — motorcycle loans (RCC owns the unit until fully paid). */
+const VEHICLE_CLAUSES=[
+  ["The vehicle and the loan","The Company purchased the motor vehicle described above for the Borrower's personal use. The Borrower has paid the stated Down Payment directly; the Company finances the balance shown as the Loan Amount, at the stated interest, repayable over the agreed term. This loan covers the motorcycle only — registration and insurance are handled under Clause 5."],
+  ["Repayment","The Borrower repays by automatic payroll deduction following the schedule in this Agreement, and irrevocably authorizes the Company to deduct each amortization until the loan and all related charges are fully paid. Prepayment in full or in part is allowed at any time without penalty."],
+  ["Ownership","The vehicle is registered in the name of, and owned by, the Company until the loan and every related charge are fully paid. Until then the Borrower holds it only as a user, not as owner, and may not sell, pledge, mortgage, or encumber it."],
+  ["Use","The vehicle is for the Borrower's personal use in commuting to and from work. It may not be used for any commercial purpose, nor lent to or operated by any other person."],
+  ["Registration and insurance","The vehicle must at all times carry valid registration and comprehensive insurance for as long as the Company owns it. The Company advances these costs to prevent any lapse. Each advance is not part of this loan — it is a separate one-time charge billed to the Borrower and recovered by salary deduction, payable within fifteen (15) days of billing. The Company's failure to bill promptly does not waive the Borrower's obligation to pay."],
+  ["Operating costs","All fuel, servicing, maintenance, parts, and repairs are for the Borrower's account. If the Borrower neglects necessary maintenance, the Company may have the work done and bill the Borrower."],
+  ["Liability and indemnity","The Borrower is solely responsible for all accidents, traffic violations, fines, and damage. The Borrower shall indemnify and hold the Company harmless from any claim, suit, fine, penalty, loss, or liability — including third-party injury, death, or property damage — arising from the custody, possession, or use of the vehicle, notwithstanding that the Company is the registered owner."],
+  ["Risk of loss","The Borrower bears the risk of loss, theft, or total damage. No such event cancels the loan; the outstanding balance remains due. Insurance proceeds, if any, are applied first to the balance, and the Borrower pays any shortfall."],
+  ["Separation from employment","On resignation, end of contract, or termination, the entire outstanding balance — loan plus any unpaid registration, insurance, or other charge — becomes immediately due. The Borrower shall either settle the full balance and receive transfer of the vehicle, or surrender the vehicle to the Company in good working condition on the last working day. Any amount still owing after surrender and disposal is deducted from final pay; any remaining shortfall is billed to the Borrower."],
+  ["Abandonment","If a separated Borrower neither settles the balance nor surrenders the vehicle within seven (7) days, the vehicle is deemed abandoned. The Company may recover it without further notice or demand; recovery, towing, and storage costs are charged to the Borrower, and an unreturned vehicle may be reported to the proper authorities."],
+  ["Default","Default occurs on any of: two consecutive missed or reversed payroll deductions; lapse of insurance or registration; unauthorized use; or separation without settlement or surrender. On default the entire outstanding balance becomes immediately due."],
+  ["Repossession and disposal","On default the Company may repossess the vehicle and sell or dispose of it at its sole discretion — to another employee or to any third party — at the best price reasonably obtainable. Net proceeds, after recovery and disposal costs, are credited to the Borrower's balance; the Borrower pays any deficiency, and any surplus is returned. No independent appraisal is required — the actual sale price establishes value."],
+  ["Transfer of ownership","Upon full payment of the loan and all related charges, the Company shall execute a Deed of Absolute Sale transferring the vehicle to the Borrower within fifteen (15) days. All transfer costs — LTO transfer fees, taxes, and documentary stamps — are borne by the Borrower."],
+  ["No cost to the Company","It is the essence of this Agreement that the Company bears no cost in connection with the vehicle. Every amount the Company advances — registration, insurance, repairs, recovery, legal, or disposal costs — is fully reimbursable by the Borrower and may be deducted from salary or final pay."],
+  ["Amendment and governing law","Any amendment to this Agreement must be in writing and signed by both parties. This Agreement is governed by the laws of the Republic of the Philippines, with venue in Pasig City."]
+];
+/* Self-contained CSS for the agreement document — used on-screen and in the print window. */
+const AGREEMENT_CSS=`
+.agreement{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1a1a1a;background:#fff;font-size:12.5px;line-height:1.5;max-width:720px;margin:0 auto}
+.agr-lh{text-align:center;border-bottom:2px solid #1E3A5F;padding-bottom:8px;margin-bottom:4px}
+.agr-co{font-size:16px;font-weight:700;color:#1E3A5F;letter-spacing:.4px}
+.agr-addr{font-size:10px;color:#666;margin-top:2px}
+.agr-title{text-align:center;font-size:13px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;margin:12px 0 1px}
+.agr-ref{text-align:center;font-size:11px;color:#666;margin-bottom:10px}
+.agr-row{display:flex;border-bottom:1px dotted #cfcfcf;padding:3px 0;gap:10px}
+.agr-k{flex:0 0 230px;color:#555;font-size:11.5px}
+.agr-v{flex:1;font-weight:600}
+.agr-sec{font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#1E3A5F;margin:16px 0 6px;border-bottom:1px solid #1E3A5F;padding-bottom:3px}
+.agr-p{margin:6px 0;text-align:justify}
+.agr-terms{margin:6px 0;padding-left:20px}
+.agr-terms li{margin-bottom:7px;text-align:justify}
+.agr-table{width:100%;border-collapse:collapse;margin-top:6px;font-size:11px}
+.agr-table th,.agr-table td{border:1px solid #cfcfcf;padding:3px 7px}
+.agr-table th{background:#eef1f5;text-align:left}
+.agr-table .num{text-align:right}
+.agr-sig{display:flex;gap:30px;margin-top:18px;flex-wrap:wrap}
+.sigbox{flex:1;min-width:210px}
+.sigline{border-bottom:1px solid #333;height:36px;margin-bottom:3px}
+.signame{font-weight:700;font-size:12px;min-height:15px}
+.sigcap{font-size:10px;color:#555}
+.agr-foot{margin-top:18px;border-top:1px solid #cfcfcf;padding-top:6px;font-size:9.5px;color:#888;text-align:center}
+`;
+/* whole-peso amount written out in words, e.g. 10000 -> "Ten Thousand Pesos" */
+function pesosInWords(n){
+  n=Math.round(n||0);
+  if(n===0) return "Zero Pesos";
+  const ones=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten",
+    "Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+  const tens=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+  function three(x){let s="";
+    if(x>=100){s+=ones[Math.floor(x/100)]+" Hundred";x%=100;if(x)s+=" ";}
+    if(x>=20){s+=tens[Math.floor(x/10)];x%=10;if(x)s+="-"+ones[x];}
+    else if(x>0){s+=ones[x];}
+    return s;}
+  const scales=["","Thousand","Million","Billion"];
+  let parts=[],i=0,x=n;
+  while(x>0){const c=x%1000;if(c)parts.unshift(three(c)+(scales[i]?" "+scales[i]:""));x=Math.floor(x/1000);i++;}
+  return parts.join(" ")+" Pesos";
+}
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+const peso  = n => "₱" + Math.round(n||0).toLocaleString("en-PH");
+const peso2 = n => "₱" + (Math.round((n||0)*100)/100).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
+function esc(s){return (s==null?"":""+s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+function fmtDate(s){if(!s)return "—";const d=new Date(s);if(isNaN(d))return s;
+  return d.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});}
+function todayISO(){const d=CONFIG.today;return d.toISOString().slice(0,10);}
+function tenureYears(hire){if(!hire)return 0;return (CONFIG.today-new Date(hire))/(365.25*24*3600*1000);}
+function tenureText(hire){const y=tenureYears(hire);const yr=Math.floor(y);const mo=Math.round((y-yr)*12);
+  return yr+" yr"+(yr!==1?"s":"")+" "+mo+" mo";}
+function addMonths(iso,m){const d=new Date(iso);d.setMonth(d.getMonth()+m);return d;}
+function rateLabel(t){if(t.rate===0)return "0% interest";
+  return t.rate+"% per annum ("+(t.rate/12)+"% per month)";}
+
+/* ============================================================
+   COMPUTATION  (flat-rate, matches RCC reference sheet)
+   ============================================================ */
+function compute(principal,ratePct,term){
+  const interest=principal*(ratePct/100)*(term/12);
+  const total=principal+interest;
+  const monthly=term>0?total/term:0;
+  return {principal,ratePct,term,interest,total,monthly,perCutoff:monthly/2};
+}
+function schedule(c){
+  const rows=[];let bal=c.principal;
+  const pP=c.principal/c.term,pI=c.interest/c.term;
+  for(let m=1;m<=c.term;m++){bal-=pP;rows.push({m,payment:c.monthly,principal:pP,interest:pI,balance:Math.max(0,bal)});}
+  return rows;
+}
+
+/* ============================================================
+   ELIGIBILITY ENGINE
+   ============================================================ */
+function assess(s1){
+  const t=CONFIG.LOAN_TYPES[s1.loanType];
+  const ten=tenureYears(s1.hireDate);
+  const c=compute(s1.amount,t.rate,s1.term);
+  const checks=[];const add=(l,st,d,internal)=>checks.push({l,st,d,internal});
+
+  add(`Minimum tenure — ${t.minTenure} year${t.minTenure!==1?"s":""}`,
+      ten>=t.minTenure?"pass":"fail",
+      `Hired ${fmtDate(s1.hireDate)} · ${ten.toFixed(1)} yrs (from Date Hired)`);
+  add("Employment status — Regular", s1.status==="Regular"?"pass":"fail",`Status: ${s1.status}`);
+  const active=s1.rccStatus==="On-going";
+  add("No other active RCC loan", active?"fail":"pass",
+      active?"Has an on-going RCC loan — only one allowed":"No active RCC loan on record");
+  if(t.maxAmount)
+    add(`Within the ${peso(t.maxAmount)} per-loan cap (HR control)`, s1.amount<=t.maxAmount?"pass":"warn",`Requested ${peso(s1.amount)}`, true);
+  if(s1.amount<=0) add("Valid requested amount","fail","No loan amount entered");
+
+  if(s1.loanType==="educational"){
+    add("Within the 3-children limit", s1.det.childCount<3?"pass":"warn",
+        `${s1.det.childCount} child${s1.det.childCount===1?"":"ren"} already in the program`);
+    if(s1.det.eduReloan)
+      add("Reloan — 50% of parent loan repaid", s1.det.eduRepaidPct>=50?"pass":"fail",
+          `${s1.det.eduRepaidPct||0}% repaid (50% minimum required)`);
+  }
+  if(s1.loanType==="moto"){
+    const dpPct=s1.det.motoPrice>0?s1.det.downPayment/s1.det.motoPrice*100:0;
+    add("Down payment of at least 10%", dpPct>=t.minDpPct?"pass":"warn",
+        `${peso(s1.det.downPayment)} (${dpPct.toFixed(0)}% of price)`);
+    const sr=s1.monthlyIncome>0?c.monthly/s1.monthlyIncome*100:0;
+    add("Amortization within 20% of salary", sr<=t.amortCapPctOfSalary?"pass":"warn",
+        `${peso(c.monthly)} = ${sr.toFixed(0)}% of ${peso(s1.monthlyIncome)}`);
+  }
+  if(s1.loanType!=="moto" && s1.term>6)
+    add("Repayment term within 6 months","warn",`${s1.term} months — extended term needs collateral / approval`);
+  if(t.discretionary)
+    add("Discretionary approval","warn","This loan type always requires management discretion");
+
+  const totDed=s1.existingDeduction+c.monthly;
+  const ratio=s1.monthlyIncome>0?totDed/s1.monthlyIncome*100:0;
+  add(`Capacity to pay — deductions under ${CONFIG.capacitySoftCapPct}% of income`,
+      ratio<=CONFIG.capacitySoftCapPct?"pass":"warn",
+      `${peso(s1.existingDeduction)} + ${peso(c.monthly)} = ${peso(totDed)} (${ratio.toFixed(0)}% of ${peso(s1.monthlyIncome)})`);
+
+  const avail=CONFIG.fundCap-fundUsed();
+  add("Loan fund availability", s1.amount<=avail?"pass":"warn",
+      `Available ${peso(avail)} of ${peso(CONFIG.fundCap)} cap`, true);
+
+  const hasFail=checks.some(x=>x.st==="fail"),hasWarn=checks.some(x=>x.st==="warn");
+  const verdict=hasFail?"NOT ELIGIBLE":(hasWarn?"FOR HR REVIEW":"PRE-QUALIFIED");
+  return {computed:c,checks,verdict,capRatio:ratio};
+}
+
+/* ============================================================
+   APPLICATION STORE
+   ============================================================ */
+let APPS=[];
+let seq=462;
+function newRef(){return "RCC-LN-0"+(seq++);}
+function fundUsed(){
+  return CONFIG.fundUsedSeed + APPS.filter(a=>a.stage==="APPROVED").reduce((s,a)=>s+a.s1.amount,0);
+}
+function last6Months(){
+  const arr=[],d=CONFIG.today;
+  for(let i=6;i>=1;i--){const m=new Date(d.getFullYear(),d.getMonth()-i,1);
+    arr.push(m.toLocaleDateString("en-US",{month:"long",year:"numeric"}));}
+  return arr;
+}
+function blankAttendance(){return last6Months().map(m=>({month:m,absences:"",lates:"",undertime:""}));}
+/* attendance auto-pulled from the timekeeping system (last 6 months) */
+function genAttendance(seedKey){
+  let n=0;const k=String(seedKey||"RCC");
+  for(let i=0;i<k.length;i++) n+=k.charCodeAt(i)*(i+1);
+  const rnd=i=>{const x=Math.sin(n*97+i*131)*10000;return x-Math.floor(x);};
+  return last6Months().map((m,i)=>{
+    const ra=rnd(i);
+    return {month:m,
+      absences: ra<0.80?0:(ra<0.94?1:2),
+      lates: +((rnd(i+20)*1.3)).toFixed(2),
+      undertime: rnd(i+40)<0.82?0:+((rnd(i+60)*0.6)).toFixed(2)};
+  });
+}
+/* next semi-monthly cut-off strictly after date d (15th and end-of-month) */
+function nextCutoff(d){
+  const x=new Date(d),day=x.getDate();
+  if(day<15) return new Date(x.getFullYear(),x.getMonth(),15);
+  const eom=new Date(x.getFullYear(),x.getMonth()+1,0).getDate();
+  if(day<eom) return new Date(x.getFullYear(),x.getMonth(),eom);
+  return new Date(x.getFullYear(),x.getMonth()+1,15);
+}
+/* full per-cut-off repayment schedule for an application */
+function deductionSchedule(app){
+  const c=app.computed,s=app.s1,rows=[];
+  let bal=c.total,d=s.releaseDate?new Date(s.releaseDate):new Date(CONFIG.today);
+  const n=Math.max(1,c.term*2);
+  for(let i=0;i<n;i++){
+    d=nextCutoff(d);
+    const amt=i===n-1?bal:c.perCutoff;
+    bal=Math.max(0,bal-amt);
+    rows.push({no:i+1,date:new Date(d),amount:amt,balance:bal});
+  }
+  return rows;
+}
+function fmtSchedDate(d){return d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});}
+
+/* ---- seed applications so each role tab has work ---- */
+function seedApps(){
+  // 1) Andrea Villanueva — educational, fresh, awaiting HR Review
+  const a1=makeApp({
+    empId:"100531", name:"Andrea Villanueva", dept:"Marketing", position:"Marketing Assistant",
+    hireDate:"2019-07-15", status:"Regular", monthlyIncome:24000, dailyRate:923,
+    loanType:"educational", purpose:"Tuition for daughter's 2nd-year college term.",
+    amount:0, term:6, releaseType:"Cut-off 15th", releaseDate:"2026-06-15",
+    rccStatus:"None", existingDeduction:900, pagibigStatus:"None", sssStatus:"None",
+    det:{semesterTotal:45000,childName:"Bea Villanueva",childAge:"19",school:"University of the East",
+      course:"BS Accountancy",yearLevel:"2nd Year",gradYear:"2028",childCount:1,eduReloan:false,eduRepaidPct:0}
+  });
+  a1.appDate="2026-05-20";
+  a1.stage="PENDING_HR";
+  APPS.push(a1);
+
+  // 2) Joseph Ramirez — medical, HR done, awaiting Supervisor Review
+  const a2=makeApp({
+    empId:"100487", name:"Joseph Ramirez", dept:"Logistics", position:"Delivery Coordinator",
+    hireDate:"2022-01-10", status:"Regular", monthlyIncome:21000, dailyRate:808,
+    loanType:"medical", purpose:"Hospitalization of minor child — dengue confinement.",
+    amount:18000, term:6, releaseType:"Rush", releaseDate:"2026-05-24",
+    rccStatus:"None", existingDeduction:1200, pagibigStatus:"None", sssStatus:"On-going", sssBalance:9000
+  });
+  a2.appDate="2026-05-18";
+  a2.hr={done:true,receivedBy:"Juvelyn Belvistre",recommendation:"Recommended for Approval",
+    notes:"Payroll details confirmed from PayPlus. Documents complete — genuine medical emergency. Recommend rush release.",
+    date:"2026-05-19"};
+  a2.stage="PENDING_SUPERVISOR";
+  APPS.push(a2);
+
+  // 3) Ritchie Abenir — house roof repair, HR + Supervisor done, awaiting Management
+  const a3=makeApp({
+    empId:"100544", name:"Ritchie Abenir", dept:"Warehouse", position:"Warehouse Assistant",
+    hireDate:"2018-11-23", status:"Regular", monthlyIncome:19500, dailyRate:750,
+    loanType:"others", purpose:"House roof repair — the roof has collapsed.",
+    amount:10000, term:12, releaseType:"Cut-off 30th", releaseDate:"2026-05-30",
+    rccStatus:"Fully Paid", rccOrig:10000, rccBalance:0, prevLoanAmt:10000, prevLoanDate:"2026-02-04",
+    pagibigStatus:"On-going", pagibigBalance:8000, sssStatus:"On-going", sssBalance:25945,
+    existingDeduction:2100,
+    attendance:[{month:"November 2025",absences:0,lates:0.23,undertime:0},
+      {month:"December 2025",absences:0,lates:0,undertime:0},
+      {month:"January 2026",absences:0,lates:0.93,undertime:0},
+      {month:"February 2026",absences:0,lates:0,undertime:0},
+      {month:"March 2026",absences:0,lates:0.18,undertime:0},
+      {month:"April 2026",absences:0,lates:0,undertime:0}]
+  });
+  a3.appDate="2026-05-06";
+  a3.hr={done:true,receivedBy:"Juvelyn Belvistre",recommendation:"Recommended for Approval",
+    notes:"Payroll confirmed from PayPlus. No active RCC loan. Documents complete — video footage of the collapsed roof attached.",
+    date:"2026-05-08"};
+  a3.sup={done:true,confirm:"Confirmed",
+    comment:"Ritchie maintains excellent attendance and is a dependable, reliable staff member in good standing.",
+    supervisorName:"James Cruz",date:"2026-05-12"};
+  a3.stage="PENDING_MANAGEMENT";
+  APPS.push(a3);
+
+  // 4) Cherry Jacinto — vehicle repair, fully approved (history)
+  const a4=makeApp({
+    empId:"100502", name:"Cherry Jacinto", dept:"Admin", position:"Admin Staff",
+    hireDate:"2017-03-01", status:"Regular", monthlyIncome:23000, dailyRate:885,
+    loanType:"vehicle", purpose:"Brake and clutch repair of personal vehicle used for work errands.",
+    amount:16000, term:6, releaseType:"Cut-off 30th", releaseDate:"2026-04-30",
+    rccStatus:"Fully Paid", rccOrig:14000, rccBalance:0, prevLoanAmt:14000, prevLoanDate:"2025-08-15",
+    existingDeduction:1400, pagibigStatus:"None", sssStatus:"None"
+  });
+  a4.appDate="2026-04-10";
+  a4.hr={done:true,receivedBy:"Juvelyn Belvistre",recommendation:"Recommended for Approval",
+    notes:"Documents complete. Personal vehicle used for work errands. Capacity to pay within limits.",
+    date:"2026-04-12"};
+  a4.sup={done:true,confirm:"Confirmed",comment:"Dependable staff in good standing.",supervisorName:"Pam Co",date:"2026-04-13"};
+  a4.mgmt={done:true,decision:"Approved for Release",approvedBy:"Anj Genomal",
+    feedback:"Approved. Release on the April 30 cut-off.",date:"2026-04-16"};
+  a4.stage="APPROVED";
+  APPS.push(a4);
+
+  // 5) Maria A. Santos — moto loan, fresh, awaiting HR Review
+  const a5=makeApp({
+    empId:"100612", name:"Maria A. Santos", dept:"Accounting", position:"Accounting Staff",
+    hireDate:"2020-03-01", status:"Regular", monthlyIncome:25000, dailyRate:960,
+    loanType:"moto", purpose:"Motorcycle for the daily commute to the head office.",
+    amount:80000, term:24, releaseType:"Cut-off 15th", releaseDate:"2026-06-15",
+    rccStatus:"None", existingDeduction:1500, pagibigStatus:"None", sssStatus:"None",
+    det:{motoModel:"Honda Click 125i",dealer:"Honda Pasig",motoPrice:90000,downPayment:10000}
+  });
+  a5.appDate="2026-05-22";
+  a5.stage="PENDING_HR";
+  APPS.push(a5);
+}
+function makeApp(o){
+  const det=Object.assign({semesterTotal:0,childName:"",childAge:"",school:"",course:"",yearLevel:"",
+    gradYear:"",childCount:0,eduReloan:false,eduRepaidPct:0,situation:"",incidentDate:"",
+    vehicleInfo:"",repairCost:0,patient:"Self",patientName:"",treatment:"",facility:"",
+    motoModel:"",dealer:"",motoPrice:0,downPayment:0}, o.det||{});
+  const s1={
+    appDate:o.appDate||todayISO(), empId:o.empId||"", name:o.name||"", dept:o.dept||"",
+    position:o.position||"", hireDate:o.hireDate||"", status:o.status||"Regular",
+    monthlyIncome:o.monthlyIncome||0, dailyRate:o.dailyRate||0,
+    loanType:o.loanType, purpose:o.purpose||"", amount:o.amount||0, term:o.term||6,
+    releaseType:o.releaseType||"Cut-off 15th", releaseDate:o.releaseDate||"",
+    det,
+    prevLoanAmt:o.prevLoanAmt||0, prevLoanDate:o.prevLoanDate||"",
+    rccOrig:o.rccOrig||0, rccBalance:o.rccBalance||0, rccStatus:o.rccStatus||"None",
+    pagibigBalance:o.pagibigBalance||0, pagibigStatus:o.pagibigStatus||"None",
+    sssBalance:o.sssBalance||0, sssStatus:o.sssStatus||"None",
+    existingDeduction:o.existingDeduction||0, email:(EMPLOYEE_DIRECTORY[o.empId]||{}).email||"",
+    docs:{}, ackSigned:false, ackName:"", ackDate:""
+  };
+  // educational principal = 50% share
+  if(s1.loanType==="educational") s1.amount=(s1.det.semesterTotal||0)*0.5;
+  const ev=assess(s1);
+  return {ref:newRef(), stage:"PENDING_HR", appDate:s1.appDate, s1,
+    computed:ev.computed, elig:{checks:ev.checks,verdict:ev.verdict},
+    attendance:o.attendance||genAttendance(o.empId),
+    loanHistory:loanHistoryFor(o.empId),
+    hr:{done:false}, sup:{done:false}, mgmt:{done:false}};
+}
+
+/* ============================================================
+   UI STATE
+   ============================================================ */
+const ui={tab:"apply", selRef:null, trackRef:""};
+const TABS=[
+  {k:"apply",label:"Employee Application"},
+  {k:"hr",label:"HR Review",stage:"PENDING_HR"},
+  {k:"supervisor",label:"Supervisor Confirmation",stage:"PENDING_SUPERVISOR"},
+  {k:"management",label:"Management Approval",stage:"PENDING_MANAGEMENT"},
+  {k:"track",label:"Track Application"}
+];
+
+/* ---- employee wizard draft ---- */
+const WSTEPS=["Verification","Loan Type","Loan Details","Documents","Authorization"];
+let wstep=0;
+let draft;
+function newDraft(){
+  draft={verified:false,rec:null,lookupError:"",s1:{
+    appDate:todayISO(), empId:"100612", name:"", dept:"", position:"", hireDate:"", status:"",
+    monthlyIncome:0, dailyRate:0, email:"",
+    loanType:null, purpose:"", amount:0, term:6, releaseType:"Cut-off 15th", releaseDate:"",
+    det:{semesterTotal:0,childName:"",childAge:"",school:"",course:"",yearLevel:"",gradYear:"",
+      childCount:0,eduReloan:false,eduRepaidPct:0,situation:"",incidentDate:"",vehicleInfo:"",
+      repairCost:0,patient:"Self",patientName:"",treatment:"",facility:"",motoModel:"",dealer:"",
+      motoPrice:0,downPayment:0},
+    prevLoanAmt:0, prevLoanDate:"", rccOrig:0, rccBalance:0, rccStatus:"None",
+    pagibigBalance:0, pagibigStatus:"None", sssBalance:0, sssStatus:"None",
+    existingDeduction:0, docs:{}, ackSigned:false, ackName:"", ackDate:todayISO()
+  }};
+  applyDirectory("100612");
+  wstep=0;
+}
+function applyDirectory(id){
+  const rec=EMPLOYEE_DIRECTORY[id];
+  if(!rec){draft.verified=false;draft.rec=null;
+    draft.lookupError='Employee ID "'+id+'" was not found in the RCC Employee Directory.';return false;}
+  draft.verified=true;draft.rec=rec;draft.lookupError="";
+  const s=draft.s1;
+  s.empId=id;s.name=rec.name;s.dept=rec.dept;s.position=rec.position;s.hireDate=rec.hireDate;
+  s.status=rec.status;s.monthlyIncome=rec.monthlyIncome;s.dailyRate=rec.dailyRate;
+  s.existingDeduction=rec.existingDeduction;s.email=rec.email;
+  return true;
+}
+
+/* ---- prototype preview: load a filled-in sample application ---- */
+const SAMPLES={
+  educational:{purpose:"Tuition for my son's 1st-year college term.",term:6,releaseDate:"2026-06-15",
+    det:{childName:"Marco Santos",childAge:"18",school:"University of Santo Tomas",course:"BS Civil Engineering",
+      yearLevel:"1st Year",gradYear:"2030",childCount:1,eduReloan:false,eduRepaidPct:0,semesterTotal:48000}},
+  others:{purpose:"House repair after a storm damaged the roof.",amount:25000,term:6,releaseDate:"2026-06-15",
+    det:{situation:"A typhoon tore off part of the roof; the bedrooms are exposed to rain.",incidentDate:"2026-05-10"}},
+  vehicle:{purpose:"Brake and transmission repair on the family car.",amount:18000,term:6,releaseDate:"2026-06-15",
+    det:{vehicleInfo:"Toyota Vios 2017 · plate ABC 1234",repairCost:30000}},
+  medical:{purpose:"Hospital confinement for a parent.",amount:20000,term:6,releaseDate:"2026-05-30",
+    det:{patient:"Parent",patientName:"Rosa Santos",treatment:"Pneumonia confinement, 3 days",facility:"The Medical City, Pasig"}},
+  moto:{purpose:"Motorcycle for the daily commute to the head office.",term:24,releaseDate:"2026-06-15",
+    det:{motoModel:"Honda Click 125i",dealer:"Honda Pasig",motoPrice:90000,downPayment:10000}}
+};
+function loadSample(type){
+  newDraft();
+  const smp=SAMPLES[type],s=draft.s1;
+  s.loanType=type;
+  s.purpose=smp.purpose;
+  s.term=smp.term;
+  s.releaseDate=smp.releaseDate||"";
+  Object.assign(s.det,smp.det);
+  if(type==="educational") s.amount=(s.det.semesterTotal||0)*0.5;
+  else if(type==="moto") s.amount=Math.max(0,s.det.motoPrice-s.det.downPayment);
+  else s.amount=smp.amount||0;
+  s.ackName=s.name;
+  wstep=WSTEPS.length-1;
+  renderWizard();
+}
+function resetWizard(){newDraft();renderWizard();}
+
+/* ============================================================
+   TOP-LEVEL RENDER
+   ============================================================ */
+function renderTabs(){
+  document.getElementById("tabwrap").innerHTML=TABS.map(t=>{
+    const cnt=t.stage?APPS.filter(a=>a.stage===t.stage).length:null;
+    return `<button class="tab ${ui.tab===t.k?"active":""}" onclick="goTab('${t.k}')">${t.label}`+
+      (cnt!==null?`<span class="cnt">${cnt}</span>`:"")+`</button>`;
+  }).join("");
+}
+function goTab(k){ui.tab=k;ui.selRef=null;render();}
+function render(){
+  renderTabs();
+  if(ui.tab==="apply") renderWizard();
+  else if(ui.tab==="track") renderTrack();
+  else renderRole(ui.tab);
+}
+
+/* ============================================================
+   EMPLOYEE WIZARD  (Section 1 of the official form)
+   ============================================================ */
+function renderWizard(){
+  const preview=`<div style="background:var(--amber-soft);border:1px dashed var(--amber);border-radius:9px;
+    padding:9px 12px;margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--amber)">PROTOTYPE PREVIEW</span>
+    <span style="font-size:11.5px;color:var(--muted)">Load a filled-in sample —</span>
+    `+Object.entries(CONFIG.LOAN_TYPES).map(([k,t])=>
+      `<button class="btn ghost sm" type="button" onclick="loadSample('${k}')">${t.name}</button>`).join("")+`
+    <button class="btn dark sm" type="button" onclick="resetWizard()">Clear</button>
+  </div>`;
+  const stepper=`<div class="stepper">`+WSTEPS.map((s,i)=>{
+    const cls=i<wstep?"done":(i===wstep?"current":"");
+    return `<div class="st ${cls}" onclick="wGoto(${i})"><div class="dot">${i<wstep?"✓":i+1}</div><span>${s}</span></div>`;
+  }).join("")+`</div>`;
+  document.getElementById("main").innerHTML =
+    preview+stepper+`<div id="wbody"></div>
+    <div class="nav">
+      <button class="btn ghost" id="wback" onclick="wBack()">← Back</button>
+      <button class="btn primary" id="wnext" onclick="wNext()">Continue →</button>
+    </div>`;
+  document.getElementById("wback").style.visibility=wstep===0?"hidden":"visible";
+  document.getElementById("wnext").textContent=wstep===WSTEPS.length-1?"Submit Application →":"Continue →";
+  document.getElementById("wnext").disabled=false;
+  [wEmployee,wType,wDetails,wDocs,wAuth][wstep]();
+}
+function wGoto(i){if(i<=wstep){wstep=i;renderWizard();}}
+function wBack(){if(wstep>0){wstep--;renderWizard();}}
+
+function wEmployee(){
+  const s=draft.s1,rec=draft.rec,verified=draft.verified;
+  let panel="";
+  if(verified&&rec){
+    let gate;
+    if(!rec.loanEligible){
+      gate=`<div class="verdict no"><div class="vt">Not eligible — Head Office &amp; Warehouse only</div>
+        <div class="vs">The company loan program is available to Head Office and Warehouse employees
+        only. ${esc(rec.position)} (Retail / Merchandiser) roles are not covered by the program.</div></div>`;
+    }else if(rec.status!=="Regular"){
+      gate=`<div class="verdict no"><div class="vt">Not eligible to apply</div>
+        <div class="vs">Only regular employees may apply for a company loan. This record shows
+        ${esc(rec.status)} status.</div></div>`;
+    }else{
+      gate=`<div class="verdict ok"><div class="vt">Verified — eligible to apply</div>
+        <div class="vs">${esc(rec.name)} · ${esc(rec.group)}. The application result is sent only to
+        this employee's registered company email on file — never to an address typed on this form.</div></div>`;
+    }
+    panel=gate+`
+      <div class="grid" style="margin-top:14px">
+        <div><label>Full Name of Borrower</label><input value="${esc(s.name)}" readonly class="ro"></div>
+        <div><label>Department</label><input value="${esc(s.dept)}" readonly class="ro"></div>
+        <div><label>Position</label><input value="${esc(s.position)}" readonly class="ro"></div>
+        <div><label>Employee Group</label><input value="${esc(rec.group)}" readonly class="ro"></div>
+        <div><label>Date Hired</label><input value="${fmtDate(s.hireDate)}" readonly class="ro">
+          <div class="hint">Length of employment: ${tenureText(s.hireDate)}</div></div>
+        <div><label>Employment Status</label><input value="${esc(s.status)}" readonly class="ro"></div>
+      </div>
+      <div class="policy" style="margin-top:12px">Payroll figures — monthly income and daily rate —
+      are held privately for the loan computation and are <b>not displayed on this page</b>, so
+      verifying an ID never exposes a co-worker's salary or email address.</div>`;
+  }else{
+    panel=`<div class="policy" style="margin-top:6px">${draft.lookupError
+      ?`<b style="color:var(--red)">${esc(draft.lookupError)}</b>`
+      :"Enter your Employee ID and click Verify. Your name, department and payroll figures are pulled from the RCC Employee Directory — they cannot be typed in manually."}</div>`;
+  }
+  document.getElementById("wbody").innerHTML=`
+  <div class="card">
+    <div class="secband">Section 1 · To be filled by the Employee</div>
+    <h2>Employee Verification</h2>
+    <div class="lead">Your identity is confirmed against the RCC Employee Directory. Company loans
+      are available to Head Office &amp; Warehouse employees only.</div>
+    <div class="grid">
+      <div><label>Application Date</label><input type="date" value="${s.appDate}" readonly class="ro"></div>
+      <div><label>Employee ID No. <span class="req">*</span></label>
+        <div style="display:flex;gap:8px">
+          <input id="e_id" value="${esc(s.empId)}" placeholder="e.g. 100612">
+          <button class="btn dark sm" type="button" onclick="wVerify()">Verify</button></div>
+        <div class="hint">Demo IDs: 100612 / 100531 (eligible) · 200318 (merchandiser) · 100489 (probationary)</div></div>
+    </div>
+    ${panel}
+  </div>`;
+  const nb=document.getElementById("wnext");
+  if(nb) nb.disabled=!(verified&&rec&&rec.loanEligible&&rec.status==="Regular");
+}
+function wVerify(){
+  const id=(document.getElementById("e_id").value||"").trim();
+  draft.s1.empId=id;
+  applyDirectory(id);
+  wEmployee();
+}
+
+function wType(){
+  const s=draft.s1,ten=tenureYears(s.hireDate);
+  const cards=Object.entries(CONFIG.LOAN_TYPES).map(([k,t])=>{
+    const flag = ten<t.minTenure?`<span class="chip r">Needs ${t.minTenure} yrs tenure</span>`
+      :(s.status!=="Regular"?`<span class="chip a">Regular status only</span>`
+        :`<span class="chip g">You may qualify</span>`);
+    return `<div class="ltcard ${s.loanType===k?"sel":""}" onclick="wPick('${k}')">
+      <div class="ltnum">${t.no}</div><div>
+        <div class="ltname">${t.name}</div>
+        <div class="ltrate">${rateLabel(t)}</div>
+        <div class="ltdesc">${t.desc}</div>
+        <div style="margin-top:6px">${flag}</div></div></div>`;
+  }).join("");
+  document.getElementById("wbody").innerHTML=`
+  <div class="card">
+    <div class="secband">Section 1 · To be filled by the Employee</div>
+    <h2>Select a Loan Type</h2>
+    <div class="lead">RCC offers five loan types. Choose the one that fits your need.</div>
+    <div class="ltgrid">${cards}</div>
+    <div id="wPolicy" style="margin-top:14px"></div>
+  </div>`;
+  if(s.loanType) wPolicy();
+}
+function wPick(k){draft.s1.loanType=k;wType();}
+function wPolicy(){
+  const t=CONFIG.LOAN_TYPES[draft.s1.loanType];
+  document.getElementById("wPolicy").innerHTML=
+    `<div class="policy"><b>${t.name} — policy summary</b><ul>`+
+    t.policy.map(p=>`<li>${p}</li>`).join("")+`</ul></div>`;
+}
+
+function wDetails(){
+  const s=draft.s1,d=s.det,t=CONFIG.LOAN_TYPES[s.loanType];
+  let termOpts="";for(let m=1;m<=t.maxTerm;m++)
+    termOpts+=`<option value="${m}" ${m===s.term?"selected":""}>${m} month${m>1?"s":""}${m===t.stdTerm?" (standard)":""}</option>`;
+  let spec="";
+  if(s.loanType==="educational"){
+    spec=`
+      <div><label>Child's Full Name <span class="req">*</span></label><input id="d_childName" value="${esc(d.childName)}"></div>
+      <div><label>Child's Age</label><input type="number" id="d_childAge" value="${d.childAge}"></div>
+      <div><label>School / University <span class="req">*</span></label><input id="d_school" value="${esc(d.school)}"></div>
+      <div><label>Course / Program</label><input id="d_course" value="${esc(d.course)}"></div>
+      <div><label>Year Level</label><input id="d_yearLevel" value="${esc(d.yearLevel)}"></div>
+      <div><label>Expected Graduation Year</label><input id="d_gradYear" value="${esc(d.gradYear)}"></div>
+      <div><label>Children already in the program</label>
+        <select id="d_childCount">${[0,1,2,3].map(n=>`<option ${n===d.childCount?"selected":""}>${n}</option>`).join("")}</select>
+        <div class="hint">Maximum of 3 children per employee.</div></div>
+      <div><label>Total tuition &amp; fees this semester <span class="req">*</span></label>
+        <input type="number" id="d_semesterTotal" value="${d.semesterTotal||""}" oninput="wLive()">
+        <div class="hint" id="d_eduShare">Employee 50% share is deducted via payroll.</div></div>
+      <div><label>Previous educational (parent) loan?</label>
+        <select id="d_eduReloan" onchange="wCollectDetails();wDetails()">
+          <option value="No" ${!d.eduReloan?"selected":""}>No — first availment</option>
+          <option value="Yes" ${d.eduReloan?"selected":""}>Yes — this is a reloan</option></select></div>
+      ${d.eduReloan?`<div><label>% of previous parent loan already repaid <span class="req">*</span></label>
+        <input type="number" id="d_eduRepaidPct" value="${d.eduRepaidPct||""}">
+        <div class="hint">At least 50% must be repaid before a reloan.</div></div>`:``}`;
+  }else if(s.loanType==="others"){
+    spec=`
+      <div class="full"><label>Nature of the emergency / situation <span class="req">*</span></label>
+        <textarea id="d_situation">${esc(d.situation)}</textarea></div>
+      <div><label>Date of incident</label><input type="date" id="d_incidentDate" value="${d.incidentDate}"></div>
+      <div><label>Requested loan amount <span class="req">*</span></label>
+        <input type="number" id="d_amount" value="${s.amount||""}" oninput="wLive()"></div>`;
+  }else if(s.loanType==="vehicle"){
+    spec=`
+      <div class="full"><label>Vehicle (make, model, plate no.) <span class="req">*</span></label>
+        <input id="d_vehicleInfo" value="${esc(d.vehicleInfo)}"></div>
+      <div><label>Total repair cost estimate <span class="req">*</span></label>
+        <input type="number" id="d_repairCost" value="${d.repairCost||""}"></div>
+      <div><label>Requested loan amount <span class="req">*</span></label>
+        <input type="number" id="d_amount" value="${s.amount||""}" oninput="wLive()">
+        <div class="hint">A percentage of the repair cost.</div></div>`;
+  }else if(s.loanType==="medical"){
+    spec=`
+      <div><label>Patient <span class="req">*</span></label>
+        <select id="d_patient">${["Self","Parent","Child (minor)"].map(p=>`<option ${p===d.patient?"selected":""}>${p}</option>`).join("")}</select></div>
+      <div><label>Patient name</label><input id="d_patientName" value="${esc(d.patientName)}"></div>
+      <div><label>Nature of treatment <span class="req">*</span></label><input id="d_treatment" value="${esc(d.treatment)}"></div>
+      <div><label>Hospital / Clinic</label><input id="d_facility" value="${esc(d.facility)}"></div>
+      <div class="full"><label>Requested loan amount <span class="req">*</span></label>
+        <input type="number" id="d_amount" value="${s.amount||""}" oninput="wLive()">
+        <div class="hint">Use PhilHealth / HMO coverage first.</div></div>`;
+  }else if(s.loanType==="moto"){
+    spec=`
+      <div><label>Motorcycle make &amp; model <span class="req">*</span></label><input id="d_motoModel" value="${esc(d.motoModel)}"></div>
+      <div><label>Dealer</label><input id="d_dealer" value="${esc(d.dealer)}"></div>
+      <div><label>Motorcycle purchase price <span class="req">*</span></label>
+        <input type="number" id="d_motoPrice" value="${d.motoPrice||""}" oninput="wLive()"></div>
+      <div><label>Down payment <span class="req">*</span></label>
+        <input type="number" id="d_downPayment" value="${d.downPayment||""}" oninput="wLive()">
+        <div class="hint">Minimum 10% of purchase price.</div></div>
+      <div class="full"><div class="policy" id="d_motoCalc">Enter price and down payment to see the loan amount.</div></div>`;
+  }
+  document.getElementById("wbody").innerHTML=`
+  <div class="card">
+    <div class="secband">Section 1 · To be filled by the Employee</div>
+    <h2>${t.name} — Loan Details</h2>
+    <div class="lead">Provide the details of your loan request.</div>
+    <div class="grid">
+      <div class="full"><label>Purpose of the New Loan <span class="req">*</span></label>
+        <textarea id="d_purpose" placeholder="Briefly describe what the loan is for">${esc(s.purpose)}</textarea></div>
+      ${spec}
+      <div><label>Loan Term Agreed <span class="req">*</span></label>
+        <select id="d_term" onchange="wLive()">${termOpts}</select>
+        <div class="hint">Standard term is ${t.stdTerm} months.</div></div>
+      <div><label>Released Date (target)</label><input type="date" id="d_releaseDate" value="${s.releaseDate}"></div>
+      <div class="full"><label>Type of Release <span class="req">*</span></label>
+        <div class="radios">${["Rush","Cut-off 15th","Cut-off 30th"].map(x=>
+          `<label><input type="radio" name="d_rel" value="${x}" ${x===s.releaseType?"checked":""}>${x}</label>`).join("")}</div>
+        <div class="hint">Rush release is reserved for death-related and medical emergencies.</div></div>
+    </div>
+  </div>`;
+  wLive();
+}
+function wCollectDetails(){
+  const g=id=>{const el=document.getElementById(id);return el?el.value:"";};
+  const s=draft.s1,d=s.det;
+  s.purpose=g("d_purpose")||s.purpose;
+  if(document.getElementById("d_term")) s.term=parseInt(g("d_term"))||s.term;
+  if(document.getElementById("d_releaseDate")) s.releaseDate=g("d_releaseDate");
+  const rel=document.querySelector('input[name="d_rel"]:checked'); if(rel) s.releaseType=rel.value;
+  if(s.loanType==="educational"){
+    d.childName=g("d_childName");d.childAge=g("d_childAge");d.school=g("d_school");
+    d.course=g("d_course");d.yearLevel=g("d_yearLevel");d.gradYear=g("d_gradYear");
+    d.childCount=parseInt(g("d_childCount"))||0;
+    d.eduReloan=g("d_eduReloan")==="Yes";
+    d.eduRepaidPct=parseFloat(g("d_eduRepaidPct"))||0;
+    d.semesterTotal=parseFloat(g("d_semesterTotal"))||0;
+    s.amount=d.semesterTotal*0.5;
+  }else if(s.loanType==="others"){
+    d.situation=g("d_situation");d.incidentDate=g("d_incidentDate");
+    s.amount=parseFloat(g("d_amount"))||0;
+  }else if(s.loanType==="vehicle"){
+    d.vehicleInfo=g("d_vehicleInfo");d.repairCost=parseFloat(g("d_repairCost"))||0;
+    s.amount=parseFloat(g("d_amount"))||0;
+  }else if(s.loanType==="medical"){
+    d.patient=g("d_patient");d.patientName=g("d_patientName");
+    d.treatment=g("d_treatment");d.facility=g("d_facility");
+    s.amount=parseFloat(g("d_amount"))||0;
+  }else if(s.loanType==="moto"){
+    d.motoModel=g("d_motoModel");d.dealer=g("d_dealer");
+    d.motoPrice=parseFloat(g("d_motoPrice"))||0;
+    d.downPayment=parseFloat(g("d_downPayment"))||0;
+    s.amount=Math.max(0,d.motoPrice-d.downPayment);
+  }
+}
+function wLive(){
+  wCollectDetails();
+  const s=draft.s1,d=s.det;
+  if(s.loanType==="educational"&&document.getElementById("d_eduShare"))
+    document.getElementById("d_eduShare").textContent=
+      `Employee 50% share: ${peso(s.amount)} (deducted via payroll). Beneficiary owes the other 50% post-graduation.`;
+  if(s.loanType==="moto"&&document.getElementById("d_motoCalc")){
+    const t=CONFIG.LOAN_TYPES.moto,
+      dpPct=d.motoPrice>0?d.downPayment/d.motoPrice*100:0,notes=[];
+    if(d.motoPrice>0&&dpPct<t.minDpPct)notes.push(`<span class="chip a">Down payment below 10%</span>`);
+    document.getElementById("d_motoCalc").innerHTML=
+      `<b>Loan amount</b> = price − down payment = ${peso(d.motoPrice)} − ${peso(d.downPayment)}
+       = <b>${peso(s.amount)}</b>${d.motoPrice>0?` (down payment ${dpPct.toFixed(0)}%)`:""}
+       <div style="margin-top:6px">${notes.join(" ")||'<span class="chip g">Down payment within policy</span>'}</div>`;
+  }
+}
+
+/* Existing loans & obligations are no longer entered by the employee.
+   They are auto-populated from PayPlus and confirmed by HR in Section 2. */
+
+/* docsFor — the documents that actually apply to an application.
+   The educational repayment proof only appears for a reloan. */
+function docsFor(s1){
+  return CONFIG.LOAN_TYPES[s1.loanType].docs.filter(doc=>{
+    if(/repayment/i.test(doc)) return !!(s1.det&&s1.det.eduReloan);
+    return true;
+  });
+}
+function docRequired(doc){ return !/funeral/i.test(doc); }
+
+function wDocs(){
+  const t=CONFIG.LOAN_TYPES[draft.s1.loanType];
+  const list=docsFor(draft.s1);
+  const rows=list.map((doc,i)=>{
+    const f=draft.s1.docs[doc];
+    const status=f?`<span class="chip g">Uploaded</span> ${esc(f)}`:`Pending — no file selected`;
+    return `<div class="docrow"><div><div class="docname">${doc}</div>
+      <div class="docstatus" id="ds_${i}">${status}</div></div>
+      <label class="uploadbtn">${f?"Replace file":"Choose file"}
+        <input type="file" data-doc="${esc(doc)}" onchange="wUpload(this)" hidden></label></div>`;
+  }).join("");
+  const done=list.filter(dc=>draft.s1.docs[dc]).length;
+  document.getElementById("wbody").innerHTML=`
+  <div class="card">
+    <div class="secband">Section 1 · To be filled by the Employee</div>
+    <h2>Required Documents</h2>
+    <div class="lead">Upload proof for the <b>${t.name}</b> — ${done} of ${list.length} uploaded.
+      All required documents must be attached before the application can be submitted.</div>
+    ${rows}
+    <div class="policy" style="margin-top:14px">Attach proof of documents so HR can process your request.
+      Late, incomplete, or fraudulent submissions may result in disqualification.
+      <b>Prototype note:</b> files are selected for demo only; in the deployed version they upload to Supabase Storage.</div>
+  </div>`;
+}
+function wUpload(input){
+  const f=input.files[0];if(!f)return;
+  draft.s1.docs[input.dataset.doc]=f.name;wDocs();
+}
+
+function wAuth(){
+  const s=draft.s1;
+  s.amount = s.loanType==="educational" ? (s.det.semesterTotal||0)*0.5 : s.amount;
+  const t=CONFIG.LOAN_TYPES[s.loanType];
+  const ev=assess(s),c=ev.computed;
+  const vClass=ev.verdict==="PRE-QUALIFIED"?"ok":(ev.verdict==="FOR HR REVIEW"?"review":"no");
+  const first=s.releaseDate?fmtDate(s.releaseDate):"to be set on release";
+  const periodEnd=s.releaseDate?fmtDate(addMonths(s.releaseDate,s.term)):"—";
+  const checks=ev.checks.filter(x=>!x.internal).map(x=>{
+    const sym=x.st==="pass"?"✓":(x.st==="warn"?"!":"✕");
+    return `<div class="check"><div class="ic ${x.st}">${sym}</div>
+      <div><div class="cl">${x.l}</div><div class="cd">${x.d}</div></div></div>`;
+  }).join("");
+  document.getElementById("wbody").innerHTML=`
+  <div class="card">
+    <div class="secband">Section 1 · To be filled by the Employee</div>
+    <h2>HR Loan Reference &amp; Authorization</h2>
+    <div class="lead">${esc(s.name)} — ${t.name} · ${rateLabel(t)}</div>
+
+    <div class="verdict ${vClass}"><div class="vt">System pre-screen: ${ev.verdict}</div>
+      <div class="vs">Automated pre-check on the details you entered. HR verifies your existing SSS,
+        Pag-IBIG and company-loan obligations in Section 3 — HR and Management make the final decision.</div></div>
+
+    <div class="sumgrid">
+      <div class="sumbox"><div class="sl">Loan Amount</div><div class="sv">${peso(c.principal)}</div></div>
+      <div class="sumbox"><div class="sl">Interest</div><div class="sv">${peso(c.interest)}</div></div>
+      <div class="sumbox"><div class="sl">Total Amount</div><div class="sv">${peso(c.total)}</div></div>
+      <div class="sumbox"><div class="sl">Monthly</div><div class="sv green">${peso(c.monthly)}</div></div>
+      <div class="sumbox"><div class="sl">Per Cut-off</div><div class="sv green">${peso(c.perCutoff)}</div></div>
+    </div>
+    <div class="drow"><span class="dk">Term</span><span class="dv">${c.term} months · ${rateLabel(t)}</span></div>
+    <div class="drow"><span class="dk">Type of Release</span><span class="dv">${esc(s.releaseType)}</span></div>
+    <div class="drow"><span class="dk">Loan period</span><span class="dv">${first} – ${periodEnd}</span></div>
+
+    <div style="font-size:12.5px;font-weight:700;color:var(--navy);margin:18px 0 4px">Eligibility checks</div>
+    ${checks}
+    <div class="policy" style="margin-top:12px"><b>Your loan history is tracked.</b> RCC keeps a record
+      of every loan you take — the amount, the date, and the purpose. Your full 2-year loan history is
+      reviewed by Management with each new application, and a copy is sent to you with the decision.</div>
+
+    ${s.loanType==="moto"?`
+    <div style="font-size:12.5px;font-weight:700;color:var(--navy);margin:18px 0 7px">Vehicle Loan Agreement — what to expect</div>
+    <div class="policy"><b>This is a vehicle loan.</b> If approved, RCC purchases the motorcycle and it
+      remains <b>company property until you have fully paid it</b>. You agree to keep it insured and
+      registered (billed separately to you), to use it for personal commuting only, and to settle the
+      balance or return the unit if you leave RCC. Once fully paid, ownership is transferred to you.
+      <div style="margin-top:8px"><button class="btn dark sm" type="button" onclick="previewAgreement()">Review the full Vehicle Loan Agreement</button></div>
+    </div>`:""}
+
+    <div style="font-size:12.5px;font-weight:700;color:var(--navy);margin:18px 0 7px">Authorization for Salary Deduction</div>
+    <div class="auth">I agree and hereby authorize the company to deduct the above loan amortization from my
+      salary per payroll cut-off. If I, the borrower, resign or am terminated for just cause, the
+      outstanding balance of the loan must be paid in full within 15 days from the date of separation.
+      Should I fail to settle the outstanding balance upon separation, an interest charge of
+      <b>${CONFIG.separationPenaltyPct}% per annum</b> shall be applied to the unpaid balance until full
+      payment is made. Any remaining balance may also be deducted from my 13th month pay, converted
+      leave credits, or final pay.</div>
+
+    <div class="grid" style="margin-top:14px">
+      <div class="full"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer">
+        <input type="checkbox" id="a_ack" ${s.ackSigned?"checked":""} style="width:auto;margin-top:2px">
+        <span style="font-weight:500">I have read and agree to the Authorization for Salary Deduction above,
+        and I certify that the information provided is true and correct.</span></label></div>
+      <div><label>Borrower's name (as digital signature) <span class="req">*</span></label>
+        <input id="a_name" value="${esc(s.ackName||s.name)}"></div>
+      <div><label>Date Signed</label><input type="date" id="a_date" value="${s.ackDate}" readonly class="ro"></div>
+    </div>
+    <div class="policy" style="margin-top:12px">In the deployed version, the employee confirms this
+      application through RCC's RA 8792-compliant digital signing step — so an application can be
+      drafted by anyone, but only the employee can sign and submit it.</div>
+  </div>`;
+}
+
+/* ---- wizard navigation ---- */
+function wBack2(){}
+function wNext(){
+  if(!wValidate())return;
+  if(wstep===WSTEPS.length-1){wSubmit();return;}
+  wstep++;renderWizard();
+}
+function wValidate(){
+  const s=draft.s1,g=id=>document.getElementById(id);
+  if(wstep===0){
+    if(!draft.verified||!draft.rec){alert("Please enter your Employee ID and click Verify.");return false;}
+    if(!draft.rec.loanEligible){alert("The company loan program is for Head Office & Warehouse employees only. Retail / Merchandiser staff are not eligible.");return false;}
+    if(draft.rec.status!=="Regular"){alert("Only regular employees are eligible to apply for a loan.");return false;}
+    return true;
+  }
+  if(wstep===1){ if(!s.loanType){alert("Please select a loan type.");return false;} return true; }
+  if(wstep===2){
+    wCollectDetails();
+    if(!s.purpose.trim()){alert("Please describe the purpose of the loan.");return false;}
+    if(s.loanType==="educational"&&(!s.det.childName.trim()||!s.det.school.trim()||!s.det.semesterTotal)){
+      alert("Please complete child's name, school and total tuition & fees.");return false;}
+    if(s.loanType==="moto"&&(!s.det.motoModel.trim()||!s.det.motoPrice||!s.det.downPayment)){
+      alert("Please enter the motorcycle model, price and down payment.");return false;}
+    if(s.loanType==="vehicle"&&(!s.det.vehicleInfo.trim()||!s.det.repairCost||!s.amount)){
+      alert("Please enter the vehicle details, repair cost and requested amount.");return false;}
+    if(s.loanType==="medical"&&(!s.det.treatment.trim()||!s.amount)){
+      alert("Please enter the treatment and requested amount.");return false;}
+    if(s.loanType==="others"&&(!s.det.situation.trim()||!s.amount)){
+      alert("Please describe the situation and requested amount.");return false;}
+    return true;
+  }
+  if(wstep===3){
+    const missing=docsFor(s).filter(d=>docRequired(d)&&!s.docs[d]);
+    if(missing.length){alert("Please upload the required proof documents before continuing:\n\n• "+missing.join("\n• "));return false;}
+    return true;
+  }
+  if(wstep===4){
+    s.ackName=g("a_name").value.trim();
+    if(!g("a_ack").checked){alert("Please tick the Authorization for Salary Deduction to proceed.");return false;}
+    if(!s.ackName){alert("Please type the borrower's name as the digital signature.");return false;}
+    s.ackSigned=true;
+    return true;
+  }
+  return true;
+}
+function wSubmit(){
+  const s=draft.s1;
+  const ev=assess(s);
+  const app={ref:newRef(),stage:"PENDING_HR",appDate:s.appDate,
+    s1:JSON.parse(JSON.stringify(s)),computed:ev.computed,
+    elig:{checks:ev.checks,verdict:ev.verdict},
+    attendance:genAttendance(s.empId),loanHistory:loanHistoryFor(s.empId),
+    hr:{done:false},sup:{done:false},mgmt:{done:false}};
+  APPS.push(app);
+  alert("Application "+app.ref+" submitted.\n\nSystem pre-screen: "+ev.verdict+
+        "\nMonthly amortization: "+peso(ev.computed.monthly)+
+        "\n\nA confirmation has been sent to the email on file: "+(s.email||"(no email on record)")+
+        "\nIt now moves to Section 2 — HR Review.");
+  newDraft();
+  ui.tab="hr";ui.selRef=null;render();
+}
+
+/* ============================================================
+   ROLE TABS  (Sections 2, 3, 4)
+   ============================================================ */
+function renderRole(tab){
+  if(ui.selRef){renderDetail(tab);return;}
+  const cfg=TABS.find(x=>x.k===tab);
+  const queue=APPS.filter(a=>a.stage===cfg.stage);
+  let html=`<div class="card">
+    <div class="secband">${tab==="hr"?"Section 2 · HR Personnel":tab==="supervisor"?"Section 3 · Supervisor":"Section 4 · Management"}</div>
+    <h2>${cfg.label} — Queue</h2>
+    <div class="lead">${queue.length} application${queue.length!==1?"s":""} awaiting your action.</div>`;
+  const cardFn=tab==="supervisor"?supervisorQcard:qcard;
+  html += queue.length? queue.map(cardFn).join("") : `<div class="empty">Nothing in the queue right now.</div>`;
+  html += `</div>`;
+  if(tab==="hr") html += hrDashboard();
+  document.getElementById("main").innerHTML=html;
+}
+function qcard(a){
+  const t=CONFIG.LOAN_TYPES[a.s1.loanType];
+  const v=a.elig.verdict,vc=v==="PRE-QUALIFIED"?"g":(v==="FOR HR REVIEW"?"a":"r");
+  return `<div class="qcard">
+    <div><div class="qref">${a.ref}</div>
+      <div class="qname">${esc(a.s1.name)}</div>
+      <div class="qmeta">${t.name} · ${esc(a.s1.dept)} · ${a.computed.term} mo ·
+        <span class="chip ${vc}">${v}</span></div></div>
+    <div class="qamt"><div class="qv">${peso(a.computed.principal)}</div>
+      <button class="btn dark sm" style="margin-top:6px" onclick="openApp('${a.ref}')">Open →</button></div>
+  </div>`;
+}
+function supervisorQcard(a){
+  return `<div class="qcard">
+    <div><div class="qref">${a.ref}</div>
+      <div class="qname">${esc(a.s1.name)}</div>
+      <div class="qmeta">${esc(a.s1.dept)} · ${esc(a.s1.position)} · Good-standing check</div></div>
+    <div class="qamt">
+      <button class="btn dark sm" onclick="openApp('${a.ref}')">Open →</button></div>
+  </div>`;
+}
+function openApp(ref){ui.selRef=ref;render();}
+function closeApp(){ui.selRef=null;render();}
+
+/* ---- full read-only application summary ---- */
+function appSummary(a){
+  const s=a.s1,c=a.computed,t=CONFIG.LOAN_TYPES[s.loanType];
+  const D=(k,v)=>`<div class="drow"><span class="dk">${k}</span><span class="dv">${v}</span></div>`;
+  let det="";
+  if(s.loanType==="educational")det=D("Beneficiary",esc(s.det.childName)+" · "+esc(s.det.school)+" · "+esc(s.det.course||""));
+  else if(s.loanType==="moto")det=D("Motorcycle",esc(s.det.motoModel)+" · price "+peso(s.det.motoPrice)+" · DP "+peso(s.det.downPayment));
+  else if(s.loanType==="vehicle")det=D("Vehicle",esc(s.det.vehicleInfo));
+  else if(s.loanType==="medical")det=D("Patient",esc(s.det.patient)+" — "+esc(s.det.treatment));
+  else if(s.loanType==="others")det=D("Situation",esc(s.det.situation));
+  const v=a.elig.verdict,vClass=v==="PRE-QUALIFIED"?"ok":(v==="FOR HR REVIEW"?"review":"no");
+  const checks=a.elig.checks.map(x=>{
+    const sym=x.st==="pass"?"✓":(x.st==="warn"?"!":"✕");
+    return `<div class="check"><div class="ic ${x.st}">${sym}</div>
+      <div><div class="cl">${x.l}</div><div class="cd">${x.d}</div></div></div>`;}).join("");
+  const docs=Object.keys(s.docs);
+  // repayment schedule
+  const sched=deductionSchedule(a);
+  const schedRows=sched.map(r=>`<tr><td>${r.no}</td><td>${fmtSchedDate(r.date)}</td>
+    <td class="tnum">${peso(r.amount)}</td><td class="tnum">${peso(r.balance)}</td></tr>`).join("");
+  // loan history (last 2 years)
+  const lh=(a.loanHistory&&a.loanHistory.length)
+    ? a.loanHistory.map(h=>`<div class="drow" style="align-items:flex-start"><span class="dk">${esc(h.type)} · ${fmtDate(h.date)}${h.reason?`<br><span style="font-weight:400;color:var(--muted)">${esc(h.reason)}</span>`:""}</span>
+        <span class="dv">${peso(h.amount)} · <span class="chip ${h.status==="Fully Paid"?"g":"a"}">${esc(h.status)}</span></span></div>`).join("")
+    : `<div class="hint">No RCC loans on record in the last 2 years.</div>`;
+  // attendance (auto-pulled from timekeeping)
+  const at=(a.attendance||[]).map(m=>`<tr><td>${m.month}</td><td class="tnum">${m.absences}</td>
+    <td class="tnum">${m.lates}</td><td class="tnum">${m.undertime}</td></tr>`).join("");
+  let hr="",sup="",mg="";
+  if(a.hr.done){
+    const rec=(a.hr.recommendation||"").indexOf("Recommended")===0;
+    hr=`<div class="subhead" style="margin-top:16px">Section 2 — HR Review</div>
+      ${D("HR recommendation",`<span class="chip ${rec?"g":"r"}">${esc(a.hr.recommendation)}</span>`)}
+      ${D("Reviewed by",esc(a.hr.receivedBy)+" · "+fmtDate(a.hr.date))}
+      ${a.hr.notes?D("HR notes",esc(a.hr.notes)):""}`;
+  }
+  if(a.sup.done)sup=`<div class="subhead" style="margin-top:16px">Section 3 — Supervisor Confirmation</div>
+    ${D("Good standing",`<span class="chip ${a.sup.confirm==="Confirmed"?"g":"a"}">${esc(a.sup.confirm)}</span>`)}
+    ${D("Comment",esc(a.sup.comment))}${D("Supervisor",esc(a.sup.supervisorName)+" · "+fmtDate(a.sup.date))}`;
+  if(a.mgmt.done)mg=`<div class="subhead" style="margin-top:16px">Section 4 — Management</div>
+    ${D("Decision",`<span class="chip ${a.mgmt.decision.indexOf("Approved")>=0?"g":"r"}">${esc(a.mgmt.decision)}</span>`)}
+    ${D("Approved by",esc(a.mgmt.approvedBy)+" · "+fmtDate(a.mgmt.date))}
+    ${a.mgmt.feedback?D("Feedback",esc(a.mgmt.feedback)):""}`;
+  return `
+  <div class="card">
+    <div class="secband">Section 1 · Employee Application</div>
+    <h2>${a.ref} — ${esc(s.name)}</h2>
+    <div class="lead">${t.name} · applied ${fmtDate(a.appDate)} ·
+      <span class="chip ${STAGES[a.stage].cls}">${STAGES[a.stage].label}</span></div>
+    <div class="subhead">Employee</div>
+    ${D("Employee ID",esc(s.empId))}${D("Department / Position",esc(s.dept)+" — "+esc(s.position))}
+    ${D("Date hired",fmtDate(s.hireDate)+" ("+tenureText(s.hireDate)+")")}
+    ${D("Employment status",esc(s.status))}
+    ${D("Email on file",esc(s.email)||"— none —")}
+    ${D("Monthly income / daily rate",peso(s.monthlyIncome)+" / "+peso(s.dailyRate))}
+    <div class="subhead" style="margin-top:16px">Loan Request</div>
+    ${D("Purpose",esc(s.purpose))}${det}
+    ${D("Type of release",esc(s.releaseType))}
+    <div class="sumgrid">
+      <div class="sumbox"><div class="sl">Loan Amount</div><div class="sv">${peso(c.principal)}</div></div>
+      <div class="sumbox"><div class="sl">Interest</div><div class="sv">${peso(c.interest)}</div></div>
+      <div class="sumbox"><div class="sl">Total Amount</div><div class="sv">${peso(c.total)}</div></div>
+      <div class="sumbox"><div class="sl">Monthly</div><div class="sv green">${peso(c.monthly)}</div></div>
+      <div class="sumbox"><div class="sl">Per Cut-off</div><div class="sv green">${peso(c.perCutoff)}</div></div>
+    </div>
+    <div class="subhead" style="margin-top:16px">Repayment Schedule
+      <span class="chip n">${sched.length} semi-monthly cut-offs</span></div>
+    <div class="scrollbox"><table><thead><tr><th>#</th><th>Cut-off date</th>
+      <th class="tnum">Deduction</th><th class="tnum">Balance</th></tr></thead>
+      <tbody>${schedRows}</tbody></table></div>
+    <div class="subhead" style="margin-top:16px">Existing Loans &amp; Obligations
+      <span class="chip n">${a.hr.done?"Confirmed by HR":"From PayPlus — HR confirms in Section 2"}</span></div>
+    ${D("RCC loan",esc(s.rccStatus)+(s.rccBalance?" · balance "+peso(s.rccBalance):""))}
+    ${D("Pag-IBIG loan",esc(s.pagibigStatus)+(s.pagibigBalance?" · balance "+peso(s.pagibigBalance):""))}
+    ${D("SSS loan",esc(s.sssStatus)+(s.sssBalance?" · balance "+peso(s.sssBalance):""))}
+    ${D("Existing monthly deductions",peso(s.existingDeduction))}
+    <div class="subhead" style="margin-top:16px">Loan History — last 2 years
+      <span class="chip n">From RCC loan records</span></div>
+    ${lh}
+    <div class="subhead" style="margin-top:16px">Attendance — last 6 months
+      <span class="chip n">Auto-pulled from timekeeping</span></div>
+    <table><thead><tr><th>Month</th><th class="tnum">Absences</th>
+      <th class="tnum">Lates</th><th class="tnum">Undertime</th></tr></thead><tbody>${at}</tbody></table>
+    <div class="subhead" style="margin-top:16px">Documents (${docs.length})</div>
+    ${docs.length?docs.map(d=>`<div class="drow"><span class="dk">${esc(d)}</span><span class="dv"><span class="chip g">Uploaded</span></span></div>`).join(""):'<div class="hint">No documents uploaded.</div>'}
+    <div class="verdict ${vClass}" style="margin-top:16px"><div class="vt">System pre-screen: ${v}</div></div>
+    ${checks}
+    ${hr}${sup}${mg}
+  </div>`;
+}
+
+/* ---- detail + action panel per role ---- */
+function renderDetail(tab){
+  const a=APPS.find(x=>x.ref===ui.selRef);
+  if(!a){closeApp();return;}
+  let action="";
+  if(tab==="supervisor") action=supervisorForm(a);
+  else if(tab==="hr") action=hrForm(a);
+  else if(tab==="management") action=managementForm(a);
+  const summary=tab==="supervisor"?supervisorSummary(a):appSummary(a);
+  document.getElementById("main").innerHTML=
+    `<span class="backlink" onclick="closeApp()">← Back to queue</span>`+summary+action;
+}
+
+function supervisorSummary(a){
+  const s=a.s1;
+  const D=(k,v)=>`<div class="drow"><span class="dk">${k}</span><span class="dv">${v}</span></div>`;
+  const at=(a.attendance||[]).map(m=>`<tr><td>${m.month}</td><td class="tnum">${m.absences}</td>
+    <td class="tnum">${m.lates}</td><td class="tnum">${m.undertime}</td></tr>`).join("");
+  return `
+  <div class="card">
+    <div class="secband">Section 3 · Good-Standing Check</div>
+    <h2>${a.ref} — ${esc(s.name)}</h2>
+    <div class="lead">You are confirming this employee's good standing. Loan details — type, amount,
+      and purpose — are deliberately not shown here.</div>
+    <div class="subhead">Employee</div>
+    ${D("Employee ID",esc(s.empId))}
+    ${D("Department / Position",esc(s.dept)+" — "+esc(s.position))}
+    ${D("Date hired",fmtDate(s.hireDate)+" ("+tenureText(s.hireDate)+")")}
+    ${D("Employment status",esc(s.status))}
+    <div class="subhead" style="margin-top:16px">Attendance — last 6 months
+      <span class="chip n">Auto-pulled from timekeeping</span></div>
+    <table><thead><tr><th>Month</th><th class="tnum">Absences</th>
+      <th class="tnum">Lates</th><th class="tnum">Undertime</th></tr></thead><tbody>${at}</tbody></table>
+  </div>`;
+}
+function supervisorForm(a){
+  return `<div class="card">
+    <div class="secband">Section 3 · To be filled by the Supervisor</div>
+    <h2>Good-Standing Confirmation</h2>
+    <div class="lead">Confirm whether this employee is in good standing, based on the 6-month
+      attendance record above and your own knowledge of their conduct and reliability. No loan
+      details are shown — this is a good-standing check only, not a loan approval.</div>
+    <div class="grid">
+      <div class="full"><label>Good standing <span class="req">*</span></label>
+        <div class="radios">${["Confirmed","Concern noted"].map(x=>
+          `<label><input type="radio" name="sv_conf" value="${x}">${x}</label>`).join("")}</div></div>
+      <div class="full"><label>Comment <span class="req">*</span></label>
+        <textarea id="sv_comment" placeholder="Note the employee's reliability and good standing — or describe any concern"></textarea></div>
+      <div><label>Supervisor Name <span class="req">*</span></label><input id="sv_name"></div>
+      <div><label>Date Signed</label><input type="date" id="sv_date" value="${todayISO()}" readonly class="ro"></div>
+    </div>
+    <div class="policy" style="margin-top:12px">This is an attestation, not an approval. The
+      application proceeds to Management either way — a "Concern noted" is forwarded with your
+      comment for Management to weigh.</div>
+    <div class="nav" style="margin-top:14px">
+      <button class="btn primary" onclick="svDecide('${a.ref}')">Submit Confirmation →</button>
+    </div>
+  </div>`;
+}
+function svDecide(ref){
+  const a=APPS.find(x=>x.ref===ref);
+  const conf=document.querySelector('input[name="sv_conf"]:checked');
+  const comment=document.getElementById("sv_comment").value.trim();
+  const name=document.getElementById("sv_name").value.trim();
+  if(!conf){alert("Please select a good-standing confirmation.");return;}
+  if(!comment){alert("A comment is required.");return;}
+  if(!name){alert("Please enter the supervisor's name.");return;}
+  a.sup={done:true,confirm:conf.value,comment,supervisorName:name,date:todayISO()};
+  a.stage="PENDING_MANAGEMENT";ui.selRef=null;render();
+  alert("Good-standing confirmation submitted — forwarded to Management Approval.");
+}
+
+function hrForm(a){
+  const s=a.s1;
+  const statusSel=(id,val)=>`<select id="${id}">${["None","On-going","Fully Paid"]
+    .map(x=>`<option ${x===val?"selected":""}>${x}</option>`).join("")}</select>`;
+  return `<div class="card">
+    <div class="secband">Section 2 · To be filled by HR Personnel</div>
+    <h2>HR Review &amp; Recommendation</h2>
+    <div class="lead">Confirm the payroll details and existing obligations (auto-populated from
+      PayPlus), then give a recommendation. The loan history and 6-month attendance shown above are
+      pulled automatically. The application then moves to the employee's supervisor.</div>
+
+    <div class="subhead">Existing Loans &amp; Obligations
+      <span class="chip n">Auto-populated from PayPlus when integrated — HR may correct</span></div>
+    <div class="grid3" style="margin-top:8px">
+      <div><label>RCC Loan Status</label>${statusSel("hr_rccStatus",s.rccStatus)}</div>
+      <div><label>RCC Original Amount</label><input type="number" id="hr_rccOrig" value="${s.rccOrig||""}"></div>
+      <div><label>RCC Balance Outstanding</label><input type="number" id="hr_rccBal" value="${s.rccBalance||""}"></div>
+      <div><label>Previous Loan Amount</label><input type="number" id="hr_prevAmt" value="${s.prevLoanAmt||""}"></div>
+      <div><label>Date of Previous Loan</label><input type="date" id="hr_prevDate" value="${s.prevLoanDate||""}"></div>
+      <div><label>Existing Monthly Deductions</label><input type="number" id="hr_exist" value="${s.existingDeduction||""}"></div>
+      <div><label>Pag-IBIG Loan Status</label>${statusSel("hr_pagStatus",s.pagibigStatus)}</div>
+      <div><label>Pag-IBIG Balance</label><input type="number" id="hr_pagBal" value="${s.pagibigBalance||""}"></div>
+      <div></div>
+      <div><label>SSS Loan Status</label>${statusSel("hr_sssStatus",s.sssStatus)}</div>
+      <div><label>SSS Balance</label><input type="number" id="hr_sssBal" value="${s.sssBalance||""}"></div>
+      <div></div>
+    </div>
+    <div class="policy" style="margin-top:8px">Only one active RCC loan is allowed at a time.
+      Submitting re-runs the capacity-to-pay assessment with the confirmed figures.</div>
+
+    <div class="subhead" style="margin-top:18px">HR Recommendation</div>
+    <div class="grid" style="margin-top:8px">
+      <div><label>Reviewed By <span class="req">*</span></label><input id="hr_by" value="Juvelyn Belvistre"></div>
+      <div><label>Date</label><input type="date" id="hr_date" value="${todayISO()}" readonly class="ro"></div>
+      <div class="full"><label>HR Notes <span class="req">*</span></label>
+        <textarea id="hr_notes" placeholder="Document completeness, capacity to pay, and the basis for your recommendation"></textarea></div>
+    </div>
+    <div class="nav" style="margin-top:14px">
+      <button class="btn danger" onclick="hrDecide('${a.ref}',false)">Decline</button>
+      <button class="btn primary" onclick="hrDecide('${a.ref}',true)">Recommend — Forward to Supervisor →</button>
+    </div>
+  </div>`;
+}
+function hrDecide(ref,forward){
+  const a=APPS.find(x=>x.ref===ref);
+  const g=id=>document.getElementById(id);
+  const by=g("hr_by").value.trim();
+  const notes=g("hr_notes").value.trim();
+  if(!by){alert("Please enter who reviewed the application.");return;}
+  if(!notes){alert("Please add HR notes explaining your recommendation.");return;}
+  // HR confirms the existing loans & obligations (auto-populated from PayPlus)
+  const s=a.s1;
+  s.rccStatus=g("hr_rccStatus").value;
+  s.rccOrig=parseFloat(g("hr_rccOrig").value)||0;
+  s.rccBalance=parseFloat(g("hr_rccBal").value)||0;
+  s.prevLoanAmt=parseFloat(g("hr_prevAmt").value)||0;
+  s.prevLoanDate=g("hr_prevDate").value||"";
+  s.existingDeduction=parseFloat(g("hr_exist").value)||0;
+  s.pagibigStatus=g("hr_pagStatus").value;
+  s.pagibigBalance=parseFloat(g("hr_pagBal").value)||0;
+  s.sssStatus=g("hr_sssStatus").value;
+  s.sssBalance=parseFloat(g("hr_sssBal").value)||0;
+  // re-run the eligibility assessment with the confirmed figures
+  const ev=assess(s);
+  a.computed=ev.computed;
+  a.elig={checks:ev.checks,verdict:ev.verdict};
+  a.hr={done:true,receivedBy:by,
+    recommendation:forward?"Recommended for Approval":"Not Recommended",
+    notes,date:todayISO()};
+  if(forward){a.stage="PENDING_SUPERVISOR";ui.selRef=null;render();
+    alert("Recommendation submitted — pre-screen: "+ev.verdict+
+          "\nForwarded to Supervisor Review.");}
+  else{a.stage="DECLINED";notifyDecline(a,"HR Review",notes);}
+}
+
+function managementForm(a){
+  const rec=a.hr.done?a.hr.recommendation:"—";
+  const gs=a.sup.done?a.sup.confirm:"—";
+  return `<div class="card">
+    <div class="secband">Section 4 · To be filled by the Management</div>
+    <h2>Management Approval</h2>
+    <div class="lead">HR recommendation: <b>${esc(rec)}</b> · Supervisor good-standing check:
+      <b>${esc(gs)}</b>. Make the final decision — the employee's 2-year loan history is shown above,
+      and staying within the ₱50,000-per-year guideline is a management judgment. On approval, the
+      Loan Application &amp; Agreement Form is generated for signature and a disbursement instruction
+      prepared for Accounting; on a decline, the employee is emailed the reason.</div>
+    <div class="grid">
+      <div><label>Approved By <span class="req">*</span></label><input id="mg_by"></div>
+      <div><label>Date</label><input type="date" id="mg_date" value="${todayISO()}" readonly class="ro"></div>
+      <div class="full"><label>Feedback / Reason <span class="req">*</span></label>
+        <textarea id="mg_fb" placeholder="Conditions on release, or the reason if declining"></textarea></div>
+    </div>
+    <div class="nav" style="margin-top:14px">
+      <button class="btn danger" onclick="mgDecide('${a.ref}',false)">Decline</button>
+      <button class="btn primary" onclick="mgDecide('${a.ref}',true)">Approve for Release ✓</button>
+    </div>
+  </div>`;
+}
+function mgDecide(ref,approve){
+  const a=APPS.find(x=>x.ref===ref);
+  const by=document.getElementById("mg_by").value.trim();
+  const fb=document.getElementById("mg_fb").value.trim();
+  if(!by){alert("Please enter the approver's name.");return;}
+  if(!fb){alert(approve?"Please add any release conditions or a confirmation note.":"Please enter the reason for declining.");return;}
+  a.mgmt={done:true,decision:approve?"Approved for Release":"Declined",
+    approvedBy:by,feedback:fb,date:todayISO()};
+  a.stage=approve?"APPROVED":"DECLINED";
+  ui.selRef=null;render();
+  if(approve) showModal("Approved — Notifications Sent",approvalDispatchHTML(a));
+  else showModal("Application Declined — Notification Sent",declineEmailHTML(a,"Management Review",fb));
+}
+
+/* ---- notifications, generated documents & modal ---- */
+function notifyDecline(a,stageName,reason){
+  ui.selRef=null;render();
+  showModal("Application Declined — Notification Sent",declineEmailHTML(a,stageName,reason));
+}
+function drow(k,v){return `<div class="drow"><span class="dk">${k}</span><span class="dv">${v}</span></div>`;}
+function declineEmailHTML(a,stageName,reason){
+  const s=a.s1,t=CONFIG.LOAN_TYPES[s.loanType];
+  return `<p style="font-size:12px;color:var(--muted);margin-bottom:14px">
+    The application was declined at <b>${esc(stageName)}</b>. A notification email has been sent to
+    the employee with the reason. No instruction is sent to Accounting.</p>
+  <div class="email">
+    <div class="email-h"><b>To:</b> ${esc(s.email)||"(no email on file)"} &nbsp;·&nbsp;
+      <b>From:</b> hr@hassarams.com<br>
+      <b>Subject:</b> Your RCC loan application ${a.ref} — Not Approved</div>
+    <div class="email-b">
+      <p>Dear ${esc(s.name)},</p>
+      <p>Thank you for your ${esc(t.name)} application (${a.ref}) for ${peso(s.amount)}, filed on
+        ${fmtDate(a.appDate)}. After review, we regret to inform you that your application was
+        <b>not approved</b> at this time.</p>
+      <p><b>Reason:</b> ${esc(reason)}</p>
+      ${loanHistoryBlock(a)}
+      <p>You may discuss this with the HR Department or re-apply once the noted concerns are
+        addressed. For questions, please contact hr@hassarams.com.</p>
+      <p>Roshan Commercial Corporation — Human Resources Department</p>
+    </div>
+  </div>`;
+}
+/* ---- draft → app shape, so the agreement can be previewed mid-application ---- */
+function draftAsApp(){
+  const s=draft.s1,ev=assess(s);
+  return {ref:"(to be assigned on submission)",appDate:s.appDate||todayISO(),
+    s1:s,computed:ev.computed,mgmt:{done:false},loanHistory:loanHistoryFor(s.empId)};
+}
+function previewAgreement(){
+  showModal("Vehicle Loan Agreement — review before you submit",
+    `<p class="modal-note">This is the agreement you will sign once your loan is approved. Review it now so you know exactly what you are committing to.</p>`
+    +`<div class="agr-frame">${loanAgreementHTML(draftAsApp())}</div>`);
+}
+/* ---- the employee's 2-year loan history block, included in decision emails ---- */
+function loanHistoryBlock(a){
+  const h=a.loanHistory||[];
+  const rows=h.length
+    ? h.map(x=>drow(esc(x.type)+" · "+fmtDate(x.date),peso(x.amount)+" — "+esc(x.status))).join("")
+    : `<div class="hint">No RCC loans on record in the last 2 years.</div>`;
+  return `<div class="doc"><div class="doct">Your RCC Loan History — last 2 years</div>${rows}`
+    +`<p style="margin-top:6px;font-size:11px;color:var(--muted)">RCC keeps a record of every loan — amount, date, and purpose. Your history is reviewed with each new application.</p></div>`;
+}
+
+/* ---- printable Loan Application & Agreement Form / Vehicle Loan Agreement ---- */
+function loanAgreementHTML(a){
+  const s=a.s1,c=a.computed,t=CONFIG.LOAN_TYPES[s.loanType];
+  const moto=s.loanType==="moto";
+  const sched=deductionSchedule(a),first=sched[0],last=sched[sched.length-1];
+  const R=(k,v)=>`<div class="agr-row"><span class="agr-k">${k}</span><span class="agr-v">${v}</span></div>`;
+  let data=R("Application Date",fmtDate(a.appDate))+R("Type of Release",esc(s.releaseType));
+  if(moto){
+    data+=R("Motorcycle",esc(s.det.motoModel||"—"))
+      +R("Dealer",esc(s.det.dealer||"—"))
+      +R("Purchase Price",peso(s.det.motoPrice))
+      +R("Down Payment — paid by employee",peso(s.det.downPayment));
+  }
+  data+=R("Loan Amount — in figures",peso(c.principal))
+    +R("Loan Amount — in words",pesosInWords(c.principal))
+    +R("Loan Term",c.term+" months")
+    +R("Interest Rate",t.rate+"%"+(t.rate?" flat for the term":" — interest-free"))
+    +R("Amount of Interest",peso(c.interest))
+    +R("Total Amount Payable",peso(c.total))
+    +R("Monthly Amortization",peso(c.monthly))
+    +R("Per Cut-off Deduction",peso(c.perCutoff))
+    +R("Date of First Payment",first?fmtDate(first.date):"—")
+    +R("Date of Last Payment",last?fmtDate(last.date):"—")
+    +R("Purpose of Loan",esc(s.purpose||"—"))
+    +R("Lender",moto?"ROSHAN COMMERCIAL CORPORATION (the Company)":"ROSHAN COMMERCIAL CORPORATION")
+    +R("Borrower",esc(s.name)+" — Employee ID "+esc(s.empId))
+    +R("Date of Release",s.releaseDate?fmtDate(s.releaseDate):"—")
+    +R("Payment Instruction","Semi-monthly payroll deduction");
+  const narrative=moto
+    ? `This Vehicle Loan Agreement is entered into by and between <b>ROSHAN COMMERCIAL CORPORATION</b> ("the Company") and <b>${esc(s.name)}</b>, an employee of the Company ("the Borrower"). At the Borrower's request, the Company has purchased the motor vehicle described above for the Borrower's personal use. The Company finances the Loan Amount of <b>${peso(c.principal)}</b>, which the Borrower repays through salary deduction. The vehicle remains the property of the Company until the loan and all related charges are fully paid.`
+    : `This loan agreement is entered into by and between <b>ROSHAN COMMERCIAL CORPORATION</b> ("the Lender") and <b>${esc(s.name)}</b> ("the Borrower") for the purpose of <b>${esc(s.purpose||"the stated purpose")}</b>, in the amount of <b>${peso(c.principal)}</b>. The loan carries interest of <b>${t.rate}%</b> for the agreed term and shall be repaid in accordance with the schedule set forth below.`;
+  const repay=`The Borrower agrees to repay the Loan Amount of <b>${peso(c.principal)}</b> and interest of <b>${peso(c.interest)}</b> — a total of <b>${peso(c.total)}</b> — over <b>${c.term} months</b>, in <b>${sched.length}</b> semi-monthly installments of <b>${peso(c.perCutoff)}</b> due on each payroll cut-off, beginning <b>${first?fmtDate(first.date):"—"}</b> and continuing until the loan is fully repaid.`;
+  const clauses=moto?VEHICLE_CLAUSES:LOAN_TERMS;
+  const terms=clauses.map(cl=>`<li><b>${cl[0]}.</b> ${cl[1]}</li>`).join("");
+  const drows=sched.map(r=>`<tr><td>${r.no}</td><td>${fmtSchedDate(r.date)}</td>`
+    +`<td class="num">${peso(r.amount)}</td><td class="num">${peso(r.balance)}</td></tr>`).join("");
+  const lenderName=(a.mgmt&&a.mgmt.done&&a.mgmt.approvedBy)?esc(a.mgmt.approvedBy):"";
+  const lenderDate=(a.mgmt&&a.mgmt.done&&a.mgmt.date)?fmtDate(a.mgmt.date):"____________";
+  return `<div class="agreement">
+    <div class="agr-lh">
+      <div class="agr-co">ROSHAN COMMERCIAL CORPORATION</div>
+      <div class="agr-addr">3rd Floor RCC Center, 104 Shaw Boulevard, Pasig, Manila, 1603, Philippines</div>
+      <div class="agr-addr">+632 86386556 &nbsp;·&nbsp; THE RIGHT MOVE</div>
+    </div>
+    <div class="agr-title">${moto?"Vehicle Loan Agreement":"Loan Application &amp; Agreement Form"}</div>
+    <div class="agr-ref">Reference No. ${esc(a.ref)}</div>
+    ${data}
+    <div class="agr-sec">${moto?"The Vehicle Loan Agreement":"Loan Agreement Terms"}</div>
+    <p class="agr-p">${narrative}</p>
+    <div class="agr-sec">Repayment Schedule</div>
+    <p class="agr-p">${repay}</p>
+    <div class="agr-sec">Terms &amp; Conditions</div>
+    <ol class="agr-terms">${terms}</ol>
+    <div class="agr-sec">Signatures</div>
+    <div class="agr-sig">
+      <div class="sigbox">
+        <div class="sigcap">LENDER — for Roshan Commercial Corporation</div>
+        <div class="sigline"></div>
+        <div class="signame">${lenderName||"&nbsp;"}</div>
+        <div class="sigcap">Authorized Signatory &nbsp;·&nbsp; Date: ${lenderDate}</div>
+      </div>
+      <div class="sigbox">
+        <div class="sigcap">BORROWER</div>
+        <div class="sigline"></div>
+        <div class="signame">${esc(s.name)}</div>
+        <div class="sigcap">Signature over Printed Name &nbsp;·&nbsp; Date: ____________</div>
+      </div>
+    </div>
+    <div class="agr-sig">
+      <div class="sigbox">
+        <div class="sigcap">WITNESSED BY</div>
+        <div class="sigline"></div>
+        <div class="sigcap">HR Officer &nbsp;·&nbsp; Date: ____________</div>
+      </div>
+      <div class="sigbox">
+        <div class="sigcap">&nbsp;</div>
+        <div class="sigline"></div>
+        <div class="sigcap">Accounting Officer &nbsp;·&nbsp; Date: ____________</div>
+      </div>
+    </div>
+    <div class="agr-sec">Authorization for Salary Deduction</div>
+    <p class="agr-p">I, <b>${esc(s.name)}</b>, agree and hereby authorize ROSHAN COMMERCIAL CORPORATION to deduct the amortization shown below from my salary every payroll cut-off. Should any balance remain unsettled, I authorize the Company to deduct it from my last and final pay.${moto?" I further authorize the deduction of registration, insurance, and any other vehicle-related charge the Company advances on my behalf, as provided in this Agreement.":""}</p>
+    <table class="agr-table"><thead><tr><th>#</th><th>Cut-off Date</th>
+      <th class="num">Deduction</th><th class="num">Balance</th></tr></thead>
+      <tbody>${drows}</tbody></table>
+    <p class="agr-foot">Roshan Commercial Corporation &nbsp;·&nbsp; Employee Loan Program &nbsp;·&nbsp; ${esc(a.ref)}</p>
+  </div>`;
+}
+/* open the agreement in a clean window and print it */
+function printDoc(ref){
+  const a=APPS.find(x=>x.ref===ref);if(!a)return;
+  const w=window.open("","_blank","width=860,height=920");
+  if(!w){alert("Please allow pop-ups for this site to print the agreement.");return;}
+  w.document.write("<!doctype html><html><head><meta charset='utf-8'><title>"
+    +esc(a.ref)+" — RCC Loan Agreement</title><style>"+AGREEMENT_CSS
+    +"body{margin:28px;background:#fff}@media print{body{margin:0}}</style></head><body>"
+    +loanAgreementHTML(a)+"</body></html>");
+  w.document.close();w.focus();
+  setTimeout(function(){try{w.print();}catch(e){}},300);
+}
+/* view the agreement in a modal (used from Track Application) */
+function viewAgreement(ref){
+  const a=APPS.find(x=>x.ref===ref);if(!a)return;
+  showModal("Loan Agreement — "+a.ref,
+    `<div class="nav" style="margin-bottom:12px"><button class="btn dark sm" onclick="printDoc('${a.ref}')">Print the Agreement</button></div>`
+    +`<div class="agr-frame">${loanAgreementHTML(a)}</div>`);
+}
+function approvalDispatchHTML(a){
+  const s=a.s1,c=a.computed,t=CONFIG.LOAN_TYPES[s.loanType];
+  const moto=s.loanType==="moto";
+  const sched=deductionSchedule(a),first=sched[0],last=sched[sched.length-1];
+  return `<p class="modal-note">The loan has been <b>approved</b>. The
+    ${moto?"Vehicle Loan Agreement":"Loan Application &amp; Agreement Form"} below is the document the
+    Borrower signs — print it for signature, and it is also sent to the employee with the approval
+    email. A <b>Disbursement Instruction</b> has been prepared for Accounting / PayPlus.</p>
+  <div class="email">
+    <div class="email-h"><b>To:</b> ${esc(s.email)||"(no email on file)"} &nbsp;·&nbsp;
+      <b>From:</b> hr@hassarams.com<br>
+      <b>Subject:</b> RCC Loan ${a.ref} — Approved</div>
+    <div class="email-b">
+      <p>Dear ${esc(s.name)}, your ${esc(t.name)} application has been <b>approved</b>. The
+        ${moto?"Vehicle Loan Agreement":"Loan Application &amp; Agreement Form"} is attached for your
+        signature — please review, sign, and return it before release.</p>
+      ${loanHistoryBlock(a)}
+    </div>
+  </div>
+  <div class="nav" style="margin-bottom:12px">
+    <button class="btn dark sm" onclick="printDoc('${a.ref}')">Print the Agreement</button>
+  </div>
+  <div class="agr-frame">${loanAgreementHTML(a)}</div>
+  <div class="email" style="margin-top:14px">
+    <div class="email-h"><b>To:</b> acctg@hassarams.com &nbsp;·&nbsp;
+      <b>Cc:</b> collections@hassarams.com<br>
+      <b>Subject:</b> Disbursement &amp; Payroll Deduction — RCC Loan ${a.ref}</div>
+    <div class="email-b">
+      <div class="doc">
+        <div class="doct">Disbursement Instruction</div>
+        ${drow("Employee",esc(s.name)+" — "+esc(s.empId))}
+        ${drow("Department",esc(s.dept))}
+        ${drow("Loan type",esc(t.name))}
+        ${drow("Amount to release",peso(c.principal))}
+        ${drow("Release",esc(s.releaseType)+(s.releaseDate?" · "+fmtDate(s.releaseDate):""))}
+        ${drow("Charge to","Employee Loan Fund")}
+        ${drow("Approved by",esc(a.mgmt.approvedBy))}
+      </div>
+      <div class="doc">
+        <div class="doct">Payroll Deduction Authorization</div>
+        ${drow("Total to recover",peso(c.total))}
+        ${drow("Per cut-off",peso(c.perCutoff))}
+        ${drow("No. of cut-offs",sched.length+" (semi-monthly)")}
+        ${drow("First deduction",first?fmtSchedDate(first.date):"—")}
+        ${drow("Final deduction",last?fmtSchedDate(last.date):"—")}
+      </div>
+      ${moto?`<p style="margin-top:8px;font-size:11.5px;color:var(--muted)">Note: vehicle
+        <b>registration and insurance are billed separately</b> from this loan as a one-time charge,
+        tracked Charged → Billed → Paid. The first-year charge is due within 15 days of the vehicle's
+        purchase.</p>`:""}
+      <p style="margin-top:8px;font-size:11.5px;color:var(--muted)">Release the loan only against the
+        fully-signed agreement. Begin deductions on the first cut-off date above and continue until
+        the balance is nil.</p>
+    </div>
+  </div>`;
+}
+function showModal(title,body){
+  let m=document.getElementById("modalRoot");
+  if(!m){m=document.createElement("div");m.id="modalRoot";document.body.appendChild(m);}
+  m.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()">
+    <div class="modal"><div class="modal-h"><h3>${esc(title)}</h3>
+      <button class="modal-x" onclick="closeModal()">✕</button></div>
+      <div class="modal-b">${body}</div></div></div>`;
+}
+function closeModal(){const m=document.getElementById("modalRoot");if(m)m.innerHTML="";}
+
+/* ---- employee self-service: Track Application ---- */
+function renderTrack(){
+  const ref=ui.trackRef||"";
+  const a=ref?APPS.find(x=>x.ref.toLowerCase()===ref.toLowerCase()):null;
+  let body;
+  if(ref&&!a){
+    body=`<div class="policy" style="border-color:var(--red)"><b style="color:var(--red)">
+      No application found for "${esc(ref)}".</b> Check the reference number on your submission
+      confirmation email.</div>`;
+  }else if(a){
+    body=trackTimeline(a);
+  }else{
+    body=`<div class="policy">Enter the reference number from your submission confirmation
+      (for example, <b>${esc(APPS[0]?APPS[0].ref:"RCC-LN-0462")}</b>) to see where your application
+      stands — no need to contact HR.</div>`;
+  }
+  document.getElementById("main").innerHTML=`
+  <div class="card">
+    <div class="secband">Employee Self-Service</div>
+    <h2>Track My Application</h2>
+    <div class="lead">Check the current stage of your loan application at any time.</div>
+    <div class="grid">
+      <div><label>Application Reference No.</label>
+        <div style="display:flex;gap:8px">
+          <input id="trk" value="${esc(ref)}" placeholder="RCC-LN-0000">
+          <button class="btn dark sm" type="button" onclick="doTrack()">Track</button></div></div>
+    </div>
+    <div style="margin-top:16px">${body}</div>
+  </div>`;
+}
+function doTrack(){ui.trackRef=(document.getElementById("trk").value||"").trim();renderTrack();}
+function trackTimeline(a){
+  const s=a.s1,t=CONFIG.LOAN_TYPES[s.loanType];
+  const declined=a.stage==="DECLINED";
+  const steps=[
+    {name:"Application Submitted",meta:"Filed "+fmtDate(a.appDate),done:true},
+    {name:"HR Review",done:a.hr.done,active:a.stage==="PENDING_HR",
+      meta:a.hr.done?(a.hr.recommendation+" · "+fmtDate(a.hr.date)):"Awaiting HR review"},
+    {name:"Supervisor Confirmation",done:a.sup.done,active:a.stage==="PENDING_SUPERVISOR",
+      meta:a.sup.done?(a.sup.confirm+" · "+fmtDate(a.sup.date)):"Awaiting supervisor confirmation"},
+    {name:"Management Approval",done:a.mgmt.done,active:a.stage==="PENDING_MANAGEMENT",
+      meta:a.mgmt.done?(a.mgmt.decision+" · "+fmtDate(a.mgmt.date)):"Awaiting management decision"},
+    {name:a.stage==="APPROVED"?"Approved for Release":(declined?"Not Approved":"Outcome"),
+      done:a.stage==="APPROVED",bad:declined,
+      meta:a.stage==="APPROVED"?"Loan approved — view and print your Loan Agreement below"
+        :(declined?"A notification email with the reason has been sent":"Pending the final decision")}
+  ];
+  const rows=steps.map((st,i)=>{
+    const last=i===steps.length-1;
+    const cls=st.bad?"bad":(st.done?"done":(st.active?"current":""));
+    const icon=st.bad?"✕":(st.done?"✓":(i+1));
+    return `<div class="tlrow ${cls}">
+      <div class="tlmark"><div class="tldot">${icon}</div>${last?"":`<div class="tlline"></div>`}</div>
+      <div class="tlbody"><div class="tlname">${esc(st.name)}</div>
+        <div class="tlmeta">${esc(st.meta)}</div></div></div>`;
+  }).join("");
+  return `${drow("Reference",a.ref)}
+    ${drow("Loan type",esc(t.name))}
+    ${drow("Amount",peso(a.computed.principal))}
+    ${drow("Current status",`<span class="chip ${STAGES[a.stage].cls}">${STAGES[a.stage].label}</span>`)}
+    <div class="subhead" style="margin-top:16px">Progress</div>
+    <div class="tl">${rows}</div>${a.stage==="APPROVED"?`
+    <div class="nav" style="margin-top:14px"><button class="btn primary" onclick="viewAgreement('${a.ref}')">View / Print my Loan Agreement</button></div>`:""}`;
+}
+
+/* ---- HR dashboard (tracker + fund) ---- */
+function hrDashboard(){
+  const used=fundUsed(),avail=CONFIG.fundCap-used,pct=used/CONFIG.fundCap*100;
+  const barColor=pct<70?"var(--green)":(pct<90?"var(--amber)":"var(--red)");
+  const rows=APPS.map(a=>{
+    const t=CONFIG.LOAN_TYPES[a.s1.loanType];
+    return `<tr><td><b>${a.ref}</b></td><td>${esc(a.s1.name)}</td><td>${t.name}</td>
+      <td class="tnum">${peso(a.computed.principal)}</td><td class="tnum">${peso(a.computed.monthly)}</td>
+      <td><span class="chip ${STAGES[a.stage].cls}">${STAGES[a.stage].label}</span></td></tr>`;
+  }).join("");
+  return `
+  <div class="kpis">
+    <div class="kpi"><div class="kl">Loan Fund Cap</div><div class="kv">${peso(CONFIG.fundCap)}</div></div>
+    <div class="kpi"><div class="kl">Disbursed / Committed</div><div class="kv">${peso(used)}</div></div>
+    <div class="kpi"><div class="kl">Available</div><div class="kv" style="color:var(--green-dark)">${peso(avail)}</div></div>
+    <div class="kpi"><div class="kl">Total Applications</div><div class="kv">${APPS.length}</div></div>
+  </div>
+  <div class="card">
+    <h2>Loan Fund Utilization</h2>
+    <div class="lead">Total fund cap of ${peso(CONFIG.fundCap)}. New loan requests pause once the cap is reached.</div>
+    <div class="bar"><div style="width:${Math.min(100,pct)}%;background:${barColor}"></div></div>
+    <div style="font-size:11.5px;color:var(--muted)">${peso(used)} used · ${peso(avail)} available · ${pct.toFixed(0)}% of cap</div>
+  </div>
+  <div class="card">
+    <h2>All Loan Applications</h2>
+    <div class="lead">Every application routes through HR. Status across all four sections.</div>
+    <div style="overflow-x:auto"><table><thead><tr><th>Ref #</th><th>Employee</th><th>Loan Type</th>
+      <th class="tnum">Principal</th><th class="tnum">Monthly</th><th>Stage</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+  </div>
+  <div class="foot"><b>Disclaimer:</b> Only regular employees are permitted to apply for a company loan.
+    Probationary, project-based, seasonal, and casual employees are not eligible. All loans remain
+    subject to HR evaluation, management discretion, and availability of funds.<br>
+    RCC Employee Loan Portal · Prototype · four-section workflow per the official Employee Loan Application form.</div>`;
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+seedApps();
+newDraft();
+document.head.insertAdjacentHTML("beforeend","<style>"+AGREEMENT_CSS
+  +".agr-frame{background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px 16px;max-height:56vh;overflow:auto}"
+  +".modal-note{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.5}</style>");
+render();
+</script>
+</body>
+</html>

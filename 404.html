@@ -2534,9 +2534,15 @@ function renderDashboard(){
   const byArea={}; open.forEach(b=>{const a=b.area||"—";byArea[a]=(byArea[a]||0)+1;});
   const bySC={}; SCs.forEach(s=>bySC[s]=open.filter(b=>b.sc===s).length);
   const bySource={}; A.forEach(e=>{const s=e.hire_source||"Direct";bySource[s]=(bySource[s]||0)+1;});
-  // merchandiser pay
-  const rates=DISERS.filter(d=>(d.status||'').toLowerCase().startsWith('active')&&d.total_rate).map(d=>Number(d.total_rate));
+  // merchandiser pay (Manning Sheet) — Total = Basic + recorded allowances (COLA/SOLA/SA/LA)
+  const actDi=DISERS.filter(d=>(d.status||'').toLowerCase().startsWith('active'));
+  const rates=actDi.filter(d=>d.total_rate).map(d=>Number(d.total_rate));
+  const basics=actDi.filter(d=>d.basic_rate).map(d=>Number(d.basic_rate));
+  const allowVals=actDi.filter(d=>d.total_rate&&d.basic_rate&&Number(d.total_rate)>Number(d.basic_rate)).map(d=>Number(d.total_rate)-Number(d.basic_rate));
   const avgRate=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):0;
+  const avgBasic=basics.length?Math.round(basics.reduce((a,b)=>a+b,0)/basics.length):0;
+  const avgAllow=allowVals.length?Math.round(allowVals.reduce((a,b)=>a+b,0)/allowVals.length):0;
+  const withAllow=allowVals.length;
   const minRate=rates.length?Math.min(...rates):0, maxRate=rates.length?Math.max(...rates):0;
   // tenure
   const ten=A.map(e=>tenureYears(e.hire_date)).filter(x=>x!=null);
@@ -2572,7 +2578,7 @@ function renderDashboard(){
     <div class="grid kpis" style="margin-top:13px;">
       <div class="kpi" style="cursor:pointer;" onclick="go('prehire')"><div class="k-l">Pre-hire in Pipeline</div><div class="k-n">${phPipe}</div><div class="k-s">${phReady} ready for contract</div></div>
       <div class="kpi" style="cursor:pointer;" onclick="go('onboarding')"><div class="k-l">Onboarding in Progress</div><div class="k-n">${onbOpen}</div><div class="k-s">${onbTasksOpen} open tasks</div></div>
-      <div class="kpi warn" style="cursor:pointer;" onclick="go('manning')"><div class="k-l">Headcount Deficiency</div><div class="k-n">${merchDef}</div><div class="k-s">unfilled merchandiser slots</div></div>
+      <div class="kpi warn" style="cursor:pointer;" onclick="go('manning')"><div class="k-l">Headcount Gap (partial)</div><div class="k-n">${merchDef}</div><div class="k-s">approved ${totAHC} vs ${totCHC} on file · full via PayPlus</div></div>
       <div class="kpi" style="cursor:pointer;" onclick="go('exit')"><div class="k-l">Exit Clearances Open</div><div class="k-n">${exitOpen}</div><div class="k-s">offboarding in progress</div></div>
     </div>
 
@@ -2584,7 +2590,7 @@ function renderDashboard(){
         ${onbTasksOpen?`<div class="task" style="cursor:pointer;" onclick="go('onboarding')"><div class="dot a"></div><div><div class="tt">${onbTasksOpen} open onboarding task(s)</div><div class="td">${onbOpen} case(s) in progress — bank, uniform, gov forms, Employee ID</div></div><div class="due a">onboarding</div></div>`:''}
         ${exitOpen?`<div class="task" style="cursor:pointer;" onclick="go('exit')"><div class="dot a"></div><div><div class="tt">${exitOpen} exit clearance(s) in progress</div><div class="td">Department sign-offs &amp; final-pay computation</div></div><div class="due a">offboarding</div></div>`:''}
         <div class="task" style="cursor:pointer;" onclick="go('employees')"><div class="dot a"></div><div><div class="tt">${prob} employees on probation</div><div class="td">3rd / 5th-month evaluations &amp; regularization reviews</div></div><div class="due a">review</div></div>
-        <div class="task" style="cursor:pointer;" onclick="go('manning')"><div class="dot r"></div><div><div class="tt">${merchDef} merchandiser slots to fill</div><div class="td">${totAHC} approved vs ${totCHC} confirmed — across ${SCs.length} Sales Coordinators</div></div><div class="due r">staffing</div></div>
+        <div class="task" style="cursor:pointer;" onclick="go('manning')"><div class="dot a"></div><div><div class="tt">Merchandiser headcount gap to verify</div><div class="td">${totAHC} approved vs ${totCHC} confirmed on file (partial — full count via PayPlus) · ${SCs.length} SCs</div></div><div class="due a">staffing</div></div>
       </div>
       <div>
         <div class="panel" style="margin-top:0;">
@@ -2600,7 +2606,7 @@ function renderDashboard(){
           <div class="team-row"><div class="tn">Onboarding</div><span class="mini ok">${onbTasksOpen} tasks</span></div>
           <div class="team-row"><div class="tn">Exit clearances</div><span class="mini ${exitOpen?'bad':'ok'}">${exitOpen} open</span></div>
           <div class="team-row"><div class="tn">Probation reviews</div><span class="mini ok">${prob} due</span></div>
-          <div class="team-row"><div class="tn">Merchandiser staffing</div><span class="mini bad">${merchDef} short</span></div>
+          <div class="team-row"><div class="tn">Merchandiser staffing</div><span class="mini ok">${totCHC}/${totAHC} confirmed</span><span class="mini ${merchDef?'bad':'ok'}">gap ${merchDef} (partial)</span></div>
         </div>
         <div class="panel">
           <h2>Workforce composition</h2>
@@ -2613,7 +2619,7 @@ function renderDashboard(){
     <div class="two-col">
       <div class="panel" style="margin-top:0;">
         <h2>Store network by Sales Coordinator</h2>
-        <div class="psub">Open stores under each SC</div>
+        <div class="psub">Number of open (operating) stores each SC covers — store count, not headcount</div>
         ${chartRows(bySC)}
       </div>
       <div class="panel" style="margin-top:0;">
@@ -2630,14 +2636,14 @@ function renderDashboard(){
         ${chartRows(byDept)}
       </div>
       <div class="panel" style="margin-top:0;">
-        <h2>Merchandiser pay</h2>
-        <div class="psub">Daily rate across ${rates.length} merchandisers on file</div>
+        <h2>Merchandiser pay <span class="count-tag">daily</span></h2>
+        <div class="psub">Basic + allowances across ${rates.length} merchandisers (from the Manning Sheet)</div>
         <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-          <div class="kpi"><div class="k-l">Average</div><div class="k-n">₱${avgRate.toLocaleString()}</div></div>
-          <div class="kpi"><div class="k-l">Lowest</div><div class="k-n">₱${minRate.toLocaleString()}</div></div>
-          <div class="kpi"><div class="k-l">Highest</div><div class="k-n">₱${maxRate.toLocaleString()}</div></div>
+          <div class="kpi"><div class="k-l">Avg Basic</div><div class="k-n">₱${avgBasic.toLocaleString()}</div></div>
+          <div class="kpi"><div class="k-l">Avg Allowance</div><div class="k-n">₱${avgAllow.toLocaleString()}</div><div class="k-s">where recorded (${withAllow})</div></div>
+          <div class="kpi"><div class="k-l">Avg Total (all-in)</div><div class="k-n">₱${avgRate.toLocaleString()}</div><div class="k-s">₱${minRate.toLocaleString()}–₱${maxRate.toLocaleString()}</div></div>
         </div>
-        <div class="task" style="margin-top:10px;"><div class="dot g"></div><div><div class="tt">${DISERS.length} active merchandisers tracked</div><div class="td">With type, position, rate, contract dates &amp; status — drill in from Manning or Worksites</div></div></div>
+        <div class="task" style="margin-top:10px;"><div class="dot a"></div><div><div class="tt">Most allowances aren't in the Manning Sheet yet</div><div class="td">Only ${withAllow} of ${rates.length} have an allowance recorded here — the complete COLA/SOLA/SA/LA figures come from <b>PayPlus</b> once connected.</div></div></div>
       </div>
     </div>`;
 }

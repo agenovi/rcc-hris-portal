@@ -189,7 +189,7 @@ function renderDashboard(){
         <div class="panel" style="margin-top:0;">
           <h2>Waiting on others <span class="count-tag">nudge</span></h2>
           <div class="psub">Sent out — now stuck with someone else</div>
-          ${waiting.length? waiting.map(w=>`<div class="nudge-item"><div class="ni"><div class="nt">${esc(w.t)}</div><div class="nd">${esc(w.d)}</div></div><button class="nbtn" onclick="event.stopPropagation();this.textContent='Nudged ✓';this.style.background='#1f6b3a';this.style.color='#fff';go('${w.go}')">Nudge</button></div>`).join("")
+          ${waiting.length? waiting.map(w=>`<div class="nudge-item"><div class="ni"><div class="nt">${esc(w.t)}</div><div class="nd">${esc(w.d)}</div></div><button class="nbtn" onclick="event.stopPropagation();this.textContent='Nudged ✓';this.style.background='#1E3A5F';this.style.color='#fff';go('${w.go}')">Nudge</button></div>`).join("")
             : '<div class="psub" style="margin-top:8px;">Nothing waiting on anyone right now. ✓</div>'}
         </div>
         <div class="panel">
@@ -385,7 +385,7 @@ function openStore(b){
   let m=document.getElementById("storeModal"); if(!m){ m=document.createElement("div"); m.id="storeModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
-    <div style="background:linear-gradient(135deg,#0e3219,#1f6b3a);color:#fff;padding:18px 22px;position:sticky;top:0;">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;">
       <div style="font-size:21px;font-weight:800;">${esc(b.name)}</div>
       <div style="font-size:12.5px;opacity:.9;margin-top:3px;">${esc(b.city||"")}${b.area?" · "+esc(b.area):""} · SC: ${esc(b.sc||"—")} · ${b.category==="CN"?"Concession":"Company-Operated"} · ${esc(b.status||"")}</div>
     </div>
@@ -524,7 +524,7 @@ function openForm(e){
   if(!m){ m=document.createElement("div"); m.id="empModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:560px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
-    <div style="background:linear-gradient(135deg,#0e3219,#1f6b3a);color:#fff;padding:18px 22px;position:sticky;top:0;">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;">
       <div style="font-size:20px;font-weight:800;">${isNew?"Add Employee":"Edit Record"}</div>
       <div style="font-size:12.5px;opacity:.85;">${isNew?"New employee record":esc(e.full_name||"")}</div></div>
     <div style="padding:18px 22px 60px;">
@@ -748,7 +748,7 @@ function openPrehire(c){
   let m=document.getElementById("phModal"); if(!m){ m=document.createElement("div"); m.id="phModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:580px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
-    <div style="background:linear-gradient(135deg,#0e3219,#1f6b3a);color:#fff;padding:18px 22px;position:sticky;top:0;">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;">
       <div style="font-size:21px;font-weight:800;">${esc(c.full_name)}</div>
       <div style="font-size:12.5px;opacity:.9;margin-top:3px;">${esc(c.prehire_id)} · ${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")} · <b>${esc(phLabel(c.phase))}</b></div>
     </div>
@@ -797,7 +797,7 @@ function editPrehire(c){
   let m=document.getElementById("phEditModal"); if(!m){ m=document.createElement("div"); m.id="phEditModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.5);display:flex;justify-content:flex-end;";
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:560px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
-    <div style="background:linear-gradient(135deg,#0e3219,#1f6b3a);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">Edit applicant — ${esc(c.full_name)}</div><div style="font-size:12.5px;opacity:.85;">${esc(c.prehire_id)} · ${esc(phLabel(c.phase))}</div></div>
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">Edit applicant — ${esc(c.full_name)}</div><div style="font-size:12.5px;opacity:.85;">${esc(c.prehire_id)} · ${esc(phLabel(c.phase))}</div></div>
     <div style="padding:18px 22px;">
       <div class="panel" style="margin-top:0;"><div class="subhead">Identity</div>
         ${fld("pe_full_name","Full name *",c.full_name)}${sel("pe_department","Department",DEPARTMENTS,c.department)}${fld("pe_position","Position",c.position)}${sel("pe_hire_source","Hire source",HIRE_SOURCES,c.hire_source||"Direct")}${fld("pe_worksite","Worksite (if store)",c.worksite)}
@@ -855,7 +855,7 @@ function newPrehire(){
   let m=document.getElementById("phModal"); if(!m){ m=document.createElement("div"); m.id="phModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:520px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
-    <div style="background:linear-gradient(135deg,#0e3219,#1f6b3a);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">New Application</div><div style="font-size:12.5px;opacity:.85;">Enters the pipeline at “Applied”.</div></div>
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">New Application</div><div style="font-size:12.5px;opacity:.85;">Enters the pipeline at “Applied”.</div></div>
     <div style="padding:18px 22px;"><div class="panel" style="margin-top:0;">
       ${fld("np_full_name","Full name *",e.full_name)}
       ${sel("np_department","Department",DEPARTMENTS,e.department)}
@@ -917,7 +917,7 @@ function renderOnboarding(){
       </div>
       ${ONBOARDING.length? `<table><thead><tr><th>New hire</th><th>Group · Worksite</th><th>Employee ID</th><th>Progress</th><th>Status</th></tr></thead>
         <tbody id="onbRows"></tbody></table>`
-        : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M3 12l5 5L21 5"/></svg></div><h2>No onboarding cases yet</h2><p>Click “Start onboarding” to create a case from a pre-hire who has reached the contract stage.</p></div>`}
+        : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1E3A5F" stroke-width="2"><path d="M3 12l5 5L21 5"/></svg></div><h2>No onboarding cases yet</h2><p>Click “Start onboarding” to create a case from a pre-hire who has reached the contract stage.</p></div>`}
     </div>`;
   $("#onbNew").addEventListener("click",pickPrehireForOnboarding);
   const rows=$("#onbRows");
@@ -968,7 +968,7 @@ function openOnboardingCase(id){
   let m=document.getElementById("onbModal"); if(!m){ m=document.createElement("div"); m.id="onbModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:580px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
-    <div style="background:linear-gradient(135deg,#0e3219,#1f6b3a);color:#fff;padding:18px 22px;position:sticky;top:0;">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;">
       <div style="font-size:21px;font-weight:800;">${esc(c.employee_name)}</div>
       <div style="font-size:12.5px;opacity:.9;margin-top:3px;">${esc(c.position||"—")} · ${esc(c.group_name||"—")}${c.worksite?" · "+esc(c.worksite):""} · ${p.done}/${p.total} tasks done</div>
     </div>
@@ -1054,7 +1054,7 @@ function renderContracts(){
       </div>
       ${CONTRACTS.length? `<table><thead><tr><th>Employee</th><th>Position</th><th>Stage</th><th>Deployment</th><th>Progress</th></tr></thead>
         <tbody id="ctRows"></tbody></table>`
-        : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/></svg></div><h2>No contracts yet</h2><p>Click “New contract” to generate one from a pre-hire who reached “Ready for Contract”.</p></div>`}
+        : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1E3A5F" stroke-width="2"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/></svg></div><h2>No contracts yet</h2><p>Click “New contract” to generate one from a pre-hire who reached “Ready for Contract”.</p></div>`}
     </div>`;
   $("#ctNew").addEventListener("click",pickPrehireForContract);
   const rows=$("#ctRows");
@@ -1103,7 +1103,7 @@ function openContract(id){
   let m=document.getElementById("ctModal"); if(!m){ m=document.createElement("div"); m.id="ctModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:580px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
-    <div style="background:linear-gradient(135deg,#0e3219,#1f6b3a);color:#fff;padding:18px 22px;position:sticky;top:0;">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;">
       <div style="font-size:21px;font-weight:800;">${esc(c.employee_name)}</div>
       <div style="font-size:12.5px;opacity:.9;margin-top:3px;">${esc(c.position||"—")} · ${esc(c.contract_id)} · ${dn}/7 signatures</div>
     </div>
@@ -1195,7 +1195,7 @@ function renderExit(){
       </div>
       ${EXITCASES.length? `<table><thead><tr><th>Employee</th><th>Last day · Tenure</th><th>Separation</th><th>Sign-offs</th><th>Net pay</th><th>Status</th></tr></thead>
         <tbody id="exRows"></tbody></table>`
-        : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M14 3H5v18h9"/><path d="M10 12h11M17 8l4 4-4 4"/></svg></div><h2>No exit clearances yet</h2><p>Click “New exit clearance” to start an employee's offboarding.</p></div>`}
+        : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1E3A5F" stroke-width="2"><path d="M14 3H5v18h9"/><path d="M10 12h11M17 8l4 4-4 4"/></svg></div><h2>No exit clearances yet</h2><p>Click “New exit clearance” to start an employee's offboarding.</p></div>`}
     </div>`;
   $("#exNew").addEventListener("click",pickEmployeeForExit);
   const rows=$("#exRows");
@@ -1251,7 +1251,7 @@ function openExitCase(id){
   let m=document.getElementById("exModal"); if(!m){ m=document.createElement("div"); m.id="exModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
-    <div style="background:linear-gradient(135deg,#0e3219,#1f6b3a);color:#fff;padding:18px 22px;position:sticky;top:0;">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;">
       <div style="font-size:21px;font-weight:800;">${esc(x.employee_name)}</div>
       <div style="font-size:12.5px;opacity:.9;margin-top:3px;">${esc(x.position||"—")} · ${esc(x.department||"—")} · ${esc(x.clearance_id)}</div>
     </div>

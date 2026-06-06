@@ -1160,14 +1160,23 @@ async function rejectContract(c,reason,modal){
 
 /* ============================ EXIT CLEARANCE MODULE ============================ */
 const EXIT_STAGES=[
-  {key:"supervisor",label:"Supervisor",s:"supervisor_status",c:"supervisor_charges"},
-  {key:"admin",label:"Admin",s:"admin_status",c:"admin_charges"},
-  {key:"finance_receivables",label:"Finance — Receivables",s:"finance_receivables_status",c:"finance_receivables_charges"},
-  {key:"finance_disbursement",label:"Finance — Disbursement",s:"finance_disbursement_status",c:"finance_disbursement_charges"},
-  {key:"finance_inventory",label:"Finance — Inventory",s:"finance_inventory_status",c:"finance_inventory_charges"},
-  {key:"finance_payroll",label:"Finance — Payroll",s:"finance_payroll_status",c:"finance_payroll_charges"},
-  {key:"accounting",label:"Accounting",s:"accounting_status",c:null},
-  {key:"hr",label:"HR",s:"hr_status",c:"hr_charges"}
+  {key:"supervisor",label:"Immediate Supervisor",s:"supervisor_status",c:"supervisor_charges",items:"Office records & documents · computer files · summary of pending work · turn-over"},
+  {key:"admin",label:"Admin Services",s:"admin_status",c:"admin_charges",items:"Office equipment (laptop, cellphone) · non-consumable supplies · property accountability"},
+  {key:"finance_receivables",label:"Finance — Receivables",s:"finance_receivables_status",c:"finance_receivables_charges",items:"Employee purchases balance"},
+  {key:"finance_disbursement",label:"Finance — Payables / Disbursement",s:"finance_disbursement_status",c:"finance_disbursement_charges",items:"Outstanding cash advances / liquidation · other damages"},
+  {key:"finance_inventory",label:"Finance — Inventory",s:"finance_inventory_status",c:"finance_inventory_charges",items:"Inventory losses"},
+  {key:"finance_payroll",label:"Finance — Payroll",s:"finance_payroll_status",c:"finance_payroll_charges",items:"Office / salary / bike / educational loan balances · pending deductions"},
+  {key:"accounting",label:"Accounting",s:"accounting_status",c:null,items:"Taxes / tax refund computation"},
+  {key:"hr",label:"Human Resources",s:"hr_status",c:"hr_charges",items:"Company ID · HMO / health card · locker key · uniform · staff handbook · breach / 30-day notice"}
+];
+const HR_RETURN_ITEMS=[["id","Company ID"],["hmo_card","HMO / Health card"],["locker","Locker key"],["uniform","Uniform"],["handbook","Staff handbook"]];
+const EXIT_INTERVIEW_Q=[
+  "What prompted your decision to leave the company?",
+  "What aspects of your job did you find most satisfying / challenging?",
+  "How would you describe the work environment and culture?",
+  "How would you rate your immediate supervisor/manager? Any team conflicts?",
+  "Did you see opportunities for career growth & advancement?",
+  "Overall experience (1–10) and recommendations / suggestions:"
 ];
 const EXIT_STATUSES=["Pending","Cleared","With Charges"];
 const SEPARATION_TYPES=["Resignation","End of Contract","Termination","AWOL","Retirement","Redundancy"];
@@ -1264,13 +1273,23 @@ function openExitCase(id){
         <div class="psub">Tenure: <b>${t!=null?t+" months":"—"}</b>${under6?' · <span style="color:var(--red);font-weight:700;">under 6 months</span>':""}</div>
       </div>
 
-      <div class="panel"><h2>Department sign-offs <span class="count-tag">${exitStagesDone(x)}/8</span></h2>
-        ${EXIT_STAGES.map(s=>`<div class="task" style="align-items:center;">
-          <div class="dot ${x[s.s]==='Cleared'?'g':(x[s.s]==='With Charges'?'r':'a')}"></div>
-          <div style="flex:1;"><div class="tt">${s.label}</div></div>
-          <select data-stage="${s.s}" style="padding:5px 8px;border:1px solid #e2e7e4;border-radius:6px;font-size:12px;background:#fff;">${opt(EXIT_STATUSES,x[s.s]||"Pending")}</select>
-          ${s.c?`<input data-charge="${s.c}" type="number" step="0.01" placeholder="charges ₱" value="${x[s.c]??""}" style="width:96px;padding:5px 8px;border:1px solid #e2e7e4;border-radius:6px;font-size:12px;margin-left:6px;">`:''}
+      <div class="panel"><h2>Department sign-offs <span class="count-tag">${exitStagesDone(x)}/8 cleared</span></h2>
+        <div class="psub">Each department clears its items (per RCC's Exit Clearance form) and flags any charges.</div>
+        ${EXIT_STAGES.map(s=>`<div class="task" style="align-items:flex-start;">
+          <div class="dot ${x[s.s]==='Cleared'?'g':(x[s.s]==='With Charges'?'r':'a')}" style="margin-top:6px;"></div>
+          <div style="flex:1;min-width:0;"><div class="tt">${s.label}</div><div class="td">${s.items||''}</div></div>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+            <select data-stage="${s.s}" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;background:#fff;">${opt(EXIT_STATUSES,x[s.s]||"Pending")}</select>
+            ${s.c?`<input data-charge="${s.c}" type="number" step="0.01" placeholder="₱" value="${x[s.c]??""}" style="width:84px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;">`:''}
+          </div>
         </div>`).join("")}
+      </div>
+
+      <div class="panel"><h2>Items returned to HR</h2>
+        <div class="psub">Company property surrendered by the leaving employee</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px 18px;">
+          ${HR_RETURN_ITEMS.map(([k,lbl])=>`<label style="font-size:13px;"><input type="checkbox" data-return="${k}" ${(x.hr_returns&&x.hr_returns[k])?"checked":""}> ${esc(lbl)}</label>`).join("")}
+        </div>
       </div>
 
       ${under6?`<div class="madv"><div class="madv-h">⚖️ Uniform deduction — tenure under 6 months</div>
@@ -1295,8 +1314,10 @@ function openExitCase(id){
       </div>
 
       <div class="panel"><h2>Closeout</h2>
-        <label style="display:block;font-size:13px;margin:5px 0;"><input type="checkbox" id="ex_exit_interview" ${x.exit_interview_done?"checked":""}> Exit interview done</label>
-        <label style="display:block;font-size:13px;margin:5px 0;"><input type="checkbox" id="ex_hmo" ${x.hmo_cancelled?"checked":""}> HMO / insurance cancellation queued</label>
+        <div class="task" style="align-items:center;"><div class="dot ${x.exit_interview_done?'g':'a'}"></div>
+          <div style="flex:1;"><div class="tt">Exit interview</div><div class="td">${x.exit_interview_done?'Completed ✓':'6-question RCC exit interview'}</div></div>
+          <button class="btn ghost" id="ex_interview_btn" style="flex-shrink:0;">${x.exit_interview_done?'View / edit':'Conduct interview'}</button></div>
+        <label style="display:block;font-size:13px;margin:8px 0;"><input type="checkbox" id="ex_hmo" ${x.hmo_cancelled?"checked":""}> HMO / insurance cancellation queued (advise sent to provider)</label>
         <label style="display:block;font-size:13px;margin:5px 0;"><input type="checkbox" id="ex_coe" ${x.coe_issued?"checked":""}> Certificate of Employment issued <span style="color:var(--muted);">(DOLE: within 3 days of request)</span></label>
       </div>
 
@@ -1317,6 +1338,29 @@ function openExitCase(id){
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   $("#exSave").addEventListener("click",()=>saveExitCase(x,m,false));
   const cmp=document.getElementById("exComplete"); if(cmp) cmp.addEventListener("click",()=>saveExitCase(x,m,true));
+  document.getElementById("ex_interview_btn").addEventListener("click",()=>openExitInterview(x));
+}
+function openExitInterview(x){
+  const ei=x.exit_interview||{};
+  let m=document.getElementById("eiModal"); if(!m){ m=document.createElement("div"); m.id="eiModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.5);display:flex;justify-content:flex-end;";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">Exit Interview — ${esc(x.employee_name)}</div><div style="font-size:12.5px;opacity:.85;">${esc(x.position||"—")} · ${esc(x.department||"—")} · last day ${x.last_working_day?fmtDate(x.last_working_day):"—"}</div></div>
+    <div style="padding:18px 22px 50px;"><div class="panel" style="margin-top:0;">
+      <div class="psub">RCC's 6-question exit interview. Answers are saved with the clearance.</div>
+      ${EXIT_INTERVIEW_Q.map((q,i)=>`<div style="margin:12px 0;"><label style="display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:5px;">${i+1}. ${esc(q)}</label><textarea id="ei_q${i}" rows="${i===5?3:2}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;">${esc(ei["q"+i]||"")}</textarea></div>`).join("")}
+      <div id="eiMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
+      <div style="display:flex;gap:10px;"><button class="btn ghost" id="eiCancel" style="flex:1;">Cancel</button><button class="btn" id="eiSave" style="flex:1;">Save interview</button></div>
+    </div></div></div>`;
+  document.getElementById("eiCancel").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("eiSave").addEventListener("click",async()=>{
+    const ans={}; EXIT_INTERVIEW_Q.forEach((q,i)=>{ ans["q"+i]=document.getElementById("ei_q"+i).value.trim(); });
+    const { error } = await sb.from("exit_clearance").update({exit_interview:ans, exit_interview_done:true, updated_at:new Date().toISOString()}).eq("id",x.id);
+    if(error){ document.getElementById("eiMsg").textContent=error.message; return; }
+    m.remove(); const xm=document.getElementById("exModal"); if(xm) xm.remove();
+    await loadEmployees(); window.go("exit");
+  });
 }
 function collectExit(x){
   const m=document.getElementById("exModal");
@@ -1327,7 +1371,9 @@ function collectExit(x){
     uniform_deduction:num("ex_uniform_deduction"),
     uniform_returned:!!(m.querySelector("#ex_uniform_returned")&&m.querySelector("#ex_uniform_returned").checked),
     uniform_auth_on_file:!!(m.querySelector("#ex_uniform_auth")&&m.querySelector("#ex_uniform_auth").checked),
-    exit_interview_done:m.querySelector("#ex_exit_interview").checked, hmo_cancelled:m.querySelector("#ex_hmo").checked, coe_issued:m.querySelector("#ex_coe").checked };
+    hmo_cancelled:m.querySelector("#ex_hmo").checked, coe_issued:m.querySelector("#ex_coe").checked };
+  const ret={}; m.querySelectorAll("[data-return]").forEach(el=>{ ret[el.dataset.return]=el.checked; });
+  o.hr_returns=ret;
   m.querySelectorAll("[data-stage]").forEach(el=>{ o[el.dataset.stage]=el.value; });
   m.querySelectorAll("[data-charge]").forEach(el=>{ o[el.dataset.charge]=el.value.trim()!==""?Number(el.value):0; });
   if(o.last_working_day) o.tenure_months=monthsBetween(x.hire_date,o.last_working_day);

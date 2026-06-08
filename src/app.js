@@ -151,15 +151,15 @@ function renderDashboard(){
   const concession=open.filter(b=>b.category==="CN").length, coOp=open.filter(b=>b.category==="CO").length;
   const agJellon=A.filter(e=>e.hire_source==="Jell-on").length, agMG=A.filter(e=>e.hire_source==="M&G").length, agency=agJellon+agMG;
   const awol=EMPLOYEES.filter(e=>e.status==="AWOL").length;
-  const phPipe=PREHIRE.filter(p=>!["COMPLETE","REJECTED"].includes(p.phase)).length;
-  const phReady=PREHIRE.filter(p=>["READY_FOR_CONTRACT","CONTRACT_PIPELINE"].includes(p.phase)).length;
+  const phPipe=PREHIRE.filter(p=>!["HIRED","REJECTED"].includes(p.phase)).length;
+  const phReady=PREHIRE.filter(p=>["HR_SIGNOFF","CONTRACT_SIGNING"].includes(p.phase)).length;
   const onbOpen=ONBOARDING.filter(c=>c.status!=="Complete").length;
   const onbTasksOpen=ONBTASKS.filter(t=>t.status!=="Done").length;
   const exitOpen=EXITCASES.filter(x=>x.overall_status!=="Complete").length;
   // "Waiting on others" — items sent out / stuck with someone else (real data)
   const waiting=[];
-  PREHIRE.filter(p=>p.phase==="CONTRACT_PIPELINE").slice(0,2).forEach(p=>waiting.push({t:"Contract — "+p.full_name, d:"In the signature pipeline", go:"prehire"}));
-  PREHIRE.filter(p=>p.phase==="OFFER_EXTENDED").slice(0,2).forEach(p=>waiting.push({t:"Offer — "+p.full_name, d:"Awaiting candidate acceptance", go:"prehire"}));
+  PREHIRE.filter(p=>p.phase==="CONTRACT_SIGNING").slice(0,2).forEach(p=>waiting.push({t:"Contract — "+p.full_name, d:"In the signature pipeline", go:"prehire"}));
+  PREHIRE.filter(p=>p.phase==="RECRUITER_REVIEW").slice(0,2).forEach(p=>waiting.push({t:"Recruiter review — "+p.full_name, d:"Vetting / offer", go:"prehire"}));
   EXITCASES.filter(x=>x.overall_status!=="Complete").slice(0,2).forEach(x=>{const pend=EXIT_STAGES.filter(s=>x[s.s]==="Pending").length; waiting.push({t:"Exit sign-off — "+x.employee_name, d:pend+" department(s) still to clear", go:"exit"});});
   ONBOARDING.filter(c=>c.status!=="Complete").slice(0,2).forEach(c=>{const op=tasksFor(c.id).filter(t=>t.status!=="Done").length; waiting.push({t:"Onboarding — "+c.employee_name, d:op+" task(s) outstanding", go:"onboarding"});});
 
@@ -607,24 +607,22 @@ async function saveEmployee(id,modal){
 
 /* ============================ PRE-HIRE MODULE ============================ */
 const PH_PHASES=[
-  {key:"APPLICATION",label:"Applied",actor:"Recruiter"},
-  {key:"ASSESSMENT_SENT",label:"Assessment Sent",actor:"Recruiter"},
-  {key:"ASSESSMENT_COMPLETE",label:"Assessed",actor:"Recruiter"},
-  {key:"OFFER_EXTENDED",label:"Offer Extended",actor:"HR Officer"},
-  {key:"COLLECTING_DOCS",label:"Collecting Docs",actor:"Candidate + HR"},
-  {key:"READY_FOR_CONTRACT",label:"Ready for Contract",actor:"Juvelyn sign-off"},
-  {key:"CONTRACT_PIPELINE",label:"→ Contracts",actor:"Contracts module"},
-  {key:"ONBOARDING",label:"Onboarding",actor:"HR + PayPlus"},
-  {key:"COMPLETE",label:"Complete",actor:"— becomes Employee"}
+  {key:"APPLIED",label:"Applied",actor:"Recruiter / applicant"},
+  {key:"SCREENING",label:"Screening",actor:"Recruiter"},
+  {key:"DOCUMENTS",label:"Documents",actor:"Candidate + HR"},
+  {key:"RECRUITER_REVIEW",label:"Recruiter Review",actor:"Recruiter · incl. offer"},
+  {key:"HR_SIGNOFF",label:"HR Sign-off",actor:"HR"},
+  {key:"CONTRACT_SIGNING",label:"Contract Signing",actor:"Contracts module"},
+  {key:"HIRED",label:"Hired",actor:"— becomes Employee"}
 ];
 const phLabel=(k)=> (PH_PHASES.find(p=>p.key===k)||{}).label || (k==="REJECTED"?"Rejected":k);
 const srcPill=(s)=> s&&s!=="Direct" ? `<span class="pill ag">${esc(s)}</span>` : `<span class="pill di">Direct</span>`;
 
 function renderPrehire(){
   const pg=$("#page-prehire"); if(!pg) return;
-  const inPipe=PREHIRE.filter(p=>p.phase!=="COMPLETE"&&p.phase!=="REJECTED");
-  const docs=PREHIRE.filter(p=>p.phase==="COLLECTING_DOCS").length;
-  const ready=PREHIRE.filter(p=>p.phase==="READY_FOR_CONTRACT").length;
+  const inPipe=PREHIRE.filter(p=>p.phase!=="HIRED"&&p.phase!=="REJECTED");
+  const docs=PREHIRE.filter(p=>p.phase==="DOCUMENTS").length;
+  const ready=PREHIRE.filter(p=>p.phase==="HR_SIGNOFF").length;
   const rejected=PREHIRE.filter(p=>p.phase==="REJECTED").length;
   const bySrc=(s)=>inPipe.filter(p=>(s==="Direct"?(!p.hire_source||p.hire_source==="Direct"):p.hire_source===s)).length;
   pg.innerHTML=`
@@ -638,8 +636,8 @@ function renderPrehire(){
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
         <div class="kpi"><div class="k-l">In Pipeline</div><div class="k-n">${inPipe.length}</div>
           <div class="k-break"><span>Direct<b>${bySrc("Direct")}</b></span><span>Jell-on<b>${bySrc("Jell-on")}</b></span><span>M&amp;G<b>${bySrc("M&G")}</b></span></div></div>
-        <div class="kpi warn"><div class="k-l">Collecting Docs</div><div class="k-n">${docs}</div><div class="k-s">awaiting uploads</div></div>
-        <div class="kpi"><div class="k-l">Ready for Contract</div><div class="k-n">${ready}</div><div class="k-s">Juvelyn signed off</div></div>
+        <div class="kpi warn"><div class="k-l">Documents</div><div class="k-n">${docs}</div><div class="k-s">awaiting uploads</div></div>
+        <div class="kpi"><div class="k-l">HR Sign-off</div><div class="k-n">${ready}</div><div class="k-s">ready for contract</div></div>
         <div class="kpi ${rejected?'':''}"><div class="k-l">Rejected</div><div class="k-n">${rejected}</div><div class="k-s">pipeline closed</div></div>
       </div>
       <div class="tabs" id="phTabs" style="margin-top:14px;">
@@ -665,7 +663,7 @@ function phBodyPipeline(){
   const cols=PH_PHASES.map(ph=>{
     const cards=PREHIRE.filter(p=>p.phase===ph.key);
     return `<div class="col"><div class="col-h">${ph.label}<span>${cards.length} · ${esc(ph.actor)}</span></div>
-      ${cards.map(c=>`<div class="ccard clickable" data-id="${c.id}" ${ph.key==="READY_FOR_CONTRACT"?'style="border-color:#bcdcc7;background:var(--green-light);"':''}>
+      ${cards.map(c=>`<div class="ccard clickable" data-id="${c.id}" ${ph.key==="HR_SIGNOFF"?'style="border-color:#bcdcc7;background:var(--green-light);"':''}>
         <div class="cn">${esc(c.full_name)}</div>
         <div class="cd">${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")}${c.daily_rate?` · ₱${Number(c.daily_rate).toLocaleString()}/day`:""}${c.assessment_score!=null?` · exam ${c.assessment_score}`:""}${c.sm_acceptance&&c.sm_acceptance!=="NA"?` · SM ${esc(c.sm_acceptance)}`:""}</div></div>`).join("")
        || `<div style="font-size:11.5px;color:var(--muted);padding:6px 2px;">—</div>`}
@@ -673,7 +671,7 @@ function phBodyPipeline(){
   }).join("");
   const rej=PREHIRE.filter(p=>p.phase==="REJECTED");
   $("#phBody").innerHTML=`
-    <div class="psub" style="margin-top:12px;">Nine stages, left → right. Click any card to open the candidate and advance the stage.</div>
+    <div class="psub" style="margin-top:12px;">Seven stages, left → right (Applied → Hired). Click any card to open the candidate and advance the stage. Onboarding is a separate phase.</div>
     <div class="pipe">${cols}</div>
     <div class="two-col" style="margin-top:14px;">
       <div class="panel" style="margin-top:0;"><h2>Agency Submissions — the two-way loop</h2>
@@ -723,7 +721,7 @@ function phBodyArch(){
 
 function phBodyData(){
   const groups=[
-    ["Identity & Stage","prehire_id, phase (9 stages + Rejected), full_name, email, phone, date_of_birth, civil_status, permanent_address, current_address, emergency_contact_name / _relation / _number, hire_source, worksite"],
+    ["Identity & Stage","prehire_id, phase (7 stages + Rejected), full_name, email, phone, date_of_birth, civil_status, permanent_address, current_address, emergency_contact_name / _relation / _number, hire_source, worksite"],
     ["Assessment","assessment_type, assessment_sent_date, assessment_score, assessment_passed, assessment_notes"],
     ["Position & Compensation","position, department, contract_type, daily_rate, daily_allowance, start_date, end_date, supervisor_name, supervisor_email"],
     ["Approvals & Review","approver1_email, approver2_email, hr_officer_notes, hr_officer_review_date, juvelyn_notes, juvelyn_review_date, amendment_request, sm_acceptance (hard gate), rejection_reason, reviewed_by"],
@@ -907,7 +905,7 @@ function newPrehire(){
     if(!fullname){ document.getElementById("npMsg").textContent="Full name is required."; return; }
     const stamp=new Date().toISOString().slice(0,10).replace(/-/g,"");
     const rnd=Math.abs(fullname.split("").reduce((a,ch)=>a*31+ch.charCodeAt(0),7))%1000;
-    const payload={ prehire_id:"PH-"+stamp+"-"+String(rnd).padStart(3,"0"), phase:"APPLICATION", full_name:fullname,
+    const payload={ prehire_id:"PH-"+stamp+"-"+String(rnd).padStart(3,"0"), phase:"APPLIED", full_name:fullname,
       department:v("np_department"), position:v("np_position"), hire_source:v("np_hire_source"), worksite:v("np_worksite"),
       email:v("np_email"), phone:v("np_phone"), contract_type:v("np_contract_type"), daily_rate:nv("np_daily_rate") };
     const { error } = await sb.from("prehire").insert(payload);
@@ -965,7 +963,7 @@ function renderOnboarding(){
 }
 function pickPrehireForOnboarding(){
   const has=new Set(ONBOARDING.map(c=>c.prehire_id).filter(Boolean));
-  const eligible=PREHIRE.filter(p=>["READY_FOR_CONTRACT","CONTRACT_PIPELINE","ONBOARDING"].includes(p.phase)&&!has.has(p.id));
+  const eligible=PREHIRE.filter(p=>["HR_SIGNOFF","CONTRACT_SIGNING","HIRED"].includes(p.phase)&&!has.has(p.id));
   let m=document.getElementById("onbPick"); if(!m){ m=document.createElement("div"); m.id="onbPick"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;max-height:80vh;overflow-y:auto;padding:22px;">

@@ -3086,15 +3086,13 @@ function phBodyPipeline(){
 
 function phBodyArch(){
   const stages=[
-    ["1 · Application","Recruiter / applicant","Candidate applies (direct link or agency submission). Core identity captured.","full_name, email, phone, position, department, hire_source, resume_url","Auto-create pre-hire record; per-candidate Drive folder provisioned"],
-    ["2 · Assessment Sent","Recruiter","Aptitude/skills test sent to the candidate.","assessment_type, assessment_sent_date","Assessment link emailed automatically"],
-    ["3 · Assessed","Recruiter","Result recorded; pass/fail gate.","assessment_score, assessment_passed → assessments table","Auto-score; fail can auto-reject"],
-    ["4 · Offer Extended","HR Officer","Position, rate and terms offered.","contract_type, daily_rate, daily_allowance, start_date, supervisor","Offer letter generated"],
-    ["5 · Collecting Docs","Candidate + HR","Candidate uploads the 6 required documents; HR verifies each.","prehire_documents (one row per doc: status PENDING/RECEIVED/REJECTED)","Upload reminders; completeness check"],
-    ["6 · Ready for Contract","Juvelyn (sign-off)","Final HR review and sign-off. Gov numbers + bank confirmed.","hr_officer_notes, juvelyn_notes, juvelyn_review_date, sss/philhealth/pagibig/tin, bank","Sign-off unlocks contract generation"],
-    ["7 · → Contracts","Contracts module","Employment contract generated and routed for e-signature.","contract_id (links to Contracts 7-stage pipeline)","Contract auto-generated from pre-hire data"],
-    ["8 · Onboarding","HR + PayPlus","PayPlus setup, Employee ID issued, uniform, orientation.","payplus_setup, assigned_employee_id, uniform_issued, orientation_complete","PayPlus ID sync; onboarding checklist"],
-    ["9 · Complete","System","Pre-hire closes — the record becomes a full Employee.","assigned_employee_id → creates employees row","Promotes pre-hire → employees automatically"]
+    ["1 · Applied","Recruiter / applicant","Candidate applies (direct link or agency submission). Core identity captured.","full_name, email, phone, position, department, hire_source, resume_url","Auto-create pre-hire record; per-candidate Drive folder provisioned"],
+    ["2 · Screening","Recruiter","Assessment + interview; pass/fail gate.","assessment_type, assessment_score, assessment_passed → assessments table","Assessment link emailed; auto-score; fail can auto-reject"],
+    ["3 · Documents","Candidate + HR","Candidate uploads the required documents; HR verifies each.","prehire_documents (one row per doc: status PENDING/RECEIVED/REJECTED)","Upload reminders; completeness check"],
+    ["4 · Recruiter Review","Recruiter","Vets candidate + documents and extends the job offer. Offer is conditional: formal only when a range was posted; fixed rate or small bump = no formal offer.","recruiter_notes, review_type, comp_basis, offer_required, offer_accepted, contract_type, daily_rate, start_date","Offer letter generated when offer_required"],
+    ["5 · HR Sign-off","HR","Final HR review and sign-off. Gov numbers + bank confirmed.","hr_signoff_notes, hr_signoff_date, sss/philhealth/pagibig/tin, bank","Sign-off unlocks contract generation"],
+    ["6 · Contract Signing","Contracts module","Employment contract generated and routed through signers for e-signature.","contract_id (links to the Contracts signing pipeline)","Contract auto-generated from pre-hire data"],
+    ["7 · Hired","System","Contract fully signed — pre-hire closes, the record becomes an Employee and an Onboarding case opens.","assigned_employee_id → creates employees row","Promotes pre-hire → employees; opens Onboarding (separate phase)"]
   ];
   $("#phBody").innerHTML=`
     <div class="panel" style="margin-top:14px;"><h2>The pipeline — stage by stage</h2>

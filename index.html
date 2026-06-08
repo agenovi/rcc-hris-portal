@@ -3314,17 +3314,32 @@ function newPrehire(){
 /* ============================ ONBOARDING MODULE ============================ */
 function tasksFor(caseId){ return ONBTASKS.filter(t=>t.case_id===caseId).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)); }
 function caseProgress(caseId){ const ts=tasksFor(caseId); const done=ts.filter(t=>t.status==="Done").length; return {done, total:ts.length}; }
+// Onboarding task timing — derived from task_key (no DB column needed).
+const ONB_TIMING={schedule:"before_start",bank:"before_start",gov_forms:"early_legal",uniform:"day_1",orientation:"day_1",itime:"day_1",payplus:"by_2nd_payroll",employee_id:"by_2nd_payroll",id_badge:"by_2nd_payroll"};
+const ONB_TIMING_GROUPS=[
+  {key:"before_start",  label:"① Before they start"},
+  {key:"early_legal",   label:"② Government — file early (legal deadline)"},
+  {key:"day_1",         label:"③ Day 1 — first day at work"},
+  {key:"by_2nd_payroll",label:"④ By 2nd payroll (15-day gate)"}
+];
 function defaultOnbTasks(c){
-  const bank=(c.group_name==="Retail")?"Union Bank":"China Bank";
-  return [
-    {task_key:"schedule",label:"Set onboarding schedule (Day 1 plan)",owner_role:"HR",sort_order:1},
-    {task_key:"bank",label:"Process bank account — "+bank,owner_role:"HR / Finance",sort_order:2},
-    {task_key:"uniform",label:"Issue / send uniform (capture deduction authorization)",owner_role:"HR / Admin",sort_order:3},
-    {task_key:"gov_forms",label:"Government registration (SSS R-1A · PhilHealth · Pag-IBIG · BIR 1902)",owner_role:"HR",sort_order:4},
-    {task_key:"payplus",label:"Encode in PayPlus",owner_role:"Payroll",sort_order:5},
-    {task_key:"employee_id",label:"Assign Employee ID",owner_role:"HR",sort_order:6},
-    {task_key:"orientation",label:"Orientation / product training",owner_role:"HR / Supervisor",sort_order:7}
+  const grp=c.group_name||"";
+  const isHOWH=grp==="Head Office"||grp==="Warehouse";
+  const bank=isHOWH?"China Bank":"Union Bank";
+  const idBadge=isHOWH?"Company ID":"Mall ID";
+  const isSM=/\bSM\b|dept|department/i.test((c.worksite||"")+" "+(c.position||""));
+  const t=[
+    {task_key:"schedule",   label:"Set Day-1 plan / schedule",                                            owner_role:"HR"},
+    {task_key:"bank",       label:"Open bank account — "+bank+" (begin early)",                            owner_role:"HR / Finance"},
+    {task_key:"gov_forms",  label:"Government registration (SSS R-1A · PhilHealth · Pag-IBIG · BIR 1902)", owner_role:"HR"},
+    {task_key:"uniform",    label:"Issue uniform + capture signed deduction authorization",               owner_role:"HR / Admin"},
+    {task_key:"orientation",label:"Orientation / product training",                                       owner_role:"HR / Supervisor"}
   ];
+  if(isSM) t.push({task_key:"itime",label:"iTime enrollment (SM department store)",owner_role:"HR"});
+  t.push({task_key:"payplus",    label:"Encode in PayPlus",           owner_role:"Payroll"});
+  t.push({task_key:"employee_id",label:"Assign Employee ID (PayPlus)",owner_role:"HR"});
+  t.push({task_key:"id_badge",   label:"Issue "+idBadge,              owner_role:"HR"});
+  return t.map((x,i)=>Object.assign({sort_order:i+1},x));
 }
 function renderOnboarding(){
   const pg=$("#page-onboarding"); if(!pg) return;
@@ -3334,7 +3349,7 @@ function renderOnboarding(){
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
       <h2>Onboarding Tasks</h2>
-      <div class="psub">After a contract is signed, each hire becomes an onboarding case — schedule, bank, uniform, government forms, PayPlus, Employee ID, orientation. Auto-flows from Pre-hire.</div>
+      <div class="psub">Once Hired, each new employee becomes an onboarding case. Tasks are grouped by <b>when they're due</b> — before-start · day-1 · by-2nd-payroll — and adapt by population (iTime for SM; Company vs Mall ID; Union vs China Bank). Auto-flows from Pre-hire.</div>
       <div class="actionbar"><button class="btn" id="onbNew">+ Start onboarding</button></div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
         <div class="kpi"><div class="k-l">In Progress</div><div class="k-n">${active.length}</div></div>
@@ -3406,11 +3421,16 @@ function openOnboardingCase(id){
       </div>
       ${!c.assigned_employee_id?`<button class="btn" id="onbAssignId" style="margin-top:12px;">Assign ${scheme} Employee ID →</button>`:""}
       <div class="panel" style="margin-top:14px;"><h2>Onboarding checklist</h2>
-        <div class="psub">Tap a task to mark it done. Bank auto-set to ${c.group_name==="Retail"?"Union Bank":"China Bank"} by group.</div>
-        ${ts.map(t=>`<div class="task clickable" data-tid="${t.id}" style="cursor:pointer;">
-          <div class="dot ${t.status==="Done"?"g":"a"}"></div>
-          <div style="flex:1;"><div class="tt">${esc(t.label)}</div><div class="td">${esc(t.owner_role||"")}${t.is_mandatory?"":" · optional"}</div></div>
-          <div class="due ${t.status==="Done"?"g":"a"}">${t.status==="Done"?"✓ Done":"Pending"}</div></div>`).join("")}
+        <div class="psub">Grouped by <b>when it's due</b> relative to the start date. Tap a task to mark it done. Bank &amp; ID set by group; iTime shows only for SM department-store hires; government registration stays early (legal deadlines).</div>
+        ${ONB_TIMING_GROUPS.map(g=>{
+          const items=ts.filter(t=>(ONB_TIMING[t.task_key]||"by_2nd_payroll")===g.key);
+          if(!items.length) return "";
+          return `<div style="margin:14px 0 4px;font-weight:700;font-size:12.5px;color:var(--green-dark);">${g.label}</div>`+
+            items.map(t=>`<div class="task clickable" data-tid="${t.id}" style="cursor:pointer;">
+              <div class="dot ${t.status==="Done"?"g":"a"}"></div>
+              <div style="flex:1;"><div class="tt">${esc(t.label)}</div><div class="td">${esc(t.owner_role||"")}</div></div>
+              <div class="due ${t.status==="Done"?"g":"a"}">${t.status==="Done"?"✓ Done":"Pending"}</div></div>`).join("");
+        }).join("")}
       </div>
       <div style="display:flex;gap:10px;margin-top:14px;">
         ${c.status!=="Complete"&&p.done===p.total&&p.total>0?'<button class="btn" id="onbComplete">Mark onboarding complete</button>':''}

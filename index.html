@@ -2427,7 +2427,7 @@ let landed=false;
 async function init(){
   const { data:{session} } = await sb.auth.getSession();
   if(session) showApp(session.user); else $("#login").style.display="flex";
-  sb.auth.onAuthStateChange((_e,s)=>{ if(!s){ location.reload(); } });
+  sb.auth.onAuthStateChange((_e,s)=>{ if(_e==='SIGNED_OUT'){ location.reload(); } });
 }
 $("#loginForm").addEventListener("submit", async (e)=>{
   e.preventDefault();

@@ -53,8 +53,40 @@ function patchSidebarFoot(user){
     <div class="av">${esc(initials)}</div>
     <div style="flex:1;min-width:0;"><div style="color:#fff;font-weight:600;overflow:hidden;text-overflow:ellipsis;">${esc(name)}</div>
       <div style="opacity:.55;font-size:11px;">Signed in</div></div>
+    <button id="chgPw" title="Change password" style="background:rgba(255,255,255,.14);color:#fff;border:none;padding:6px 9px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;margin-right:6px;">🔑</button>
     <button id="signOut" style="background:rgba(255,255,255,.14);color:#fff;border:none;padding:6px 10px;border-radius:7px;font-size:11.5px;font-weight:600;cursor:pointer;">Sign out</button>`;
   $("#signOut").addEventListener("click", async ()=>{ await sb.auth.signOut(); });
+  $("#chgPw").addEventListener("click", openChangePassword);
+}
+function openChangePassword(){
+  let m=document.getElementById("pwModal"); if(!m){ m=document.createElement("div"); m.id="pwModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:24px;">
+    <h2 style="color:var(--green-dark);font-size:18px;margin-bottom:4px;">Change your password</h2>
+    <div style="color:#6B7785;font-size:13px;margin-bottom:14px;">Set a password only you know — at least 8 characters.</div>
+    <label style="font-size:12px;font-weight:700;color:#6B7785;">NEW PASSWORD</label>
+    <input id="pwNew" type="password" autocomplete="new-password" style="width:100%;padding:10px 12px;border:1px solid #E3E8EF;border-radius:8px;margin:4px 0 12px;">
+    <label style="font-size:12px;font-weight:700;color:#6B7785;">CONFIRM PASSWORD</label>
+    <input id="pwConf" type="password" autocomplete="new-password" style="width:100%;padding:10px 12px;border:1px solid #E3E8EF;border-radius:8px;margin:4px 0 4px;">
+    <div id="pwMsg" style="font-size:13px;margin:8px 0;min-height:18px;"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px;">
+      <button id="pwCancel" class="btn ghost">Cancel</button>
+      <button id="pwSave" class="btn">Save password</button>
+    </div></div>`;
+  const close=()=>m.remove();
+  $("#pwCancel").addEventListener("click",close);
+  m.addEventListener("click",(ev)=>{ if(ev.target===m) close(); });
+  $("#pwSave").addEventListener("click", async ()=>{
+    const np=$("#pwNew").value, cf=$("#pwConf").value, msg=$("#pwMsg");
+    if(np.length<8){ msg.style.color="#a4322a"; msg.textContent="Password must be at least 8 characters."; return; }
+    if(np!==cf){ msg.style.color="#a4322a"; msg.textContent="Passwords don't match — please re-type."; return; }
+    const btn=$("#pwSave"); btn.disabled=true; btn.textContent="Saving…";
+    const { error } = await sb.auth.updateUser({ password: np });
+    btn.disabled=false; btn.textContent="Save password";
+    if(error){ msg.style.color="#a4322a"; msg.textContent=error.message; return; }
+    msg.style.color="#1c6b3f"; msg.textContent="✓ Password updated — use it next time you sign in.";
+    setTimeout(close, 1900);
+  });
 }
 
 /* ---------- DATA ---------- */

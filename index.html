@@ -2416,6 +2416,7 @@ let ONBTASKS=[];
 let EXITCASES=[];
 let CONTRACTS=[];
 let PHDOCS=[];
+let COMPLIANCE=[];
 let CURRENT_USER=null;
 const DEFAULT_PH_DOCS=[["nbi","NBI / Police Clearance",true],["birth","PSA Birth Certificate",false],["sss","SSS (E-1 / number)",false],["philhealth","PhilHealth",false],["pagibig","Pag-IBIG (MID)",false],["tin","TIN / BIR 1902",false],["photo","2×2 ID Photos",false],["diploma","Diploma / TOR",false],["medical","Medical / Health Certificate",false]];
 let empFilter="All";
@@ -2488,7 +2489,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2497,7 +2498,8 @@ async function loadEmployees(){
     sb.from("onboarding_tasks").select("*").order("sort_order"),
     sb.from("exit_clearance").select("*").order("created_at"),
     sb.from("contracts").select("*").order("created_at"),
-    sb.from("prehire_documents").select("*")
+    sb.from("prehire_documents").select("*"),
+    sb.from("compliance_items").select("*").order("name")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2509,7 +2511,9 @@ async function loadEmployees(){
   EXITCASES=(ex&&ex.data)||[];
   CONTRACTS=(ct&&ct.data)||[];
   PHDOCS=(pd&&pd.data)||[];
+  COMPLIANCE=(cm&&cm.data)||[];
   renderDashboard();
+  renderCompliance();
   renderEmployeesPage();
   renderBranchesPage();
   renderManning();
@@ -2521,6 +2525,47 @@ async function loadEmployees(){
   wireGlobalSearch();
   if(!landed){ landed=true; if(typeof window.go==="function") window.go("dashboard"); }
 }
+/* ---------- COMPLIANCE — live register (IPO trademarks; licenses/permits next) ---------- */
+function renderCompliance(){
+  const pg=$("#page-compliance"); if(!pg) return;
+  const CY=new Date().getFullYear();
+  const tm=COMPLIANCE.filter(c=>c.kind==="Trademark");
+  const verify=tm.filter(c=>c.needs_verify);
+  const dueNow=tm.filter(c=>c.next_due_year===CY && !c.needs_verify);
+  const upcoming=tm.filter(c=>c.next_due_year>CY && !c.needs_verify).sort((a,b)=>a.next_due_year-b.next_due_year);
+  const pending=tm.filter(c=>c.status==="PENDING");
+  const expired=tm.filter(c=>c.status==="EXPIRED");
+  const row=(c,dotClass,extra)=>`<div class="task"><div class="dot ${dotClass}"></div>
+    <div style="flex:1;"><div class="tt">${esc(c.name)}</div>
+      <div class="td">${esc(c.ref_no||"no case # on file")} · ${esc(c.authority||"")}${c.reg_year?" · registered "+c.reg_year:""}</div></div>
+    <div class="due ${dotClass}">${esc(extra)}</div></div>`;
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Compliance — IPO Trademarks <span class="count-tag">live</span></h2>
+      <div class="psub">Every registered mark needs a <b>Declaration of Actual Use</b> (3rd / 5th / 7th year) and a <b>10-year renewal</b> — missing a DAU can cancel the mark. Source: IPO Trademark Calendar. Dates are year-level; confirm exact dates against the certificates.</div>
+      <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
+        <div class="kpi ${verify.length?'alert':''}"><div class="k-l">Verify</div><div class="k-n">${verify.length}</div><div class="k-s">deadline passed on file</div></div>
+        <div class="kpi ${dueNow.length?'warn':''}"><div class="k-l">Due ${CY}</div><div class="k-n">${dueNow.length}</div><div class="k-s">DAU / renewals this year</div></div>
+        <div class="kpi"><div class="k-l">Upcoming</div><div class="k-n">${upcoming.length}</div><div class="k-s">${CY+1} onwards</div></div>
+        <div class="kpi"><div class="k-l">Pending Apps</div><div class="k-n">${pending.length}</div><div class="k-s">awaiting IPOPHL</div></div>
+        <div class="kpi"><div class="k-l">Expired</div><div class="k-n">${expired.length}</div><div class="k-s">re-file decisions</div></div>
+      </div>
+      ${verify.length?`<h2 style="margin-top:18px;">⚠ Verify with IPO records — deadline on file has passed</h2>
+        <div class="psub">These show a renewal/DAU year already past. Either it was filed (update the record) or the mark is at risk.</div>
+        ${verify.map(c=>row(c,"r",(c.next_due_label||"")+" "+(c.next_due_year||""))).join("")}`:""}
+      ${dueNow.length?`<h2 style="margin-top:18px;">Due this year (${CY})</h2>
+        ${dueNow.map(c=>row(c,"a",(c.next_due_label||"")+" "+CY)).join("")}`:""}
+      <h2 style="margin-top:18px;">Upcoming</h2>
+      ${upcoming.map(c=>row(c,"g",(c.next_due_label||"")+" "+(c.next_due_year||""))).join("")||'<div class="psub">None upcoming.</div>'}
+      ${pending.length?`<h2 style="margin-top:18px;">Pending applications</h2>
+        ${pending.map(c=>row(c,"a","awaiting registration")).join("")}`:""}
+      ${expired.length?`<h2 style="margin-top:18px;">Expired marks</h2>
+        <div class="psub">Decide per brand: re-file or let go. (GEAR UP is here — note the GearUp stores.)</div>
+        ${expired.map(c=>row(c,"r","expired")).join("")}`:""}
+      <div class="psub" style="margin-top:16px;">Next for this section: <b>License to Operate</b> + business permits with expiry reminders — send me the permits and I'll add them.</div>
+    </div>`;
+}
+
 /* ---------- LOANS — embeds anj's preferred RCC Loan Portal (loans.html) ---------- */
 function renderLoans(){
   const pg=$("#page-loans"); if(!pg||pg.dataset.loaded) return;
@@ -2585,6 +2630,9 @@ function renderDashboard(){
   const onbOpen=ONBOARDING.filter(c=>c.status!=="Complete").length;
   const onbTasksOpen=ONBTASKS.filter(t=>t.status!=="Done").length;
   const exitOpen=EXITCASES.filter(x=>x.overall_status!=="Complete").length;
+  const CY=new Date().getFullYear();
+  const compDue=COMPLIANCE.filter(c=>c.next_due_year===CY && !c.needs_verify).length;
+  const compVerify=COMPLIANCE.filter(c=>c.needs_verify).length;
   // "Waiting on others" — items sent out / stuck with someone else (real data)
   const waiting=[];
   PREHIRE.filter(p=>p.phase==="CONTRACT_SIGNING").slice(0,2).forEach(p=>waiting.push({t:"Contract — "+p.full_name, d:"In the signature pipeline", go:"prehire"}));
@@ -2619,6 +2667,8 @@ function renderDashboard(){
         ${phReady?`<div class="task" style="cursor:pointer;" onclick="go('prehire')"><div class="dot r"></div><div><div class="tt">${phReady} candidate(s) ready for contract / onboarding</div><div class="td">Move them into an onboarding case</div></div><div class="due r">hiring</div></div>`:''}
         ${onbTasksOpen?`<div class="task" style="cursor:pointer;" onclick="go('onboarding')"><div class="dot a"></div><div><div class="tt">${onbTasksOpen} open onboarding task(s)</div><div class="td">${onbOpen} case(s) in progress — bank, uniform, gov forms, Employee ID</div></div><div class="due a">onboarding</div></div>`:''}
         ${exitOpen?`<div class="task" style="cursor:pointer;" onclick="go('exit')"><div class="dot a"></div><div><div class="tt">${exitOpen} exit clearance(s) in progress</div><div class="td">Department sign-offs &amp; final-pay computation</div></div><div class="due a">offboarding</div></div>`:''}
+        ${compVerify?`<div class="task" style="cursor:pointer;" onclick="go('compliance')"><div class="dot r"></div><div><div class="tt">${compVerify} trademark(s) past a deadline on file — verify with IPO records</div><div class="td">Renewal year has passed (e.g. SPYDER, AIRFLEX) — confirm renewed or lapsed</div></div><div class="due r">compliance</div></div>`:''}
+        ${compDue?`<div class="task" style="cursor:pointer;" onclick="go('compliance')"><div class="dot a"></div><div><div class="tt">${compDue} trademark deadline(s) due ${CY}</div><div class="td">DAU filings &amp; renewals — missing a DAU can cancel the mark</div></div><div class="due a">compliance</div></div>`:''}
         <div class="task" style="cursor:pointer;" onclick="go('employees')"><div class="dot a"></div><div><div class="tt">${prob} employees on probation</div><div class="td">3rd / 5th-month evaluations &amp; regularization reviews</div></div><div class="due a">review</div></div>
         <div class="task" style="cursor:pointer;" onclick="go('manning')"><div class="dot a"></div><div><div class="tt">Merchandiser headcount gap to verify</div><div class="td">${totAHC} approved vs ${totCHC} confirmed on file (partial — full count via PayPlus) · ${SCs.length} SCs</div></div><div class="due a">staffing</div></div>
       </div>
@@ -2637,6 +2687,7 @@ function renderDashboard(){
           <div class="team-row"><div class="tn">Exit clearances</div><span class="mini ${exitOpen?'bad':'ok'}">${exitOpen} open</span></div>
           <div class="team-row"><div class="tn">Probation reviews</div><span class="mini ok">${prob} due</span></div>
           <div class="team-row"><div class="tn">Merchandiser staffing</div><span class="mini ok">${totCHC}/${totAHC} confirmed</span><span class="mini ${merchDef?'bad':'ok'}">gap ${merchDef} (partial)</span></div>
+          <div class="team-row" style="cursor:pointer;" onclick="go('compliance')"><div class="tn">Compliance (IPO)</div>${compVerify?`<span class="mini bad">${compVerify} verify</span>`:''}<span class="mini ${compDue?'bad':'ok'}">${compDue} due ${CY}</span></div>
         </div>
         <div class="panel">
           <h2>Workforce composition</h2>

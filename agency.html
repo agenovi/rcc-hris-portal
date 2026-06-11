@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RCC Merchandiser Openings</title>
+<style>
+  :root{--navy:#1E3A5F;--navy-d:#142a45;--ink:#1F2A37;--muted:#6B7785;--line:#E3E8EF;--bg:#F4F6F8;--gold:#c8a86a;
+    --green:#1c6b3f;--green-bg:#e8f2eb;--amber:#8a6a14;--amber-bg:#fdf6e3;}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  body{background:var(--bg);color:var(--ink);line-height:1.5;}
+  .top{background:linear-gradient(135deg,var(--navy-d),var(--navy));color:#fff;padding:20px 22px;}
+  .top h1{font-size:20px;font-weight:800;}
+  .top .s{opacity:.8;font-size:13px;margin-top:2px;}
+  .wrap{max-width:880px;margin:0 auto;padding:18px 16px 60px;}
+  .tabs{display:flex;gap:8px;margin:14px 0;}
+  .tab{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 14px;font-weight:700;font-size:13.5px;color:var(--navy);cursor:pointer;}
+  .tab.sel{background:var(--navy);color:#fff;border-color:var(--navy);}
+  .grp{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;margin:16px 0 6px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .card .nm{font-weight:700;color:var(--navy);font-size:15px;}
+  .card .loc{font-size:12.5px;color:var(--muted);}
+  .chips{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;}
+  .chip{font-size:12px;font-weight:700;padding:4px 9px;border-radius:20px;}
+  .chip.open{background:var(--green-bg);color:var(--green);}
+  .chip.rev{background:#e7f1f5;color:#2c6e8f;}
+  .chip.hir{background:var(--bg);color:var(--muted);}
+  .btn{background:var(--navy);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:13px;cursor:pointer;}
+  .btn.ghost{background:#fff;color:var(--navy);border:1px solid var(--line);}
+  .btn:disabled{opacity:.5;cursor:default;}
+  .modal{position:fixed;inset:0;z-index:50;background:rgba(14,30,50,.5);display:flex;align-items:center;justify-content:center;padding:20px;}
+  .sheet{background:#fff;border-radius:14px;max-width:420px;width:100%;padding:22px;}
+  .sheet h2{color:var(--navy);font-size:18px;margin-bottom:2px;}
+  label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;}
+  input,textarea,select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:14px;}
+  .req{color:#c0392b;}
+  .msg{font-size:13px;margin:8px 0;min-height:18px;}
+  .empty{color:var(--muted);font-size:14px;padding:20px;text-align:center;}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  th,td{text-align:left;padding:10px 12px;font-size:13.5px;border-bottom:1px solid var(--line);}
+  th{background:var(--navy);color:#fff;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;}
+  .pill{font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:20px;background:var(--bg);color:var(--muted);}
+  .foot{font-size:12px;color:var(--muted);margin-top:18px;text-align:center;}
+</style></head>
+<body>
+  <div class="top"><h1>RCC Merchandiser Openings</h1><div class="s" id="who">Loading…</div></div>
+  <div class="wrap">
+    <div class="tabs">
+      <div class="tab sel" id="tabOpen" onclick="show('open')">Open positions</div>
+      <div class="tab" id="tabMine" onclick="show('mine')">My submissions</div>
+    </div>
+    <div id="body"><div class="empty">Loading…</div></div>
+    <div class="foot">You only see open positions and your own submitted candidates. Counts are anonymized. — RCC</div>
+  </div>
+<script>
+const FN="https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/agency";
+const token=new URLSearchParams(location.search).get("t")||"";
+let DATA={openings:[],my_submissions:[],agency:""}, TAB="open";
+const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+async function load(){
+  if(!token){ document.getElementById("body").innerHTML='<div class="empty">This link is missing its access code. Please use the link RCC gave you.</div>'; document.getElementById("who").textContent="No access"; return; }
+  try{
+    const r=await fetch(`${FN}?token=${encodeURIComponent(token)}&action=board`);
+    const d=await r.json();
+    if(d.error){ document.getElementById("body").innerHTML=`<div class="empty">${esc(d.error)}</div>`; document.getElementById("who").textContent="No access"; return; }
+    DATA=d; document.getElementById("who").textContent=`${d.agency} · ${d.openings.length} stores with openings`;
+    render();
+  }catch(e){ document.getElementById("body").innerHTML=`<div class="empty">Couldn't load right now. Please try again.</div>`; }
+}
+function show(t){ TAB=t; document.getElementById("tabOpen").classList.toggle("sel",t==="open"); document.getElementById("tabMine").classList.toggle("sel",t==="mine"); render(); }
+function render(){
+  const b=document.getElementById("body");
+  if(TAB==="mine"){
+    const m=DATA.my_submissions||[];
+    b.innerHTML = m.length ? `<table><thead><tr><th>Candidate</th><th>Store</th><th>Position</th><th>Status</th></tr></thead><tbody>`+
+      m.map(x=>`<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.store||"—")}</td><td>${esc(x.position||"—")}</td><td><span class="pill">${esc(statusLabel(x.status))}</span></td></tr>`).join("")+
+      `</tbody></table>` : `<div class="empty">No candidates submitted yet. Open a position and click “Submit a candidate”.</div>`;
+    return;
+  }
+  const ops=DATA.openings||[];
+  if(!ops.length){ b.innerHTML='<div class="empty">No open positions right now. Check back soon.</div>'; return; }
+  const bySc={}; ops.forEach(o=>{ (bySc[o.sc||"—"]=bySc[o.sc||"—"]||[]).push(o); });
+  b.innerHTML=Object.entries(bySc).map(([sc,list])=>`<div class="grp">${esc(sc)}</div>`+
+    list.map(o=>`<div class="card">
+      <div><div class="nm">${esc(o.store)}</div><div class="loc">${esc(o.city||"")}${o.area?" · "+esc(o.area):""}${o.category?" · "+(o.category==="CN"?"Concession":"Company-Op"):""}</div></div>
+      <div class="chips">
+        <span class="chip open">${o.open_slots} open</span>
+        <span class="chip rev">${o.in_review} in review</span>
+        ${o.hired?`<span class="chip hir">${o.hired} hired</span>`:""}
+      </div>
+      <button class="btn" onclick='openSubmit(${JSON.stringify(o.store)})'>Submit a candidate</button>
+    </div>`).join("")).join("");
+}
+function statusLabel(p){ return ({APPLIED:"Applied",SCREENING:"Screening",DOCUMENTS:"Documents",RECRUITER_REVIEW:"In review",HR_SIGNOFF:"HR sign-off",CONTRACT_SIGNING:"Contract",HIRED:"Hired",REJECTED:"Not selected"}[p])||p; }
+
+function openSubmit(store){
+  let m=document.getElementById("subModal"); if(!m){ m=document.createElement("div"); m.id="subModal"; document.body.appendChild(m); }
+  m.className="modal";
+  m.innerHTML=`<div class="sheet">
+    <h2>Submit a candidate</h2>
+    <div style="color:var(--muted);font-size:13px;">For <b>${esc(store)}</b></div>
+    <label>Candidate full name <span class="req">*</span></label><input id="s_name">
+    <label>Position</label><input id="s_pos" value="Merchandiser">
+    <label>Contact number</label><input id="s_contact">
+    <label>Notes (optional)</label><textarea id="s_notes" rows="2"></textarea>
+    <div class="msg" id="s_msg"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+      <button class="btn ghost" onclick="document.getElementById('subModal').remove()">Cancel</button>
+      <button class="btn" id="s_save">Submit</button>
+    </div></div>`;
+  m.onclick=e=>{ if(e.target===m) m.remove(); };
+  document.getElementById("s_save").onclick=async()=>{
+    const name=document.getElementById("s_name").value.trim(), msg=document.getElementById("s_msg");
+    if(!name){ msg.style.color="#c0392b"; msg.textContent="Candidate name is required."; return; }
+    const btn=document.getElementById("s_save"); btn.disabled=true; btn.textContent="Submitting…";
+    try{
+      const r=await fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+        token, action:"submit", name, store,
+        position:document.getElementById("s_pos").value, contact:document.getElementById("s_contact").value, notes:document.getElementById("s_notes").value })});
+      const d=await r.json();
+      if(!d.ok){ btn.disabled=false; btn.textContent="Submit"; msg.style.color="#c0392b"; msg.textContent=d.error||"Couldn't submit. Try again."; return; }
+      msg.style.color="#1c6b3f"; msg.textContent="✓ Submitted to RCC. Thank you!";
+      setTimeout(()=>{ m.remove(); load(); }, 1200);
+    }catch(e){ btn.disabled=false; btn.textContent="Submit"; msg.style.color="#c0392b"; msg.textContent="Couldn't submit. Try again."; }
+  };
+}
+load();
+</script></body></html>

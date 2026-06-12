@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RCC Employee Loan — Application</title>
+<style>
+  :root{--navy:#1E3A5F;--navy-d:#142a45;--ink:#1F2A37;--muted:#6B7785;--line:#E3E8EF;--bg:#F4F6F8;--gold:#c8a86a;
+    --green:#1c6b3f;--green-bg:#e8f2eb;--amber:#8a6a14;--amber-bg:#fdf6e3;--red:#c0392b;}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  body{background:var(--bg);color:var(--ink);line-height:1.5;}
+  .top{background:linear-gradient(135deg,var(--navy-d),var(--navy));color:#fff;padding:22px;}
+  .top h1{font-size:21px;font-weight:800;}
+  .top .s{opacity:.82;font-size:13px;margin-top:3px;}
+  .wrap{max-width:640px;margin:0 auto;padding:18px 16px 70px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:14px;}
+  .card h2{font-size:15px;color:var(--navy);margin-bottom:4px;}
+  .sub{color:var(--muted);font-size:12.5px;margin-bottom:12px;}
+  label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin:12px 0 4px;}
+  input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;}
+  .req{color:var(--red);}
+  .types{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .lt{border:1px solid var(--line);border-radius:10px;padding:12px;cursor:pointer;transition:.15s;}
+  .lt:hover{border-color:var(--navy);}
+  .lt.sel{border-color:var(--navy);background:var(--green-bg);}
+  .lt .n{font-weight:800;color:var(--navy);font-size:14px;}
+  .lt .r{font-size:12px;color:var(--green);font-weight:700;margin:3px 0;}
+  .lt .d{font-size:11.5px;color:var(--muted);}
+  .calc{background:var(--bg);border-radius:10px;padding:12px;margin-top:10px;font-size:13.5px;}
+  .calc b{color:var(--navy);}
+  .auth{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:#3a4540;margin-top:6px;}
+  .auth input{width:auto;margin-top:3px;}
+  .btn{background:var(--navy);color:#fff;border:none;border-radius:9px;padding:12px 18px;font-weight:800;font-size:15px;cursor:pointer;width:100%;}
+  .btn:disabled{opacity:.5;}
+  .msg{font-size:13.5px;margin:10px 0;min-height:18px;}
+  .done{text-align:center;padding:40px 20px;}
+  .done .ok{font-size:46px;}
+  .note{background:var(--amber-bg);color:var(--amber);border:1px solid #ecdca6;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:600;margin-top:10px;}
+</style></head>
+<body>
+  <div class="top"><h1>RCC Employee Loan — Application</h1><div class="s">Fill this out and submit — HR will review and get back to you. No login needed.</div></div>
+  <div class="wrap" id="wrap">
+    <div class="card">
+      <h2>1 · Your details</h2>
+      <label>Full name <span class="req">*</span></label><input id="f_name">
+      <label>Employee ID (if you know it)</label><input id="f_eid">
+      <label>Department / store</label><input id="f_dept">
+    </div>
+    <div class="card">
+      <h2>2 · Choose a loan</h2>
+      <div class="types" id="types"></div>
+      <div id="typeNote"></div>
+    </div>
+    <div class="card">
+      <h2>3 · Loan details</h2>
+      <label>Amount needed (₱) <span class="req">*</span></label><input id="f_amount" type="number" oninput="calc()">
+      <label>Repayment term</label>
+      <select id="f_term" onchange="calc()"></select>
+      <label>Purpose / reason</label><textarea id="f_purpose" rows="2"></textarea>
+      <div class="calc" id="calcBox">Pick a loan type and enter an amount to see the estimated monthly.</div>
+    </div>
+    <div class="card">
+      <h2>4 · Affordability check <span style="font-weight:400;color:var(--muted);font-size:12px;">(optional)</span></h2>
+      <div class="sub">Enter your current monthly <b>take-home pay</b> (after all existing deductions) to see the most you can borrow under the 15% rule.</div>
+      <label>Monthly take-home pay (₱)</label><input id="f_net" type="number" oninput="calc()">
+      <div class="calc" id="affBox" style="display:none;"></div>
+    </div>
+    <div class="card">
+      <h2>5 · Authorization</h2>
+      <div class="auth"><input type="checkbox" id="f_auth">
+        <span>I authorize RCC to deduct the agreed loan amortization from my salary each payroll until fully repaid, and on separation from the balance of my final pay (subject to Article 113 of the Labor Code). I understand the amount and terms are <b>subject to HR approval</b>. (RA 8792 electronic consent.)</span></div>
+      <div class="msg" id="msg"></div>
+      <button class="btn" id="submitBtn" onclick="submitLoan()">Submit application</button>
+      <div class="note">All loan amounts are maximums and are subject to HR approval and what your pay can afford.</div>
+    </div>
+  </div>
+<script>
+const FN="https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/loan-apply";
+const TYPES={
+  discretionary:{n:"Discretionary",rate:12,max:50000,term:12,d:"7+ yrs service · no docs"},
+  emergency:{n:"Emergency",rate:12,max:20000,term:12,d:"medical · sudden damage · death"},
+  educational:{n:"Educational",rate:0,max:null,term:12,d:"0% · child's tuition (50%)"},
+  moto:{n:"Motorcycle",rate:6,max:100000,term:36,d:"RCC-owned until paid · 10% DP"},
+};
+let SEL=null;
+const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const peso=n=>"₱"+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0});
+
+document.getElementById("types").innerHTML=Object.entries(TYPES).map(([k,t])=>
+  `<div class="lt" data-k="${k}" onclick="pick('${k}')"><div class="n">${t.n}</div>
+   <div class="r">${t.rate===0?"0% interest":t.rate+"% p.a."}</div>
+   <div class="d">${t.d}${t.max?" · max "+peso(t.max):""}</div></div>`).join("");
+function pick(k){ SEL=k; [...document.querySelectorAll('.lt')].forEach(e=>e.classList.toggle('sel',e.dataset.k===k));
+  const t=TYPES[k]; let o=""; for(let m=1;m<=t.term;m++) o+=`<option value="${m}" ${m===Math.min(12,t.term)?"selected":""}>${m} month${m>1?"s":""}</option>`;
+  document.getElementById("f_term").innerHTML=o;
+  document.getElementById("typeNote").innerHTML=t.max?`<div class="sub" style="margin-top:10px;">Maximum for ${t.n}: <b>${peso(t.max)}</b> · subject to approval.</div>`:`<div class="sub" style="margin-top:10px;">Educational = 50% of tuition, paid to the school.</div>`;
+  calc();
+}
+function monthly(amount,rate,term){ const interest=amount*(rate/100)*(term/12); return (amount+interest)/term; }
+function calc(){
+  const amt=parseFloat(document.getElementById("f_amount").value)||0;
+  const term=parseInt(document.getElementById("f_term").value)||12;
+  const cb=document.getElementById("calcBox");
+  if(SEL&&amt>0){ const m=monthly(amt,TYPES[SEL].rate,term);
+    cb.innerHTML=`Estimated monthly amortization: <b>${peso(m)}</b> over ${term} month(s) at ${TYPES[SEL].rate}% p.a. <span style="color:var(--muted);">(indicative — subject to approval)</span>`;
+    window.__monthly=m;
+  } else { cb.textContent="Pick a loan type and enter an amount to see the estimated monthly."; window.__monthly=0; }
+  const net=parseFloat(document.getElementById("f_net").value)||0;
+  const ab=document.getElementById("affBox");
+  if(net>0){ ab.style.display="block";
+    const maxMonthly=net*0.15, term2=term||12; const maxLoan=SEL?maxMonthly*term2/(1+TYPES[SEL].rate/100*term2/12):maxMonthly*term2;
+    ab.innerHTML=`At 15% of take-home, your monthly cap is <b>${peso(maxMonthly)}</b> → roughly up to <b>${peso(maxLoan)}</b> over ${term2} months. <span style="color:var(--muted);">Subject to approval.</span>`;
+  } else ab.style.display="none";
+}
+async function submitLoan(){
+  const name=document.getElementById("f_name").value.trim(), msg=document.getElementById("msg");
+  if(!name){ msg.style.color="#c0392b"; msg.textContent="Please enter your full name."; return; }
+  if(!SEL){ msg.style.color="#c0392b"; msg.textContent="Please choose a loan type."; return; }
+  const amt=parseFloat(document.getElementById("f_amount").value)||0;
+  if(amt<=0){ msg.style.color="#c0392b"; msg.textContent="Please enter the amount needed."; return; }
+  if(!document.getElementById("f_auth").checked){ msg.style.color="#c0392b"; msg.textContent="Please tick the authorization to continue."; return; }
+  const btn=document.getElementById("submitBtn"); btn.disabled=true; btn.textContent="Submitting…";
+  const payload={ applicant_name:name, employee_id:document.getElementById("f_eid").value,
+    department:document.getElementById("f_dept").value, loan_type:SEL, amount:amt,
+    term_months:parseInt(document.getElementById("f_term").value)||12,
+    purpose:document.getElementById("f_purpose").value, monthly_estimate:window.__monthly||0,
+    net_pay:parseFloat(document.getElementById("f_net").value)||null, authorized:true };
+  try{
+    const r=await fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(!d.ok){ btn.disabled=false; btn.textContent="Submit application"; msg.style.color="#c0392b"; msg.textContent=d.error||"Couldn't submit. Please try again."; return; }
+    document.getElementById("wrap").innerHTML=`<div class="card done"><div class="ok">✓</div>
+      <h2 style="font-size:18px;margin:10px 0 6px;">Application submitted</h2>
+      <div class="sub">Your reference: <b>${esc(d.ref)}</b><br>HR will review it and contact you. You can close this page.</div></div>`;
+  }catch(e){ btn.disabled=false; btn.textContent="Submit application"; msg.style.color="#c0392b"; msg.textContent="Couldn't submit. Please try again."; }
+}
+</script></body></html>

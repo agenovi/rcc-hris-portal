@@ -2417,6 +2417,7 @@ let EXITCASES=[];
 let CONTRACTS=[];
 let PHDOCS=[];
 let COMPLIANCE=[];
+let LOANS=[];
 let CURRENT_USER=null;
 const DEFAULT_PH_DOCS=[["nbi","NBI / Police Clearance",true],["birth","PSA Birth Certificate",false],["sss","SSS (E-1 / number)",false],["philhealth","PhilHealth",false],["pagibig","Pag-IBIG (MID)",false],["tin","TIN / BIR 1902",false],["photo","2×2 ID Photos",false],["diploma","Diploma / TOR",false],["medical","Medical / Health Certificate",false]];
 let empFilter="All";
@@ -2489,7 +2490,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2499,7 +2500,8 @@ async function loadEmployees(){
     sb.from("exit_clearance").select("*").order("created_at"),
     sb.from("contracts").select("*").order("created_at"),
     sb.from("prehire_documents").select("*"),
-    sb.from("compliance_items").select("*").order("name")
+    sb.from("compliance_items").select("*").order("name"),
+    sb.from("loans").select("*").order("created_at", {ascending:false})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2512,6 +2514,7 @@ async function loadEmployees(){
   CONTRACTS=(ct&&ct.data)||[];
   PHDOCS=(pd&&pd.data)||[];
   COMPLIANCE=(cm&&cm.data)||[];
+  LOANS=(ln&&ln.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -2566,12 +2569,82 @@ function renderCompliance(){
     </div>`;
 }
 
-/* ---------- LOANS — embeds anj's preferred RCC Loan Portal (loans.html) ---------- */
+/* ---------- LOANS — HR review queue (employees apply via the public link) ---------- */
+const LOAN_APPLY_URL="https://agenovi.github.io/rcc-hris-portal/loan-apply.html";
+const LOAN_STAGES=["Submitted","HR Review","Supervisor","Management","Approved","Released","Rejected"];
+const loanTypeLabel=(t)=>({discretionary:"Discretionary",emergency:"Emergency",educational:"Educational",moto:"Motorcycle"}[t]||t||"—");
+const loanStatusPill=(s)=>{ const m={"Submitted":"a","HR Review":"a","Supervisor":"a","Management":"a","Approved":"g","Released":"g","Rejected":"r"}; return `<span class="pill ${({a:'probation',g:'active',r:'closed'})[m[s]||'a']}">${esc(s)}</span>`; };
 function renderLoans(){
-  const pg=$("#page-loans"); if(!pg||pg.dataset.loaded) return;
-  pg.dataset.loaded="1";
-  pg.innerHTML=`<iframe title="RCC Employee Loan Portal" src="https://agenovi.github.io/rcc-hris-portal/loans.html"
-    style="width:100%;height:calc(100vh - 96px);border:1px solid var(--line);border-radius:12px;display:block;background:#fff;"></iframe>`;
+  const pg=$("#page-loans"); if(!pg) return;
+  const open=LOANS.filter(l=>!["Released","Rejected"].includes(l.status));
+  const newCt=LOANS.filter(l=>l.status==="Submitted").length;
+  const approved=LOANS.filter(l=>["Approved","Released"].includes(l.status)).length;
+  const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Employee Loans <span class="count-tag">live</span></h2>
+      <div class="psub">Employees apply through the public link — no portal login. Applications land here for HR to review and move through the stages.</div>
+      <div class="actionbar">
+        <button class="btn" onclick="navigator.clipboard&&navigator.clipboard.writeText('${LOAN_APPLY_URL}');this.textContent='Link copied ✓'">Copy employee application link</button>
+        <a class="btn blue" href="${LOAN_APPLY_URL}" target="_blank" style="text-decoration:none;">Open the form ↗</a>
+      </div>
+      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
+        <div class="kpi ${newCt?'warn':''}"><div class="k-l">New</div><div class="k-n">${newCt}</div><div class="k-s">just submitted</div></div>
+        <div class="kpi"><div class="k-l">In Progress</div><div class="k-n">${open.length}</div><div class="k-s">under review</div></div>
+        <div class="kpi"><div class="k-l">Approved / Released</div><div class="k-n">${approved}</div></div>
+        <div class="kpi"><div class="k-l">Total Applications</div><div class="k-n">${LOANS.length}</div></div>
+      </div>
+      ${LOANS.length?`<table><thead><tr><th>Ref</th><th>Applicant</th><th>Type</th><th>Amount</th><th>Monthly (est.)</th><th>Status</th></tr></thead>
+        <tbody id="loanRows"></tbody></table>`
+        : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1E3A5F" stroke-width="2"><path d="M12 1v22M5 8h9a3 3 0 010 6H7"/></svg></div><h2>No applications yet</h2><p>Share the employee application link above. Submissions appear here automatically.</p></div>`}
+    </div>`;
+  const rows=$("#loanRows");
+  if(rows){
+    rows.innerHTML=LOANS.map(l=>`<tr class="clickable" data-id="${l.id}">
+      <td><b>${esc(l.loan_ref)}</b></td>
+      <td>${esc(l.applicant_name)}${l.department?`<div class="esub">${esc(l.department)}</div>`:""}</td>
+      <td>${esc(loanTypeLabel(l.loan_type))}</td>
+      <td>${peso(l.amount)}</td>
+      <td>${peso(l.monthly_estimate)}</td>
+      <td>${loanStatusPill(l.status)}</td></tr>`).join("");
+    $$("#loanRows tr").forEach(tr=>tr.addEventListener("click",()=>openLoan(tr.dataset.id)));
+  }
+}
+function openLoan(id){
+  const l=LOANS.find(x=>String(x.id)===String(id)); if(!l) return;
+  const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+  const idx=LOAN_STAGES.indexOf(l.status); const next=idx>=0&&idx<4?LOAN_STAGES[idx+1]:null;
+  let m=document.getElementById("loanModal"); if(!m){ m=document.createElement("div"); m.id="loanModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:540px;height:100%;overflow-y:auto;">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;">
+      <div style="font-size:20px;font-weight:800;">${esc(l.applicant_name)}</div>
+      <div style="font-size:12.5px;opacity:.9;">${esc(l.loan_ref)} · ${esc(loanTypeLabel(l.loan_type))} · ${peso(l.amount)}</div>
+    </div>
+    <div style="padding:18px 22px 60px;">
+      <div class="panel" style="margin-top:0;">
+        <h2>Application</h2>
+        ${phRow("Loan type",loanTypeLabel(l.loan_type))}${phRow("Amount",peso(l.amount))}${phRow("Term",(l.term_months||"—")+" months")}${phRow("Est. monthly",peso(l.monthly_estimate))}${phRow("Employee ID",l.employee_id)}${phRow("Department",l.department)}${phRow("Take-home given",l.net_pay?peso(l.net_pay):"—")}${phRow("Purpose",l.purpose)}${phRow("Authorized",l.authorized?"Yes (RA 8792)":"—")}
+      </div>
+      <div class="panel">
+        <h2>Status</h2>
+        <div class="psub">Current: ${loanStatusPill(l.status)}</div>
+        <textarea id="loanNotes" rows="2" placeholder="HR notes…" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin-top:8px;">${esc(l.hr_notes||"")}</textarea>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          ${next?`<button class="btn" id="loanAdv">Advance → ${esc(next)}</button>`:""}
+          ${l.status!=="Rejected"&&l.status!=="Released"?`<button class="btn ghost" id="loanRej" style="color:var(--red);border-color:#f1c9c5;">Reject</button>`:""}
+          ${l.status==="Approved"?`<button class="btn" id="loanRel">Mark Released</button>`:""}
+          <button class="btn ghost" id="loanClose" style="margin-left:auto;">Close</button>
+        </div>
+      </div>
+    </div></div>`;
+  $("#loanClose").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  const setLoan=async(patch)=>{ patch.hr_notes=document.getElementById("loanNotes").value; patch.updated_at=new Date().toISOString();
+    const {error}=await sb.from("loans").update(patch).eq("id",l.id); if(error){alert(error.message);return;} await loadEmployees(); m.remove(); };
+  const adv=document.getElementById("loanAdv"); if(adv) adv.addEventListener("click",()=>setLoan({status:next}));
+  const rel=document.getElementById("loanRel"); if(rel) rel.addEventListener("click",()=>setLoan({status:"Released"}));
+  const rej=document.getElementById("loanRej"); if(rej) rej.addEventListener("click",()=>setLoan({status:"Rejected"}));
 }
 const isActive=(e)=>e.status==="Active";
 const typePill=(e)=>{

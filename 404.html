@@ -3370,7 +3370,14 @@ function openPrehire(c){
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   $("#phEdit").addEventListener("click",()=>editPrehire(c));
   $$("#phModal [data-doc]").forEach(el=>el.addEventListener("click",()=>togglePhDoc(c, el.dataset.doc, el.dataset.label, el.dataset.tofollow==="1")));
-  if(next) $("#phAdvance").addEventListener("click",()=>setPhase(c,next.key,m));
+  if(next) $("#phAdvance").addEventListener("click",()=>{
+    // SM HARD GATE: no candidate reaches "Hired" until store / Retail-ops acceptance is resolved.
+    if(next.key==="HIRED" && !["Accepted","NA"].includes(c.sm_acceptance||"")){
+      alert("SM hard gate\n\nThis candidate can't be marked Hired until store / Retail-ops acceptance is recorded.\n\nOpen “Edit applicant details” → set “SM / Retail-ops acceptance” to:\n • Accepted — the host store has taken them, or\n • NA — this role isn't store-based.\n\n(It is currently: "+(c.sm_acceptance||"blank")+".)");
+      return;
+    }
+    setPhase(c,next.key,m);
+  });
   const rej=document.getElementById("phReject"); if(rej) rej.addEventListener("click",()=>{ const reason=prompt("Rejection reason?"); if(reason!=null) setPhase(c,"REJECTED",m,{rejection_reason:reason}); });
 }
 function editPrehire(c){
@@ -3810,12 +3817,14 @@ function renderExit(){
   const rows=$("#exRows");
   if(rows){
     rows.innerHTML=EXITCASES.map(x=>{ const dn=exitStagesDone(x); const t=x.tenure_months;
+      const age=(x.overall_status!=="Complete" && x.created_at)?Math.floor((Date.now()-new Date(x.created_at).getTime())/86400000):null;
+      const ageTag=age!=null?` <span style="font-size:11px;font-weight:700;color:${age>30?'var(--red)':'var(--muted)'};">· ${age}d open${age>30?' ⚠':''}</span>`:"";
       return `<tr class="clickable" data-id="${x.id}"><td><b>${esc(x.employee_name)}</b><div class="esub">${esc(x.position||"")}</div></td>
         <td>${x.last_working_day?fmtDate(x.last_working_day):"—"}${t!=null?` · ${t} mo`:""}</td>
         <td>${esc(x.separation_type||"—")}</td>
         <td><div class="barrow"><div class="bartrack"><div class="bar${dn===8?'':' def'}" style="width:${Math.round(dn/8*100)}%"></div></div><span style="font-size:11.5px;color:var(--muted);">${dn}/8</span></div></td>
         <td><b>${peso(exitNet(x))}</b></td>
-        <td>${x.overall_status==="Complete"?'<span class="pill closed">Separated</span>':'<span class="pill probation">In Progress</span>'}</td></tr>`;
+        <td>${x.overall_status==="Complete"?'<span class="pill closed">Separated</span>':'<span class="pill probation">In Progress</span>'+ageTag}</td></tr>`;
     }).join("");
     $$("#exRows tr").forEach(tr=>tr.addEventListener("click",()=>openExitCase(tr.dataset.id)));
   }
@@ -3919,6 +3928,7 @@ function openExitCase(id){
           <button class="btn ghost" id="ex_interview_btn" style="flex-shrink:0;">${x.exit_interview_done?'View / edit':'Conduct interview'}</button></div>
         <label style="display:block;font-size:13px;margin:8px 0;"><input type="checkbox" id="ex_hmo" ${x.hmo_cancelled?"checked":""}> HMO / insurance cancellation queued (advise sent to provider)</label>
         <label style="display:block;font-size:13px;margin:5px 0;"><input type="checkbox" id="ex_coe" ${x.coe_issued?"checked":""}> Certificate of Employment issued <span style="color:var(--muted);">(DOLE: within 3 days of request)</span></label>
+        <label style="display:block;font-size:13px;margin:5px 0;"><input type="checkbox" id="ex_quitclaim" ${x.quitclaim_signed?"checked":""}> Quitclaim / release &amp; waiver signed by employee <span style="color:var(--muted);">(on receipt of final pay — keep their signed copy)</span></label>
       </div>
 
       <div id="exMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
@@ -3969,9 +3979,9 @@ function collectExit(x){
     outstanding_salary:num("ex_outstanding_salary"), sil_payment:num("ex_sil_payment"), thirteenth_month:num("ex_thirteenth_month"),
     tax_refund:num("ex_tax_refund"), pending_commission:num("ex_pending_commission"),
     uniform_deduction:num("ex_uniform_deduction"),
-    uniform_returned:!!(m.querySelector("#ex_uniform_returned")&&m.querySelector("#ex_uniform_returned").checked),
     uniform_auth_on_file:!!(m.querySelector("#ex_uniform_auth")&&m.querySelector("#ex_uniform_auth").checked),
-    hmo_cancelled:m.querySelector("#ex_hmo").checked, coe_issued:m.querySelector("#ex_coe").checked };
+    hmo_cancelled:m.querySelector("#ex_hmo").checked, coe_issued:m.querySelector("#ex_coe").checked,
+    quitclaim_signed:!!(m.querySelector("#ex_quitclaim")&&m.querySelector("#ex_quitclaim").checked) };
   const ret={}; m.querySelectorAll("[data-return]").forEach(el=>{ ret[el.dataset.return]=el.checked; });
   const otherEl=m.querySelector("#ex_other_return"); if(otherEl) ret.other=otherEl.value.trim();
   o.hr_returns=ret;
@@ -3985,6 +3995,12 @@ async function saveExitCase(x,modal,complete){
   // fairness guard: uniform deduction needs signed authorization
   if(Number(o.uniform_deduction||0)>0 && !o.uniform_auth_on_file){
     document.getElementById("exMsg").textContent="Uniform deduction requires the signed authorization (contract clause) on file — tick the box or set the deduction to 0.";
+    return;
+  }
+  // a department flagged "With Charges" but entered no amount → ambiguous/unfair; require the figure
+  const badCharge=EXIT_STAGES.find(s=>s.c && o[s.s]==="With Charges" && !(Number(o[s.c])>0));
+  if(badCharge){
+    document.getElementById("exMsg").textContent=`“${badCharge.label}” is marked With Charges but has no amount — enter the charge (₱) or change its status.`;
     return;
   }
   o.total_payable=exitPayables(o); o.total_deductions=exitDeductions(o); o.net_payable=exitNet(o); o.updated_at=new Date().toISOString();

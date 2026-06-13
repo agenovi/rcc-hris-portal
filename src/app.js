@@ -128,9 +128,139 @@ async function loadEmployees(){
   renderExit();
   renderContracts();
   renderLoans();
+  renderSettings();
   wireGlobalSearch();
   if(!landed){ landed=true; if(typeof window.go==="function") window.go("dashboard"); }
 }
+/* ---------- SETTINGS — PayPlus Sync ----------
+   Pulls the PayPlus masterlist + recent attendance and reconciles employee
+   Active/Separated status. Status is decided by ATTENDANCE (present>0 in the
+   window), never by PayPlus resignationDate (that field is unreliable).
+   Flow: Preview (dry-run, no changes) → review the diff → Apply (writes).
+   Separations are only written if the "apply separations" box is ticked, so
+   nobody on maternity/sick leave gets auto-separated. */
+const PP_GATE="sync-Rcc7Yq2";
+let PP_LAST=null;
+
+async function ppSyncFetch(params){
+  const { data:{session} } = await sb.auth.getSession();
+  if(!session) throw new Error("You're signed out — sign in again and retry.");
+  const r = await fetch(`${SUPABASE_URL}/functions/v1/payplus-sync?`+params, {
+    headers:{ apikey: SUPABASE_ANON_KEY, Authorization:`Bearer ${session.access_token}` }});
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok || j.error) throw new Error(j.error || ("PayPlus sync failed (HTTP "+r.status+")."));
+  return j;
+}
+
+function renderSettings(){
+  const pg=$("#page-settings"); if(!pg) return;
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>PayPlus Sync <span class="count-tag">live</span></h2>
+      <div class="psub">Reconcile employee <b>Active / Separated</b> status against PayPlus.
+        Status is decided by recent <b>attendance</b> (anyone with attendance in the window is Active) —
+        not by PayPlus's unreliable resignation dates. Always <b>Preview</b> first; nothing is changed until you click <b>Apply</b>.</div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 12px;">
+        <label style="font-size:12.5px;color:var(--muted);font-weight:600;">Attendance window
+          <select id="ppDays" style="margin-left:6px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:13px;">
+            <option value="30">last 30 days</option>
+            <option value="60" selected>last 60 days</option>
+            <option value="90">last 90 days</option>
+          </select></label>
+        <button id="ppPreview" class="btn">Preview sync (dry run)</button>
+        <span id="ppBusy" style="font-size:12.5px;color:var(--muted);display:none;">Contacting PayPlus…</span>
+      </div>
+      <div id="ppResult"></div>
+    </div>`;
+  $("#ppDays").value="60";
+  $("#ppPreview").addEventListener("click",()=>runPayPlusPreview());
+}
+
+function ppCard(label,n,tone){
+  const col = tone==="good" ? "#1c6b3f" : tone==="warn" ? "#9a6a00" : tone==="bad" ? "#a4322a" : "var(--green-dark)";
+  return `<div class="kpi" style="flex:1;min-width:130px;"><div class="k-l">${label}</div><div class="k-n" style="color:${col};">${n}</div></div>`;
+}
+function ppList(title,rows,cols){
+  if(!rows||!rows.length) return "";
+  const body=rows.map(r=>`<tr><td>${esc(r.id)}</td><td>${esc(r.name||"—")}</td>${cols.from?`<td>${esc(r.from||"—")}</td>`:""}<td style="text-align:right;">${esc(String(r.present??"—"))}</td></tr>`).join("");
+  return `<details style="margin-top:10px;"><summary style="cursor:pointer;font-weight:700;color:var(--green-dark);font-size:13.5px;">${title} — ${rows.length} ${rows.length===80||rows.length===300?"(showing first "+rows.length+")":""}</summary>
+    <table style="margin-top:8px;"><thead><tr><th>PayPlus ID</th><th>Name</th>${cols.from?"<th>From status</th>":""}<th style="text-align:right;">Present days</th></tr></thead><tbody>${body}</tbody></table></details>`;
+}
+
+async function runPayPlusPreview(){
+  const out=$("#ppResult"), busy=$("#ppBusy"), btn=$("#ppPreview");
+  const days=$("#ppDays").value||"60";
+  out.innerHTML=""; busy.style.display="inline"; btn.disabled=true;
+  try{
+    const j=await ppSyncFetch(`mode=dry&days=${days}`);
+    PP_LAST=j; const res=j.result||{}; const w=j.window||{}; const p=j.pulled||{};
+    const nA=res.will_activate||0, nS=res.will_separate||0, nI=res.will_insert_new_active||0;
+    const hasChanges = nA||nI||nS;
+    out.innerHTML=`
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:8px;">
+        Window <b>${esc(w.dateFrom)} → ${esc(w.dateTo)}</b> ·
+        pulled ${p.masterlist} masterlist, ${p.active_in_window} active in window ·
+        matched ${res.matched}, already in sync ${res.already_consistent}.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+        ${ppCard("Will activate",nA,nA?"good":"")}
+        ${ppCard("Will add (new active)",nI,nI?"good":"")}
+        ${ppCard("Flagged separated",nS,nS?"warn":"")}
+        ${ppCard("Already consistent",res.already_consistent||0,"")}
+      </div>
+      ${ppList("To activate (back to Active)",res.sample_activate,{from:true})}
+      ${ppList("To add as new Active employees",res.sample_insert,{from:false})}
+      ${ppList("No recent attendance → would be Separated",res.list_separate,{from:false})}
+      ${ hasChanges ? `
+        <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px;">
+          ${ nS ? `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--ink);margin-bottom:12px;background:#fff8ec;border:1px solid #f0d9a8;border-radius:9px;padding:10px 12px;">
+            <input type="checkbox" id="ppDowngrades" style="margin-top:3px;">
+            <span><b>Also mark the ${nS} flagged people as Separated.</b> Leave this <b>unticked</b> unless you've reviewed the list above —
+            anyone on maternity, sick, or other approved leave will have no attendance and must NOT be separated. Activations and new adds apply either way.</span></label>` : "" }
+          <button id="ppApply" class="btn">Apply changes${nS?" (review separations first)":""}</button>
+          <button id="ppRefresh" class="btn ghost" style="margin-left:8px;">Re-run preview</button>
+        </div>` : `<div style="margin-top:14px;color:#1c6b3f;font-weight:700;">✓ Everything is already in sync — nothing to apply.</div>` }`;
+    if(hasChanges){
+      $("#ppApply").addEventListener("click",()=>runPayPlusApply());
+      $("#ppRefresh").addEventListener("click",()=>runPayPlusPreview());
+    }
+  }catch(e){
+    out.innerHTML=`<div style="color:#a4322a;font-weight:600;">${esc(e.message)}</div>`;
+  }finally{ busy.style.display="none"; btn.disabled=false; }
+}
+
+async function runPayPlusApply(){
+  if(!PP_LAST){ return; }
+  const res=PP_LAST.result||{};
+  const days=$("#ppDays").value||"60";
+  const dg = $("#ppDowngrades") && $("#ppDowngrades").checked;
+  const nA=res.will_activate||0, nI=res.will_insert_new_active||0, nS=res.will_separate||0;
+  const parts=[]; if(nA)parts.push(`reactivate ${nA}`); if(nI)parts.push(`add ${nI} new`); if(dg&&nS)parts.push(`separate ${nS}`);
+  const msg=`Apply to the live directory now?\n\nThis will ${parts.join(", ")}.`+
+    (nS&&!dg?`\n\nThe ${nS} no-attendance people will NOT be separated (box unticked).`:"")+
+    `\n\nThis writes to employee records.`;
+  if(!confirm(msg)) return;
+  const out=$("#ppResult"), busy=$("#ppBusy");
+  busy.style.display="inline"; const apply=$("#ppApply"); if(apply){ apply.disabled=true; apply.textContent="Applying…"; }
+  try{
+    const j=await ppSyncFetch(`mode=apply&days=${days}&downgrades=${dg?"1":"0"}&gate=${PP_GATE}`);
+    const r=j.result||{};
+    const successHtml=`<div style="background:var(--green-light);border:1px solid #bcdcc8;border-radius:10px;padding:14px 16px;">
+      <div style="color:#1c6b3f;font-weight:800;font-size:15px;margin-bottom:6px;">✓ Sync applied — directory updated</div>
+      <div style="font-size:13.5px;color:var(--ink);">
+        Reactivated <b>${r.will_activate||0}</b> · added <b>${r.will_insert_new_active||0}</b> new ·
+        separated <b>${dg?(r.will_separate||0):0}</b> · identity-refreshed <b>${r.identity_refreshed||0}</b>.
+      </div>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:6px;">Run Preview again any time to re-check.</div></div>`;
+    PP_LAST=null;
+    await loadEmployees();      // refresh KPIs + directory; this also re-renders the Settings panel (clearing #ppResult)
+    go("settings");             // keep the user on Settings
+    const fresh=$("#ppResult"); if(fresh) fresh.innerHTML=successHtml;   // re-show the result after the panel rebuild
+    return;
+  }catch(e){
+    out.innerHTML=`<div style="color:#a4322a;font-weight:600;">Apply failed: ${esc(e.message)}</div>`;
+  }finally{ busy.style.display="none"; }
+}
+
 /* ---------- COMPLIANCE — live register (IPO trademarks; licenses/permits next) ---------- */
 function renderCompliance(){
   const pg=$("#page-compliance"); if(!pg) return;

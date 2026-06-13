@@ -22,6 +22,9 @@
   .chip.open{background:var(--green-bg);color:var(--green);}
   .chip.rev{background:#e7f1f5;color:#2c6e8f;}
   .chip.hir{background:var(--bg);color:var(--muted);}
+  .chip.urg{background:#fdecea;color:#c0392b;}
+  .dates{font-size:11.5px;color:var(--muted);margin-top:3px;}
+  .dates .od{color:#c0392b;font-weight:700;}
   .btn{background:var(--navy);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:13px;cursor:pointer;}
   .btn.ghost{background:#fff;color:var(--navy);border:1px solid var(--line);}
   .btn:disabled{opacity:.5;cursor:default;}
@@ -78,16 +81,27 @@ function render(){
   const ops=DATA.openings||[];
   if(!ops.length){ b.innerHTML='<div class="empty">No open positions right now. Check back soon.</div>'; return; }
   const bySc={}; ops.forEach(o=>{ (bySc[o.sc||"—"]=bySc[o.sc||"—"]||[]).push(o); });
+  const fmtD=s=>{ if(!s) return ""; const d=new Date(s+"T00:00:00"); return isNaN(d)?"":d.toLocaleDateString(undefined,{month:"short",day:"numeric"}); };
+  const today=new Date(new Date().toDateString());
   b.innerHTML=Object.entries(bySc).map(([sc,list])=>`<div class="grp">${esc(sc)}</div>`+
-    list.map(o=>`<div class="card">
-      <div><div class="nm">${esc(o.store)}</div><div class="loc">${esc(o.city||"")}${o.area?" · "+esc(o.area):""}${o.category?" · "+(o.category==="CN"?"Concession":"Company-Op"):""}</div></div>
+    list.map(o=>{
+      const overdue=o.target_fill_date && new Date(o.target_fill_date+"T00:00:00")<today;
+      let when;
+      if(o.priority==="Urgent" && !o.target_fill_date) when=`<span class="od">Urgent — needed now</span>`;
+      else if(o.target_fill_date) when=`<span class="${overdue?'od':''}">Fill by ${fmtD(o.target_fill_date)}${overdue?" · overdue":""}</span>`;
+      else when=`Open`;
+      return `<div class="card">
+      <div style="flex:1;min-width:140px;"><div class="nm">${esc(o.store)}</div>
+        <div class="loc">${esc(o.city||"")}${o.area?" · "+esc(o.area):""}${o.category?" · "+(o.category==="CN"?"Concession":"Company-Op"):""}</div>
+        <div class="dates">Posted ${fmtD(o.date_posted)} · ${when}</div></div>
       <div class="chips">
-        <span class="chip open">${o.open_slots} open</span>
+        <span class="chip open">${o.open_slots} shortfall</span>
         <span class="chip rev">${o.in_review} in review</span>
         ${o.hired?`<span class="chip hir">${o.hired} hired</span>`:""}
+        ${o.urgent?`<span class="chip urg">Urgent</span>`:""}
       </div>
       <button class="btn" onclick='openSubmit(${JSON.stringify(o.store)})'>Submit a candidate</button>
-    </div>`).join("")).join("");
+    </div>`;}).join("")).join("");
 }
 function statusLabel(p){ return ({APPLIED:"Applied",SCREENING:"Screening",DOCUMENTS:"Documents",RECRUITER_REVIEW:"In review",HR_SIGNOFF:"HR sign-off",CONTRACT_SIGNING:"Contract",HIRED:"Hired",REJECTED:"Not selected"}[p])||p; }
 

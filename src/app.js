@@ -1111,7 +1111,7 @@ function openPrehire(c){
     }
     setPhase(c,next.key,m);
   });
-  const rej=document.getElementById("phReject"); if(rej) rej.addEventListener("click",()=>{ const reason=prompt("Rejection reason?"); if(reason!=null) setPhase(c,"REJECTED",m,{rejection_reason:reason}); });
+  const rej=document.getElementById("phReject"); if(rej) rej.addEventListener("click",()=>rejectPrehire(c,m));
 }
 function editPrehire(c){
   let m=document.getElementById("phEditModal"); if(!m){ m=document.createElement("div"); m.id="phEditModal"; document.body.appendChild(m); }
@@ -1169,6 +1169,27 @@ async function setPhase(c,phase,modal,extra){
   if(error){ alert(error.message); return; }
   if(modal) modal.remove();
   await loadEmployees(); window.go("prehire");
+}
+const REJECT_REASONS=["Did not meet the position qualifications","Incomplete requirements / documents","Failed assessment / interview","Store / Retail-ops did not accept","Position already filled","Withdrew / no longer available","Other"];
+function rejectPrehire(c, parentModal){
+  let m=document.getElementById("phRejModal"); if(!m){ m=document.createElement("div"); m.id="phRejModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10000;background:rgba(14,50,25,.5);display:flex;align-items:center;justify-content:center;padding:24px;";
+  const agencyNote=(c.hire_source&&c.hire_source!=="Direct")?`The agency (<b>${esc(c.hire_source)}</b>) will see this reason as their basis.`:`This is recorded on the candidate's record.`;
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:440px;width:100%;padding:22px;">
+    <h2 style="font-size:17px;color:var(--red);margin-bottom:2px;">Reject — ${esc(c.full_name)}</h2>
+    <div class="psub">${agencyNote}</div>
+    <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin:10px 0 3px;">Reason</label>
+    <select id="rjReason" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;">${REJECT_REASONS.map(r=>`<option>${esc(r)}</option>`).join("")}</select>
+    <textarea id="rjNote" rows="2" placeholder="Optional note (added to the reason)" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin-top:8px;"></textarea>
+    <div style="display:flex;gap:10px;margin-top:12px;"><button class="btn ghost" id="rjCancel" style="flex:1;">Cancel</button><button class="btn" id="rjGo" style="flex:1;background:var(--red);border-color:var(--red);">Reject candidate</button></div>
+  </div>`;
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("rjCancel").addEventListener("click",()=>m.remove());
+  document.getElementById("rjGo").addEventListener("click",()=>{
+    const base=document.getElementById("rjReason").value, note=document.getElementById("rjNote").value.trim();
+    const reason=note?base+" — "+note:base;
+    m.remove(); setPhase(c,"REJECTED",parentModal,{rejection_reason:reason});
+  });
 }
 function newPrehire(){
   const e={};

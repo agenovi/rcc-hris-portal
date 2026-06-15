@@ -1214,7 +1214,7 @@ function editPrehire(c){
         ${fld("pe_atype","Type",c.assessment_type)}${fld("pe_ascore","Score",c.assessment_score,"number")}
       </div>
       <div class="panel"><div class="subhead">Offer &amp; compensation <span class="sh-note">daily rate may change at contract</span></div>
-        ${sel("pe_ctype","Contract type",CONTRACT_TYPES,c.contract_type)}${fld("pe_rate","Daily rate offered (₱)",c.daily_rate,"number")}${fld("pe_allow","Daily allowance (₱)",c.daily_allowance,"number")}${fld("pe_start","Target start date",c.start_date,"date")}${fld("pe_super","Supervisor",c.supervisor_name)}
+        ${sel("pe_ctype","Contract type",CONTRACT_TYPES,c.contract_type)}${sel("pe_paybasis","Pay basis — Head Office only (others are daily-rated)",["Daily","Monthly"],c.pay_basis)}${fld("pe_rate","Daily rate offered (₱)",c.daily_rate,"number")}${fld("pe_allow","Daily allowance (₱)",c.daily_allowance,"number")}${fld("pe_start","Target start date",c.start_date,"date")}${fld("pe_super","Supervisor",c.supervisor_name)}
       </div>
       <div class="panel"><div class="subhead">Government numbers &amp; bank</div>
         ${fld("pe_sss","SSS",c.sss_number)}${fld("pe_phil","PhilHealth",c.philhealth_number)}${fld("pe_pag","Pag-IBIG",c.pagibig_number)}${fld("pe_tin","TIN",c.tin_number)}${fld("pe_bank","Bank name",c.bank_name)}${fld("pe_acct","Bank account number",c.bank_account_number)}
@@ -1236,7 +1236,7 @@ function editPrehire(c){
       email:v("pe_email"), phone, date_of_birth:v("pe_dob"), civil_status:v("pe_civil"), permanent_address:v("pe_perm"), current_address:v("pe_curr"),
       emergency_contact_name:v("pe_ecn"), emergency_contact_relation:v("pe_ecr"), emergency_contact_number:v("pe_ecnum"),
       assessment_type:v("pe_atype"), assessment_score:nv("pe_ascore"),
-      contract_type:v("pe_ctype"), daily_rate:nv("pe_rate"), daily_allowance:nv("pe_allow"), start_date:v("pe_start"), supervisor_name:v("pe_super"),
+      contract_type:v("pe_ctype"), pay_basis:v("pe_paybasis"), daily_rate:nv("pe_rate"), daily_allowance:nv("pe_allow"), start_date:v("pe_start"), supervisor_name:v("pe_super"),
       sss_number:v("pe_sss"), philhealth_number:v("pe_phil"), pagibig_number:v("pe_pag"), tin_number:v("pe_tin"), bank_name:v("pe_bank"), bank_account_number:v("pe_acct"),
       hr_officer_notes:v("pe_notes"), sm_acceptance:v("pe_sm"), updated_at:new Date().toISOString() };
     const { error } = await sb.from("prehire").update(p).eq("id",c.id);

@@ -41,11 +41,12 @@
         <option value="">Select a position…</option>
         <option>Merchandiser</option>
         <option>Store Supervisor</option>
-        <option>Sales Coordinator</option>
         <option>Warehouse Staff</option>
-        <option>Head Office / Administrative</option>
+        <option>Head Office / Admin</option>
+        <option>Seasonal Employee</option>
         <option>Other</option>
       </select>
+      <input id="f_pos_other" placeholder="Please specify the position" style="display:none;margin-top:8px;">
       <div class="merch" id="merchBlock" style="display:none;">
         <div class="badge">For Merchandiser / department-store roles</div>
         <label>Store / location (if you have one in mind)</label><input id="f_store">
@@ -128,7 +129,12 @@ const FN="https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/apply";
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const val=id=>document.getElementById(id).value.trim();
 const radio=n=>{ const el=document.querySelector(`input[name="${n}"]:checked`); return el?el.value:""; };
-function togglePos(){ document.getElementById("merchBlock").style.display = document.getElementById("f_pos").value==="Merchandiser" ? "block" : "none"; }
+function togglePos(){
+  const p=document.getElementById("f_pos").value;
+  document.getElementById("merchBlock").style.display = p==="Merchandiser" ? "block" : "none";
+  document.getElementById("f_pos_other").style.display = p==="Other" ? "block" : "none";
+}
+function posValue(){ const p=document.getElementById("f_pos").value; return p==="Other" ? (val("f_pos_other")||"Other") : p; }
 function showD(n){ const m={q1:"f_q1d",q2:"f_q2d",q3:"f_q3d"}; document.getElementById(m[n]).style.display = radio(n)==="Yes" ? "block" : "none"; }
 async function submitApp(){
   const msg=document.getElementById("msg"), name=val("f_name");
@@ -143,7 +149,7 @@ async function submitApp(){
     full_name:name, nickname:val("f_nick"), date_of_birth:val("f_dob"), place_of_birth:val("f_pob"),
     sex:val("f_sex"), civil_status:val("f_civil"),
     email:val("f_email"), phone:val("f_phone"), telegram:val("f_tg"), viber:val("f_vb"), facebook:val("f_fb"),
-    position:val("f_pos"), worksite:val("f_store"), religion:val("f_religion"), height:val("f_height"), weight:val("f_weight"),
+    position:posValue(), worksite:val("f_store"), religion:val("f_religion"), height:val("f_height"), weight:val("f_weight"),
     prev_employer:val("f_prevemp"), prev_position:val("f_prevpos"), prev_duration:val("f_prevdur"), prev_reason:val("f_prevreason"),
     education_school:val("f_school"), education_year:val("f_year"),
     q_discharged:radio("q1"), q_discharged_detail:val("f_q1d"),

@@ -30,6 +30,7 @@ console.log("build ok");
 [ -f "$APP_DIR/loans.html" ] && cp "$APP_DIR/loans.html" "$SITE_DIR/loans.html"
 [ -f "$APP_DIR/agency.html" ] && cp "$APP_DIR/agency.html" "$SITE_DIR/agency.html"
 [ -f "$APP_DIR/loan-apply.html" ] && cp "$APP_DIR/loan-apply.html" "$SITE_DIR/loan-apply.html"
+[ -f "$APP_DIR/direct-apply.html" ] && cp "$APP_DIR/direct-apply.html" "$SITE_DIR/direct-apply.html"
 
 # 1b. Also refresh the local double-clickable copy in the project folder (for easy viewing)
 cp "$SITE_DIR/index.html" "/Users/anj/Library/CloudStorage/Dropbox/CLAUDE/RCC HRIS Portal/RCC HRIS Portal - LIVE APP.html"

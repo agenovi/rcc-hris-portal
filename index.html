@@ -2418,6 +2418,7 @@ let CONTRACTS=[];
 let PHDOCS=[];
 let COMPLIANCE=[];
 let LOANS=[];
+let MANPOWER=[];
 let CURRENT_USER=null;
 const DEFAULT_PH_DOCS=[["nbi","NBI / Police Clearance",true],["birth","PSA Birth Certificate",false],["sss","SSS (E-1 / number)",false],["philhealth","PhilHealth",false],["pagibig","Pag-IBIG (MID)",false],["tin","TIN / BIR 1902",false],["photo","2×2 ID Photos",false],["diploma","Diploma / TOR",false],["medical","Medical / Health Certificate",false]];
 let empFilter="All";
@@ -2490,7 +2491,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2501,7 +2502,8 @@ async function loadEmployees(){
     sb.from("contracts").select("*").order("created_at"),
     sb.from("prehire_documents").select("*"),
     sb.from("compliance_items").select("*").order("name"),
-    sb.from("loans").select("*").order("created_at", {ascending:false})
+    sb.from("loans").select("*").order("created_at", {ascending:false}),
+    sb.from("manpower_requests").select("*").order("date_posted", {ascending:false})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2515,6 +2517,7 @@ async function loadEmployees(){
   PHDOCS=(pd&&pd.data)||[];
   COMPLIANCE=(cm&&cm.data)||[];
   LOANS=(ln&&ln.data)||[];
+  MANPOWER=(mr&&mr.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -3142,8 +3145,16 @@ function renderManning(){
   const SCs=[...new Set(open.map(b=>b.sc).filter(x=>x&&x!=='Unassigned'))].sort();
   const totAHC=open.reduce((s,b)=>s+b.ahc_stationary+b.ahc_reliever,0);
   const totCHC=open.reduce((s,b)=>s+chcFor(b.name),0);
+  const OPENINGS=MANPOWER.filter(o=>o.status==="Open");
+  const opInReview=(store)=>PREHIRE.filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT"].includes(p.phase)).length;
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
+      <h2>Openings <span class="count-tag">${OPENINGS.length} open</span></h2>
+      <div class="psub">Manpower requests you post. These drive the agency links — each agency sees the shortfall + an in-review count, then submits candidates into the pipeline.</div>
+      <div class="actionbar"><button class="btn" id="opNew">+ Post opening</button></div>
+      ${OPENINGS.length?`<table><thead><tr><th>Store</th><th>SC</th><th>Need</th><th>In review</th><th>Posted</th><th>Deadline</th><th></th></tr></thead><tbody id="opRows"></tbody></table>`:`<div class="psub" style="margin-top:6px;">No open requests yet — click “Post opening”.</div>`}
+    </div>
+    <div class="panel">
       <h2>Manning / Headcount <span class="count-tag">by Sales Coordinator</span></h2>
       <div class="psub">Every Sales Coordinator → their stores → approved vs. confirmed headcount. Store sales and live attendance plug in here once PayPlus and the sales system are connected.</div>
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
@@ -3157,6 +3168,22 @@ function renderManning(){
       </div>
       <div id="scBlocks"></div>
     </div>`;
+  const opNewBtn=$("#opNew"); if(opNewBtn) opNewBtn.addEventListener("click",()=>openingForm());
+  const opRows=$("#opRows");
+  if(opRows){
+    const today=new Date(new Date().toDateString());
+    opRows.innerHTML=OPENINGS.map(o=>{
+      const overdue=o.target_fill_date && new Date(o.target_fill_date+"T00:00:00")<today;
+      let dl;
+      if(o.priority==="Urgent"&&!o.target_fill_date) dl=`<span class="pill awol">Urgent</span>`;
+      else if(o.target_fill_date) dl=`${fmtDate(o.target_fill_date)}${overdue?' <span class="pill awol">overdue</span>':''}`;
+      else dl=`<span class="note">—</span>`;
+      return `<tr><td><b>${esc(o.worksite)}</b></td><td>${esc(o.sc||"—")}</td><td>${o.count_needed}</td><td>${opInReview(o.worksite)}</td><td>${o.date_posted?fmtDate(o.date_posted):"—"}</td><td>${dl}</td>
+        <td style="text-align:right;white-space:nowrap;"><button class="btn ghost" data-opedit="${o.id}">Edit</button> <button class="btn ghost" data-opclose="${o.id}" style="color:var(--red);border-color:#f1c9c5;">Close</button></td></tr>`;
+    }).join("");
+    $$("#opRows [data-opedit]").forEach(b=>b.addEventListener("click",()=>openingForm(MANPOWER.find(o=>o.id===b.dataset.opedit))));
+    $$("#opRows [data-opclose]").forEach(b=>b.addEventListener("click",()=>closeOpening(MANPOWER.find(o=>o.id===b.dataset.opclose))));
+  }
   const paint=()=>{
     const list=(scFilter==="All"?SCs:[scFilter]);
     $("#scBlocks").innerHTML=list.map(sc=>{
@@ -3188,6 +3215,43 @@ function renderManning(){
   };
   $$("#scChips .chip").forEach(c=>c.addEventListener("click",()=>{ scFilter=c.dataset.sc; renderManning(); }));
   paint();
+}
+function openingForm(o){
+  const isNew=!o; o=o||{};
+  const stores=[...new Set(BRANCHES.map(b=>b.name))].sort();
+  let m=document.getElementById("opModal"); if(!m){ m=document.createElement("div"); m.id="opModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:440px;width:100%;padding:22px;">
+    <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:8px;">${isNew?"Post an opening":"Edit opening"}</h2>
+    ${sel("op_store","Store *",stores,o.worksite)}
+    ${fld("op_count","How many needed *",o.count_needed??1,"number")}
+    ${sel("op_priority","Priority",["Normal","Urgent"],o.priority||"Normal")}
+    ${fld("op_fill","Fill-by date (optional)",o.target_fill_date,"date")}
+    <div class="psub" style="margin:-4px 0 8px;">Leave the date blank and set Priority = Urgent if it's just “needed now”.</div>
+    <div id="opMsg" style="font-size:13px;color:#a4322a;margin:4px 0;"></div>
+    <div style="display:flex;gap:10px;"><button class="btn ghost" id="opCancel" style="flex:1;">Cancel</button><button class="btn" id="opSave" style="flex:1;">${isNew?"Post opening":"Save"}</button></div>
+  </div>`;
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("opCancel").addEventListener("click",()=>m.remove());
+  document.getElementById("opSave").addEventListener("click",async()=>{
+    const store=v("op_store"); if(!store){ document.getElementById("opMsg").textContent="Pick a store."; return; }
+    const br=BRANCHES.find(b=>b.name===store);
+    const payload={ worksite:store, sc:br?br.sc:null, count_needed:nv("op_count")||1, priority:v("op_priority")||"Normal",
+      target_fill_date:v("op_fill")||null, status:"Open", updated_at:new Date().toISOString() };
+    let res;
+    if(isNew){ payload.date_posted=new Date().toISOString().slice(0,10); res=await sb.from("manpower_requests").insert(payload); }
+    else res=await sb.from("manpower_requests").update(payload).eq("id",o.id);
+    if(res.error){ document.getElementById("opMsg").textContent=res.error.message; return; }
+    m.remove(); await loadEmployees();
+  });
+}
+function closeOpening(o){
+  if(!o) return;
+  if(!confirm("Close the opening for "+o.worksite+"? It will stop showing on the agency links.")) return;
+  sb.from("manpower_requests").update({status:"Filled", updated_at:new Date().toISOString()}).eq("id",o.id).then(async({error})=>{
+    if(error){ alert(error.message); return; }
+    await loadEmployees();
+  });
 }
 
 /* ---------- GLOBAL SEARCH (topbar) ---------- */

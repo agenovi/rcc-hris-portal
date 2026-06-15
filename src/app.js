@@ -1113,6 +1113,23 @@ async function togglePhDoc(c,key,label,toFollow){
   await loadEmployees();
   openPrehire(PREHIRE.find(p=>String(p.id)===String(c.id)));
 }
+function phAppRows(a){
+  if(typeof a==="string"){ try{ a=JSON.parse(a); }catch(e){ return ""; } }
+  if(!a) return "";
+  const row=(l,val)=>val?`<div class="efield"><div class="el">${esc(l)}</div><div class="ev">${esc(val)}</div></div>`:"";
+  const yn=(l,val,d)=>val?`<div class="efield"><div class="el">${esc(l)}</div><div class="ev">${esc(val)}${val==="Yes"&&d?" — "+esc(d):""}</div></div>`:"";
+  const out=[
+    row("Nickname",a.nickname), row("Place of birth",a.place_of_birth), row("Sex",a.sex),
+    row("Telegram",a.telegram), row("Viber",a.viber), row("Facebook",a.facebook),
+    row("Religion (SM)",a.religion), row("Height",a.height), row("Weight",a.weight),
+    row("Recent employer",a.prev_employer), row("Position held",a.prev_position), row("Dates",a.prev_duration), row("Reason for leaving",a.prev_reason),
+    row("Education / school",a.education_school), row("Year graduated",a.education_year),
+    yn("Discharged / asked to resign?",a.q_discharged,a.q_discharged_detail),
+    yn("Charged / convicted of a crime?",a.q_criminal,a.q_criminal_detail),
+    yn("Health condition affecting the job?",a.q_health,a.q_health_detail)
+  ].join("");
+  return out||'<div class="psub">No extra details provided.</div>';
+}
 function openPrehire(c){
   if(!c) return;
   const idx=PH_PHASES.findIndex(p=>p.key===c.phase);
@@ -1156,6 +1173,7 @@ function openPrehire(c){
         <div class="psub">NBI / police clearance may be <b>"to follow"</b>; the rest are needed to close onboarding. Tap to mark received.</div>
         ${phDocsRows(c)}
       </div>
+      ${c.application?`<div class="panel"><h2>Application <span class="count-tag">as submitted</span></h2>${phAppRows(c.application)}</div>`:''}
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
         <button class="btn" id="phEdit">Edit applicant details</button>
         ${next?`<button class="btn blue" id="phAdvance">Advance → ${esc(next.label)}</button>`:'<span class="pill active">Pipeline complete</span>'}

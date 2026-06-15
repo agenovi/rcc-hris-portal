@@ -2,33 +2,42 @@
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>RCC — Apply</title>
 <style>
-  :root{--navy:#1E3A5F;--navy-d:#142a45;--ink:#1F2A37;--muted:#6B7785;--line:#E3E8EF;--bg:#F4F6F8;--green:#1c6b3f;--red:#c0392b;}
+  :root{--navy:#1E3A5F;--navy-d:#142a45;--ink:#1F2A37;--muted:#6B7785;--line:#E3E8EF;--bg:#F4F6F8;--green:#1c6b3f;--red:#c0392b;--info-bg:#e7f1f5;--info:#2c6e8f;}
   *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
   body{background:var(--bg);color:var(--ink);line-height:1.5;}
   .top{background:linear-gradient(135deg,var(--navy-d),var(--navy));color:#fff;padding:22px;}
   .top h1{font-size:21px;font-weight:800;}
   .top .s{opacity:.82;font-size:13px;margin-top:3px;}
-  .wrap{max-width:560px;margin:0 auto;padding:18px 16px 70px;}
-  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:14px;}
-  label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin:12px 0 4px;}
+  .wrap{max-width:600px;margin:0 auto;padding:18px 16px 80px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:14px;}
+  .card h2{font-size:15px;color:var(--navy);margin-bottom:2px;}
+  .sub{color:var(--muted);font-size:12.5px;margin-bottom:6px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;}
+  label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;}
   input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;}
   .req{color:var(--red);}
-  .btn{background:var(--navy);color:#fff;border:none;border-radius:9px;padding:12px 18px;font-weight:800;font-size:15px;cursor:pointer;width:100%;}
+  .yn{display:flex;gap:14px;align-items:center;margin-top:4px;font-size:14px;}
+  .yn label{font-weight:400;color:var(--ink);margin:0;display:flex;gap:5px;align-items:center;}
+  .yn input{width:auto;}
+  .merch{border:2px solid var(--info);border-radius:12px;padding:14px 16px;margin-top:6px;background:#fbfdff;}
+  .badge{display:inline-block;background:var(--info-bg);color:var(--info);font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:8px;margin-bottom:6px;}
+  .auth{display:flex;gap:10px;align-items:flex-start;font-size:13px;margin-top:6px;}
+  .auth input{width:auto;margin-top:3px;}
+  .btn{background:var(--navy);color:#fff;border:none;border-radius:9px;padding:13px 18px;font-weight:800;font-size:15px;cursor:pointer;width:100%;}
   .btn:disabled{opacity:.5;}
   .msg{font-size:13.5px;margin:10px 0;min-height:18px;}
   .done{text-align:center;padding:40px 20px;}
   .done .ok{font-size:46px;color:var(--green);}
-  .note{font-size:12px;color:var(--muted);margin-top:10px;}
+  .note{font-size:12px;color:var(--muted);margin-top:8px;}
 </style></head>
 <body>
-  <div class="top"><h1>Apply to Roshan Commercial Corporation</h1><div class="s">Tell us a few details — HR will review and get back to you. No login needed.</div></div>
+  <div class="top"><h1>Apply to Roshan Commercial Corporation</h1><div class="s">Please answer fully and accurately. HR will review and contact you. No login needed.</div></div>
   <div class="wrap" id="wrap">
+
     <div class="card">
-      <label>Full name <span class="req">*</span></label><input id="f_name" placeholder="First Middle Last">
-      <label>Email</label><input id="f_email" type="email">
-      <label>Mobile number</label><input id="f_phone" placeholder="09XXXXXXXXX">
+      <h2>1 · Position</h2>
       <label>Position you're applying for <span class="req">*</span></label>
-      <select id="f_pos">
+      <select id="f_pos" onchange="togglePos()">
         <option value="">Select a position…</option>
         <option>Merchandiser</option>
         <option>Store Supervisor</option>
@@ -37,30 +46,118 @@
         <option>Head Office / Administrative</option>
         <option>Other</option>
       </select>
-      <label>Store / location (if you have one in mind)</label><input id="f_site">
-      <label>Anything you'd like us to know (optional)</label><textarea id="f_notes" rows="2"></textarea>
+      <div class="merch" id="merchBlock" style="display:none;">
+        <div class="badge">For Merchandiser / department-store roles</div>
+        <label>Store / location (if you have one in mind)</label><input id="f_store">
+        <div class="grid">
+          <div><label>Religion</label><input id="f_religion"></div>
+          <div><label>Height (cm)</label><input id="f_height" placeholder="e.g. 165"></div>
+          <div><label>Weight (kg)</label><input id="f_weight" placeholder="e.g. 60"></div>
+        </div>
+        <div class="note">Religion, height and weight are required for SM mall ID issuance.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2 · Personal information</h2>
+      <div class="grid">
+        <div><label>Full name <span class="req">*</span></label><input id="f_name" placeholder="First Middle Last"></div>
+        <div><label>Nickname</label><input id="f_nick"></div>
+        <div><label>Date of birth</label><input id="f_dob" type="date"></div>
+        <div><label>Place of birth</label><input id="f_pob"></div>
+        <div><label>Sex</label><select id="f_sex"><option value="">—</option><option>Female</option><option>Male</option></select></div>
+        <div><label>Civil status</label><select id="f_civil"><option value="">—</option><option>Single</option><option>Married</option><option>Widowed</option><option>Separated</option><option>Annulled</option></select></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3 · How we can reach you</h2>
+      <div class="sub">Email is our main channel for updates — use one you check often.</div>
+      <div class="grid">
+        <div><label>Email <span class="req">*</span></label><input id="f_email" type="email"></div>
+        <div><label>Mobile number <span class="req">*</span></label><input id="f_phone" placeholder="09XXXXXXXXX"></div>
+        <div><label>Telegram</label><input id="f_tg" placeholder="@username or number"></div>
+        <div><label>Viber</label><input id="f_vb" placeholder="number"></div>
+        <div><label>Facebook / Messenger</label><input id="f_fb" placeholder="profile name or link"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>4 · Work &amp; education</h2>
+      <label>Most recent employer (if any)</label><input id="f_prevemp">
+      <div class="grid">
+        <div><label>Position held</label><input id="f_prevpos"></div>
+        <div><label>Dates (from – to)</label><input id="f_prevdur"></div>
+      </div>
+      <label>Reason for leaving</label><input id="f_prevreason">
+      <div class="grid" style="margin-top:4px;">
+        <div><label>Highest education / school</label><input id="f_school"></div>
+        <div><label>Year graduated</label><input id="f_year"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>5 · A few questions</h2>
+      <label>Have you ever been discharged or asked to resign from a job?</label>
+      <div class="yn"><label><input type="radio" name="q1" value="Yes" onchange="showD('q1')"> Yes</label><label><input type="radio" name="q1" value="No" onchange="showD('q1')"> No</label></div>
+      <textarea id="f_q1d" rows="2" placeholder="If yes, please give details" style="display:none;margin-top:6px;"></textarea>
+
+      <label>Have you ever been charged or convicted of a crime?</label>
+      <div class="yn"><label><input type="radio" name="q2" value="Yes" onchange="showD('q2')"> Yes</label><label><input type="radio" name="q2" value="No" onchange="showD('q2')"> No</label></div>
+      <textarea id="f_q2d" rows="2" placeholder="If yes, please state the facts" style="display:none;margin-top:6px;"></textarea>
+
+      <label>Do you have any health condition that may affect this job?</label>
+      <div class="yn"><label><input type="radio" name="q3" value="Yes" onchange="showD('q3')"> Yes</label><label><input type="radio" name="q3" value="No" onchange="showD('q3')"> No</label></div>
+      <textarea id="f_q3d" rows="2" placeholder="If yes, please provide details" style="display:none;margin-top:6px;"></textarea>
+    </div>
+
+    <div class="card">
+      <h2>6 · Documents</h2>
+      <div class="sub">You don't upload here yet. Once you submit, HR will tell you where to send your NBI, PSA Birth Certificate, valid ID, SSS/PhilHealth/Pag-IBIG/TIN, 2×2 photo and diploma/TOR (NBI may be "to follow").</div>
+    </div>
+
+    <div class="card">
+      <div class="auth"><input type="checkbox" id="f_confirm">
+        <span>I confirm that all the information above is true, complete, and accurate to the best of my knowledge. <span class="req">*</span></span></div>
       <div class="msg" id="msg"></div>
       <button class="btn" id="submitBtn" onclick="submitApp()">Submit application</button>
-      <div class="note">After you submit, HR will contact you to complete your requirements and documents.</div>
     </div>
   </div>
 <script>
 const FN="https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/apply";
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const val=id=>document.getElementById(id).value.trim();
+const radio=n=>{ const el=document.querySelector(`input[name="${n}"]:checked`); return el?el.value:""; };
+function togglePos(){ document.getElementById("merchBlock").style.display = document.getElementById("f_pos").value==="Merchandiser" ? "block" : "none"; }
+function showD(n){ const m={q1:"f_q1d",q2:"f_q2d",q3:"f_q3d"}; document.getElementById(m[n]).style.display = radio(n)==="Yes" ? "block" : "none"; }
 async function submitApp(){
-  const name=document.getElementById("f_name").value.trim(), msg=document.getElementById("msg");
-  if(!name){ msg.style.color="#c0392b"; msg.textContent="Please enter your full name."; return; }
-  if(!document.getElementById("f_pos").value){ msg.style.color="#c0392b"; msg.textContent="Please select the position you're applying for."; return; }
+  const msg=document.getElementById("msg"), name=val("f_name");
+  if(!name){ return fail("Please enter your full name."); }
+  if(!document.getElementById("f_pos").value){ return fail("Please select the position you're applying for."); }
+  if(!val("f_email")){ return fail("Please enter your email."); }
+  if(!val("f_phone")){ return fail("Please enter your mobile number."); }
+  if(!document.getElementById("f_confirm").checked){ return fail("Please tick the confirmation to submit."); }
+  function fail(t){ msg.style.color="#c0392b"; msg.textContent=t; return; }
   const btn=document.getElementById("submitBtn"); btn.disabled=true; btn.textContent="Submitting…";
-  const payload={ full_name:name, email:document.getElementById("f_email").value, phone:document.getElementById("f_phone").value,
-    position:document.getElementById("f_pos").value, worksite:document.getElementById("f_site").value, notes:document.getElementById("f_notes").value };
+  const payload={
+    full_name:name, nickname:val("f_nick"), date_of_birth:val("f_dob"), place_of_birth:val("f_pob"),
+    sex:val("f_sex"), civil_status:val("f_civil"),
+    email:val("f_email"), phone:val("f_phone"), telegram:val("f_tg"), viber:val("f_vb"), facebook:val("f_fb"),
+    position:val("f_pos"), worksite:val("f_store"), religion:val("f_religion"), height:val("f_height"), weight:val("f_weight"),
+    prev_employer:val("f_prevemp"), prev_position:val("f_prevpos"), prev_duration:val("f_prevdur"), prev_reason:val("f_prevreason"),
+    education_school:val("f_school"), education_year:val("f_year"),
+    q_discharged:radio("q1"), q_discharged_detail:val("f_q1d"),
+    q_criminal:radio("q2"), q_criminal_detail:val("f_q2d"),
+    q_health:radio("q3"), q_health_detail:val("f_q3d"),
+    source:"Direct", confirmed:true
+  };
   try{
     const r=await fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
     const d=await r.json();
     if(!d.ok){ btn.disabled=false; btn.textContent="Submit application"; msg.style.color="#c0392b"; msg.textContent=d.error||"Couldn't submit. Please try again."; return; }
     document.getElementById("wrap").innerHTML=`<div class="card done"><div class="ok">✓</div>
-      <h2 style="font-size:18px;margin:10px 0 6px;">Application received</h2>
-      <div style="color:var(--muted);font-size:13.5px;">Your reference: <b>${esc(d.ref)}</b><br>HR will review it and contact you. You can close this page.</div></div>`;
+      <h2 style="font-size:18px;margin:10px 0 6px;color:var(--navy);">Application received</h2>
+      <div style="color:var(--muted);font-size:13.5px;">Your reference: <b>${esc(d.ref)}</b><br>HR will review it and contact you about your requirements. You can close this page.</div></div>`;
   }catch(e){ btn.disabled=false; btn.textContent="Submit application"; msg.style.color="#c0392b"; msg.textContent="Couldn't submit. Please try again."; }
 }
 </script></body></html>

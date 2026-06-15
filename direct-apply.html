@@ -27,7 +27,16 @@
       <label>Full name <span class="req">*</span></label><input id="f_name" placeholder="First Middle Last">
       <label>Email</label><input id="f_email" type="email">
       <label>Mobile number</label><input id="f_phone" placeholder="09XXXXXXXXX">
-      <label>Position you're applying for</label><input id="f_pos" placeholder="e.g. Merchandiser, Warehouse Staff">
+      <label>Position you're applying for <span class="req">*</span></label>
+      <select id="f_pos">
+        <option value="">Select a position…</option>
+        <option>Merchandiser</option>
+        <option>Store Supervisor</option>
+        <option>Sales Coordinator</option>
+        <option>Warehouse Staff</option>
+        <option>Head Office / Administrative</option>
+        <option>Other</option>
+      </select>
       <label>Store / location (if you have one in mind)</label><input id="f_site">
       <label>Anything you'd like us to know (optional)</label><textarea id="f_notes" rows="2"></textarea>
       <div class="msg" id="msg"></div>
@@ -41,6 +50,7 @@ const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;
 async function submitApp(){
   const name=document.getElementById("f_name").value.trim(), msg=document.getElementById("msg");
   if(!name){ msg.style.color="#c0392b"; msg.textContent="Please enter your full name."; return; }
+  if(!document.getElementById("f_pos").value){ msg.style.color="#c0392b"; msg.textContent="Please select the position you're applying for."; return; }
   const btn=document.getElementById("submitBtn"); btn.disabled=true; btn.textContent="Submitting…";
   const payload={ full_name:name, email:document.getElementById("f_email").value, phone:document.getElementById("f_phone").value,
     position:document.getElementById("f_pos").value, worksite:document.getElementById("f_site").value, notes:document.getElementById("f_notes").value };

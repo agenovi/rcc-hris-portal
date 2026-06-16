@@ -465,11 +465,7 @@
     </div>
     <nav>
       <div class="nav-sec">Workspace</div>
-      <div class="nav-item active" data-page="wherewe" onclick="go('wherewe')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5l3 2"/></svg>
-        Where We Are
-      </div>
-      <div class="nav-item" data-page="dashboard" onclick="go('dashboard')">
+      <div class="nav-item active" data-page="dashboard" onclick="go('dashboard')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
         Dashboard
       </div>
@@ -603,91 +599,8 @@
     <div class="content">
 
       <!-- DASHBOARD -->
-      <section class="page active" id="page-wherewe">
-        <div class="panel" style="margin-top:0;">
-          <h2>Where we are — and where this is going</h2>
-          <div class="psub">The honest picture, so the rest of the mockup makes sense.</div>
-          <p style="font-size:14px;margin:6px 0 0;">The RCC HRIS Portal <strong>does not exist yet</strong> — it is in design. Every other screen here shows the <strong>target</strong>: where we are headed. This screen shows <strong>where things stand today</strong>, so you can see the whole journey, not only the destination.</p>
-        </div>
 
-        <div class="two-col">
-          <div class="panel" style="margin-top:0;">
-            <h2>Today — how RCC HR runs now</h2>
-            <div class="psub">Scattered across several tools</div>
-            <div class="task"><div class="dot a"></div><div><div class="tt">Google Sheets</div><div class="td">The Employee Directory, the Manning Sheet, the 44-column Contract Tracker — separate files, kept in sync by hand.</div></div></div>
-            <div class="task"><div class="dot a"></div><div><div class="tt">Google Apps Script</div><div class="td">The Rose HR bot, the contract pipeline, memo generation — automation bolted onto the sheets.</div></div></div>
-            <div class="task"><div class="dot a"></div><div><div class="tt">The Tally-Portal</div><div class="td">Some employee and branch master data lives in the separate company portal.</div></div></div>
-            <div class="task"><div class="dot a"></div><div><div class="tt">Manual tracking</div><div class="td">Timekeeping, exit clearance and more — handled by hand.</div></div></div>
-          </div>
-          <div class="panel" style="margin-top:0;">
-            <h2>The portal — the target</h2>
-            <div class="psub">What we are building toward</div>
-            <div class="task"><div class="dot g"></div><div><div class="tt">One system, one database</div><div class="td">A single home for every employee, branch and record — one source of truth.</div></div></div>
-            <div class="task"><div class="dot g"></div><div><div class="tt">Role-aware logins</div><div class="td">Each person sees what they should — plus a limited login for each agency.</div></div></div>
-            <div class="task"><div class="dot g"></div><div><div class="tt">Connected modules</div><div class="td">One fact updates everything — the "3 absences" cascade runs on its own.</div></div></div>
-            <div class="task"><div class="dot g"></div><div><div class="tt">PayPlus connected</div><div class="td">Payroll data flows in as a continuous cross-check.</div></div></div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <h2>The journey — three phases</h2>
-          <div class="psub">Where we are right now</div>
-          <div style="display:flex;gap:12px;flex-wrap:wrap;">
-            <div style="flex:1;min-width:200px;border:1px solid var(--line);border-left:4px solid var(--green);border-radius:9px;padding:13px 15px;background:#fafbfa;">
-              <div style="font-size:11.5px;font-weight:800;color:var(--green);text-transform:uppercase;">&#10003; Phase 1 — Done</div>
-              <div style="font-size:13.5px;font-weight:700;margin-top:3px;">Foundation</div>
-              <div style="font-size:12px;color:var(--muted);">The Supabase database is set up — 22 tables reviewed.</div>
-            </div>
-            <div style="flex:1;min-width:200px;border:1px solid var(--amber);border-left:4px solid var(--amber);border-radius:9px;padding:13px 15px;background:var(--amber-bg);">
-              <div style="font-size:11.5px;font-weight:800;color:var(--amber-ink);text-transform:uppercase;">&#9679; Phase 2 — Now</div>
-              <div style="font-size:13.5px;font-weight:700;margin-top:3px;">Design the structure</div>
-              <div style="font-size:12px;color:var(--muted);">Designing the data and the screens — starting with the employee record.</div>
-            </div>
-            <div style="flex:1;min-width:200px;border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:9px;padding:13px 15px;background:#fafbfa;">
-              <div style="font-size:11.5px;font-weight:800;color:var(--muted);text-transform:uppercase;">&#9675; Phase 3 — Next</div>
-              <div style="font-size:13.5px;font-weight:700;margin-top:3px;">Build</div>
-              <div style="font-size:12px;color:var(--muted);">Build the portal module by module.</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <h2>Where each module stands</h2>
-          <div class="psub">What runs it today, and how far along it is toward the portal</div>
-          <table>
-            <thead><tr><th>Module</th><th>How it runs today</th><th>Toward the portal</th></tr></thead>
-            <tbody>
-              <tr><td><b>Employee Records</b></td><td>Google Sheet directory</td><td><span class="pill di">Database ready</span> <span style="font-size:11px;color:var(--muted);">in design now</span></td></tr>
-              <tr><td><b>Contracts</b></td><td>Apps Script automation</td><td><span class="pill di">Database ready</span></td></tr>
-              <tr><td><b>Pre-hire &amp; Recruiting</b></td><td>Apps Script</td><td><span class="pill di">Database ready</span></td></tr>
-              <tr><td><b>Notices &amp; Memos</b></td><td>Apps Script</td><td><span class="pill di">Database ready</span></td></tr>
-              <tr><td><b>Evaluations</b></td><td>Apps Script (not deployed)</td><td><span class="pill di">Database ready</span></td></tr>
-              <tr><td><b>Exit Clearance</b></td><td>Apps Script + paper forms</td><td><span class="pill di">Database ready</span></td></tr>
-              <tr><td><b>Loans</b></td><td>Paper forms</td><td><span class="pill di">Database ready</span></td></tr>
-              <tr><td><b>Employee Purchases</b></td><td>A monitoring sheet</td><td><span class="pill di">Database ready</span></td></tr>
-              <tr><td><b>Timekeeping &amp; Attendance</b></td><td>SM biometrics + manual</td><td><span class="pill probation">To build — no table yet</span></td></tr>
-              <tr><td><b>Branches / Manning</b></td><td>The Manning Sheet</td><td><span class="pill probation">To build — no table yet</span></td></tr>
-              <tr><td><b>Agency Staffing</b></td><td>Email &amp; phone</td><td><span class="pill probation">To build — no table yet</span></td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="panel">
-          <h2>Your ideas — parked for later</h2>
-          <div class="psub">Captured in the Parking Lot — not yet designed, but not forgotten</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;">
-            <span class="chip">IPO tracker</span><span class="chip">Store compliance tracker</span>
-            <span class="chip">Onboarding &amp; annual tracking</span><span class="chip">Store inventory schedule</span>
-            <span class="chip">Inventory loss tracker</span><span class="chip">JD &amp; deliverables</span>
-            <span class="chip">Compliance calendar</span><span class="chip">Admin requisition</span>
-            <span class="chip">HR requisition</span><span class="chip">HR expense tracking</span>
-            <span class="chip">Process compiler</span><span class="chip">Government forms versioning</span>
-            <span class="chip">HR lagging &#8594; month-end KPI</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="page" id="page-dashboard">
+      <section class="page active" id="page-dashboard">
         <div class="hello">
           <div class="hd">SUNDAY, MAY 24, 2026</div>
           <div class="hh">Good morning, <span>Juvelyn.</span></div>
@@ -1964,7 +1877,7 @@
 
 <script>
   var TITLES={
-    wherewe:'Where We Are', dashboard:'Dashboard', employees:'Employee Master', employee:'Employee Record',
+    dashboard:'Dashboard', employees:'Employee Master', employee:'Employee Record',
     branches:'Branch Master', store:'Branch Detail',
     prehire:'Pre-hire & Recruiting', contracts:'Contracts', memos:'Notices',
     evaluations:'Evaluations', timekeeping:'Timekeeping & Attendance', exit:'Exit Clearance',

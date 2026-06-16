@@ -461,10 +461,10 @@ function renderDashboard(){
       <div class="hsub">Your whole workforce, live from the database — ${A.length} active people across ${open.length} stores.</div>
     </div>
     <div class="grid kpis">
-      <div class="kpi"><div class="k-l">Active Employees</div><div class="k-n">${A.length}</div><div class="k-break"><span>HO+WH<b>${ho+wh}</b></span><span>Retail<b>${rt}</b></span></div></div>
-      <div class="kpi"><div class="k-l">Agency Merchandisers</div><div class="k-n">${agency}</div><div class="k-break"><span>Jell-on<b>${agJellon}</b></span><span>M&amp;G<b>${agMG}</b></span></div></div>
-      <div class="kpi warn"><div class="k-l">On Probation</div><div class="k-n">${prob}</div><div class="k-s">regularization reviews ahead</div></div>
-      <div class="kpi ${awol?'alert':''}"><div class="k-l">AWOL Cases</div><div class="k-n">${awol}</div><div class="k-s">${awol?'NTE / due process':'none open'}</div></div>
+      <div class="kpi" style="cursor:pointer;" onclick="go('employees')"><div class="k-l">Active Employees</div><div class="k-n">${A.length}</div><div class="k-break"><span>HO+WH<b>${ho+wh}</b></span><span>Retail<b>${rt}</b></span></div></div>
+      <div class="kpi" style="cursor:pointer;" onclick="go('branches')"><div class="k-l">Agency Merchandisers</div><div class="k-n">${agency}</div><div class="k-break"><span>Jell-on<b>${agJellon}</b></span><span>M&amp;G<b>${agMG}</b></span></div></div>
+      <div class="kpi warn" style="cursor:pointer;" onclick="go('employees')"><div class="k-l">On Probation</div><div class="k-n">${prob}</div><div class="k-s">regularization reviews ahead</div></div>
+      <div class="kpi ${awol?'alert':''}" style="cursor:pointer;" onclick="go('employees')"><div class="k-l">AWOL Cases</div><div class="k-n">${awol}</div><div class="k-s">${awol?'NTE / due process':'none open'}</div></div>
     </div>
     <div class="grid kpis" style="margin-top:13px;">
       <div class="kpi" style="cursor:pointer;" onclick="go('prehire')"><div class="k-l">Pre-hire in Pipeline</div><div class="k-n">${phPipe}</div><div class="k-s">${phReady} ready for contract</div></div>

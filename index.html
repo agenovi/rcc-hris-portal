@@ -2717,6 +2717,42 @@ function chartRows(obj, max){
     <div style="width:42px;text-align:right;font-weight:800;font-size:13px;color:var(--green-dark);">${v}</div></div>`).join("");
 }
 function tenureYears(d){ if(!d) return null; const y=(Date.parse(d)); if(isNaN(y)) return null; return (Date.now()-y)/(365.25*24*3600*1000); }
+const DASH_PANEL_LABELS=[
+  ["Your pending tasks","Pending tasks"],["Waiting on others","Waiting on others"],
+  ["Where we're lagging","Where we're lagging"],["Workforce composition","Workforce composition"],
+  ["Store network","Store network"],["Store footprint","Store footprint"],["Merchandiser pay","Merchandiser pay"]
+];
+function dashHiddenKey(){ return "dashHidden:"+((CURRENT_USER&&CURRENT_USER.email)||"x"); }
+function dashHidden(){ try{ return JSON.parse(localStorage.getItem(dashHiddenKey())||"[]"); }catch(e){ return []; } }
+function dashWidgets(){
+  const pg=document.getElementById("page-dashboard"); const out=[]; if(!pg) return out;
+  const rowLabels=["People stats","Hiring stats","Merchandiser pay"];
+  pg.querySelectorAll(".grid.kpis").forEach((row,i)=>{ const id="kpis"+i; row.dataset.w=id; out.push({id,label:rowLabels[i]||("Stats row "+(i+1))}); });
+  pg.querySelectorAll(".panel").forEach(p=>{ const h=p.querySelector("h2"); if(!h) return;
+    const t=(h.textContent||"").replace(/\s+/g," ").trim();
+    const hit=DASH_PANEL_LABELS.find(([k])=>t.indexOf(k)===0);
+    if(hit){ const id="p_"+hit[0].replace(/\W+/g,"").slice(0,14); p.dataset.w=id; out.push({id,label:hit[1]}); } });
+  return out;
+}
+function applyDashPrefs(){ const h=dashHidden(); dashWidgets().forEach(w=>{ const el=document.querySelector('#page-dashboard [data-w="'+w.id+'"]'); if(el) el.style.display=h.includes(w.id)?"none":""; }); }
+function customizeDash(){
+  const widgets=dashWidgets(), h=dashHidden();
+  let m=document.getElementById("dashCustModal"); if(!m){ m=document.createElement("div"); m.id="dashCustModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:360px;width:100%;padding:22px;max-height:80vh;overflow-y:auto;">
+    <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:3px;">Customize your dashboard</h2>
+    <div class="psub" style="margin-bottom:10px;">Tick what you want to see — saved to your login.</div>
+    ${widgets.map(w=>`<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;padding:6px 0;"><input type="checkbox" data-wid="${w.id}" ${h.includes(w.id)?"":"checked"}> ${esc(w.label)}</label>`).join("")}
+    <div style="display:flex;gap:10px;margin-top:14px;"><button class="btn ghost" id="dcCancel" style="flex:1;">Cancel</button><button class="btn" id="dcSave" style="flex:1;">Save</button></div>
+  </div>`;
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("dcCancel").addEventListener("click",()=>m.remove());
+  document.getElementById("dcSave").addEventListener("click",()=>{
+    const hidden=[]; m.querySelectorAll("[data-wid]").forEach(cb=>{ if(!cb.checked) hidden.push(cb.dataset.wid); });
+    try{ localStorage.setItem(dashHiddenKey(), JSON.stringify(hidden)); }catch(e){}
+    m.remove(); applyDashPrefs();
+  });
+}
 function renderDashboard(){
   const A=EMPLOYEES.filter(isActive);
   const hr=new Date().getHours(); const greet=hr<12?"Good morning":hr<18?"Good afternoon":"Good evening";
@@ -2769,6 +2805,7 @@ function renderDashboard(){
       <div class="hd">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"}).toUpperCase()}</div>
       <div class="hh">${greet}, <span>${esc(nm)}.</span></div>
       <div class="hsub">Your whole workforce, live from the database — ${A.length} active people across ${open.length} stores.</div>
+      <button class="btn ghost" id="dashCust" style="margin-top:10px;font-size:12.5px;padding:5px 12px;">Customize dashboard</button>
     </div>
     <div class="grid kpis">
       <div class="kpi" style="cursor:pointer;" onclick="go('employees')"><div class="k-l">Active Employees</div><div class="k-n">${A.length}</div><div class="k-break"><span>HO+WH<b>${ho+wh}</b></span><span>Retail<b>${rt}</b></span></div></div>
@@ -2850,6 +2887,8 @@ function renderDashboard(){
         <div class="task" style="margin-top:10px;"><div class="dot a"></div><div><div class="tt">Company allowances (COLA / SOLA / SA / LA) — mostly for Lead Disers</div><div class="td">Not reliably recorded in the Manning Sheet, so they're not in the totals above. The actual per-person allowance comes from <b>PayPlus</b> once connected.</div></div></div>
       </div>
     </div>`;
+  const dc=document.getElementById("dashCust"); if(dc) dc.addEventListener("click",customizeDash);
+  applyDashPrefs();
 }
 /* legacy KPI-only updater (unused, kept for safety) */
 function renderDashboardKPIs(){

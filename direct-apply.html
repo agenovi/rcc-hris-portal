@@ -49,7 +49,8 @@
       <input id="f_pos_other" placeholder="Please specify the position" style="display:none;margin-top:8px;">
       <div class="merch" id="merchBlock" style="display:none;">
         <div class="badge">For Merchandiser / department-store roles</div>
-        <label>Store / location (if you have one in mind)</label><input id="f_store">
+        <label>Store you'd like to apply to <span style="font-weight:400;color:var(--muted);">(optional — these are our current openings)</span></label>
+        <select id="f_store"><option value="">No preference — wherever I'm needed</option></select>
         <div class="grid">
           <div><label>Religion</label><input id="f_religion"></div>
           <div><label>Height (cm)</label><input id="f_height" placeholder="e.g. 165"></div>
@@ -129,6 +130,15 @@ const FN="https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/apply";
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const val=id=>document.getElementById(id).value.trim();
 const radio=n=>{ const el=document.querySelector(`input[name="${n}"]:checked`); return el?el.value:""; };
+(async function loadStores(){
+  try{
+    const r=await fetch(FN); const d=await r.json();
+    if(d&&d.ok&&Array.isArray(d.stores)){
+      const sel=document.getElementById("f_store");
+      d.stores.forEach(s=>{ const o=document.createElement("option"); o.textContent=s; sel.appendChild(o); });
+    }
+  }catch(e){}
+})();
 function togglePos(){
   const p=document.getElementById("f_pos").value;
   document.getElementById("merchBlock").style.display = p==="Merchandiser" ? "block" : "none";

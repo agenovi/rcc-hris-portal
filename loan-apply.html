@@ -53,7 +53,7 @@
       <label>Amount needed (₱) <span class="req">*</span></label><input id="f_amount" type="number" oninput="calc()">
       <label>Repayment term</label>
       <select id="f_term" onchange="calc()"></select>
-      <label>Purpose / reason</label><textarea id="f_purpose" rows="2"></textarea>
+      <label>Reason for this loan <span class="req">*</span></label><textarea id="f_purpose" rows="2" placeholder="Briefly, what is this for? HR will review every request."></textarea>
       <div class="calc" id="calcBox">Pick a loan type and enter an amount to see the estimated monthly.</div>
     </div>
     <div class="card">
@@ -74,7 +74,7 @@
 <script>
 const FN="https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/loan-apply";
 const TYPES={
-  discretionary:{n:"Discretionary",rate:12,max:50000,term:12,d:"7+ yrs service · no docs"},
+  discretionary:{n:"Discretionary",rate:12,max:50000,term:12,d:"7+ yrs service · brief reason required"},
   emergency:{n:"Emergency",rate:12,max:20000,term:12,d:"regular employees · medical · accident · death"},
   educational:{n:"Educational",rate:0,max:null,term:12,d:"0% · child's tuition (50%)"},
   moto:{n:"Motorcycle",rate:6,max:100000,term:36,d:"RCC-owned until paid · 10% DP"},
@@ -115,6 +115,7 @@ async function submitLoan(){
   if(!SEL){ msg.style.color="#c0392b"; msg.textContent="Please choose a loan type."; return; }
   const amt=parseFloat(document.getElementById("f_amount").value)||0;
   if(amt<=0){ msg.style.color="#c0392b"; msg.textContent="Please enter the amount needed."; return; }
+  if(!document.getElementById("f_purpose").value.trim()){ msg.style.color="#c0392b"; msg.textContent="Please give a brief reason for this loan."; return; }
   if(!document.getElementById("f_auth").checked){ msg.style.color="#c0392b"; msg.textContent="Please tick the authorization to continue."; return; }
   const btn=document.getElementById("submitBtn"); btn.disabled=true; btn.textContent="Submitting…";
   const payload={ applicant_name:name, employee_id:document.getElementById("f_eid").value,

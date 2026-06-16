@@ -1248,6 +1248,11 @@ function openPrehire(c){
   $("#phEdit").addEventListener("click",()=>editPrehire(c));
   $$("#phModal [data-doc]").forEach(el=>el.addEventListener("click",()=>togglePhDoc(c, el.dataset.doc, el.dataset.label, el.dataset.tofollow==="1")));
   if(next) $("#phAdvance").addEventListener("click",()=>{
+    // PAY-BASIS GATE: a Head Office hire must have Daily/Monthly chosen before the contract.
+    if(next.key==="CONTRACT_SIGNING" && deriveGroup(c.department)==="Head Office" && !c.pay_basis){
+      alert("Pay basis not set.\n\nThis is a Head Office hire — choose Daily or Monthly before the contract is prepared.\n\nOpen “Edit applicant details” → Offer & compensation → Pay basis.");
+      return;
+    }
     // SM HARD GATE: no candidate reaches "Hired" until store / Retail-ops acceptance is resolved.
     if(next.key==="HIRED" && !["Accepted","NA"].includes(c.sm_acceptance||"")){
       alert("SM hard gate\n\nThis candidate can't be marked Hired until store / Retail-ops acceptance is recorded.\n\nOpen “Edit applicant details” → set “SM / Retail-ops acceptance” to:\n • Accepted — the host store has taken them, or\n • NA — this role isn't store-based.\n\n(It is currently: "+(c.sm_acceptance||"blank")+".)");

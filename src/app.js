@@ -185,8 +185,8 @@ function ppCard(label,n,tone){
 }
 function ppList(title,rows,cols){
   if(!rows||!rows.length) return "";
-  const body=rows.map(r=>`<tr><td>${esc(r.id)}</td><td>${esc(r.name||"—")}</td>${cols.from?`<td>${esc(r.from||"—")}</td>`:""}<td style="text-align:right;">${esc(String(r.present??"—"))}</td></tr>`).join("");
-  return `<details style="margin-top:10px;"><summary style="cursor:pointer;font-weight:700;color:var(--green-dark);font-size:13.5px;">${title} — ${rows.length} ${rows.length===80||rows.length===300?"(showing first "+rows.length+")":""}</summary>
+  const body=rows.map(r=>`<tr class="clickable" data-ppid="${esc(r.id)}" style="cursor:pointer;"><td>${esc(r.id)}</td><td>${esc(r.name||"—")}</td>${cols.from?`<td>${esc(r.from||"—")}</td>`:""}<td style="text-align:right;">${esc(String(r.present??"—"))}</td></tr>`).join("");
+  return `<details${cols.open?" open":""} style="margin-top:10px;"><summary style="cursor:pointer;font-weight:700;color:var(--green-dark);font-size:13.5px;">${title} — ${rows.length} ${rows.length===80||rows.length===300?"(showing first "+rows.length+")":""} <span style="font-weight:400;color:var(--muted);font-size:12px;">· click a name to view their record</span></summary>
     <table style="margin-top:8px;"><thead><tr><th>PayPlus ID</th><th>Name</th>${cols.from?"<th>From status</th>":""}<th style="text-align:right;">Present days</th></tr></thead><tbody>${body}</tbody></table></details>`;
 }
 
@@ -212,7 +212,7 @@ async function runPayPlusPreview(){
       </div>
       ${ppList("To activate (back to Active)",res.sample_activate,{from:true})}
       ${ppList("To add as new Active employees",res.sample_insert,{from:false})}
-      ${ppList("No recent attendance → would be Separated",res.list_separate,{from:false})}
+      ${ppList("No recent attendance → would be Separated",res.list_separate,{from:false,open:true})}
       ${ hasChanges ? `
         <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px;">
           ${ nS ? `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--ink);margin-bottom:12px;background:#fff8ec;border:1px solid #f0d9a8;border-radius:9px;padding:10px 12px;">
@@ -222,6 +222,10 @@ async function runPayPlusPreview(){
           <button id="ppApply" class="btn">Apply changes${nS?" (review separations first)":""}</button>
           <button id="ppRefresh" class="btn ghost" style="margin-left:8px;">Re-run preview</button>
         </div>` : `<div style="margin-top:14px;color:#1c6b3f;font-weight:700;">✓ Everything is already in sync — nothing to apply.</div>` }`;
+    $$("#ppResult [data-ppid]").forEach(tr=>tr.addEventListener("click",()=>{
+      const e=EMPLOYEES.find(x=>String(x.employee_id)===String(tr.dataset.ppid));
+      if(e) openForm(e); else alert("This person isn't in the portal yet — they're new in PayPlus, so there's no record to open.");
+    }));
     if(hasChanges){
       $("#ppApply").addEventListener("click",()=>runPayPlusApply());
       $("#ppRefresh").addEventListener("click",()=>runPayPlusPreview());

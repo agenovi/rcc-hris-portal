@@ -50,6 +50,7 @@
       <div class="tab sel" id="tabOpen" onclick="show('open')">Open positions</div>
       <div class="tab" id="tabMine" onclick="show('mine')">My submissions</div>
     </div>
+    <div id="mylink" style="font-size:12px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:9px;padding:8px 11px;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"></div>
     <div id="body"><div class="empty">Loading…</div></div>
     <div class="foot">You only see open positions and your own submitted candidates. Counts are anonymized. — RCC</div>
   </div>
@@ -182,4 +183,8 @@ function editDraft(i){
   };
 }
 load();
+(function(){ const ml=document.getElementById("mylink"); if(!ml) return; const u=location.href.split("#")[0];
+  ml.innerHTML=`<span style="font-weight:700;color:var(--ink);">Your link:</span> <span style="word-break:break-all;flex:1;min-width:0;">${esc(u)}</span> <button class="tab" id="copyMine" style="cursor:pointer;padding:4px 12px;">Copy</button>`;
+  const cm=document.getElementById("copyMine"); if(cm) cm.onclick=()=>{ if(navigator.clipboard) navigator.clipboard.writeText(u); cm.textContent="Copied ✓"; setTimeout(()=>cm.textContent="Copy",1200); };
+})();
 </script></body></html>

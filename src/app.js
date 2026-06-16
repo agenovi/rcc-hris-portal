@@ -968,6 +968,23 @@ const PH_PHASES=[
 const phLabel=(k)=> (PH_PHASES.find(p=>p.key===k)||{}).label || (k==="REJECTED"?"Rejected":k);
 const srcPill=(s)=> s&&s!=="Direct" ? `<span class="pill ag">${esc(s)}</span>` : `<span class="pill di">Direct</span>`;
 
+const SHARE_BASE="https://agenovi.github.io/rcc-hris-portal/";
+function phLinksBar(){
+  const links=[
+    {l:"Direct applicants — apply link", s:"Public · share anywhere", u:SHARE_BASE+"direct-apply.html"},
+    {l:"Agency · Jell-on", s:"Private · send only to Jell-on", u:SHARE_BASE+"agency.html?t=3a28000c77be400f97c1d2e36c9b416e"},
+    {l:"Agency · M&G", s:"Private · send only to M&G", u:SHARE_BASE+"agency.html?t=60fc360932f049dd851131dccbd185af"}
+  ];
+  return `<div style="background:#eef4ef;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:12px;">
+    <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Share these links</div>
+    ${links.map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:5px 0;">
+      <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;">${esc(x.l)} <span style="font-weight:400;color:var(--muted);font-size:11.5px;">${esc(x.s)}</span></div>
+      <div style="font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(x.u)}</div></div>
+      <button class="btn ghost" data-copy="${esc(x.u)}" style="flex-shrink:0;">Copy</button>
+      <a class="btn ghost" href="${esc(x.u)}" target="_blank" rel="noopener" style="flex-shrink:0;text-decoration:none;">Open</a>
+    </div>`).join("")}
+  </div>`;
+}
 function renderPrehire(){
   const pg=$("#page-prehire"); if(!pg) return;
   const inPipe=PREHIRE.filter(p=>p.phase!=="HIRED"&&p.phase!=="REJECTED");
@@ -983,6 +1000,7 @@ function renderPrehire(){
         <button class="btn" id="phNew">+ New Application</button>
         <button class="btn blue" id="phExport">Export CSV</button>
       </div>
+      ${phLinksBar()}
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
         <div class="kpi"><div class="k-l">In Pipeline</div><div class="k-n">${inPipe.length}</div>
           <div class="k-break"><span>Direct<b>${bySrc("Direct")}</b></span><span>Jell-on<b>${bySrc("Jell-on")}</b></span><span>M&amp;G<b>${bySrc("M&G")}</b></span></div></div>
@@ -998,6 +1016,7 @@ function renderPrehire(){
       <div id="phBody"></div>
     </div>`;
   $("#phNew").addEventListener("click",newPrehire);
+  $$("#page-prehire [data-copy]").forEach(b=>b.addEventListener("click",()=>{ navigator.clipboard&&navigator.clipboard.writeText(b.dataset.copy); const t=b.textContent; b.textContent="Copied ✓"; setTimeout(()=>b.textContent=t,1200); }));
   $("#phExport").addEventListener("click",()=>{
     const cols=["prehire_id","full_name","phase","position","department","hire_source","worksite","contract_type","daily_rate","email"];
     const csv=cols.join(",")+"\n"+PREHIRE.map(p=>cols.map(c=>`"${(p[c]==null?"":String(p[c])).replace(/"/g,'""')}"`).join(",")).join("\n");

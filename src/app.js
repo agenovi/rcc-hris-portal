@@ -1187,8 +1187,8 @@ function phAppRows(a){
     row("Recent employer",a.prev_employer), row("Position held",a.prev_position), row("Dates",a.prev_duration), row("Reason for leaving",a.prev_reason),
     row("Education / school",a.education_school), row("Year graduated",a.education_year),
     yn("Discharged / asked to resign?",a.q_discharged,a.q_discharged_detail),
-    yn("Charged / convicted of a crime?",a.q_criminal,a.q_criminal_detail),
-    yn("Health condition affecting the job?",a.q_health,a.q_health_detail)
+    yn("Convicted of a crime?",a.q_criminal,a.q_criminal_detail),
+    yn("Able to perform the duties?",a.q_can_perform,a.q_can_perform_detail)
   ].join("");
   return out||'<div class="psub">No extra details provided.</div>';
 }

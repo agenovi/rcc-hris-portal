@@ -104,13 +104,13 @@
       <div class="yn"><label><input type="radio" name="q1" value="Yes" onchange="showD('q1')"> Yes</label><label><input type="radio" name="q1" value="No" onchange="showD('q1')"> No</label></div>
       <textarea id="f_q1d" rows="2" placeholder="If yes, please give details" style="display:none;margin-top:6px;"></textarea>
 
-      <label>Have you ever been charged or convicted of a crime?</label>
+      <label>Have you ever been convicted of a crime?</label>
       <div class="yn"><label><input type="radio" name="q2" value="Yes" onchange="showD('q2')"> Yes</label><label><input type="radio" name="q2" value="No" onchange="showD('q2')"> No</label></div>
       <textarea id="f_q2d" rows="2" placeholder="If yes, please state the facts" style="display:none;margin-top:6px;"></textarea>
 
-      <label>Do you have any health condition that may affect this job?</label>
+      <label>Are you able to perform the essential duties of this position, with or without reasonable accommodation?</label>
       <div class="yn"><label><input type="radio" name="q3" value="Yes" onchange="showD('q3')"> Yes</label><label><input type="radio" name="q3" value="No" onchange="showD('q3')"> No</label></div>
-      <textarea id="f_q3d" rows="2" placeholder="If yes, please provide details" style="display:none;margin-top:6px;"></textarea>
+      <textarea id="f_q3d" rows="2" placeholder="If no, tell us what support you would need" style="display:none;margin-top:6px;"></textarea>
     </div>
 
     <div class="card">
@@ -146,7 +146,7 @@ function togglePos(){
   document.getElementById("f_pos_other").style.display = p==="Other" ? "block" : "none";
 }
 function posValue(){ const p=document.getElementById("f_pos").value; return p==="Other" ? (val("f_pos_other")||"Other") : p; }
-function showD(n){ const m={q1:"f_q1d",q2:"f_q2d",q3:"f_q3d"}; document.getElementById(m[n]).style.display = radio(n)==="Yes" ? "block" : "none"; }
+function showD(n){ const m={q1:"f_q1d",q2:"f_q2d",q3:"f_q3d"}; document.getElementById(m[n]).style.display = radio(n)===(n==="q3"?"No":"Yes") ? "block" : "none"; }
 async function submitApp(){
   const msg=document.getElementById("msg"), name=val("f_name");
   if(!name){ return fail("Please enter your full name."); }
@@ -165,7 +165,7 @@ async function submitApp(){
     education_school:val("f_school"), education_year:val("f_year"),
     q_discharged:radio("q1"), q_discharged_detail:val("f_q1d"),
     q_criminal:radio("q2"), q_criminal_detail:val("f_q2d"),
-    q_health:radio("q3"), q_health_detail:val("f_q3d"),
+    q_can_perform:radio("q3"), q_can_perform_detail:val("f_q3d"),
     source:"Direct", confirmed:true
   };
   try{

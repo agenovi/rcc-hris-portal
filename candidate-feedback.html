@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RCC — How was your experience?</title>
+<style>
+  :root{--navy:#1E3A5F;--navy-d:#142a45;--ink:#1F2A37;--muted:#6B7785;--line:#E3E8EF;--bg:#F4F6F8;--green:#1c6b3f;--red:#c0392b;--gold:#c8a86a;}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  body{background:var(--bg);color:var(--ink);line-height:1.5;}
+  .top{background:linear-gradient(135deg,var(--navy-d),var(--navy));color:#fff;padding:22px;}
+  .top h1{font-size:21px;font-weight:800;}
+  .top .s{opacity:.85;font-size:13px;margin-top:4px;}
+  .wrap{max-width:600px;margin:0 auto;padding:18px 16px 80px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:14px;}
+  .card h2{font-size:15px;color:var(--navy);margin-bottom:2px;}
+  .sub{color:var(--muted);font-size:12.5px;margin-bottom:6px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;}
+  label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;}
+  input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;}
+  .q{margin:14px 0;}
+  .ql{font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:7px;}
+  .rate{display:flex;gap:6px;flex-wrap:wrap;}
+  .rate button{flex:1;min-width:54px;border:1px solid var(--line);background:#fff;border-radius:9px;padding:9px 4px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;}
+  .rate button.on{background:var(--navy);color:#fff;border-color:var(--navy);}
+  .scale{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin-top:3px;}
+  .pills{display:flex;gap:8px;flex-wrap:wrap;}
+  .pill{border:1px solid var(--line);background:#fff;border-radius:20px;padding:7px 14px;font-size:13px;cursor:pointer;}
+  .pill.on{background:var(--navy);color:#fff;border-color:var(--navy);}
+  .btn{background:var(--navy);color:#fff;border:none;border-radius:9px;padding:13px 18px;font-weight:800;font-size:15px;cursor:pointer;width:100%;}
+  .btn:disabled{opacity:.5;}
+  .msg{font-size:13.5px;margin:10px 0;min-height:18px;}
+  .done{text-align:center;padding:44px 20px;}
+  .done .ok{font-size:46px;color:var(--green);}
+  .note{font-size:12px;color:var(--muted);margin-top:8px;}
+</style></head>
+<body>
+  <div class="top"><h1>How was your experience with us?</h1><div class="s">Your honest feedback helps us treat applicants better. It's confidential and won't affect any current or future application.</div></div>
+  <div class="wrap" id="wrap">
+
+    <div class="card">
+      <h2>About you <span style="font-weight:400;color:var(--muted);">(optional)</span></h2>
+      <div class="grid">
+        <div><label>Your name</label><input id="f_name" placeholder="Leave blank to stay anonymous"></div>
+        <div><label>Position you applied for</label><input id="f_pos"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Where did you get to?</h2>
+      <label>How far did your application go?</label>
+      <select id="f_reached"><option value="">—</option><option>Applied only</option><option>Screened</option><option>Invited for interview</option><option>Interviewed</option><option>Received an offer</option><option>Hired / started</option><option>Not selected</option></select>
+      <label>What was the outcome?</label>
+      <select id="f_outcome" onchange="toggleDecline()"><option value="">—</option><option>Still in process</option><option>I accepted the offer</option><option>I declined the offer</option><option>I was not selected</option><option>I withdrew</option></select>
+      <div id="declineBox" style="display:none;">
+        <label>If you declined, what was the main reason?</label>
+        <select id="f_decline"><option value="">—</option><option>Store / work location</option><option>Pay / compensation</option><option>Accepted another job</option><option>Schedule / hours</option><option>Personal reasons</option><option>Other</option></select>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Rate your experience</h2>
+      <div class="sub">1 = poor · 5 = excellent</div>
+      <div class="q"><div class="ql">Overall experience applying with RCC</div><div class="rate" data-r="overall"></div></div>
+      <div class="q"><div class="ql">How clear and easy the application process was</div><div class="rate" data-r="clarity"></div></div>
+      <div class="q"><div class="ql">Communication — were you kept informed?</div><div class="rate" data-r="comms"></div></div>
+      <div class="q"><div class="ql">The interview itself (skip if you weren't interviewed)</div><div class="rate" data-r="interview"></div></div>
+    </div>
+
+    <div class="card">
+      <h2>A few quick ones</h2>
+      <div class="q"><div class="ql">Were you treated fairly and respectfully throughout?</div>
+        <div class="pills" data-p="fair"><span class="pill">Yes</span><span class="pill">Somewhat</span><span class="pill">No</span></div></div>
+      <div class="q"><div class="ql">Would you apply to RCC again or recommend us?</div>
+        <div class="pills" data-p="rec"><span class="pill">Yes</span><span class="pill">Maybe</span><span class="pill">No</span></div></div>
+    </div>
+
+    <div class="card">
+      <h2>In your words</h2>
+      <label>What could we do better?</label><textarea id="f_improve" rows="3" placeholder="Anything about the process, communication, or interview"></textarea>
+      <label>Anything else you'd like us to know?</label><textarea id="f_comments" rows="2"></textarea>
+    </div>
+
+    <div class="card">
+      <div class="msg" id="msg"></div>
+      <button class="btn" id="submitBtn" onclick="submitFb()">Send feedback</button>
+      <div class="note">Thank you for taking the time — it genuinely helps us improve.</div>
+    </div>
+  </div>
+<script>
+const FN="https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/feedback";
+const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const val=id=>document.getElementById(id).value.trim();
+const R={overall:null,clarity:null,comms:null,interview:null};
+const P={fair:null,rec:null};
+// build 1-5 rating rows
+document.querySelectorAll('.rate').forEach(row=>{
+  const key=row.dataset.r;
+  for(let i=1;i<=5;i++){ const b=document.createElement('button'); b.textContent=i; b.onclick=()=>{ R[key]=i; [...row.children].forEach((c,idx)=>c.classList.toggle('on',idx<i)); }; row.appendChild(b); }
+});
+document.querySelectorAll('.pills').forEach(row=>{
+  const key=row.dataset.p;
+  [...row.children].forEach(p=>{ p.onclick=()=>{ P[key]=p.textContent; [...row.children].forEach(c=>c.classList.toggle('on',c===p)); }; });
+});
+function toggleDecline(){ document.getElementById('declineBox').style.display = document.getElementById('f_outcome').value==="I declined the offer" ? "block":"none"; }
+async function submitFb(){
+  const msg=document.getElementById("msg");
+  if(R.overall==null){ msg.style.color="#c0392b"; msg.textContent="Please rate your overall experience first."; return; }
+  const btn=document.getElementById("submitBtn"); btn.disabled=true; btn.textContent="Sending…";
+  const payload={
+    full_name:val("f_name"), position:val("f_pos"),
+    reached:val("f_reached"), outcome:val("f_outcome"), decline_reason:val("f_decline"),
+    overall_rating:R.overall, clarity_rating:R.clarity, comms_rating:R.comms, interview_rating:R.interview,
+    treated_fairly:P.fair, would_recommend:P.rec,
+    improve:val("f_improve"), comments:val("f_comments")
+  };
+  try{
+    const r=await fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(!d.ok){ btn.disabled=false; btn.textContent="Send feedback"; msg.style.color="#c0392b"; msg.textContent=d.error||"Couldn't send. Please try again."; return; }
+    document.getElementById("wrap").innerHTML=`<div class="card done"><div class="ok">✓</div>
+      <h2 style="font-size:18px;margin:10px 0 6px;color:var(--navy);">Thank you</h2>
+      <div style="color:var(--muted);font-size:13.5px;">We've received your feedback and we read every one. You can close this page.</div></div>`;
+  }catch(e){ btn.disabled=false; btn.textContent="Send feedback"; msg.style.color="#c0392b"; msg.textContent="Couldn't send. Please try again."; }
+}
+</script></body></html>

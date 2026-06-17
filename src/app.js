@@ -23,6 +23,7 @@ let COMPLIANCE=[];
 let LOANS=[];
 let MANPOWER=[];
 let SIGNATURES=[];
+let CANDIDATE_FEEDBACK=[];
 let CURRENT_USER=null;
 const DEFAULT_PH_DOCS=[["nbi","NBI / Police Clearance",true],["birth","PSA Birth Certificate",false],["sss","SSS (E-1 / number)",false],["philhealth","PhilHealth",false],["pagibig","Pag-IBIG (MID)",false],["tin","TIN / BIR 1902",false],["photo","2×2 ID Photos",false],["diploma","Diploma / TOR",false],["medical","Medical / Health Certificate",false]];
 let empFilter="All";
@@ -95,7 +96,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -108,7 +109,8 @@ async function loadEmployees(){
     sb.from("compliance_items").select("*").order("name"),
     sb.from("loans").select("*").order("created_at", {ascending:false}),
     sb.from("manpower_requests").select("*").order("date_posted", {ascending:false}),
-    sb.from("signature_requests").select("*").order("created_at", {ascending:false})
+    sb.from("signature_requests").select("*").order("created_at", {ascending:false}),
+    sb.from("candidate_feedback").select("*").order("created_at", {ascending:false})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -124,6 +126,7 @@ async function loadEmployees(){
   LOANS=(ln&&ln.data)||[];
   MANPOWER=(mr&&mr.data)||[];
   SIGNATURES=(sg&&sg.data)||[];
+  CANDIDATE_FEEDBACK=(cf&&cf.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -1121,7 +1124,8 @@ function phLinksBar(){
   const links=[
     {l:"Direct applicants — apply link", s:"Public · share anywhere", u:SHARE_BASE+"direct-apply.html"},
     {l:"Agency · Jell-on", s:"Private · send only to Jell-on", u:SHARE_BASE+"agency.html?t=3a28000c77be400f97c1d2e36c9b416e"},
-    {l:"Agency · M&G", s:"Private · send only to M&G", u:SHARE_BASE+"agency.html?t=60fc360932f049dd851131dccbd185af"}
+    {l:"Agency · M&G", s:"Private · send only to M&G", u:SHARE_BASE+"agency.html?t=60fc360932f049dd851131dccbd185af"},
+    {l:"Candidate feedback — experience survey", s:"Send to applicants after their interview / decision", u:SHARE_BASE+"candidate-feedback.html"}
   ];
   return `<div style="background:#eef4ef;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:12px;">
     <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Share these links</div>
@@ -1160,6 +1164,7 @@ function renderPrehire(){
         <div class="tab ${prehireTab==='pipeline'?'active':''}" data-t="pipeline">Pipeline</div>
         <div class="tab ${prehireTab==='arch'?'active':''}" data-t="arch">How it works (Architecture)</div>
         <div class="tab ${prehireTab==='data'?'active':''}" data-t="data">Data model</div>
+        <div class="tab ${prehireTab==='feedback'?'active':''}" data-t="feedback">Candidate Feedback</div>
       </div>
       <div id="phBody"></div>
     </div>`;
@@ -1173,6 +1178,7 @@ function renderPrehire(){
   $$("#phTabs .tab").forEach(t=>t.addEventListener("click",()=>{ prehireTab=t.dataset.t; renderPrehire(); }));
   if(prehireTab==="arch") phBodyArch();
   else if(prehireTab==="data") phBodyData();
+  else if(prehireTab==="feedback") phBodyFeedback();
   else phBodyPipeline();
 }
 
@@ -1279,6 +1285,34 @@ async function togglePhDoc(c,key,label,toFollow){
   else { await sb.from("prehire_documents").insert({prehire_id:c.id, document_key:key, document_label:label, is_mandatory:!toFollow, is_to_follow:toFollow, status:"RECEIVED", submitted_at:new Date().toISOString()}); }
   await loadEmployees();
   openPrehire(PREHIRE.find(p=>String(p.id)===String(c.id)));
+}
+function phBodyFeedback(){
+  const F=CANDIDATE_FEEDBACK||[];
+  const avg=(k)=>{ const v=F.map(x=>x[k]).filter(n=>n!=null); return v.length?(v.reduce((a,b)=>a+b,0)/v.length).toFixed(1):"—"; };
+  const cnt=(k,val)=>F.filter(x=>x[k]===val).length;
+  const stars=(n)=> n==="—"?"—":"★".repeat(Math.round(+n))+"☆".repeat(5-Math.round(+n))+" "+n;
+  const declines=F.filter(x=>x.outcome==="I declined the offer");
+  $("#phBody").innerHTML=`
+    <div class="psub" style="margin-top:12px;">What candidates say about applying with RCC. Share the “Candidate feedback” link (in Share these links, above) after an interview or a decision. <b>${F.length}</b> response${F.length===1?"":"s"} so far.</div>
+    ${!F.length?'<div class="panel" style="margin-top:12px;"><div class="psub">No feedback yet — send the survey link to applicants and responses will appear here.</div></div>':`
+    <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-top:12px;">
+      <div class="kpi"><div class="k-l">Overall</div><div class="k-n" style="font-size:17px;">${stars(avg("overall_rating"))}</div></div>
+      <div class="kpi"><div class="k-l">Process clarity</div><div class="k-n" style="font-size:17px;">${stars(avg("clarity_rating"))}</div></div>
+      <div class="kpi"><div class="k-l">Communication</div><div class="k-n" style="font-size:17px;">${stars(avg("comms_rating"))}</div></div>
+      <div class="kpi"><div class="k-l">Interview</div><div class="k-n" style="font-size:17px;">${stars(avg("interview_rating"))}</div></div>
+    </div>
+    <div class="two-col" style="margin-top:14px;">
+      <div class="panel" style="margin-top:0;">
+        <h2>Treated fairly &amp; respectfully?</h2>
+        <div class="psub">Yes ${cnt("treated_fairly","Yes")} · Somewhat ${cnt("treated_fairly","Somewhat")} · No ${cnt("treated_fairly","No")}</div>
+        <h2 style="margin-top:14px;">Would apply / recommend again</h2>
+        <div class="psub">Yes ${cnt("would_recommend","Yes")} · Maybe ${cnt("would_recommend","Maybe")} · No ${cnt("would_recommend","No")}</div>
+        ${declines.length?`<h2 style="margin-top:14px;">Why offers were declined</h2>${declines.map(d=>`<div class="task"><div class="dot a"></div><div><div class="tt">${esc(d.decline_reason||"—")}</div><div class="td">${esc(d.position||"")}${d.full_name?" · "+esc(d.full_name):""}</div></div></div>`).join("")}`:""}
+      </div>
+      <div class="panel" style="margin-top:0;"><h2>Recent comments</h2>
+        ${F.filter(x=>x.improve||x.comments).slice(0,12).map(x=>`<div class="task"><div class="dot ${(x.overall_rating||3)>=4?'g':((x.overall_rating||3)<=2?'r':'a')}"></div><div><div class="tt">${esc(x.full_name||"Anonymous")}${x.position?" · "+esc(x.position):""}${x.overall_rating?" · "+x.overall_rating+"★":""}</div><div class="td">${esc(x.improve||x.comments||"")}</div></div></div>`).join("")||'<div class="psub">No written comments yet.</div>'}
+      </div>
+    </div>`}`;
 }
 function phAppRows(a){
   if(typeof a==="string"){ try{ a=JSON.parse(a); }catch(e){ return ""; } }

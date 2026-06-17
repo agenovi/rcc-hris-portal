@@ -106,7 +106,7 @@ function render(){
       <button class="btn" onclick='openSubmit(${JSON.stringify(o.store)})'>Submit a candidate</button>
     </div>`;}).join("");
 }
-function statusLabel(p){ return ({DRAFT:"Draft — not sent",APPLIED:"Applied",SCREENING:"Screening",DOCUMENTS:"Documents",RECRUITER_REVIEW:"In review",HR_SIGNOFF:"HR sign-off",CONTRACT_SIGNING:"Contract",HIRED:"Hired",REJECTED:"Not selected"}[p])||p; }
+function statusLabel(p){ if(p==="DRAFT") return "Draft — not sent"; if(p==="HIRED") return "Hired"; if(p==="REJECTED") return "Not selected"; return "In process"; }
 
 function openSubmit(store){
   let m=document.getElementById("subModal"); if(!m){ m=document.createElement("div"); m.id="subModal"; document.body.appendChild(m); }

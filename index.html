@@ -3693,7 +3693,7 @@ function editPrehire(c){
     <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">Edit applicant — ${esc(c.full_name)}</div><div style="font-size:12.5px;opacity:.85;">${esc(c.prehire_id)} · ${esc(phLabel(c.phase))}</div></div>
     <div style="padding:18px 22px;">
       <div class="panel" style="margin-top:0;"><div class="subhead">Identity</div>
-        ${fld("pe_full_name","Full name *",c.full_name)}${sel("pe_department","Department",DEPARTMENTS,c.department)}${fld("pe_position","Position",c.position)}${sel("pe_hire_source","Hire source",HIRE_SOURCES,c.hire_source||"Direct")}${sel("pe_worksite","Worksite (store — pick from list)",[...new Set([...(c.worksite?[c.worksite]:[]),...BRANCHES.map(b=>b.name)])].sort(),c.worksite)}
+        ${fld("pe_full_name","Full name *",c.full_name)}${sel("pe_department","Department",DEPARTMENTS,c.department)}${fld("pe_position","Position",c.position)}${sel("pe_hire_source","Hire source",HIRE_SOURCES,c.hire_source||"Direct")}${sel("pe_worksite","Worksite / location",[...new Set(["Head Office","Warehouse Solaris",...BRANCHES.map(b=>b.name).sort(),...(c.worksite?[c.worksite]:[])])],c.worksite)}
       </div>
       <div class="panel"><div class="subhead">Personal details</div>
         ${fld("pe_email","Email",c.email,"email")}${fld("pe_phone","Mobile (09XXXXXXXXX)",c.phone)}${fld("pe_dob","Date of birth",c.date_of_birth,"date")}${sel("pe_civil","Civil status",CIVIL,c.civil_status)}${fld("pe_perm","Permanent address",c.permanent_address)}${fld("pe_curr","Current address",c.current_address)}
@@ -3781,7 +3781,7 @@ function newPrehire(){
       ${fld("np_full_name","Full name *",e.full_name)}
       ${sel("np_department","Department",DEPARTMENTS,e.department)}
       ${fld("np_position","Position",e.position)}
-      ${sel("np_worksite","Worksite (store, if applicable)",[...new Set(BRANCHES.map(b=>b.name))].sort(),e.worksite)}
+      ${sel("np_worksite","Worksite / location",["Head Office","Warehouse Solaris"].concat([...new Set(BRANCHES.map(b=>b.name))].sort()),e.worksite)}
       ${fld("np_email","Email",e.email,"email")}
       ${fld("np_phone","Phone",e.phone)}
       <div class="psub" style="margin-top:2px;">Contract type, pay basis and rate are set later at the offer stage — not on the application.</div>

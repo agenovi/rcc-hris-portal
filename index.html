@@ -3781,12 +3781,10 @@ function newPrehire(){
       ${fld("np_full_name","Full name *",e.full_name)}
       ${sel("np_department","Department",DEPARTMENTS,e.department)}
       ${fld("np_position","Position",e.position)}
-      ${sel("np_hire_source","Hire source",HIRE_SOURCES,"Direct")}
       ${sel("np_worksite","Worksite (store, if applicable)",[...new Set(BRANCHES.map(b=>b.name))].sort(),e.worksite)}
       ${fld("np_email","Email",e.email,"email")}
       ${fld("np_phone","Phone",e.phone)}
-      ${sel("np_contract_type","Contract type",CONTRACT_TYPES,"Probationary")}
-      ${fld("np_daily_rate","Daily rate (₱)",e.daily_rate,"number")}
+      <div class="psub" style="margin-top:2px;">Contract type, pay basis and rate are set later at the offer stage — not on the application.</div>
       <div id="npMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
       <div style="display:flex;gap:10px;"><button class="btn ghost" id="npCancel" style="flex:1;">Cancel</button><button class="btn" id="npSave" style="flex:1;">Create</button></div>
     </div></div></div>`;
@@ -3798,8 +3796,8 @@ function newPrehire(){
     const stamp=new Date().toISOString().slice(0,10).replace(/-/g,"");
     const rnd=Math.abs(fullname.split("").reduce((a,ch)=>a*31+ch.charCodeAt(0),7))%1000;
     const payload={ prehire_id:"PH-"+stamp+"-"+String(rnd).padStart(3,"0"), phase:"APPLIED", full_name:fullname,
-      department:v("np_department"), position:v("np_position"), hire_source:v("np_hire_source"), worksite:v("np_worksite"),
-      email:v("np_email"), phone:v("np_phone"), contract_type:v("np_contract_type"), daily_rate:nv("np_daily_rate") };
+      department:v("np_department"), position:v("np_position"), hire_source:"Direct", worksite:v("np_worksite"),
+      email:v("np_email"), phone:v("np_phone") };
     const { error } = await sb.from("prehire").insert(payload);
     if(error){ document.getElementById("npMsg").textContent=error.message; return; }
     m.remove(); await loadEmployees(); window.go("prehire");

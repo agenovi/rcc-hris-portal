@@ -1162,6 +1162,7 @@ function renderPrehire(){
       </div>
       <div class="tabs" id="phTabs" style="margin-top:14px;">
         <div class="tab ${prehireTab==='pipeline'?'active':''}" data-t="pipeline">Pipeline</div>
+        <div class="tab ${prehireTab==='funnel'?'active':''}" data-t="funnel">Recruitment Funnel</div>
         <div class="tab ${prehireTab==='arch'?'active':''}" data-t="arch">How it works (Architecture)</div>
         <div class="tab ${prehireTab==='data'?'active':''}" data-t="data">Data model</div>
         <div class="tab ${prehireTab==='feedback'?'active':''}" data-t="feedback">Candidate Feedback</div>
@@ -1179,6 +1180,7 @@ function renderPrehire(){
   if(prehireTab==="arch") phBodyArch();
   else if(prehireTab==="data") phBodyData();
   else if(prehireTab==="feedback") phBodyFeedback();
+  else if(prehireTab==="funnel") phBodyFunnel();
   else phBodyPipeline();
 }
 
@@ -1285,6 +1287,37 @@ async function togglePhDoc(c,key,label,toFollow){
   else { await sb.from("prehire_documents").insert({prehire_id:c.id, document_key:key, document_label:label, is_mandatory:!toFollow, is_to_follow:toFollow, status:"RECEIVED", submitted_at:new Date().toISOString()}); }
   await loadEmployees();
   openPrehire(PREHIRE.find(p=>String(p.id)===String(c.id)));
+}
+const FUNNEL_INVITED=["Invited","Interviewed","Final interview","Offered","Hired","No-show","Failed","Declined"];
+const FUNNEL_SHOWED=["Interviewed","Final interview","Offered","Hired","Failed","Declined"];
+const FUNNEL_OFFERED=["Offered","Hired","Declined"];
+function phBodyFunnel(){
+  const byRole={};
+  PREHIRE.filter(p=>p.interview_status||p.position).forEach(p=>{ const r=(p.position||"—").trim()||"—"; (byRole[r]=byRole[r]||[]).push(p); });
+  const today=new Date(new Date().toDateString());
+  const step=(l,n,strong)=>`<div style="text-align:center;flex:1;min-width:56px;"><div style="font-size:22px;font-weight:800;color:${strong?'#1E3A5F':'#9aa6b2'};">${n}</div><div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">${l}</div></div>`;
+  const arrow=`<span style="color:#cdd5de;font-size:14px;">→</span>`;
+  const roleCard=(role,list)=>{
+    const c=(arr)=>list.filter(p=>arr.includes(p.interview_status)).length;
+    const screened=list.length, invited=c(FUNNEL_INVITED), showed=c(FUNNEL_SHOWED), offered=c(FUNNEL_OFFERED);
+    const hired=list.filter(p=>p.interview_status==="Hired"||p.phase==="HIRED").length;
+    const noshow=list.filter(p=>p.interview_status==="No-show").length;
+    const failed=list.filter(p=>p.interview_status==="Failed").length;
+    const declined=list.filter(p=>p.interview_status==="Declined").length;
+    const upcoming=list.filter(p=>p.interview_date && new Date(p.interview_date+"T00:00:00")>=today).sort((a,b)=>a.interview_date<b.interview_date?-1:1);
+    return `<div class="panel" style="margin-top:12px;">
+      <h2>${esc(role)} <span class="count-tag">${screened} in funnel</span></h2>
+      <div style="display:flex;gap:6px;align-items:center;margin:12px 0 4px;flex-wrap:wrap;">
+        ${step("Screened",screened,screened>0)}${arrow}${step("Invited",invited,invited>0)}${arrow}${step("Interviewed",showed,showed>0)}${arrow}${step("Offer",offered,offered>0)}${arrow}${step("Hired",hired,hired>0)}
+      </div>
+      <div class="psub">${noshow?`<span class="pill awol">No-show ${noshow}</span> `:""}${failed?`<span class="pill awol">Failed ${failed}</span> `:""}${declined?`<span class="pill awol">Declined ${declined}</span> `:""}${(!noshow&&!failed&&!declined)?'<span class="note">No drop-offs recorded.</span>':""}</div>
+      ${upcoming.length?`<div class="psub" style="margin-top:8px;">📅 Scheduled: ${upcoming.map(p=>esc(p.full_name||"candidate")+" — "+fmtDate(p.interview_date)).join(" · ")}</div>`:""}
+    </div>`;
+  };
+  const roles=Object.entries(byRole).sort((a,b)=>b[1].length-a[1].length);
+  $("#phBody").innerHTML=`
+    <div class="psub" style="margin-top:12px;">Live recruitment funnel by role — <b>Screened → Invited → Interviewed → Offer → Hired</b>, with drop-offs (no-show / failed / declined) and scheduled interviews. This is your weekly report, generated from the pipeline. Set each candidate's stage in <b>open a candidate → Edit applicant → Recruiting / interview</b>.</div>
+    ${roles.length?roles.map(([r,l])=>roleCard(r,l)).join(""):'<div class="panel" style="margin-top:12px;"><div class="psub">No candidates with a recruiting stage yet. Add applicants and set their stage to populate the funnel.</div></div>'}`;
 }
 function phBodyFeedback(){
   const F=CANDIDATE_FEEDBACK||[];
@@ -1438,6 +1471,9 @@ function editPrehire(c){
         <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">HR officer notes</label><textarea id="pe_notes" rows="2" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;">${esc(c.hr_officer_notes||"")}</textarea></div>
         ${sel("pe_sm","SM / Retail-ops acceptance",["Pending","Accepted","Rejected","NA"],c.sm_acceptance)}
       </div>
+      <div class="panel"><div class="subhead">Recruiting / interview <span class="sh-note">drives the funnel report</span></div>
+        ${sel("pe_istatus","Stage in the hiring funnel",["Screened","Invited","Interviewed","No-show","Failed","Final interview","Offered","Declined","Hired"],c.interview_status)}${fld("pe_idate","Interview date (if scheduled)",c.interview_date,"date")}${fld("pe_interviewer","Interviewer",c.interviewer)}
+      </div>
       <div id="peMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
       <div style="display:flex;gap:10px;"><button class="btn ghost" id="peCancel" style="flex:1;">Cancel</button><button class="btn" id="peSave" style="flex:1;">Save</button></div>
     </div></div>`;
@@ -1453,7 +1489,8 @@ function editPrehire(c){
       assessment_type:v("pe_atype"), assessment_score:nv("pe_ascore"),
       contract_type:v("pe_ctype"), pay_basis:v("pe_paybasis"), daily_rate:nv("pe_rate"), daily_allowance:nv("pe_allow"), start_date:v("pe_start"), supervisor_name:v("pe_super"),
       sss_number:v("pe_sss"), philhealth_number:v("pe_phil"), pagibig_number:v("pe_pag"), tin_number:v("pe_tin"), bank_name:v("pe_bank"), bank_account_number:v("pe_acct"),
-      hr_officer_notes:v("pe_notes"), sm_acceptance:v("pe_sm"), updated_at:new Date().toISOString() };
+      hr_officer_notes:v("pe_notes"), sm_acceptance:v("pe_sm"),
+      interview_status:v("pe_istatus"), interview_date:v("pe_idate"), interviewer:v("pe_interviewer"), updated_at:new Date().toISOString() };
     const { error } = await sb.from("prehire").update(p).eq("id",c.id);
     if(error){ document.getElementById("peMsg").textContent=error.message; return; }
     m.remove(); const pm=document.getElementById("phModal"); if(pm) pm.remove();

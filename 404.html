@@ -2332,6 +2332,7 @@ let PHDOCS=[];
 let COMPLIANCE=[];
 let LOANS=[];
 let MANPOWER=[];
+let SIGNATURES=[];
 let CURRENT_USER=null;
 const DEFAULT_PH_DOCS=[["nbi","NBI / Police Clearance",true],["birth","PSA Birth Certificate",false],["sss","SSS (E-1 / number)",false],["philhealth","PhilHealth",false],["pagibig","Pag-IBIG (MID)",false],["tin","TIN / BIR 1902",false],["photo","2×2 ID Photos",false],["diploma","Diploma / TOR",false],["medical","Medical / Health Certificate",false]];
 let empFilter="All";
@@ -2404,7 +2405,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2416,7 +2417,8 @@ async function loadEmployees(){
     sb.from("prehire_documents").select("*"),
     sb.from("compliance_items").select("*").order("name"),
     sb.from("loans").select("*").order("created_at", {ascending:false}),
-    sb.from("manpower_requests").select("*").order("date_posted", {ascending:false})
+    sb.from("manpower_requests").select("*").order("date_posted", {ascending:false}),
+    sb.from("signature_requests").select("*").order("created_at", {ascending:false})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2431,6 +2433,7 @@ async function loadEmployees(){
   COMPLIANCE=(cm&&cm.data)||[];
   LOANS=(ln&&ln.data)||[];
   MANPOWER=(mr&&mr.data)||[];
+  SIGNATURES=(sg&&sg.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -2442,6 +2445,7 @@ async function loadEmployees(){
   renderContracts();
   renderLoans();
   renderSettings();
+  renderSignatures();
   wireGlobalSearch();
   if(!landed){ landed=true; if(typeof window.go==="function") window.go("dashboard"); }
 }
@@ -3095,6 +3099,107 @@ function renderBranchesPage(){
 }
 
 /* ---------- MANNING / HEADCOUNT — grouped by Sales Coordinator ---------- */
+/* ============================ SIGNATURES — sign-this inbox (RA 8792 prototype) ============================ */
+const SIG_ICON={contract:"contract",advance:"advance",memo:"memo",coe:"contract",claim:"advance"};
+const sigInitial=s=>((s.subject_name||s.doc_title||"?").trim()[0]||"?").toUpperCase();
+function fmtAgo(d){ if(!d) return ""; const h=(Date.now()-new Date(d).getTime())/36e5; if(h<1) return "just now"; if(h<24) return Math.round(h)+"h ago"; const dd=Math.round(h/24); return dd+(dd===1?" day ago":" days ago"); }
+function sigParts(){
+  const pend=SIGNATURES.filter(s=>s.awaiting==="you"&&s.status==="pending");
+  const oth=SIGNATURES.filter(s=>s.awaiting==="other"&&s.status==="pending");
+  const signed=SIGNATURES.filter(s=>s.status==="signed").sort((a,b)=>new Date(b.signed_at||0)-new Date(a.signed_at||0));
+  const now=new Date();
+  const signedMonth=signed.filter(s=>s.signed_at&&new Date(s.signed_at).getMonth()===now.getMonth()&&new Date(s.signed_at).getFullYear()===now.getFullYear());
+  let avg="—"; const durs=signed.filter(s=>s.signed_at&&s.created_at).map(s=>(new Date(s.signed_at)-new Date(s.created_at))/36e5).filter(h=>h>=0);
+  if(durs.length){ const h=durs.reduce((a,b)=>a+b,0)/durs.length; avg=h<48?Math.max(1,Math.round(h))+"h":Math.round(h/24)+"d"; }
+  return {pend,oth,signed,signedMonth,avg};
+}
+function renderSignatures(){
+  const pg=$("#page-signatures"); if(!pg) return;
+  const {pend,oth,signed,signedMonth,avg}=sigParts();
+  const nb=document.querySelector('.nav-item[data-page="signatures"] .nav-badge'); if(nb) nb.textContent=pend.length;
+  const row=(s)=>`<div class="sigrow"><div class="sigicon ${SIG_ICON[s.doc_type]||'memo'}">${esc(sigInitial(s))}</div>
+    <div class="sigbody"><div class="sig-t">${esc(s.doc_title)}${s.subject_name?" — "+esc(s.subject_name):""}</div>
+      <div class="sig-m">From ${esc(s.from_name||"HR")}${s.amount?" · ₱"+Number(s.amount).toLocaleString():""}${s.meta?" · "+esc(s.meta):" · sent "+fmtAgo(s.created_at)}</div></div>
+    <button class="btn" data-sign="${esc(s.id)}">Review &amp; Sign</button></div>`;
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Signatures</h2>
+      <div class="psub">Your sign-this inbox. RA 8792 compliant · works on mobile + personal email · every signature audit-logged. One place for contracts, memos, advance releases, claim authorizations.</div>
+      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
+        <div class="kpi alert clickable" data-jump="pendPanel" style="cursor:pointer;"><div class="k-l">Pending Your Signature</div><div class="k-n">${pend.length}</div></div>
+        <div class="kpi warn clickable" data-jump="othPanel" style="cursor:pointer;"><div class="k-l">Sent — Awaiting Others</div><div class="k-n">${oth.length}</div></div>
+        <div class="kpi clickable" data-jump="histPanel" style="cursor:pointer;"><div class="k-l">Signed This Month</div><div class="k-n">${signedMonth.length}</div></div>
+        <div class="kpi"><div class="k-l">Avg. Sign Time</div><div class="k-n">${avg}</div></div>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="panel" style="margin-top:0;" id="pendPanel">
+        <h2>Pending your signature <span class="count-tag">${pend.length}</span></h2>
+        <div class="psub">Open each, review the document, sign.</div>
+        ${pend.length?pend.map(row).join(""):'<div class="psub">Nothing waiting on you right now. 🎉</div>'}
+      </div>
+      <div>
+        <div class="panel" style="margin-top:0;" id="othPanel">
+          <h2>Sent — waiting on others <span class="count-tag">${oth.length}</span></h2>
+          <div class="psub">Things you sent, now with someone else.</div>
+          ${oth.length?oth.map(s=>`<div class="nudge-item"><div class="ni"><div class="nt">${esc(s.doc_title)}${s.subject_name?" — "+esc(s.subject_name):""}</div><div class="nd">With ${esc(s.with_whom||"—")} · ${fmtAgo(s.created_at)}</div></div><button class="nbtn" data-nudge="${esc(s.id)}">Nudge</button></div>`).join(""):'<div class="psub">Nothing pending with others.</div>'}
+        </div>
+        <div class="panel" id="histPanel">
+          <h2>History <span class="count-tag">${signed.length}</span></h2>
+          <div class="psub">Signed documents · audit log (signer + timestamp).</div>
+          ${signed.length?signed.slice(0,12).map(s=>`<div class="task"><div class="dot g"></div><div><div class="tt">${esc(s.doc_title)}${s.subject_name?" — "+esc(s.subject_name):""}</div><div class="td">Signed ${s.signed_at?fmtDate(s.signed_at):""}${s.signer_name?" · by "+esc(s.signer_name):""}</div></div></div>`).join(""):'<div class="psub">No signed documents yet.</div>'}
+        </div>
+      </div>
+    </div>`;
+  $$('#page-signatures [data-sign]').forEach(b=>b.addEventListener("click",()=>openSignDoc(b.dataset.sign)));
+  $$('#page-signatures [data-jump]').forEach(c=>c.addEventListener("click",()=>{ const el=document.getElementById(c.dataset.jump); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); }));
+  $$('#page-signatures [data-nudge]').forEach(b=>b.addEventListener("click",()=>{ b.textContent="Reminded ✓"; b.disabled=true; }));
+}
+function openSignDoc(id){
+  const s=SIGNATURES.find(x=>String(x.id)===String(id)); if(!s) return;
+  let m=document.getElementById("sigModal"); if(!m){ m=document.createElement("div"); m.id="sigModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
+    <h2 style="font-size:18px;color:#1E3A5F;margin-bottom:2px;">${esc(s.doc_title)}${s.subject_name?" — "+esc(s.subject_name):""}</h2>
+    <div class="psub">From ${esc(s.from_name||"HR")}${s.amount?" · ₱"+Number(s.amount).toLocaleString():""}${s.meta?" · "+esc(s.meta):""}</div>
+    <div style="background:#f7f9fb;border:1px solid #E3E8EF;border-radius:10px;padding:14px 16px;margin:12px 0;white-space:pre-wrap;font-size:13.5px;line-height:1.6;max-height:34vh;overflow-y:auto;">${esc(s.body||"(document body)")}</div>
+    <div style="font-size:12px;color:#6B7785;margin-bottom:6px;">Sign below — drawn with your finger or mouse. RA 8792 e-signature · timestamped + recorded against your account.</div>
+    <canvas id="sigPad" width="500" height="150" style="width:100%;height:150px;border:1px dashed #b9c4cf;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+      <button class="btn ghost" id="sigClear" style="flex:0 0 auto;">Clear</button>
+      <span id="sigMsg" style="font-size:12.5px;color:#a4322a;flex:1;"></span>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px;">
+      <button class="btn ghost" id="sigDecline" style="color:#c0392b;border-color:#f1c9c5;">Decline</button>
+      <button class="btn ghost" id="sigCancel" style="margin-left:auto;">Cancel</button>
+      <button class="btn" id="sigDo">Sign document</button>
+    </div></div>`;
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("sigCancel").onclick=()=>m.remove();
+  const cv=document.getElementById("sigPad"), ctx=cv.getContext("2d"); let drawing=false, dirty=false;
+  ctx.lineWidth=2.2; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.strokeStyle="#13243b";
+  const pos=e=>{ const r=cv.getBoundingClientRect(), t=e.touches&&e.touches[0]?e.touches[0]:e; return {x:(t.clientX-r.left)*(cv.width/r.width), y:(t.clientY-r.top)*(cv.height/r.height)}; };
+  const start=e=>{ drawing=true; dirty=true; const p=pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); e.preventDefault(); };
+  const move=e=>{ if(!drawing) return; const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); e.preventDefault(); };
+  const end=()=>{ drawing=false; };
+  cv.addEventListener("mousedown",start); cv.addEventListener("mousemove",move); window.addEventListener("mouseup",end);
+  cv.addEventListener("touchstart",start,{passive:false}); cv.addEventListener("touchmove",move,{passive:false}); cv.addEventListener("touchend",end);
+  document.getElementById("sigClear").onclick=()=>{ ctx.clearRect(0,0,cv.width,cv.height); dirty=false; document.getElementById("sigMsg").textContent=""; };
+  document.getElementById("sigDo").onclick=async()=>{
+    if(!dirty){ document.getElementById("sigMsg").textContent="Please draw your signature first."; return; }
+    const btn=document.getElementById("sigDo"); btn.disabled=true; btn.textContent="Signing…";
+    const signer=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"Signed-in user";
+    const { error } = await sb.from("signature_requests").update({ status:"signed", signed_at:new Date().toISOString(), signer_name:signer, signature_data:cv.toDataURL("image/png"), updated_at:new Date().toISOString() }).eq("id",s.id);
+    if(error){ document.getElementById("sigMsg").textContent=error.message; btn.disabled=false; btn.textContent="Sign document"; return; }
+    m.remove(); await loadEmployees(); window.go("signatures");
+  };
+  document.getElementById("sigDecline").onclick=async()=>{
+    const why=prompt("Reason for declining (optional):",""); if(why===null) return;
+    const { error } = await sb.from("signature_requests").update({ status:"declined", decline_reason:why||null, updated_at:new Date().toISOString() }).eq("id",s.id);
+    if(error){ alert(error.message); return; }
+    m.remove(); await loadEmployees(); window.go("signatures");
+  };
+}
 function renderManning(){
   const pg=$("#page-manning"); if(!pg) return;
   const open=BRANCHES.filter(b=>b.status==="Open");

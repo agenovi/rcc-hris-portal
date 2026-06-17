@@ -139,6 +139,7 @@ async function loadEmployees(){
   renderLoans();
   renderSettings();
   renderSignatures();
+  tagPreviewPages();
   wireGlobalSearch();
   if(!landed){ landed=true; if(typeof window.go==="function") window.go("dashboard"); }
 }
@@ -162,6 +163,19 @@ async function ppSyncFetch(params){
   return j;
 }
 
+// Honesty pass: every screen NOT backed by live data gets a visible "Preview" ribbon,
+// so HR never mistakes an illustrative mock-up for real data. Real pages are listed here.
+const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures"]);
+function tagPreviewPages(){
+  document.querySelectorAll('section.page').forEach(sec=>{
+    const id=(sec.id||"").replace("page-","");
+    if(REAL_PAGES.has(id) || sec.querySelector(':scope > .preview-tag')) return;
+    const b=document.createElement('div'); b.className='preview-tag';
+    b.style.cssText="background:#fdf6e3;border:1px solid #ecd9a6;color:#8a6a14;border-radius:10px;padding:9px 13px;margin:0 0 12px;font-size:12.5px;font-weight:600;";
+    b.textContent="👁 Preview — this screen is an illustrative mock-up, not live data yet. Tell Claude to wire it up, or it gets built for real on Tally.";
+    sec.insertBefore(b, sec.firstChild);
+  });
+}
 function renderSettings(){
   const pg=$("#page-settings"); if(!pg) return;
   pg.innerHTML=`

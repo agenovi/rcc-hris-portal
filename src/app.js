@@ -624,9 +624,9 @@ function renderEmployeesPage(){
     <h2>Employee Master</h2>
     <div class="psub">${EMPLOYEES.length} records · ${A.length} active · click any row to open the record</div>
     <div class="actionbar">
-      <button class="btn" id="addEmp">+ Add Employee</button>
       <button class="btn blue" id="exportEmp">Export CSV</button>
     </div>
+    <div class="psub" style="margin:-2px 0 8px;">🔒 Employees can't be added here. A new employee is created only through <b>hire → onboarding</b> and confirmed against PayPlus attendance — this prevents ghost employees.</div>
     <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
       <div class="kpi"><div class="k-l">Active</div><div class="k-n">${A.length}</div></div>
       <div class="kpi"><div class="k-l">Head Office</div><div class="k-n">${ho}</div></div>
@@ -643,7 +643,7 @@ function renderEmployeesPage(){
       <tbody id="empRows"></tbody>
     </table>
     <div id="empCount" style="font-size:12px;color:var(--muted);margin-top:10px;"></div>`;
-  $("#addEmp").addEventListener("click",()=>openForm(null));
+  const _addEmp=$("#addEmp"); if(_addEmp) _addEmp.addEventListener("click",()=>openForm(null)); // free-hand add removed (anti-ghost control); creation only via hire→onboarding→PayPlus
   $("#exportEmp").addEventListener("click",exportCSV);
   $$("#empChips .chip").forEach(c=>c.addEventListener("click",()=>{ empFilter=c.dataset.f; renderEmployeesPage(); }));
   $("#empSearch").addEventListener("input",paintEmpRows);

@@ -2334,6 +2334,7 @@ let LOANS=[];
 let MANPOWER=[];
 let SIGNATURES=[];
 let CANDIDATE_FEEDBACK=[];
+let MEMOS=[];
 let CURRENT_USER=null;
 const DEFAULT_PH_DOCS=[["nbi","NBI / Police Clearance",true],["birth","PSA Birth Certificate",false],["sss","SSS (E-1 / number)",false],["philhealth","PhilHealth",false],["pagibig","Pag-IBIG (MID)",false],["tin","TIN / BIR 1902",false],["photo","2×2 ID Photos",false],["diploma","Diploma / TOR",false],["medical","Medical / Health Certificate",false]];
 let empFilter="All";
@@ -2406,7 +2407,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2420,7 +2421,8 @@ async function loadEmployees(){
     sb.from("loans").select("*").order("created_at", {ascending:false}),
     sb.from("manpower_requests").select("*").order("date_posted", {ascending:false}),
     sb.from("signature_requests").select("*").order("created_at", {ascending:false}),
-    sb.from("candidate_feedback").select("*").order("created_at", {ascending:false})
+    sb.from("candidate_feedback").select("*").order("created_at", {ascending:false}),
+    sb.from("memos").select("*").order("created_at", {ascending:false})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2437,6 +2439,7 @@ async function loadEmployees(){
   MANPOWER=(mr&&mr.data)||[];
   SIGNATURES=(sg&&sg.data)||[];
   CANDIDATE_FEEDBACK=(cf&&cf.data)||[];
+  MEMOS=(me&&me.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -2449,6 +2452,7 @@ async function loadEmployees(){
   renderLoans();
   renderSettings();
   renderSignatures();
+  renderMemos();
   tagPreviewPages();
   wireGlobalSearch();
   if(!landed){ landed=true; if(typeof window.go==="function") window.go("dashboard"); }
@@ -2475,7 +2479,7 @@ async function ppSyncFetch(params){
 
 // Honesty pass: every screen NOT backed by live data gets a visible "Preview" ribbon,
 // so HR never mistakes an illustrative mock-up for real data. Real pages are listed here.
-const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures"]);
+const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos"]);
 function tagPreviewPages(){
   document.querySelectorAll('section.page').forEach(sec=>{
     const id=(sec.id||"").replace("page-","");
@@ -3216,6 +3220,105 @@ function openSignDoc(id){
     if(error){ alert(error.message); return; }
     m.remove(); await loadEmployees(); window.go("signatures");
   };
+}
+/* ============================ MEMOS & NOTICES (RCC letterhead · routed to Signatures) ============================ */
+const MEMO_TYPES=[
+  {k:"Written Warning", tmpl:(n,d,x)=>`WRITTEN WARNING\n\nTo: ${n}\n\nThis is a written warning regarding the following:\n${x||"[describe the matter]"}\n\nThis is a corrective measure to help you meet company standards — not a penalty. You may submit a written explanation within five (5) days of receipt. Related or repeated infractions may lead to further disciplinary action under due process.\n\nYour signature acknowledges RECEIPT only — it does not signify agreement.`},
+  {k:"Notice to Explain (NTE)", tmpl:(n,d,x)=>`NOTICE TO EXPLAIN\n\nTo: ${n}\n\nIt has been reported that, on or about ${d||"[date]"}, the following occurred:\n${x||"[state the act/omission]"}\n\nThis may constitute a violation of company rules and/or the Labor Code. You are directed to submit a WRITTEN EXPLANATION within five (5) days of receipt as to why no disciplinary action should be taken against you. You may request a conference and be assisted by a representative of your choice.\n\nThis is the FIRST of the twin notices required by due process. No decision has been made at this stage.`},
+  {k:"Notice of Decision", tmpl:(n,d,x)=>`NOTICE OF DECISION\n\nTo: ${n}\n\nAfter considering the Notice to Explain${d?" dated "+d:""} and your response (or your failure to respond within the period given), management's decision is as follows:\n${x||"[decision + basis]"}\n\nThis decision was reached after due process, weighing the facts and your explanation.`},
+  {k:"Notice of Termination", tmpl:(n,d,x)=>`NOTICE OF TERMINATION\n\nTo: ${n}\n\nFollowing due process (twin notices and the opportunity to be heard), your employment with Roshan Commercial Corporation is terminated effective ${d||"[date]"} on the following ground:\n${x||"[just/authorized cause]"}\n\nFinal pay and your Certificate of Employment will be released in accordance with DOLE rules. Please complete the clearance process.`},
+  {k:"Acceptance of Resignation", tmpl:(n,d,x)=>`ACCEPTANCE OF RESIGNATION\n\nTo: ${n}\n\nWe acknowledge and accept your resignation. Your last day of work is ${d||"[date]"}.\n${x||""}\n\nPlease complete the clearance process. Your final pay and Certificate of Employment will be released within the periods provided by DOLE. We thank you for your service.`},
+  {k:"End of Contract", tmpl:(n,d,x)=>`NOTICE OF END OF CONTRACT\n\nTo: ${n}\n\nThis is to inform you that your fixed-term/probationary contract ends on ${d||"[date]"}.\n${x||""}\n\nThis is the natural expiration of your contract term, not a dismissal. Final pay and your Certificate of Employment will be processed accordingly.`},
+  {k:"Certificate of Employment (COE)", tmpl:(n,d,x)=>`CERTIFICATE OF EMPLOYMENT\n\nThis is to certify that ${n} was employed by Roshan Commercial Corporation.\n${x||"[position held · dates of employment]"}\n\nIssued upon the employee's request for whatever legal purpose it may serve. (Per DOLE Labor Advisory No. 06-20, a COE states the dates of employment and position held, and is issued within three (3) days of request.)`},
+  {k:"Custom memo", tmpl:(n,d,x)=>x||""}
+];
+function renderMemos(){
+  const pg=$("#page-memos"); if(!pg) return;
+  const M=MEMOS||[];
+  const drafts=M.filter(m=>m.status==="Draft"), issued=M.filter(m=>m.status==="Issued"), signed=M.filter(m=>m.status==="Signed");
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Memos &amp; Notices</h2>
+      <div class="psub">The 7 standard HR letters + a custom memo — generated on RCC letterhead, routed through Signatures, and logged. DOLE twin-notice flow: <b>NTE → (employee explains) → Notice of Decision</b>.</div>
+      <div class="actionbar"><button class="btn" id="memoNew">+ New memo</button></div>
+      <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
+        <div class="kpi"><div class="k-l">Drafts</div><div class="k-n">${drafts.length}</div></div>
+        <div class="kpi warn"><div class="k-l">Awaiting signature</div><div class="k-n">${issued.length}</div></div>
+        <div class="kpi"><div class="k-l">Signed</div><div class="k-n">${signed.length}</div></div>
+      </div>
+    </div>
+    <div class="panel"><h2>All memos <span class="count-tag">${M.length}</span></h2>
+      ${M.length?`<table><thead><tr><th>Ref</th><th>Type</th><th>Employee</th><th>Status</th><th>Date</th><th></th></tr></thead><tbody>`+
+        M.map(m=>`<tr><td>${esc(m.ref_no||"—")}</td><td>${esc(m.memo_type)}</td><td>${esc(m.subject_name||"—")}</td><td><span class="pill ${m.status==="Signed"?"active":(m.status==="Issued"?"awol":"")}">${esc(m.status)}</span></td><td>${m.created_at?fmtDate(m.created_at):""}</td>
+          <td style="text-align:right;white-space:nowrap;"><button class="btn ghost" data-memoview="${esc(m.id)}">View</button>${m.status==="Draft"?` <button class="btn ghost" data-memoissue="${esc(m.id)}">Issue</button>`:""}</td></tr>`).join("")+
+        `</tbody></table>`:'<div class="psub">No memos yet — click “New memo”.</div>'}
+    </div>`;
+  $("#memoNew").addEventListener("click",()=>newMemo());
+  $$('#page-memos [data-memoview]').forEach(b=>b.addEventListener("click",()=>viewMemo(b.dataset.memoview)));
+  $$('#page-memos [data-memoissue]').forEach(b=>b.addEventListener("click",()=>issueMemo(b.dataset.memoissue)));
+}
+function newMemo(){
+  let m=document.getElementById("memoModal"); if(!m){ m=document.createElement("div"); m.id="memoModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,30,50,.5);display:flex;justify-content:flex-end;";
+  const names=[...new Set(EMPLOYEES.map(e=>e.full_name).filter(Boolean))].sort();
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">New memo / notice</div><div style="font-size:12.5px;opacity:.85;">Generates DOLE-aware text on RCC letterhead. Edit before issuing.</div></div>
+    <div style="padding:18px 22px;">
+      <div class="panel" style="margin-top:0;">
+        ${sel("mm_type","Memo type",MEMO_TYPES.map(t=>t.k),"")}
+        ${sel("mm_emp","Employee",names,"")}
+        ${fld("mm_date","Relevant date (incident / effective / last day)","","date")}
+        <div style="margin:8px 0;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Details / specifics</label><textarea id="mm_details" rows="3" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;" placeholder="The facts, ground, or specifics to weave into the letter"></textarea></div>
+        <button class="btn ghost" id="mm_gen">↻ Generate letter text</button>
+      </div>
+      <div class="panel"><div class="subhead">Letter (renders on RCC letterhead) — editable</div>
+        <textarea id="mm_body" rows="14" style="width:100%;padding:10px 12px;border:1px solid #e2e7e4;border-radius:8px;font-size:13px;line-height:1.5;font-family:ui-monospace,Menlo,monospace;"></textarea>
+      </div>
+      <div id="mmMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
+      <div style="display:flex;gap:10px;"><button class="btn ghost" id="mm_cancel" style="flex:1;">Cancel</button><button class="btn ghost" id="mm_draft" style="flex:1;">Save draft</button><button class="btn" id="mm_issue" style="flex:1;">Issue for signature</button></div>
+    </div></div>`;
+  m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("mm_cancel").onclick=()=>m.remove();
+  const gen=()=>{ const t=MEMO_TYPES.find(x=>x.k===v("mm_type")); if(!t){ document.getElementById("mmMsg").textContent="Pick a memo type first."; return; } document.getElementById("mm_body").value=t.tmpl(v("mm_emp")||"[employee]", v("mm_date")||"", v("mm_details")||""); document.getElementById("mmMsg").textContent=""; };
+  document.getElementById("mm_gen").onclick=gen;
+  const save=async(issue)=>{
+    const type=v("mm_type"); if(!type){ document.getElementById("mmMsg").textContent="Pick a memo type."; return; }
+    let body=document.getElementById("mm_body").value.trim(); if(!body){ gen(); body=document.getElementById("mm_body").value.trim(); }
+    const stamp=new Date().toISOString().slice(0,10).replace(/-/g,"");
+    const ref="M-"+stamp+"-"+String(Math.abs((v("mm_emp")||type).split("").reduce((a,c)=>a*31+c.charCodeAt(0),7))%1000).padStart(3,"0");
+    const row={ ref_no:ref, memo_type:type, subject_name:v("mm_emp"), title:type, body, relevant_date:v("mm_date"), status:"Draft", created_by:(CURRENT_USER&&CURRENT_USER.email)||"HR" };
+    const { data, error } = await sb.from("memos").insert(row).select().single();
+    if(error){ document.getElementById("mmMsg").textContent=error.message; return; }
+    m.remove();
+    if(issue){ await issueMemo(data.id, true); } else { await loadEmployees(); window.go("memos"); }
+  };
+  document.getElementById("mm_draft").onclick=()=>save(false);
+  document.getElementById("mm_issue").onclick=()=>save(true);
+}
+async function issueMemo(id, skipConfirm){
+  const m=(MEMOS.find(x=>String(x.id)===String(id)))||(await sb.from("memos").select("*").eq("id",id).single()).data;
+  if(!m) return;
+  if(!skipConfirm && !confirm("Issue this "+m.memo_type+" for "+(m.subject_name||"the employee")+"?\n\nIt will be sent to Signatures for the employee's acknowledgment and logged.")) return;
+  const { data:sig, error:e1 } = await sb.from("signature_requests").insert({ doc_type:"memo", doc_title:m.memo_type, subject_name:m.subject_name, body:m.body, from_name:(CURRENT_USER&&CURRENT_USER.email)||"HR", awaiting:"other", with_whom:"Employee (acknowledgment)", status:"pending" }).select().single();
+  if(e1){ alert(e1.message); return; }
+  const { error:e2 } = await sb.from("memos").update({ status:"Issued", signature_request_id:sig.id, updated_at:new Date().toISOString() }).eq("id",m.id);
+  if(e2){ alert(e2.message); return; }
+  await loadEmployees(); window.go("memos");
+}
+function viewMemo(id){
+  const m=MEMOS.find(x=>String(x.id)===String(id)); if(!m) return;
+  let el=document.getElementById("memoView"); if(!el){ el=document.createElement("div"); el.id="memoView"; document.body.appendChild(el); }
+  el.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+  el.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
+    <h2 style="font-size:18px;color:#1E3A5F;margin-bottom:2px;">${esc(m.memo_type)}${m.subject_name?" — "+esc(m.subject_name):""}</h2>
+    <div class="psub">${esc(m.ref_no||"")} · ${esc(m.status)}${m.created_at?" · "+fmtDate(m.created_at):""}</div>
+    <div style="background:#fff;border:1px solid #E3E8EF;border-radius:10px;padding:16px 18px;margin:12px 0;white-space:pre-wrap;font-size:13.5px;line-height:1.6;">${esc(m.body||"")}</div>
+    <div class="note">↳ This renders on RCC letterhead when printed/served. Twin-notice flow + counsel review apply for real disciplinary use.</div>
+    <div style="display:flex;gap:10px;margin-top:14px;">${m.status==="Draft"?`<button class="btn" id="mvIssue">Issue for signature</button>`:""}<button class="btn ghost" id="mvClose" style="margin-left:auto;">Close</button></div>
+  </div>`;
+  el.addEventListener("click",e=>{ if(e.target===el) el.remove(); });
+  document.getElementById("mvClose").onclick=()=>el.remove();
+  const iv=document.getElementById("mvIssue"); if(iv) iv.onclick=()=>{ el.remove(); issueMemo(m.id); };
 }
 function renderManning(){
   const pg=$("#page-manning"); if(!pg) return;

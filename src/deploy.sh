@@ -33,7 +33,7 @@ console.log("build ok");
 [ -f "$APP_DIR/direct-apply.html" ] && cp "$APP_DIR/direct-apply.html" "$SITE_DIR/direct-apply.html"
 
 # 1b. Also refresh the local double-clickable copy in the project folder (for easy viewing)
-cp "$SITE_DIR/index.html" "/Users/anj/Library/CloudStorage/Dropbox/CLAUDE/RCC HRIS Portal/RCC HRIS Portal - LIVE APP.html"
+cp "$SITE_DIR/index.html" "/Users/anj/Library/CloudStorage/Dropbox/CLAUDE/RCC HR/RCC HRIS Portal - LIVE APP.html"
 
 # 1c. Back up the editable SOURCE into the repo (/src) so GitHub keeps full version history
 mkdir -p "$SITE_DIR/src"

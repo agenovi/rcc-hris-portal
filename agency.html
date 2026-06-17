@@ -120,6 +120,7 @@ function openSubmit(store){
     <label>Candidate full name <span class="req">*</span></label><input id="s_name">
     <label>Position</label><input id="s_pos" value="Merchandiser">
     <label>Contact number</label><input id="s_contact">
+    <label>Email (optional)</label><input id="s_email" type="email">
     <label>Notes (optional)</label><textarea id="s_notes" rows="2"></textarea>
     <div class="msg" id="s_msg"></div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
@@ -134,7 +135,7 @@ function openSubmit(store){
     try{
       const r=await fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
         token, action:"submit", name, store,
-        position:document.getElementById("s_pos").value, contact:document.getElementById("s_contact").value, notes:document.getElementById("s_notes").value })});
+        position:document.getElementById("s_pos").value, contact:document.getElementById("s_contact").value, email:document.getElementById("s_email").value, notes:document.getElementById("s_notes").value })});
       const d=await r.json();
       if(!d.ok){ btn.disabled=false; btn.textContent="Save as draft"; msg.style.color="#c0392b"; msg.textContent=d.error||"Couldn't save. Try again."; return; }
       msg.style.color="#1c6b3f"; msg.textContent="✓ Saved as a draft. Review it under “My submissions”, then Submit to RCC.";

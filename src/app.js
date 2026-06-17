@@ -1248,16 +1248,25 @@ function openPrehire(c){
   $("#phEdit").addEventListener("click",()=>editPrehire(c));
   $$("#phModal [data-doc]").forEach(el=>el.addEventListener("click",()=>togglePhDoc(c, el.dataset.doc, el.dataset.label, el.dataset.tofollow==="1")));
   if(next) $("#phAdvance").addEventListener("click",()=>{
+    const grp=deriveGroup(c.department);
+    // DEPARTMENT GATE: department decides group (HO / Warehouse / Retail) → pay basis, ID type, SM rule. Require it before the contract.
+    if(next.key==="CONTRACT_SIGNING" && !c.department){
+      alert("Department not set.\n\nSet the candidate's department first — it decides Head-Office vs Warehouse vs Retail, which drives pay basis, ID type and the SM rule.\n\nOpen “Edit applicant details” → Identity → Department.");
+      return;
+    }
     // PAY-BASIS GATE: a Head Office hire must have Daily/Monthly chosen before the contract.
-    if(next.key==="CONTRACT_SIGNING" && deriveGroup(c.department)==="Head Office" && !c.pay_basis){
+    if(next.key==="CONTRACT_SIGNING" && grp==="Head Office" && !c.pay_basis){
       alert("Pay basis not set.\n\nThis is a Head Office hire — choose Daily or Monthly before the contract is prepared.\n\nOpen “Edit applicant details” → Offer & compensation → Pay basis.");
       return;
     }
-    // SM HARD GATE: no candidate reaches "Hired" until store / Retail-ops acceptance is resolved.
-    if(next.key==="HIRED" && !["Accepted","NA"].includes(c.sm_acceptance||"")){
-      alert("SM hard gate\n\nThis candidate can't be marked Hired until store / Retail-ops acceptance is recorded.\n\nOpen “Edit applicant details” → set “SM / Retail-ops acceptance” to:\n • Accepted — the host store has taken them, or\n • NA — this role isn't store-based.\n\n(It is currently: "+(c.sm_acceptance||"blank")+".)");
+    // SM HARD GATE: only store-based hires need host-store acceptance. Head Office & Warehouse are not store-based → skip.
+    const storeBased=!(grp==="Head Office"||grp==="Warehouse");
+    if(next.key==="HIRED" && storeBased && !["Accepted","NA"].includes(c.sm_acceptance||"")){
+      alert("SM hard gate\n\nThis store-based candidate can't be marked Hired until store / Retail-ops acceptance is recorded.\n\nOpen “Edit applicant details” → set “SM / Retail-ops acceptance” to:\n • Accepted — the host store has taken them, or\n • NA — this role isn't store-based.\n\n(It is currently: "+(c.sm_acceptance||"blank")+".)");
       return;
     }
+    // HIRED auto-opens the onboarding case so the hire→onboard hand-off can't be missed.
+    if(next.key==="HIRED"){ advanceToHired(c,m); return; }
     setPhase(c,next.key,m);
   });
   const rej=document.getElementById("phReject"); if(rej) rej.addEventListener("click",()=>rejectPrehire(c,m));
@@ -1269,7 +1278,7 @@ function editPrehire(c){
     <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">Edit applicant — ${esc(c.full_name)}</div><div style="font-size:12.5px;opacity:.85;">${esc(c.prehire_id)} · ${esc(phLabel(c.phase))}</div></div>
     <div style="padding:18px 22px;">
       <div class="panel" style="margin-top:0;"><div class="subhead">Identity</div>
-        ${fld("pe_full_name","Full name *",c.full_name)}${sel("pe_department","Department",DEPARTMENTS,c.department)}${fld("pe_position","Position",c.position)}${sel("pe_hire_source","Hire source",HIRE_SOURCES,c.hire_source||"Direct")}${fld("pe_worksite","Worksite (if store)",c.worksite)}
+        ${fld("pe_full_name","Full name *",c.full_name)}${sel("pe_department","Department",DEPARTMENTS,c.department)}${fld("pe_position","Position",c.position)}${sel("pe_hire_source","Hire source",HIRE_SOURCES,c.hire_source||"Direct")}${sel("pe_worksite","Worksite (store — pick from list)",[...new Set([...(c.worksite?[c.worksite]:[]),...BRANCHES.map(b=>b.name)])].sort(),c.worksite)}
       </div>
       <div class="panel"><div class="subhead">Personal details</div>
         ${fld("pe_email","Email",c.email,"email")}${fld("pe_phone","Mobile (09XXXXXXXXX)",c.phone)}${fld("pe_dob","Date of birth",c.date_of_birth,"date")}${sel("pe_civil","Civil status",CIVIL,c.civil_status)}${fld("pe_perm","Permanent address",c.permanent_address)}${fld("pe_curr","Current address",c.current_address)}
@@ -1319,6 +1328,13 @@ async function setPhase(c,phase,modal,extra){
   if(modal) modal.remove();
   await loadEmployees(); window.go("prehire");
 }
+// Reaching HIRED auto-opens the onboarding case (one per candidate) so the hire→onboard hand-off can't be missed.
+async function advanceToHired(c, modal){
+  if(modal) modal.remove();
+  const existing=(typeof ONBOARDING!=="undefined"&&Array.isArray(ONBOARDING)?ONBOARDING:[]).find(o=>o.prehire_id===c.id);
+  if(existing){ await setPhase(c,"HIRED"); window.go("onboarding"); openOnboardingCase(existing.id); return; }
+  await createOnboardingCase(c);  // creates the case + tasks, sets phase HIRED, opens onboarding
+}
 const REJECT_REASONS=["Did not meet the position qualifications","Incomplete requirements / documents","Failed assessment / interview","Store / Retail-ops did not accept","Position already filled","Withdrew / no longer available","Other"];
 function rejectPrehire(c, parentModal){
   let m=document.getElementById("phRejModal"); if(!m){ m=document.createElement("div"); m.id="phRejModal"; document.body.appendChild(m); }
@@ -1351,7 +1367,7 @@ function newPrehire(){
       ${sel("np_department","Department",DEPARTMENTS,e.department)}
       ${fld("np_position","Position",e.position)}
       ${sel("np_hire_source","Hire source",HIRE_SOURCES,"Direct")}
-      ${fld("np_worksite","Worksite (if store)",e.worksite)}
+      ${sel("np_worksite","Worksite (store, if applicable)",[...new Set(BRANCHES.map(b=>b.name))].sort(),e.worksite)}
       ${fld("np_email","Email",e.email,"email")}
       ${fld("np_phone","Phone",e.phone)}
       ${sel("np_contract_type","Contract type",CONTRACT_TYPES,"Probationary")}

@@ -69,7 +69,7 @@ async function load(){
     DATA=d;
     const slots=(d.openings||[]).reduce((s,o)=>s+(Number(o.open_slots)||0),0);
     const myActive=(d.my_submissions||[]).filter(x=>!["DRAFT","HIRED","REJECTED"].includes(x.status)).length;
-    document.getElementById("who").textContent=`${d.agency} · ${d.openings.length} stores · ${slots} open positions · ${d.total_active||0} candidates in process (${myActive} yours)`;
+    document.getElementById("who").textContent=`${d.agency} · ${d.openings.length} stores · ${slots} open positions · ${d.total_active||0} candidates in process · ${myActive} from ${d.agency}`;
     const to=document.getElementById("tabOpen"); if(to) to.textContent=`Open positions (${slots})`;
     const tm=document.getElementById("tabMine"); if(tm) tm.textContent=`My submissions (${(d.my_submissions||[]).length})`;
     render();
@@ -107,7 +107,7 @@ function render(){
         <div class="dates">Posted ${fmtD(o.date_posted)} · ${when}</div></div>
       <div class="chips">
         <span class="chip open">${o.open_slots} shortfall</span>
-        <span class="chip rev">${o.in_review} in review${o.my_in_review?` · ${o.my_in_review} yours`:""}</span>
+        <span class="chip rev">${o.in_review} in review${o.my_in_review?` · ${o.my_in_review} ${esc(DATA.agency)}`:""}</span>
         ${o.hired?`<span class="chip hir">${o.hired} hired</span>`:""}
         ${o.urgent?`<span class="chip urg">Urgent</span>`:""}
       </div>

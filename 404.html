@@ -3582,8 +3582,8 @@ function renderPrehire(){
       </div>
       ${phLinksBar()}
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
-        <div class="kpi"><div class="k-l">In Pipeline</div><div class="k-n">${inPipe.length}</div>
-          <div class="k-break"><span data-psrc="Direct" style="cursor:pointer;">Direct<b>${bySrc("Direct")}</b></span><span data-psrc="Jell-on" style="cursor:pointer;">Jell-on<b>${bySrc("Jell-on")}</b></span><span data-psrc="M&G" style="cursor:pointer;">M&amp;G<b>${bySrc("M&G")}</b></span></div></div>
+        <div class="kpi" data-gopipe="1" style="cursor:pointer;user-select:none;"><div class="k-l">In Pipeline ▸</div><div class="k-n">${inPipe.length}</div>
+          <div class="k-break"><span data-psrc="Direct" style="cursor:pointer;user-select:none;">Direct<b>${bySrc("Direct")}</b></span><span data-psrc="Jell-on" style="cursor:pointer;user-select:none;">Jell-on<b>${bySrc("Jell-on")}</b></span><span data-psrc="M&G" style="cursor:pointer;user-select:none;">M&amp;G<b>${bySrc("M&G")}</b></span></div></div>
         <div class="kpi warn"><div class="k-l">Documents</div><div class="k-n">${docs}</div><div class="k-s">awaiting uploads</div></div>
         <div class="kpi"><div class="k-l">HR Sign-off</div><div class="k-n">${ready}</div><div class="k-s">ready for contract</div></div>
         <div class="kpi ${rejected?'':''}"><div class="k-l">Rejected</div><div class="k-n">${rejected}</div><div class="k-s">pipeline closed</div></div>
@@ -3605,7 +3605,8 @@ function renderPrehire(){
     const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="prehire.csv";a.click();
   });
   $$("#phTabs .tab").forEach(t=>t.addEventListener("click",()=>{ prehireTab=t.dataset.t; renderPrehire(); }));
-  $$("#page-prehire [data-psrc]").forEach(el=>el.addEventListener("click",()=>{ prehireSrc=(prehireSrc===el.dataset.psrc?null:el.dataset.psrc); prehireTab="pipeline"; renderPrehire(); }));
+  $$("#page-prehire [data-psrc]").forEach(el=>el.addEventListener("click",(ev)=>{ ev.stopPropagation(); prehireSrc=(prehireSrc===el.dataset.psrc?null:el.dataset.psrc); prehireTab="pipeline"; renderPrehire(); const pb=document.getElementById("phBody"); if(pb) pb.scrollIntoView({behavior:"smooth",block:"start"}); }));
+  $$("#page-prehire [data-gopipe]").forEach(el=>el.addEventListener("click",()=>{ prehireSrc=null; prehireTab="pipeline"; renderPrehire(); const pb=document.getElementById("phBody"); if(pb) pb.scrollIntoView({behavior:"smooth",block:"start"}); }));
   if(prehireTab==="arch") phBodyArch();
   else if(prehireTab==="data") phBodyData();
   else if(prehireTab==="feedback") phBodyFeedback();

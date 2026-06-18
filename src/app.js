@@ -8,7 +8,8 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const $ = (s, r=document) => r.querySelector(s);
 const $$ = (s, r=document) => [...r.querySelectorAll(s)];
 const esc = (s)=> (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const fmtDate=(d)=>{ if(!d) return "—"; const x=new Date(d+"T00:00:00"); return isNaN(x)?d:x.toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"}); };
+const fmtDate=(d)=>{ if(!d) return "—"; const x=new Date(/[TZ:]/.test(String(d))?d:d+"T00:00:00"); return isNaN(x)?String(d):x.toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"}); };
+const fmtMDY=(d)=>{ if(!d) return "—"; const x=new Date(d); if(isNaN(x)) return String(d); const p=n=>String(n).padStart(2,"0"); return p(x.getMonth()+1)+"-"+p(x.getDate())+"-"+String(x.getFullYear()).slice(2); };
 
 let EMPLOYEES=[];
 let BRANCHES=[];
@@ -1313,7 +1314,7 @@ function phBodyPipeline(){
     return `<div class="col"><div class="col-h">${ph.label}<span>${cards.length} · ${esc(ph.actor)}</span></div>
       ${cards.map(c=>`<div class="ccard clickable" data-id="${c.id}" ${ph.key==="HR_SIGNOFF"?'style="border-color:#bcdcc7;background:var(--green-light);"':''}>
         <div class="cn">${esc(c.full_name)}</div>
-        <div class="cd">${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")}${c.daily_rate?` · ₱${Number(c.daily_rate).toLocaleString()}/day`:""}${c.assessment_score!=null?` · exam ${c.assessment_score}`:""}${c.sm_acceptance&&c.sm_acceptance!=="NA"?` · SM ${esc(c.sm_acceptance)}`:""}</div>${c.created_at?`<div style="font-size:10.5px;margin-top:3px;color:${(Date.now()-new Date(c.created_at))/86400000>14?'#c0392b':'var(--muted)'};">Submitted ${fmtDate(c.created_at)} · ${fmtAgo(c.created_at)}</div>`:""}</div>`).join("")
+        <div class="cd">${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")}${c.daily_rate?` · ₱${Number(c.daily_rate).toLocaleString()}/day`:""}${c.assessment_score!=null?` · exam ${c.assessment_score}`:""}${c.sm_acceptance&&c.sm_acceptance!=="NA"?` · SM ${esc(c.sm_acceptance)}`:""}</div>${c.created_at?`<div style="font-size:10.5px;margin-top:3px;color:${(Date.now()-new Date(c.created_at))/86400000>14?'#c0392b':'var(--muted)'};">Submitted ${fmtMDY(c.created_at)} · ${fmtAgo(c.created_at)}</div>`:""}</div>`).join("")
        || `<div style="font-size:11.5px;color:var(--muted);padding:6px 2px;">—</div>`}
     </div>`;
   }).join("");

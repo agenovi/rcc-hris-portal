@@ -1275,7 +1275,7 @@ function renderPrehire(){
       ${phLinksBar()}
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
         <div class="kpi" data-gopipe="1" style="cursor:pointer;user-select:none;"><div class="k-l">In Pipeline ▸</div><div class="k-n">${inPipe.length}</div>
-          <div class="k-break"><span data-psrc="Direct" style="cursor:pointer;user-select:none;">Direct<b>${bySrc("Direct")}</b></span><span data-psrc="Jell-on" style="cursor:pointer;user-select:none;">Jell-on<b>${bySrc("Jell-on")}</b></span><span data-psrc="M&G" style="cursor:pointer;user-select:none;">M&amp;G<b>${bySrc("M&G")}</b></span></div></div>
+          <div class="k-break">${[["","All",inPipe.length],["Direct","Direct",bySrc("Direct")],["Jell-on","Jell-on",bySrc("Jell-on")],["M&G","M&amp;G",bySrc("M&G")]].map(a=>`<span data-psrc="${a[0]}" style="cursor:pointer;user-select:none;${(prehireSrc||"")===a[0]?'background:#dbe7f0;border-radius:7px;':''}">${a[1]}<b>${a[2]}</b></span>`).join("")}</div></div>
         <div class="kpi warn"><div class="k-l">Documents</div><div class="k-n">${docs}</div><div class="k-s">awaiting uploads</div></div>
         <div class="kpi"><div class="k-l">HR Sign-off</div><div class="k-n">${ready}</div><div class="k-s">ready for contract</div></div>
         <div class="kpi ${rejected?'':''}"><div class="k-l">Rejected</div><div class="k-n">${rejected}</div><div class="k-s">pipeline closed</div></div>

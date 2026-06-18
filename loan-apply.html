@@ -87,7 +87,7 @@ const ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI
 const FN=SB+"/functions/v1/loan-apply";
 const TYPES={
   discretionary:{n:"Discretionary",rate:12,max:50000,term:12,d:"7+ yrs service · brief reason required",
-    docs:[]},
+    docs:["Valid government-issued ID","Proof of your reason — quotation, bill, or estimate (if applicable)"]},
   emergency:{n:"Emergency",rate:12,max:20000,term:12,d:"regular employees · medical · accident · death",
     docs:["Medical certificate / police or incident report","Receipts, cost estimate, or proof of loss"], optional:true},
   educational:{n:"Educational",rate:0,max:null,term:12,d:"0% · child's tuition (50%)",
@@ -112,7 +112,9 @@ function pick(k){ SEL=k; [...document.querySelectorAll('.lt')].forEach(e=>e.clas
 }
 function renderDocs(k){
   const t=TYPES[k]; const hint=document.getElementById("docHint"), slots=document.getElementById("docSlots");
-  if(!t.docs||!t.docs.length){ hint.textContent="No supporting documents are required for a "+t.n+" loan."; slots.innerHTML=""; return; }
+  if(!t.docs||!t.docs.length){ hint.innerHTML="Attach anything that supports your request — a valid ID, quotation, bill, or estimate.";
+    slots.innerHTML=`<label>Supporting document <span style="font-weight:400;color:var(--muted);font-size:11px;">— attach a file</span></label>
+     <input type="file" class="docfile" data-label="Supporting document" accept="image/*,application/pdf,.pdf">`; return; }
   hint.innerHTML=t.optional
     ? `Attach what you have for a <b>${t.n}</b> loan. You can submit now and send the rest to HR later — we won't hold up an emergency.`
     : `Please attach the following for a <b>${t.n}</b> loan. Clear phone photos or PDFs are fine.`;

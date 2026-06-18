@@ -40,6 +40,7 @@
       <select id="f_pos" onchange="togglePos()">
         <option value="">Select a position…</option>
         <option>Merchandiser</option>
+        <option>Store Representative</option>
         <option>Store Supervisor</option>
         <option>Warehouse Staff</option>
         <option>Head Office / Admin</option>
@@ -47,16 +48,18 @@
         <option>Other</option>
       </select>
       <input id="f_pos_other" placeholder="Please specify the position" style="display:none;margin-top:8px;">
-      <div class="merch" id="merchBlock" style="display:none;">
-        <div class="badge">For Merchandiser / department-store roles</div>
+      <div class="merch" id="storeBlock" style="display:none;">
+        <div class="badge">For store-based roles</div>
         <label>Store you'd like to apply to <span style="font-weight:400;color:var(--muted);">(optional — these are our current openings)</span></label>
         <select id="f_store"><option value="">No preference — wherever I'm needed</option></select>
-        <div class="grid">
-          <div><label>Religion</label><input id="f_religion"></div>
-          <div><label>Height (cm)</label><input id="f_height" placeholder="e.g. 165"></div>
-          <div><label>Weight (kg)</label><input id="f_weight" placeholder="e.g. 60"></div>
+        <div id="smExtras">
+          <div class="grid">
+            <div><label>Religion</label><input id="f_religion"></div>
+            <div><label>Height (cm)</label><input id="f_height" placeholder="e.g. 165"></div>
+            <div><label>Weight (kg)</label><input id="f_weight" placeholder="e.g. 60"></div>
+          </div>
+          <div class="note">Religion, height and weight are required for SM mall ID issuance.</div>
         </div>
-        <div class="note">Religion, height and weight are required for SM mall ID issuance.</div>
       </div>
     </div>
 
@@ -142,7 +145,9 @@ const radio=n=>{ const el=document.querySelector(`input[name="${n}"]:checked`); 
 })();
 function togglePos(){
   const p=document.getElementById("f_pos").value;
-  document.getElementById("merchBlock").style.display = p==="Merchandiser" ? "block" : "none";
+  const storeRole = (p==="Merchandiser" || p==="Store Representative");
+  document.getElementById("storeBlock").style.display = storeRole ? "block" : "none";   // store list: only store-based roles
+  document.getElementById("smExtras").style.display = (p==="Merchandiser") ? "block" : "none"; // SM mall-ID fields: merchandiser only
   document.getElementById("f_pos_other").style.display = p==="Other" ? "block" : "none";
 }
 function posValue(){ const p=document.getElementById("f_pos").value; return p==="Other" ? (val("f_pos_other")||"Other") : p; }

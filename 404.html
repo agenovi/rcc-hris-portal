@@ -3558,8 +3558,7 @@ function phLinksBar(){
   return `<div style="background:#eef4ef;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:12px;">
     <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Share these links</div>
     ${links.map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:5px 0;">
-      <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;">${esc(x.l)} <span style="font-weight:400;color:var(--muted);font-size:11.5px;">${esc(x.s)}</span></div>
-      <div style="font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(x.u)}</div></div>
+      <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;">${esc(x.l)} <span style="font-weight:400;color:var(--muted);font-size:11.5px;">${esc(x.s)}</span></div></div>
       <button class="btn ghost" data-copy="${esc(x.u)}" style="flex-shrink:0;">Copy</button>
       <a class="btn ghost" href="${esc(x.u)}" target="_blank" rel="noopener" style="flex-shrink:0;text-decoration:none;">Open</a>
     </div>`).join("")}

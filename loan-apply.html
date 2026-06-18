@@ -88,12 +88,12 @@ const FN=SB+"/functions/v1/loan-apply";
 const TYPES={
   discretionary:{n:"Discretionary",rate:12,max:50000,term:12,d:"7+ yrs service · brief reason required",
     docs:["Valid government-issued ID","Proof of your reason — quotation, bill, or estimate (if applicable)"]},
-  emergency:{n:"Emergency",rate:12,max:20000,term:12,d:"regular employees · medical · accident · death",
-    docs:["Medical certificate / police or incident report","Receipts, cost estimate, or proof of loss"], optional:true},
+  emergency:{n:"Emergency",rate:12,max:20000,term:12,d:"medical · accident · death · urgent repair",
+    docs:["Photos or images of the situation / damage","Medical certificate, police, or incident report","Repair estimate, receipts, or proof of loss"]},
   educational:{n:"Educational",rate:0,max:null,term:12,d:"0% · child's tuition (50%)",
     docs:["School invoice / Statement of Account","Proof of payment on any previous educational loan"]},
-  moto:{n:"Motorcycle",rate:6,max:100000,term:36,d:"RCC-owned until paid · 10% DP",
-    docs:["Repair cost estimate or dealer quotation","Proof of vehicle ownership / valid driver's license"]},
+  moto:{n:"Motorcycle",rate:6,max:100000,term:36,d:"purchase only · RCC-owned until paid · 10% DP",
+    docs:["Dealer quotation","Valid driver's license","Proof of capacity to pay"]},
 };
 let SEL=null;
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -106,7 +106,7 @@ document.getElementById("types").innerHTML=Object.entries(TYPES).map(([k,t])=>
 function pick(k){ SEL=k; [...document.querySelectorAll('.lt')].forEach(e=>e.classList.toggle('sel',e.dataset.k===k));
   const t=TYPES[k]; let o=""; for(let m=1;m<=t.term;m++) o+=`<option value="${m}" ${m===Math.min(12,t.term)?"selected":""}>${m} month${m>1?"s":""}</option>`;
   document.getElementById("f_term").innerHTML=o;
-  document.getElementById("typeNote").innerHTML=t.max?`<div class="sub" style="margin-top:10px;">Maximum for ${t.n}: <b>${peso(t.max)}</b> · subject to approval.</div>`:`<div class="sub" style="margin-top:10px;">Educational support covers <b>up to 50% of tuition</b>, paid directly to the school — your family covers the other half. 0% interest, subject to approval.</div>`;
+  document.getElementById("typeNote").innerHTML=t.max?`<div class="sub" style="margin-top:10px;">Maximum for ${t.n}: <b>${peso(t.max)}</b> · subject to approval.</div>`:`<div class="sub" style="margin-top:10px;">Educational support covers <b>up to 50% of tuition</b>, paid directly to the school — your family covers the other half. 0% interest, subject to approval. <b>If approved, the student/child signs a waiver before release.</b></div>`;
   renderDocs(k);
   calc();
 }
@@ -160,7 +160,7 @@ function calc(){
     const reqMonthly=(SEL&&amt>0)?monthly(amt,TYPES[SEL].rate,term2||12):0;
     let verdict;
     if(SEL==="educational"){
-      verdict=`<div style="margin-top:10px;padding:11px 13px;background:var(--green-bg);border-radius:10px;font-size:14px;">Educational assistance is here to <b>help your family</b>. RCC covers up to <b>50% of the tuition</b> — your family covers the other half — at <b>0% interest</b>, paid directly to the school.${amt>0?` Your half-share of about <b>${peso(reqMonthly)}</b>/month is well within your pay.`:""} The amount and repayment are set with HR — <b>subject to approval</b>.</div>`;
+      verdict=`<div style="margin-top:10px;padding:11px 13px;background:var(--green-bg);border-radius:10px;font-size:14px;">Educational assistance is here to <b>help your family</b>. RCC covers up to <b>50% of the tuition</b> — your family covers the other half — at <b>0% interest</b>, paid directly to the school.${amt>0?` Your half-share of about <b>${peso(reqMonthly)}</b>/month is well within your pay.`:""} The amount and repayment are set with HR — <b>subject to approval</b>, and the student/child signs a waiver before release.</div>`;
     } else if(SEL&&amt>0){
       verdict = reqMonthly<=maxMonthly
         ? `<div style="margin-top:10px;padding:11px 13px;background:var(--green-bg);border-radius:10px;font-size:14px;"><b style="color:var(--green);">✓ Within your allowable range.</b> Your estimated monthly of <b>${peso(reqMonthly)}</b> fits within the <b>${peso(maxMonthly)}</b> your pay can support. Final amount is <b>subject to HR's approval</b>.</div>`

@@ -171,6 +171,7 @@ async function submitApp(){
     q_discharged:radio("q1"), q_discharged_detail:val("f_q1d"),
     q_criminal:radio("q2"), q_criminal_detail:val("f_q2d"),
     q_can_perform:radio("q3"), q_can_perform_detail:val("f_q3d"),
+    agency_token:(new URLSearchParams(location.search).get("ag")||""),
     source:"Direct", confirmed:true
   };
   try{

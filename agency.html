@@ -79,11 +79,11 @@ function render(){
   const b=document.getElementById("body");
   if(TAB==="mine"){
     const m=DATA.my_submissions||[];
-    b.innerHTML = m.length ? `<table><thead><tr><th>Candidate</th><th>Store</th><th>Status</th><th></th></tr></thead><tbody>`+
+    b.innerHTML = m.length ? `<table><thead><tr><th>Candidate</th><th>Store</th><th>Status</th><th>Submitted</th><th></th></tr></thead><tbody>`+
       m.map((x,i)=>{
         const draft=x.status==="DRAFT";
         const act=draft?`<button class="btn ghost" onclick='editDraft(${i})'>Edit</button> <button class="btn" onclick='shipDraft(${i})'>Submit to RCC</button>`:"";
-        return `<tr><td><b>${esc(x.name)}</b><div style="font-size:11.5px;color:var(--muted);">${esc(x.position||"")}</div></td><td>${esc(x.store||"—")}</td><td><span class="pill"${draft?' style="background:#fdf6e3;color:#8a6a14;"':''}>${esc(statusLabel(x.status))}</span>${x.status==="REJECTED"&&x.reason?`<div class="rsn">${esc(x.reason)}</div>`:""}</td><td style="white-space:nowrap;text-align:right;">${act}</td></tr>`;
+        return `<tr><td><b>${esc(x.name)}</b><div style="font-size:11.5px;color:var(--muted);">${esc(x.position||"")}</div></td><td>${esc(x.store||"—")}</td><td><span class="pill"${draft?' style="background:#fdf6e3;color:#8a6a14;"':''}>${esc(statusLabel(x.status))}</span>${x.status==="REJECTED"&&x.reason?`<div class="rsn">${esc(x.reason)}</div>`:""}</td><td style="white-space:nowrap;font-size:12px;color:${x.submitted&&(Date.now()-new Date(x.submitted))/86400000>14?'#c0392b':'var(--muted)'};">${x.submitted?new Date(x.submitted).toLocaleDateString(undefined,{month:'short',day:'numeric'})+' · '+(Math.floor((Date.now()-new Date(x.submitted))/86400000)||0)+'d':'—'}</td><td style="white-space:nowrap;text-align:right;">${act}</td></tr>`;
       }).join("")+
       `</tbody></table>` : `<div class="empty">No candidates yet. Open a position and click “Submit a candidate” — it saves as a draft you review before sending to RCC.</div>`;
     return;

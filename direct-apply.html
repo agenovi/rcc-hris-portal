@@ -51,7 +51,9 @@
       <div class="merch" id="storeBlock" style="display:none;">
         <div class="badge">For store-based roles</div>
         <label>Store you'd like to apply to <span style="font-weight:400;color:var(--muted);">(optional — these are our current openings)</span></label>
-        <select id="f_store"><option value="">No preference — wherever I'm needed</option></select>
+        <select id="f_store" onchange="toggleStore()"><option value="">No preference — wherever I'm needed</option></select>
+        <input id="f_store_other" placeholder="Type the store / location you want" style="display:none;margin-top:8px;">
+        <div class="note" id="storeOtherNote" style="display:none;">We'll check this — if it's not a current opening, HR verifies it (it may be a new store).</div>
         <div id="smExtras">
           <div class="grid">
             <div><label>Religion</label><input id="f_religion"></div>
@@ -135,13 +137,14 @@ const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;
 const val=id=>document.getElementById(id).value.trim();
 const radio=n=>{ const el=document.querySelector(`input[name="${n}"]:checked`); return el?el.value:""; };
 (async function loadStores(){
+  const sel=document.getElementById("f_store");
   try{
     const r=await fetch(FN); const d=await r.json();
     if(d&&d.ok&&Array.isArray(d.stores)){
-      const sel=document.getElementById("f_store");
       d.stores.forEach(s=>{ const o=document.createElement("option"); o.textContent=s; sel.appendChild(o); });
     }
   }catch(e){}
+  const oo=document.createElement("option"); oo.value="__other__"; oo.textContent="Other — my store isn't listed"; sel.appendChild(oo);
 })();
 function togglePos(){
   const p=document.getElementById("f_pos").value;
@@ -150,6 +153,8 @@ function togglePos(){
   document.getElementById("smExtras").style.display = (p==="Merchandiser") ? "block" : "none"; // SM mall-ID fields: merchandiser only
   document.getElementById("f_pos_other").style.display = p==="Other" ? "block" : "none";
 }
+function toggleStore(){ const o=document.getElementById("f_store").value==="__other__"; document.getElementById("f_store_other").style.display=o?"block":"none"; document.getElementById("storeOtherNote").style.display=o?"block":"none"; }
+function storeValue(){ return document.getElementById("f_store").value==="__other__" ? val("f_store_other") : val("f_store"); }
 function posValue(){ const p=document.getElementById("f_pos").value; return p==="Other" ? (val("f_pos_other")||"Other") : p; }
 function showD(n){ const m={q1:"f_q1d",q2:"f_q2d",q3:"f_q3d"}; document.getElementById(m[n]).style.display = radio(n)===(n==="q3"?"No":"Yes") ? "block" : "none"; }
 async function submitApp(){
@@ -165,7 +170,7 @@ async function submitApp(){
     full_name:name, nickname:val("f_nick"), date_of_birth:val("f_dob"), place_of_birth:val("f_pob"),
     sex:val("f_sex"), civil_status:val("f_civil"),
     email:val("f_email"), phone:val("f_phone"), telegram:val("f_tg"), viber:val("f_vb"), facebook:val("f_fb"),
-    position:posValue(), worksite:val("f_store"), religion:val("f_religion"), height:val("f_height"), weight:val("f_weight"),
+    position:posValue(), worksite:storeValue(), religion:val("f_religion"), height:val("f_height"), weight:val("f_weight"),
     prev_employer:val("f_prevemp"), prev_position:val("f_prevpos"), prev_duration:val("f_prevdur"), prev_reason:val("f_prevreason"),
     education_school:val("f_school"), education_year:val("f_year"),
     q_discharged:radio("q1"), q_discharged_detail:val("f_q1d"),

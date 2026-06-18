@@ -65,7 +65,10 @@ async function load(){
     const r=await fetch(`${FN}?token=${encodeURIComponent(token)}&action=board`);
     const d=await r.json();
     if(d.error){ document.getElementById("body").innerHTML=`<div class="empty">${esc(d.error)}</div>`; document.getElementById("who").textContent="No access"; return; }
-    DATA=d; document.getElementById("who").textContent=`${d.agency} · ${d.openings.length} stores with openings`;
+    DATA=d;
+    const slots=(d.openings||[]).reduce((s,o)=>s+(Number(o.open_slots)||0),0);
+    document.getElementById("who").textContent=`${d.agency} · ${d.openings.length} stores · ${slots} open positions`;
+    const to=document.getElementById("tabOpen"); if(to) to.textContent=`Open positions (${slots})`;
     render();
   }catch(e){ document.getElementById("body").innerHTML=`<div class="empty">Couldn't load right now. Please try again.</div>`; }
 }

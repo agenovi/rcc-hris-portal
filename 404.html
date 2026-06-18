@@ -2790,6 +2790,7 @@ function renderDashboard(){
   const totAHC=open.reduce((s,b)=>s+b.ahc_stationary+b.ahc_reliever,0);
   const totCHC=open.reduce((s,b)=>s+chcFor(b.name),0);
   const merchDef=Math.max(0,totAHC-totCHC);
+  const _openMR=MANPOWER.filter(o=>o.status==="Open"); const openSlots=_openMR.reduce((s,o)=>s+(Number(o.count_needed)||0),0), openStores=_openMR.length;
   // composition
   const byGroup={"Head Office":ho,"Warehouse":wh,"Retail":rt};
   const byDept={}; A.filter(e=>e.group_name==="Head Office").forEach(e=>{const d=e.department||"—";byDept[d]=(byDept[d]||0)+1;});
@@ -2843,7 +2844,7 @@ function renderDashboard(){
     <div class="grid kpis" style="margin-top:13px;">
       <div class="kpi" style="cursor:pointer;" onclick="go('prehire')"><div class="k-l">Pre-hire in Pipeline</div><div class="k-n">${phPipe}</div><div class="k-s">${phReady} ready for contract</div></div>
       <div class="kpi" style="cursor:pointer;" onclick="go('onboarding')"><div class="k-l">Onboarding in Progress</div><div class="k-n">${onbOpen}</div><div class="k-s">${onbTasksOpen} open tasks</div></div>
-      <div class="kpi warn" style="cursor:pointer;" onclick="go('manning')"><div class="k-l">Headcount Gap (partial)</div><div class="k-n">${merchDef}</div><div class="k-s">approved ${totAHC} vs ${totCHC} on file · full via PayPlus</div></div>
+      <div class="kpi warn" style="cursor:pointer;" onclick="go('manning')"><div class="k-l">Open Positions</div><div class="k-n">${openSlots}</div><div class="k-s">${openStores} stores need staffing · ${totAHC} approved overall</div></div>
       <div class="kpi" style="cursor:pointer;" onclick="go('exit')"><div class="k-l">Exit Clearances Open</div><div class="k-n">${exitOpen}</div><div class="k-s">offboarding in progress</div></div>
     </div>
 
@@ -2857,7 +2858,7 @@ function renderDashboard(){
         ${compVerify?`<div class="task" style="cursor:pointer;" onclick="go('compliance')"><div class="dot r"></div><div><div class="tt">${compVerify} trademark(s) past a deadline on file — verify with IPO records</div><div class="td">Renewal year has passed (e.g. SPYDER, AIRFLEX) — confirm renewed or lapsed</div></div><div class="due r">compliance</div></div>`:''}
         ${compDue?`<div class="task" style="cursor:pointer;" onclick="go('compliance')"><div class="dot a"></div><div><div class="tt">${compDue} trademark deadline(s) due ${CY}</div><div class="td">DAU filings &amp; renewals — missing a DAU can cancel the mark</div></div><div class="due a">compliance</div></div>`:''}
         <div class="task" style="cursor:pointer;" onclick="go('employees')"><div class="dot a"></div><div><div class="tt">${prob} employees on probation</div><div class="td">3rd / 5th-month evaluations &amp; regularization reviews</div></div><div class="due a">review</div></div>
-        <div class="task" style="cursor:pointer;" onclick="go('manning')"><div class="dot a"></div><div><div class="tt">Merchandiser headcount gap to verify</div><div class="td">${totAHC} approved vs ${totCHC} confirmed on file (partial — full count via PayPlus) · ${SCs.length} SCs</div></div><div class="due a">staffing</div></div>
+        <div class="task" style="cursor:pointer;" onclick="go('manning')"><div class="dot a"></div><div><div class="tt">Merchandiser headcount gap to verify</div><div class="td">${openSlots} positions open across ${openStores} stores (from manning) · ${SCs.length} SCs</div></div><div class="due a">staffing</div></div>
       </div>
       <div>
         <div class="panel" style="margin-top:0;">
@@ -2873,7 +2874,7 @@ function renderDashboard(){
           <div class="team-row"><div class="tn">Onboarding</div><span class="mini ok">${onbTasksOpen} tasks</span></div>
           <div class="team-row"><div class="tn">Exit clearances</div><span class="mini ${exitOpen?'bad':'ok'}">${exitOpen} open</span></div>
           <div class="team-row"><div class="tn">Probation reviews</div><span class="mini ok">${prob} due</span></div>
-          <div class="team-row"><div class="tn">Merchandiser staffing</div><span class="mini ok">${totCHC}/${totAHC} confirmed</span><span class="mini ${merchDef?'bad':'ok'}">gap ${merchDef} (partial)</span></div>
+          <div class="team-row"><div class="tn">Merchandiser staffing</div><span class="mini ok">${totAHC} approved</span><span class="mini ${openSlots?'bad':'ok'}">${openSlots} open positions</span></div>
           <div class="team-row" style="cursor:pointer;" onclick="go('compliance')"><div class="tn">Compliance (IPO)</div>${compVerify?`<span class="mini bad">${compVerify} verify</span>`:''}<span class="mini ${compDue?'bad':'ok'}">${compDue} due ${CY}</span></div>
         </div>
         <div class="panel">

@@ -59,7 +59,12 @@
       <div class="calc" id="calcBox">Pick a loan type and enter an amount to see the estimated monthly.</div>
     </div>
     <div class="card">
-      <h2>4 · Affordability check <span style="font-weight:400;color:var(--muted);font-size:12px;">(recommended)</span></h2>
+      <h2>4 · Supporting documents</h2>
+      <div class="sub" id="docHint">Choose a loan type above — the documents needed will appear here.</div>
+      <div id="docSlots"></div>
+    </div>
+    <div class="card">
+      <h2>5 · Affordability check <span style="font-weight:400;color:var(--muted);font-size:12px;">(recommended)</span></h2>
       <div class="sub">Enter your monthly earnings and any existing government-loan deductions — we'll estimate your disposable pay and your <b>maximum loan release</b>. <span style="color:var(--muted);">Daily-rated? Use daily rate × working days/month.</span></div>
       <div class="grid">
         <div><label>Monthly earnings (₱)</label><input id="f_base" type="number" oninput="calc()"></div>
@@ -68,7 +73,7 @@
       <div class="calc" id="govBox" style="display:none;"></div>
     </div>
     <div class="card">
-      <h2>5 · Authorization</h2>
+      <h2>6 · Authorization</h2>
       <div class="auth"><input type="checkbox" id="f_auth">
         <span>I authorize RCC to deduct the agreed loan amortization from my salary each payroll until fully repaid, and on separation from the balance of my final pay (subject to Article 113 of the Labor Code). I understand the amount and terms are <b>subject to HR approval</b>. (RA 8792 electronic consent.)</span></div>
       <div class="msg" id="msg"></div>
@@ -77,12 +82,18 @@
     </div>
   </div>
 <script>
-const FN="https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/loan-apply";
+const SB="https://jtfkpmvievetihhfdmqb.supabase.co";
+const ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0ZmtwbXZpZXZldGloaGZkbXFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwODA1MTksImV4cCI6MjA5MTY1NjUxOX0.ozphoaGT7jVKr3NGmqQC1wMj5lp7MvVfdqO2HZWMl6k";
+const FN=SB+"/functions/v1/loan-apply";
 const TYPES={
-  discretionary:{n:"Discretionary",rate:12,max:50000,term:12,d:"7+ yrs service · brief reason required"},
-  emergency:{n:"Emergency",rate:12,max:20000,term:12,d:"regular employees · medical · accident · death"},
-  educational:{n:"Educational",rate:0,max:null,term:12,d:"0% · child's tuition (50%)"},
-  moto:{n:"Motorcycle",rate:6,max:100000,term:36,d:"RCC-owned until paid · 10% DP"},
+  discretionary:{n:"Discretionary",rate:12,max:50000,term:12,d:"7+ yrs service · brief reason required",
+    docs:[]},
+  emergency:{n:"Emergency",rate:12,max:20000,term:12,d:"regular employees · medical · accident · death",
+    docs:["Medical certificate / police or incident report","Receipts, cost estimate, or proof of loss"], optional:true},
+  educational:{n:"Educational",rate:0,max:null,term:12,d:"0% · child's tuition (50%)",
+    docs:["School invoice / Statement of Account","Proof of payment on any previous educational loan"]},
+  moto:{n:"Motorcycle",rate:6,max:100000,term:36,d:"RCC-owned until paid · 10% DP",
+    docs:["Repair cost estimate or dealer quotation","Proof of vehicle ownership / valid driver's license"]},
 };
 let SEL=null;
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -96,7 +107,18 @@ function pick(k){ SEL=k; [...document.querySelectorAll('.lt')].forEach(e=>e.clas
   const t=TYPES[k]; let o=""; for(let m=1;m<=t.term;m++) o+=`<option value="${m}" ${m===Math.min(12,t.term)?"selected":""}>${m} month${m>1?"s":""}</option>`;
   document.getElementById("f_term").innerHTML=o;
   document.getElementById("typeNote").innerHTML=t.max?`<div class="sub" style="margin-top:10px;">Maximum for ${t.n}: <b>${peso(t.max)}</b> · subject to approval.</div>`:`<div class="sub" style="margin-top:10px;">Educational = 50% of tuition, paid to the school.</div>`;
+  renderDocs(k);
   calc();
+}
+function renderDocs(k){
+  const t=TYPES[k]; const hint=document.getElementById("docHint"), slots=document.getElementById("docSlots");
+  if(!t.docs||!t.docs.length){ hint.textContent="No supporting documents are required for a "+t.n+" loan."; slots.innerHTML=""; return; }
+  hint.innerHTML=t.optional
+    ? `Attach what you have for a <b>${t.n}</b> loan. You can submit now and send the rest to HR later — we won't hold up an emergency.`
+    : `Please attach the following for a <b>${t.n}</b> loan. Clear phone photos or PDFs are fine.`;
+  slots.innerHTML=t.docs.map((d,i)=>
+    `<label>${esc(d)} ${t.optional?'<span style="font-weight:400;color:var(--muted);font-size:11px;">— optional</span>':''}</label>
+     <input type="file" class="docfile" data-label="${esc(d)}" accept="image/*,application/pdf,.pdf">`).join("");
 }
 function monthly(amount,rate,term){ const interest=amount*(rate/100)*(term/12); return (amount+interest)/term; }
 // Estimate of mandatory PH government deductions (employee share) on monthly basic salary — ESTIMATE only; payroll is the truth.
@@ -157,12 +179,32 @@ async function submitLoan(){
   if(amt<=0){ msg.style.color="#c0392b"; msg.textContent="Please enter the amount needed."; return; }
   if(!document.getElementById("f_purpose").value.trim()){ msg.style.color="#c0392b"; msg.textContent="Please give a brief reason for this loan."; return; }
   if(!document.getElementById("f_auth").checked){ msg.style.color="#c0392b"; msg.textContent="Please tick the authorization to continue."; return; }
-  const btn=document.getElementById("submitBtn"); btn.disabled=true; btn.textContent="Submitting…";
+  const pickedFiles=[...document.querySelectorAll(".docfile")].filter(i=>i.files&&i.files[0]);
+  if(TYPES[SEL].docs&&TYPES[SEL].docs.length&&!TYPES[SEL].optional&&pickedFiles.length===0){
+    if(!confirm("You haven't attached any supporting documents.\n\nHR will need them before this loan can be approved. Submit anyway and send the documents later?")) return;
+  }
+  const btn=document.getElementById("submitBtn"); btn.disabled=true;
+  // upload supporting documents to private storage; collect their references
+  const documents=[]; msg.style.color="#6B7785";
+  for(let i=0;i<pickedFiles.length;i++){
+    const inp=pickedFiles[i], f=inp.files[0], label=inp.dataset.label;
+    btn.textContent="Uploading document "+(i+1)+" of "+pickedFiles.length+"…";
+    const folder=Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+    const safe=(label+"-"+f.name).replace(/[^a-zA-Z0-9._-]+/g,"_").slice(0,120);
+    const path=folder+"/"+safe;
+    try{
+      const up=await fetch(SB+"/storage/v1/object/loan-docs/"+path,{method:"POST",
+        headers:{apikey:ANON,Authorization:"Bearer "+ANON,"x-upsert":"true"},body:f});
+      if(up.ok) documents.push({label:label,path:path,name:f.name});
+      else msg.textContent="One document couldn't upload — HR can still collect it later.";
+    }catch(e){ msg.textContent="One document couldn't upload — HR can still collect it later."; }
+  }
+  btn.textContent="Submitting…";
   const payload={ applicant_name:name, contact_number:contact, email:email, employee_id:document.getElementById("f_eid").value,
     department:document.getElementById("f_dept").value, loan_type:SEL, amount:amt,
     term_months:parseInt(document.getElementById("f_term").value)||12,
     purpose:document.getElementById("f_purpose").value, monthly_estimate:window.__monthly||0,
-    net_pay:window.__net||null, authorized:true };
+    net_pay:window.__net||null, documents:documents, authorized:true };
   try{
     const r=await fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
     const d=await r.json();

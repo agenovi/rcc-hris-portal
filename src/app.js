@@ -340,6 +340,14 @@ function renderCompliance(){
 const LOAN_APPLY_URL="https://agenovi.github.io/rcc-hris-portal/loan-apply.html";
 const LOAN_STAGES=["Submitted","HR Review","Supervisor","Management","Approved","Released","Rejected"];
 const loanTypeLabel=(t)=>({discretionary:"Discretionary",emergency:"Emergency",educational:"Educational",moto:"Motorcycle"}[t]||t||"—");
+async function openLoanDoc(path,btn){
+  if(btn){ btn.disabled=true; btn.textContent="Opening…"; }
+  const {data,error}=await sb.storage.from("loan-docs").createSignedUrl(path,3600);
+  if(btn){ btn.disabled=false; btn.textContent="View"; }
+  if(error||!data){ alert("Couldn't open this document: "+(error&&error.message||"unknown error")); return; }
+  window.open(data.signedUrl,"_blank");
+}
+window.openLoanDoc=openLoanDoc;
 const loanStatusPill=(s)=>{ const m={"Submitted":"a","HR Review":"a","Supervisor":"a","Management":"a","Approved":"g","Released":"g","Rejected":"r"}; return `<span class="pill ${({a:'probation',g:'active',r:'closed'})[m[s]||'a']}">${esc(s)}</span>`; };
 function renderLoans(){
   const pg=$("#page-loans"); if(!pg) return;
@@ -392,6 +400,14 @@ function openLoan(id){
       <div class="panel" style="margin-top:0;">
         <h2>Application</h2>
         ${phRow("Loan type",loanTypeLabel(l.loan_type))}${phRow("Amount",peso(l.amount))}${phRow("Term",(l.term_months||"—")+" months")}${phRow("Est. monthly",peso(l.monthly_estimate))}${phRow("Mobile",l.contact_number)}${phRow("Email",l.email)}${phRow("Employee ID",l.employee_id)}${phRow("Position",l.department)}${phRow("Take-home given",l.net_pay?peso(l.net_pay):"—")}${phRow("Purpose",l.purpose)}${phRow("Authorized",l.authorized?"Yes (RA 8792)":"—")}
+      </div>
+      <div class="panel">
+        <h2>Supporting documents</h2>
+        ${(Array.isArray(l.documents)&&l.documents.length)
+          ? l.documents.map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);">
+              <div><div style="font-weight:600;">${esc(d.label||d.name||"Document")}</div><div class="esub">${esc(d.name||"")}</div></div>
+              <button class="btn ghost" style="flex:none;" onclick="openLoanDoc('${esc(d.path)}',this)">View</button></div>`).join("")
+          : `<div class="psub">No documents were attached. Use the applicant's mobile / email above to request them.</div>`}
       </div>
       <div class="panel">
         <h2>Status</h2>

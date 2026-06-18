@@ -106,7 +106,7 @@ document.getElementById("types").innerHTML=Object.entries(TYPES).map(([k,t])=>
 function pick(k){ SEL=k; [...document.querySelectorAll('.lt')].forEach(e=>e.classList.toggle('sel',e.dataset.k===k));
   const t=TYPES[k]; let o=""; for(let m=1;m<=t.term;m++) o+=`<option value="${m}" ${m===Math.min(12,t.term)?"selected":""}>${m} month${m>1?"s":""}</option>`;
   document.getElementById("f_term").innerHTML=o;
-  document.getElementById("typeNote").innerHTML=t.max?`<div class="sub" style="margin-top:10px;">Maximum for ${t.n}: <b>${peso(t.max)}</b> · subject to approval.</div>`:`<div class="sub" style="margin-top:10px;">Educational = 50% of tuition, paid to the school.</div>`;
+  document.getElementById("typeNote").innerHTML=t.max?`<div class="sub" style="margin-top:10px;">Maximum for ${t.n}: <b>${peso(t.max)}</b> · subject to approval.</div>`:`<div class="sub" style="margin-top:10px;">Educational support covers <b>up to 50% of tuition</b>, paid directly to the school — your family covers the other half. 0% interest, subject to approval.</div>`;
   renderDocs(k);
   calc();
 }
@@ -159,20 +159,22 @@ function calc(){
     let term2=0; if(SEL){ term2=parseInt(document.getElementById("f_term").value)||TYPES[SEL].term; }
     const reqMonthly=(SEL&&amt>0)?monthly(amt,TYPES[SEL].rate,term2||12):0;
     let verdict;
-    if(SEL&&amt>0){
+    if(SEL==="educational"){
+      verdict=`<div style="margin-top:10px;padding:11px 13px;background:var(--green-bg);border-radius:10px;font-size:14px;">Educational assistance is here to <b>help your family</b>. RCC covers up to <b>50% of the tuition</b> — your family covers the other half — at <b>0% interest</b>, paid directly to the school.${amt>0?` Your half-share of about <b>${peso(reqMonthly)}</b>/month is well within your pay.`:""} The amount and repayment are set with HR — <b>subject to approval</b>.</div>`;
+    } else if(SEL&&amt>0){
       verdict = reqMonthly<=maxMonthly
-        ? `<div style="margin-top:10px;padding:11px 13px;background:var(--green-bg);border-radius:10px;font-size:14px;"><b style="color:var(--green);">✓ Within your allowable range.</b> Your estimated monthly of <b>${peso(reqMonthly)}</b> fits within the <b>${peso(maxMonthly)}</b> your pay can support. HR will confirm against your payslip.</div>`
-        : `<div style="margin-top:10px;padding:11px 13px;background:var(--amber-bg);border:1px solid #ecdca6;border-radius:10px;font-size:14px;"><b style="color:var(--amber);">⚠ This may be more than your pay can support.</b> Your estimated monthly of <b>${peso(reqMonthly)}</b> is above the <b>${peso(maxMonthly)}</b> limit (15% of disposable pay). You can still apply — HR may approve a smaller amount or a longer term.</div>`;
+        ? `<div style="margin-top:10px;padding:11px 13px;background:var(--green-bg);border-radius:10px;font-size:14px;"><b style="color:var(--green);">✓ Within your allowable range.</b> Your estimated monthly of <b>${peso(reqMonthly)}</b> fits within the <b>${peso(maxMonthly)}</b> your pay can support. Final amount is <b>subject to HR's approval</b>.</div>`
+        : `<div style="margin-top:10px;padding:11px 13px;background:var(--amber-bg);border:1px solid #ecdca6;border-radius:10px;font-size:14px;"><b style="color:var(--amber);">⚠ This may be more than your pay can support.</b> Your estimated monthly of <b>${peso(reqMonthly)}</b> is above the <b>${peso(maxMonthly)}</b> your pay can support (a 15% guide). You can still apply — HR may approve a smaller amount or a longer term.</div>`;
     } else if(SEL){ verdict=`<div class="note" style="margin-top:8px;">Enter the amount you need (section 3) to check it against your pay.</div>`; }
     else { verdict=`<div class="note" style="margin-top:8px;">Pick a loan type (section 2) and enter an amount to check affordability.</div>`; }
     gb.innerHTML=`<div style="font-weight:800;color:var(--navy);margin-bottom:4px;">Affordability check</div>
       <div>Govt deductions — SSS ${peso(g.sss)} · PhilHealth ${peso(g.philhealth)} · Pag-IBIG ${peso(g.pagibig)} · Tax ${peso(g.tax)}</div>
       <div>Take-home after government deductions: <b>${peso(g.net)}</b></div>
       ${govLoan?`<div>Less existing government loans: −${peso(govLoan)}</div>`:""}
-      <div style="border-top:1px solid #cdd5de;margin:6px 0;padding-top:6px;">Disposable pay: <b>${peso(disposable)}</b></div>
-      <div>Most your pay can support per month (15% of disposable): <b>${peso(maxMonthly)}</b></div>
+      <div style="border-top:1px solid #cdd5de;margin:6px 0;padding-top:6px;">Pay available for repayment: <b>${peso(disposable)}</b></div>
+      <div>Most your pay can support per month (15% guide): <b>${peso(maxMonthly)}</b></div>
       ${verdict}
-      <div class="note" style="margin-top:8px;">⚠ Estimates only — government rates + the 15% rule apply <b>before</b> this company loan. HR confirms against your latest payslip; final amount subject to approval.</div>`;
+      <div class="note" style="margin-top:8px;">⚠ Estimates only, and <b>subject to HR's approval</b> — government rates + the 15% guide apply <b>before</b> this company loan. HR confirms against your latest payslip.</div>`;
     window.__net=disposable;
   } else { gb.style.display="none"; window.__net=0; }
 }

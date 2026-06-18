@@ -65,7 +65,7 @@
     </div>
     <div class="card">
       <h2>5 · Affordability check <span style="font-weight:400;color:var(--muted);font-size:12px;">(recommended)</span></h2>
-      <div class="sub">Enter your monthly earnings and any existing government-loan deductions — we'll estimate your disposable pay and your <b>maximum loan release</b>. <span style="color:var(--muted);">Daily-rated? Use daily rate × working days/month.</span></div>
+      <div class="sub">Enter your monthly earnings and any existing government-loan deductions — we'll check whether the loan you asked for <b>fits within your pay</b>. <span style="color:var(--muted);">Daily-rated? Use daily rate × working days/month.</span></div>
       <div class="grid">
         <div><label>Monthly earnings (₱)</label><input id="f_base" type="number" oninput="calc()"></div>
         <div><label>Existing govt loan deductions (₱/mo)</label><input id="f_govloan" type="number" oninput="calc()" placeholder="SSS / Pag-IBIG loans, if any"></div>
@@ -156,15 +156,22 @@ function calc(){
   if(g){ gb.style.display="block";
     const disposable=Math.max(0, g.net - govLoan);
     const maxMonthly=disposable*0.15;
-    let maxRelease=0, term2=0;
-    if(SEL){ const t=TYPES[SEL]; term2=parseInt(document.getElementById("f_term").value)||t.term; maxRelease=maxMonthly*term2/(1+(t.rate/100)*term2/12); if(t.max) maxRelease=Math.min(maxRelease,t.max); }
-    gb.innerHTML=`<div style="font-weight:800;color:var(--navy);margin-bottom:4px;">Estimated monthly figures</div>
+    let term2=0; if(SEL){ term2=parseInt(document.getElementById("f_term").value)||TYPES[SEL].term; }
+    const reqMonthly=(SEL&&amt>0)?monthly(amt,TYPES[SEL].rate,term2||12):0;
+    let verdict;
+    if(SEL&&amt>0){
+      verdict = reqMonthly<=maxMonthly
+        ? `<div style="margin-top:10px;padding:11px 13px;background:var(--green-bg);border-radius:10px;font-size:14px;"><b style="color:var(--green);">✓ Within your allowable range.</b> Your estimated monthly of <b>${peso(reqMonthly)}</b> fits within the <b>${peso(maxMonthly)}</b> your pay can support. HR will confirm against your payslip.</div>`
+        : `<div style="margin-top:10px;padding:11px 13px;background:var(--amber-bg);border:1px solid #ecdca6;border-radius:10px;font-size:14px;"><b style="color:var(--amber);">⚠ This may be more than your pay can support.</b> Your estimated monthly of <b>${peso(reqMonthly)}</b> is above the <b>${peso(maxMonthly)}</b> limit (15% of disposable pay). You can still apply — HR may approve a smaller amount or a longer term.</div>`;
+    } else if(SEL){ verdict=`<div class="note" style="margin-top:8px;">Enter the amount you need (section 3) to check it against your pay.</div>`; }
+    else { verdict=`<div class="note" style="margin-top:8px;">Pick a loan type (section 2) and enter an amount to check affordability.</div>`; }
+    gb.innerHTML=`<div style="font-weight:800;color:var(--navy);margin-bottom:4px;">Affordability check</div>
       <div>Govt deductions — SSS ${peso(g.sss)} · PhilHealth ${peso(g.philhealth)} · Pag-IBIG ${peso(g.pagibig)} · Tax ${peso(g.tax)}</div>
       <div>Take-home after government deductions: <b>${peso(g.net)}</b></div>
       ${govLoan?`<div>Less existing government loans: −${peso(govLoan)}</div>`:""}
       <div style="border-top:1px solid #cdd5de;margin:6px 0;padding-top:6px;">Disposable pay: <b>${peso(disposable)}</b></div>
-      <div>Max monthly amortization (15% of disposable): <b>${peso(maxMonthly)}</b></div>
-      ${SEL?`<div style="margin-top:10px;padding:11px 13px;background:var(--green-bg);border-radius:10px;font-size:15px;">★ <b>MAX RELEASE: ${peso(maxRelease)}</b> <span style="font-size:12px;color:var(--muted);">— most you can borrow for ${TYPES[SEL].n} over ${term2} months</span></div>`:`<div class="note" style="margin-top:8px;">Pick a loan type above (section 2) to see your maximum release.</div>`}
+      <div>Most your pay can support per month (15% of disposable): <b>${peso(maxMonthly)}</b></div>
+      ${verdict}
       <div class="note" style="margin-top:8px;">⚠ Estimates only — government rates + the 15% rule apply <b>before</b> this company loan. HR confirms against your latest payslip; final amount subject to approval.</div>`;
     window.__net=disposable;
   } else { gb.style.display="none"; window.__net=0; }

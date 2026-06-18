@@ -112,15 +112,12 @@ function pick(k){ SEL=k; [...document.querySelectorAll('.lt')].forEach(e=>e.clas
 }
 function renderDocs(k){
   const t=TYPES[k]; const hint=document.getElementById("docHint"), slots=document.getElementById("docSlots");
+  const chooser=`<label>Attach your files <span style="font-weight:400;color:var(--muted);font-size:11px;">— you can select more than one</span></label>
+     <input type="file" class="docfile" multiple accept="image/*,application/pdf,.pdf">`;
   if(!t.docs||!t.docs.length){ hint.innerHTML="Attach anything that supports your request — a valid ID, quotation, bill, or estimate.";
-    slots.innerHTML=`<label>Supporting document <span style="font-weight:400;color:var(--muted);font-size:11px;">— attach a file</span></label>
-     <input type="file" class="docfile" data-label="Supporting document" accept="image/*,application/pdf,.pdf">`; return; }
-  hint.innerHTML=t.optional
-    ? `Attach what you have for a <b>${t.n}</b> loan. You can submit now and send the rest to HR later — we won't hold up an emergency.`
-    : `Please attach the following for a <b>${t.n}</b> loan. Clear phone photos or PDFs are fine.`;
-  slots.innerHTML=t.docs.map((d,i)=>
-    `<label>${esc(d)} ${t.optional?'<span style="font-weight:400;color:var(--muted);font-size:11px;">— optional</span>':''}</label>
-     <input type="file" class="docfile" data-label="${esc(d)}" accept="image/*,application/pdf,.pdf">`).join("");
+    slots.innerHTML=chooser; return; }
+  hint.innerHTML=`Please attach the following for a <b>${t.n}</b> loan. Clear phone photos or PDFs are fine.`;
+  slots.innerHTML=`<ul style="margin:8px 0 12px 18px;padding:0;font-size:13.5px;color:var(--ink);line-height:1.7;">${t.docs.map(d=>`<li>${esc(d)}</li>`).join("")}</ul>${chooser}`;
 }
 function monthly(amount,rate,term){ const interest=amount*(rate/100)*(term/12); return (amount+interest)/term; }
 // Estimate of mandatory PH government deductions (employee share) on monthly basic salary — ESTIMATE only; payroll is the truth.
@@ -190,7 +187,8 @@ async function submitLoan(){
   if(amt<=0){ msg.style.color="#c0392b"; msg.textContent="Please enter the amount needed."; return; }
   if(!document.getElementById("f_purpose").value.trim()){ msg.style.color="#c0392b"; msg.textContent="Please give a brief reason for this loan."; return; }
   if(!document.getElementById("f_auth").checked){ msg.style.color="#c0392b"; msg.textContent="Please tick the authorization to continue."; return; }
-  const pickedFiles=[...document.querySelectorAll(".docfile")].filter(i=>i.files&&i.files[0]);
+  const pickedFiles=[];
+  document.querySelectorAll(".docfile").forEach(inp=>{ if(inp.files) for(const f of inp.files) pickedFiles.push(f); });
   if(TYPES[SEL].docs&&TYPES[SEL].docs.length&&!TYPES[SEL].optional&&pickedFiles.length===0){
     if(!confirm("You haven't attached any supporting documents.\n\nHR will need them before this loan can be approved. Submit anyway and send the documents later?")) return;
   }
@@ -198,17 +196,17 @@ async function submitLoan(){
   // upload supporting documents to private storage; collect their references
   const documents=[]; msg.style.color="#6B7785";
   for(let i=0;i<pickedFiles.length;i++){
-    const inp=pickedFiles[i], f=inp.files[0], label=inp.dataset.label;
-    btn.textContent="Uploading document "+(i+1)+" of "+pickedFiles.length+"…";
+    const f=pickedFiles[i], label=f.name;
+    btn.textContent="Uploading file "+(i+1)+" of "+pickedFiles.length+"…";
     const folder=Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
-    const safe=(label+"-"+f.name).replace(/[^a-zA-Z0-9._-]+/g,"_").slice(0,120);
+    const safe=f.name.replace(/[^a-zA-Z0-9._-]+/g,"_").slice(0,120);
     const path=folder+"/"+safe;
     try{
       const up=await fetch(SB+"/storage/v1/object/loan-docs/"+path,{method:"POST",
         headers:{apikey:ANON,Authorization:"Bearer "+ANON,"x-upsert":"true"},body:f});
       if(up.ok) documents.push({label:label,path:path,name:f.name});
-      else msg.textContent="One document couldn't upload — HR can still collect it later.";
-    }catch(e){ msg.textContent="One document couldn't upload — HR can still collect it later."; }
+      else msg.textContent="One file couldn't upload — HR can still collect it later.";
+    }catch(e){ msg.textContent="One file couldn't upload — HR can still collect it later."; }
   }
   btn.textContent="Submitting…";
   const payload={ applicant_name:name, contact_number:contact, email:email, employee_id:document.getElementById("f_eid").value,

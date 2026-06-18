@@ -2701,7 +2701,7 @@ function openLoan(id){
     <div style="padding:18px 22px 60px;">
       <div class="panel" style="margin-top:0;">
         <h2>Application</h2>
-        ${phRow("Loan type",loanTypeLabel(l.loan_type))}${phRow("Amount",peso(l.amount))}${phRow("Term",(l.term_months||"—")+" months")}${phRow("Est. monthly",peso(l.monthly_estimate))}${phRow("Employee ID",l.employee_id)}${phRow("Department",l.department)}${phRow("Take-home given",l.net_pay?peso(l.net_pay):"—")}${phRow("Purpose",l.purpose)}${phRow("Authorized",l.authorized?"Yes (RA 8792)":"—")}
+        ${phRow("Loan type",loanTypeLabel(l.loan_type))}${phRow("Amount",peso(l.amount))}${phRow("Term",(l.term_months||"—")+" months")}${phRow("Est. monthly",peso(l.monthly_estimate))}${phRow("Mobile",l.contact_number)}${phRow("Employee ID",l.employee_id)}${phRow("Position",l.department)}${phRow("Take-home given",l.net_pay?peso(l.net_pay):"—")}${phRow("Purpose",l.purpose)}${phRow("Authorized",l.authorized?"Yes (RA 8792)":"—")}
       </div>
       <div class="panel">
         <h2>Status</h2>

@@ -40,7 +40,8 @@
     <div class="card">
       <h2>1 · Your details</h2>
       <label>Full name <span class="req">*</span></label><input id="f_name">
-      <label>Mobile number <span class="req">*</span></label><input id="f_contact" inputmode="tel" placeholder="09xx xxx xxxx — so HR can reach you">
+      <label>Mobile number <span class="req">*</span></label><input id="f_contact" inputmode="tel" placeholder="09xx xxx xxxx">
+      <label>Email <span class="req">*</span></label><input id="f_email" type="email" placeholder="so HR can reach you">
       <label>Employee ID (if you know it)</label><input id="f_eid">
       <label>Position</label><input id="f_dept">
     </div>
@@ -147,15 +148,17 @@ function calc(){
 async function submitLoan(){
   const name=document.getElementById("f_name").value.trim(), msg=document.getElementById("msg");
   const contact=document.getElementById("f_contact").value.trim();
+  const email=document.getElementById("f_email").value.trim();
   if(!name){ msg.style.color="#c0392b"; msg.textContent="Please enter your full name."; return; }
   if(!contact){ msg.style.color="#c0392b"; msg.textContent="Please enter a mobile number so HR can reach you."; return; }
+  if(!email||!/^\S+@\S+\.\S+$/.test(email)){ msg.style.color="#c0392b"; msg.textContent="Please enter a valid email so HR can reach you."; return; }
   if(!SEL){ msg.style.color="#c0392b"; msg.textContent="Please choose a loan type."; return; }
   const amt=parseFloat(document.getElementById("f_amount").value)||0;
   if(amt<=0){ msg.style.color="#c0392b"; msg.textContent="Please enter the amount needed."; return; }
   if(!document.getElementById("f_purpose").value.trim()){ msg.style.color="#c0392b"; msg.textContent="Please give a brief reason for this loan."; return; }
   if(!document.getElementById("f_auth").checked){ msg.style.color="#c0392b"; msg.textContent="Please tick the authorization to continue."; return; }
   const btn=document.getElementById("submitBtn"); btn.disabled=true; btn.textContent="Submitting…";
-  const payload={ applicant_name:name, contact_number:contact, employee_id:document.getElementById("f_eid").value,
+  const payload={ applicant_name:name, contact_number:contact, email:email, employee_id:document.getElementById("f_eid").value,
     department:document.getElementById("f_dept").value, loan_type:SEL, amount:amt,
     term_months:parseInt(document.getElementById("f_term").value)||12,
     purpose:document.getElementById("f_purpose").value, monthly_estimate:window.__monthly||0,

@@ -30,6 +30,7 @@ const DEFAULT_PH_DOCS=[["nbi","NBI / Police Clearance",true],["birth","PSA Birth
 let empFilter="All";
 let scFilter="All";
 let prehireTab="pipeline";
+let prehireSrc=null;
 let landed=false;
 
 /* ---------- AUTH ---------- */
@@ -1272,7 +1273,7 @@ function renderPrehire(){
       ${phLinksBar()}
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
         <div class="kpi"><div class="k-l">In Pipeline</div><div class="k-n">${inPipe.length}</div>
-          <div class="k-break"><span>Direct<b>${bySrc("Direct")}</b></span><span>Jell-on<b>${bySrc("Jell-on")}</b></span><span>M&amp;G<b>${bySrc("M&G")}</b></span></div></div>
+          <div class="k-break"><span data-psrc="Direct" style="cursor:pointer;">Direct<b>${bySrc("Direct")}</b></span><span data-psrc="Jell-on" style="cursor:pointer;">Jell-on<b>${bySrc("Jell-on")}</b></span><span data-psrc="M&G" style="cursor:pointer;">M&amp;G<b>${bySrc("M&G")}</b></span></div></div>
         <div class="kpi warn"><div class="k-l">Documents</div><div class="k-n">${docs}</div><div class="k-s">awaiting uploads</div></div>
         <div class="kpi"><div class="k-l">HR Sign-off</div><div class="k-n">${ready}</div><div class="k-s">ready for contract</div></div>
         <div class="kpi ${rejected?'':''}"><div class="k-l">Rejected</div><div class="k-n">${rejected}</div><div class="k-s">pipeline closed</div></div>
@@ -1294,6 +1295,7 @@ function renderPrehire(){
     const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="prehire.csv";a.click();
   });
   $$("#phTabs .tab").forEach(t=>t.addEventListener("click",()=>{ prehireTab=t.dataset.t; renderPrehire(); }));
+  $$("#page-prehire [data-psrc]").forEach(el=>el.addEventListener("click",()=>{ prehireSrc=(prehireSrc===el.dataset.psrc?null:el.dataset.psrc); prehireTab="pipeline"; renderPrehire(); }));
   if(prehireTab==="arch") phBodyArch();
   else if(prehireTab==="data") phBodyData();
   else if(prehireTab==="feedback") phBodyFeedback();
@@ -1302,8 +1304,9 @@ function renderPrehire(){
 }
 
 function phBodyPipeline(){
+  const srcMatch=p=>!prehireSrc || (prehireSrc==="Direct"?(!p.hire_source||p.hire_source==="Direct"):p.hire_source===prehireSrc);
   const cols=PH_PHASES.map(ph=>{
-    const cards=PREHIRE.filter(p=>p.phase===ph.key);
+    const cards=PREHIRE.filter(p=>p.phase===ph.key && srcMatch(p));
     return `<div class="col"><div class="col-h">${ph.label}<span>${cards.length} · ${esc(ph.actor)}</span></div>
       ${cards.map(c=>`<div class="ccard clickable" data-id="${c.id}" ${ph.key==="HR_SIGNOFF"?'style="border-color:#bcdcc7;background:var(--green-light);"':''}>
         <div class="cn">${esc(c.full_name)}</div>
@@ -1311,8 +1314,9 @@ function phBodyPipeline(){
        || `<div style="font-size:11.5px;color:var(--muted);padding:6px 2px;">—</div>`}
     </div>`;
   }).join("");
-  const rej=PREHIRE.filter(p=>p.phase==="REJECTED");
+  const rej=PREHIRE.filter(p=>p.phase==="REJECTED" && srcMatch(p));
   $("#phBody").innerHTML=`
+    ${prehireSrc?`<div style="margin-top:12px;"><span class="pill ag" id="clrSrc" style="cursor:pointer;font-size:12px;">Showing ${esc(prehireSrc)} only · ✕ clear</span></div>`:""}
     <div class="psub" style="margin-top:12px;">Seven stages, left → right (Applied → Hired). Click any card to open the candidate and advance the stage. Onboarding is a separate phase.</div>
     <div class="pipe">${cols}</div>
     <div class="two-col" style="margin-top:14px;">
@@ -1327,6 +1331,7 @@ function phBodyPipeline(){
     </div>
     ${rej.length?`<div class="panel"><h2>Rejected <span class="count-tag">${rej.length}</span></h2>${rej.map(c=>`<div class="task clickable" data-id="${c.id}"><div class="dot r"></div><div><div class="tt">${esc(c.full_name)}</div><div class="td">${esc(c.position||"—")} · ${esc(c.rejection_reason||"no reason recorded")}</div></div></div>`).join("")}</div>`:""}`;
   $$("#phBody .clickable").forEach(el=>el.addEventListener("click",()=>openPrehire(PREHIRE.find(p=>String(p.id)===el.dataset.id))));
+  const _cs=document.getElementById("clrSrc"); if(_cs) _cs.addEventListener("click",()=>{ prehireSrc=null; renderPrehire(); });
 }
 
 function phBodyArch(){

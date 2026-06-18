@@ -35,7 +35,7 @@
   .note{background:var(--amber-bg);color:var(--amber);border:1px solid #ecdca6;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:600;margin-top:10px;}
 </style></head>
 <body>
-  <div class="top"><h1>RCC Employee Loan — Application</h1><div class="s">Fill this out and submit — HR will review and get back to you. No login needed.</div></div>
+  <div class="top"><h1>RCC Employee Loan — Application</h1><div class="s">For <b>Head Office &amp; Warehouse</b> employees. Fill this out — HR reviews and gets back to you. No login needed.</div></div>
   <div class="wrap" id="wrap">
     <div class="card">
       <h2>1 · Your details</h2>
@@ -57,10 +57,10 @@
       <div class="calc" id="calcBox">Pick a loan type and enter an amount to see the estimated monthly.</div>
     </div>
     <div class="card">
-      <h2>4 · Affordability check <span style="font-weight:400;color:var(--muted);font-size:12px;">(optional)</span></h2>
-      <div class="sub">Enter your current monthly <b>take-home pay</b> (after all existing deductions) to see the most you can borrow under the 15% rule.</div>
-      <label>Monthly take-home pay (₱)</label><input id="f_net" type="number" oninput="calc()">
-      <div class="calc" id="affBox" style="display:none;"></div>
+      <h2>4 · Affordability check <span style="font-weight:400;color:var(--muted);font-size:12px;">(recommended)</span></h2>
+      <div class="sub">Enter your <b>monthly basic salary</b> — we'll estimate your mandatory government deductions and what you can borrow. <span style="color:var(--muted);">Daily-rated? Use daily rate × working days/month.</span></div>
+      <label>Monthly basic salary (₱)</label><input id="f_base" type="number" oninput="calc()">
+      <div class="calc" id="govBox" style="display:none;"></div>
     </div>
     <div class="card">
       <h2>5 · Authorization</h2>
@@ -94,6 +94,25 @@ function pick(k){ SEL=k; [...document.querySelectorAll('.lt')].forEach(e=>e.clas
   calc();
 }
 function monthly(amount,rate,term){ const interest=amount*(rate/100)*(term/12); return (amount+interest)/term; }
+// Estimate of mandatory PH government deductions (employee share) on monthly basic salary — ESTIMATE only; payroll is the truth.
+// Standard current rates: SSS 5% (MSC ₱5k–₱35k) · PhilHealth 2.5% (floor ₱10k, ceiling ₱100k) · Pag-IBIG 2% (max ₱200) · BIR withholding (TRAIN monthly). Maintain yearly.
+function withholding_(t){
+  if(t<=20833) return 0;
+  if(t<=33332) return (t-20833)*0.15;
+  if(t<=66666) return 1875+(t-33333)*0.20;
+  if(t<=166666) return 8541.80+(t-66667)*0.25;
+  if(t<=666666) return 33541.80+(t-166667)*0.30;
+  return 183541.80+(t-666667)*0.35;
+}
+function govDeductions_(base){
+  if(!base||base<=0) return null;
+  const sss=0.05*Math.min(Math.max(base,5000),35000);
+  const philhealth=0.025*Math.min(Math.max(base,10000),100000);
+  const pagibig=Math.min(0.02*base,200);
+  const tax=withholding_(Math.max(0,base-sss-philhealth-pagibig));
+  const total=sss+philhealth+pagibig+tax;
+  return {sss,philhealth,pagibig,tax,total,net:base-total};
+}
 function calc(){
   const amt=parseFloat(document.getElementById("f_amount").value)||0;
   const term=parseInt(document.getElementById("f_term").value)||12;
@@ -102,12 +121,19 @@ function calc(){
     cb.innerHTML=`Estimated monthly amortization: <b>${peso(m)}</b> over ${term} month(s) at ${TYPES[SEL].rate}% p.a. <span style="color:var(--muted);">(indicative — subject to approval)</span>`;
     window.__monthly=m;
   } else { cb.textContent="Pick a loan type and enter an amount to see the estimated monthly."; window.__monthly=0; }
-  const net=parseFloat(document.getElementById("f_net").value)||0;
-  const ab=document.getElementById("affBox");
-  if(net>0){ ab.style.display="block";
-    const maxMonthly=net*0.15, term2=term||12; const maxLoan=SEL?maxMonthly*term2/(1+TYPES[SEL].rate/100*term2/12):maxMonthly*term2;
-    ab.innerHTML=`At 15% of take-home, your monthly cap is <b>${peso(maxMonthly)}</b> → roughly up to <b>${peso(maxLoan)}</b> over ${term2} months. <span style="color:var(--muted);">Subject to approval.</span>`;
-  } else ab.style.display="none";
+  const base=parseFloat(document.getElementById("f_base").value)||0;
+  const gb=document.getElementById("govBox"); const g=govDeductions_(base);
+  if(g){ gb.style.display="block";
+    const maxMonthly=g.net*0.15;
+    const over=(window.__monthly||0)>maxMonthly && (window.__monthly||0)>0;
+    gb.innerHTML=`<div style="font-weight:800;color:var(--navy);margin-bottom:4px;">Estimated government deductions (monthly)</div>
+      <div>SSS (5%): <b>${peso(g.sss)}</b> · PhilHealth (2.5%): <b>${peso(g.philhealth)}</b></div>
+      <div>Pag-IBIG (max ₱200): <b>${peso(g.pagibig)}</b> · Withholding tax: <b>${peso(g.tax)}</b></div>
+      <div style="border-top:1px solid #cdd5de;margin:6px 0;padding-top:6px;">Take-home after government deductions: <b>${peso(g.net)}</b></div>
+      <div class="note" style="margin-top:8px;">⚠ This is <b>BEFORE your existing government loans</b> (SSS / Pag-IBIG salary loans) and any other deductions — your real disposable pay is <b>lower</b>. A company loan must fit <b>AFTER</b> those. HR confirms against your latest payslip. Figures are estimates.</div>
+      <div style="margin-top:8px;">At 15% of take-home, your amortization cap ≈ <b>${peso(maxMonthly)}/month</b>.${over?` <span style="color:var(--red);font-weight:700;">Your requested amount (~${peso(window.__monthly)}/mo) is above this — HR may reduce it.</span>`:""}</div>`;
+    window.__net=g.net;
+  } else { gb.style.display="none"; window.__net=0; }
 }
 async function submitLoan(){
   const name=document.getElementById("f_name").value.trim(), msg=document.getElementById("msg");
@@ -122,7 +148,7 @@ async function submitLoan(){
     department:document.getElementById("f_dept").value, loan_type:SEL, amount:amt,
     term_months:parseInt(document.getElementById("f_term").value)||12,
     purpose:document.getElementById("f_purpose").value, monthly_estimate:window.__monthly||0,
-    net_pay:parseFloat(document.getElementById("f_net").value)||null, authorized:true };
+    net_pay:window.__net||null, authorized:true };
   try{
     const r=await fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
     const d=await r.json();

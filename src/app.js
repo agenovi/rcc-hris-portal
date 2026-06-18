@@ -498,7 +498,8 @@ function renderDashboard(){
   const ten=A.map(e=>tenureYears(e.hire_date)).filter(x=>x!=null);
   const avgTen=ten.length?(ten.reduce((a,b)=>a+b,0)/ten.length).toFixed(1):"—";
   const concession=open.filter(b=>b.category==="CN").length, coOp=open.filter(b=>b.category==="CO").length;
-  const agJellon=A.filter(e=>e.hire_source==="Jell-on").length, agMG=A.filter(e=>e.hire_source==="M&G").length, agency=agJellon+agMG;
+  const dAct=DISERS.filter(d=>(d.status||"").toLowerCase().startsWith("active")); // agency merchandisers come from the diser roster (hired_by), not employees.hire_source
+  const agJellon=dAct.filter(d=>/jell/i.test(d.hired_by||"")).length, agMG=dAct.filter(d=>/^mg|m&g/i.test(d.hired_by||"")).length, agSMI=dAct.filter(d=>/smi/i.test(d.hired_by||"")).length, agency=agJellon+agMG+agSMI;
   const awol=EMPLOYEES.filter(e=>e.status==="AWOL").length;
   const phPipe=PREHIRE.filter(p=>!["HIRED","REJECTED"].includes(p.phase)).length;
   const phReady=PREHIRE.filter(p=>["HR_SIGNOFF","CONTRACT_SIGNING"].includes(p.phase)).length;
@@ -525,7 +526,7 @@ function renderDashboard(){
     </div>
     <div class="grid kpis">
       <div class="kpi" style="cursor:pointer;" onclick="go('employees')"><div class="k-l">Active Employees</div><div class="k-n">${A.length}</div><div class="k-break"><span>HO+WH<b>${ho+wh}</b></span><span>Retail<b>${rt}</b></span></div></div>
-      <div class="kpi" style="cursor:pointer;" onclick="go('branches')"><div class="k-l">Agency Merchandisers</div><div class="k-n">${agency}</div><div class="k-break"><span>Jell-on<b>${agJellon}</b></span><span>M&amp;G<b>${agMG}</b></span></div></div>
+      <div class="kpi" style="cursor:pointer;" onclick="go('branches')"><div class="k-l">Agency Merchandisers</div><div class="k-n">${agency}</div><div class="k-break"><span>Jell-on<b>${agJellon}</b></span><span>M&amp;G<b>${agMG}</b></span><span>SMI<b>${agSMI}</b></span></div></div>
       <div class="kpi warn" style="cursor:pointer;" onclick="go('employees')"><div class="k-l">On Probation</div><div class="k-n">${prob}</div><div class="k-s">regularization reviews ahead</div></div>
       <div class="kpi ${awol?'alert':''}" style="cursor:pointer;" onclick="go('employees')"><div class="k-l">AWOL Cases</div><div class="k-n">${awol}</div><div class="k-s">${awol?'NTE / due process':'none open'}</div></div>
     </div>
@@ -612,13 +613,13 @@ function renderDashboardKPIs(){
   const ho=A.filter(e=>e.group_name==="Head Office").length;
   const wh=A.filter(e=>e.group_name==="Warehouse").length;
   const rt=A.filter(e=>e.group_name==="Retail").length;
-  const ag=A.filter(e=>e.hire_source&&e.hire_source!=="Direct").length;
+  const _dA=DISERS.filter(d=>(d.status||"").toLowerCase().startsWith("active")); const agJ=_dA.filter(d=>/jell/i.test(d.hired_by||"")).length, agM=_dA.filter(d=>/^mg|m&g/i.test(d.hired_by||"")).length, agS=_dA.filter(d=>/smi/i.test(d.hired_by||"")).length; const ag=agJ+agM+agS;
   const prob=A.filter(e=>e.contract_type==="Probationary").length;
   const sep=EMPLOYEES.filter(e=>e.status==="Separated").length;
   const grids=$$("#page-dashboard .kpis");
   if(grids[0]) grids[0].innerHTML=`
     <div class="kpi"><div class="k-l">Total Employees</div><div class="k-n">${A.length}</div><div class="k-s">Head Office ${ho} · Warehouse ${wh} · Retail ${rt}</div></div>
-    <div class="kpi"><div class="k-l">Agency Merchandisers</div><div class="k-n">${ag}</div><div class="k-break"><span>Jell-on<b>${A.filter(e=>e.hire_source==="Jell-on").length}</b></span><span>M&amp;G<b>${A.filter(e=>e.hire_source==="M&G").length}</b></span></div></div>
+    <div class="kpi"><div class="k-l">Agency Merchandisers</div><div class="k-n">${ag}</div><div class="k-break"><span>Jell-on<b>${agJ}</b></span><span>M&amp;G<b>${agM}</b></span><span>SMI<b>${agS}</b></span></div></div>
     <div class="kpi warn"><div class="k-l">On Probation</div><div class="k-n">${prob}</div><div class="k-s">probationary contracts</div></div>
     <div class="kpi"><div class="k-l">Separated (records)</div><div class="k-n">${sep}</div><div class="k-s">past employees retained</div></div>`;
   if(grids[1]) grids[1].innerHTML=`
@@ -639,7 +640,7 @@ function renderEmployeesPage(){
   const ho=A.filter(e=>e.group_name==="Head Office").length;
   const wh=A.filter(e=>e.group_name==="Warehouse").length;
   const rt=A.filter(e=>e.group_name==="Retail").length;
-  const ag=A.filter(e=>e.hire_source&&e.hire_source!=="Direct").length;
+  const _dA=DISERS.filter(d=>(d.status||"").toLowerCase().startsWith("active")); const agJ=_dA.filter(d=>/jell/i.test(d.hired_by||"")).length, agM=_dA.filter(d=>/^mg|m&g/i.test(d.hired_by||"")).length, agS=_dA.filter(d=>/smi/i.test(d.hired_by||"")).length; const ag=agJ+agM+agS;
   const prob=A.filter(e=>e.contract_type==="Probationary").length;
   const panel=$("#page-employees .panel"); if(!panel) return;
   panel.innerHTML=`

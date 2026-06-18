@@ -68,7 +68,8 @@ async function load(){
     if(d.error){ document.getElementById("body").innerHTML=`<div class="empty">${esc(d.error)}</div>`; document.getElementById("who").textContent="No access"; return; }
     DATA=d;
     const slots=(d.openings||[]).reduce((s,o)=>s+(Number(o.open_slots)||0),0);
-    document.getElementById("who").textContent=`${d.agency} · ${d.openings.length} stores · ${slots} open positions · ${(d.my_submissions||[]).length} submitted by you`;
+    const myActive=(d.my_submissions||[]).filter(x=>!["DRAFT","HIRED","REJECTED"].includes(x.status)).length;
+    document.getElementById("who").textContent=`${d.agency} · ${d.openings.length} stores · ${slots} open positions · ${d.total_active||0} candidates in process (${myActive} yours)`;
     const to=document.getElementById("tabOpen"); if(to) to.textContent=`Open positions (${slots})`;
     const tm=document.getElementById("tabMine"); if(tm) tm.textContent=`My submissions (${(d.my_submissions||[]).length})`;
     render();

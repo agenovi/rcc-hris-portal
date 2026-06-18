@@ -69,6 +69,7 @@ async function load(){
     const slots=(d.openings||[]).reduce((s,o)=>s+(Number(o.open_slots)||0),0);
     document.getElementById("who").textContent=`${d.agency} · ${d.openings.length} stores · ${slots} open positions`;
     const to=document.getElementById("tabOpen"); if(to) to.textContent=`Open positions (${slots})`;
+    const tm=document.getElementById("tabMine"); if(tm) tm.textContent=`My submissions (${(d.my_submissions||[]).length})`;
     render();
   }catch(e){ document.getElementById("body").innerHTML=`<div class="empty">Couldn't load right now. Please try again.</div>`; }
 }

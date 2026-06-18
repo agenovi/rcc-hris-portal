@@ -3959,6 +3959,23 @@ function rejectPrehire(c, parentModal){
     m.remove(); setPhase(c,"REJECTED",parentModal,{rejection_reason:reason});
   });
 }
+const HO_DEPTS=DEPARTMENTS.filter(d=>!["Sales","Warehouse","Warehouse Solaris"].includes(d));
+// Position drives the worksite (and department): store roles → store list · Warehouse → Warehouse · Head Office → Head Office + a dept picker.
+function npPosChange(){
+  const pos=(document.getElementById("np_position")||{}).value||"";
+  const ww=document.getElementById("np_worksite_wrap"), dw=document.getElementById("np_dept_wrap");
+  if(!ww||!dw) return;
+  const stores=[...new Set(BRANCHES.map(b=>b.name))].sort();
+  if(["Merchandiser","Store Representative","Store Supervisor"].includes(pos)){
+    ww.innerHTML=sel("np_worksite","Worksite — store",stores,""); dw.innerHTML="";
+  } else if(pos==="Warehouse Staff"){
+    ww.innerHTML=sel("np_worksite","Worksite",["Warehouse Solaris"],"Warehouse Solaris"); dw.innerHTML="";
+  } else if(pos==="Head Office / Admin"){
+    ww.innerHTML=sel("np_worksite","Worksite",["Head Office"],"Head Office"); dw.innerHTML=sel("np_department","Department",HO_DEPTS,"");
+  } else {
+    ww.innerHTML=sel("np_worksite","Worksite / location",["Head Office","Warehouse Solaris"].concat(stores),""); dw.innerHTML="";
+  }
+}
 function newPrehire(){
   const e={};
   let m=document.getElementById("phModal"); if(!m){ m=document.createElement("div"); m.id="phModal"; document.body.appendChild(m); }
@@ -3967,9 +3984,9 @@ function newPrehire(){
     <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">New Application</div><div style="font-size:12.5px;opacity:.85;">Enters the pipeline at “Applied”.</div></div>
     <div style="padding:18px 22px;"><div class="panel" style="margin-top:0;">
       ${fld("np_full_name","Full name *",e.full_name)}
-      ${sel("np_department","Department",DEPARTMENTS,e.department)}
-      ${fld("np_position","Position",e.position)}
-      ${sel("np_worksite","Worksite / location",["Head Office","Warehouse Solaris"].concat([...new Set(BRANCHES.map(b=>b.name))].sort()),e.worksite)}
+      ${sel("np_position","Position",["Merchandiser","Store Representative","Store Supervisor","Warehouse Staff","Head Office / Admin"],e.position)}
+      <div id="np_worksite_wrap"></div>
+      <div id="np_dept_wrap"></div>
       ${fld("np_email","Email",e.email,"email")}
       ${fld("np_phone","Phone",e.phone)}
       <div class="psub" style="margin-top:2px;">Contract type, pay basis and rate are set later at the offer stage — not on the application.</div>
@@ -3978,13 +3995,16 @@ function newPrehire(){
     </div></div></div>`;
   $("#npCancel").addEventListener("click",()=>m.remove());
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  const _np=$("#np_position"); if(_np) _np.addEventListener("change",npPosChange); npPosChange();
   $("#npSave").addEventListener("click",async()=>{
     const fullname=document.getElementById("np_full_name").value.trim();
     if(!fullname){ document.getElementById("npMsg").textContent="Full name is required."; return; }
     const stamp=new Date().toISOString().slice(0,10).replace(/-/g,"");
     const rnd=Math.abs(fullname.split("").reduce((a,ch)=>a*31+ch.charCodeAt(0),7))%1000;
+    const pos=v("np_position");
+    const dept=document.getElementById("np_department")?v("np_department"):(["Merchandiser","Store Representative","Store Supervisor"].includes(pos)?"Sales":(pos==="Warehouse Staff"?"Warehouse":null));
     const payload={ prehire_id:"PH-"+stamp+"-"+String(rnd).padStart(3,"0"), phase:"APPLIED", full_name:fullname,
-      department:v("np_department"), position:v("np_position"), hire_source:"Direct", worksite:v("np_worksite"),
+      department:dept, position:pos, hire_source:"Direct", worksite:v("np_worksite"),
       email:v("np_email"), phone:v("np_phone") };
     const { error } = await sb.from("prehire").insert(payload);
     if(error){ document.getElementById("npMsg").textContent=error.message; return; }

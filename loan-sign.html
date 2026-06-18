@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RCC Employee Loan — Sign Agreement</title>
+<style>
+  :root{--navy:#1E3A5F;--navy-d:#142a45;--ink:#1F2A37;--muted:#6B7785;--line:#E3E8EF;--bg:#F4F6F8;--gold:#c8a86a;
+    --green:#1c6b3f;--green-bg:#e8f2eb;--amber:#8a6a14;--amber-bg:#fdf6e3;--red:#c0392b;}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  body{background:var(--bg);color:var(--ink);line-height:1.55;}
+  .top{background:linear-gradient(135deg,var(--navy-d),var(--navy));color:#fff;padding:20px;}
+  .top h1{font-size:19px;font-weight:800;}
+  .top .s{opacity:.82;font-size:12.5px;margin-top:3px;}
+  .wrap{max-width:680px;margin:0 auto;padding:18px 16px 80px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:14px;}
+  .lh{text-align:center;border-bottom:2px solid var(--navy);padding-bottom:10px;margin-bottom:16px;}
+  .lh .nm{font-size:17px;font-weight:800;color:var(--navy);letter-spacing:.5px;}
+  .lh .ad{font-size:11px;color:var(--muted);margin-top:2px;}
+  .agt{white-space:pre-wrap;font-size:13.5px;line-height:1.65;color:var(--ink);}
+  label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin:14px 0 4px;}
+  input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;}
+  .req{color:var(--red);}
+  .sigwrap{border:1px dashed var(--navy);border-radius:10px;background:#fff;margin-top:6px;}
+  canvas{width:100%;height:170px;display:block;touch-action:none;border-radius:10px;}
+  .row{display:flex;gap:10px;align-items:center;margin-top:8px;}
+  .btn{background:var(--navy);color:#fff;border:none;border-radius:9px;padding:12px 18px;font-weight:800;font-size:15px;cursor:pointer;}
+  .btn.full{width:100%;}
+  .btn:disabled{opacity:.5;}
+  .btn.ghost{background:#fff;color:var(--navy);border:1px solid var(--line);}
+  .msg{font-size:13.5px;margin:10px 0;min-height:18px;}
+  .done{text-align:center;padding:40px 20px;}
+  .done .ok{font-size:46px;color:var(--green);}
+  .note{background:var(--amber-bg);color:var(--amber);border:1px solid #ecdca6;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:600;margin-top:10px;}
+  .auth{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:#3a4540;margin-top:12px;}
+  .auth input{width:auto;margin-top:3px;}
+</style></head>
+<body>
+  <div class="top"><h1>RCC Employee Loan — Sign Your Agreement</h1><div class="s">Read your loan agreement below, then sign. Electronic signature (RA 8792). No login needed.</div></div>
+  <div class="wrap" id="wrap"><div class="card"><div id="loading">Loading your agreement…</div></div></div>
+<script>
+const FN="https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/loan-sign";
+const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const qs=new URLSearchParams(location.search); const REF=qs.get("ref")||""; const TOKEN=qs.get("t")||qs.get("token")||"";
+let canvas, ctx, drawing=false, hasInk=false;
+
+async function load(){
+  if(!REF||!TOKEN){ document.getElementById("loading").innerHTML="<b>Invalid link.</b> Please ask HR for your signing link."; return; }
+  try{
+    const r=await fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"get",ref:REF,token:TOKEN})});
+    const d=await r.json();
+    if(!d.ok){ document.getElementById("loading").innerHTML="<b>"+esc(d.error||"This link is invalid or expired.")+"</b>"; return; }
+    if(d.status==="signed"){ renderSigned(d); return; }
+    renderAgreement(d);
+  }catch(e){ document.getElementById("loading").innerHTML="<b>Couldn't load the agreement.</b> Please try again."; }
+}
+function renderSigned(d){
+  document.getElementById("wrap").innerHTML=`<div class="card done"><div class="ok">✓</div>
+    <h2 style="font-size:18px;margin:10px 0 6px;">Already signed</h2>
+    <div style="color:var(--muted);font-size:13.5px;">Loan ${esc(d.ref)} — your agreement has been signed. You can close this page.</div></div>`;
+}
+function renderAgreement(d){
+  document.getElementById("wrap").innerHTML=`
+    <div class="card">
+      <div class="lh"><div class="nm">ROSHAN COMMERCIAL CORPORATION</div><div class="ad">Employee Loan Agreement · ${esc(d.ref)}</div></div>
+      <div class="agt">${esc(d.body||"(agreement text unavailable)")}</div>
+    </div>
+    <div class="card">
+      <h2 style="font-size:15px;color:var(--navy);margin-bottom:4px;">Sign here</h2>
+      <label>Type your full name <span class="req">*</span></label>
+      <input id="signer" placeholder="As it should appear on the agreement">
+      <label>Signature <span class="req">*</span> <span style="font-weight:400;color:var(--muted);font-size:11px;">— draw with your finger or mouse</span></label>
+      <div class="sigwrap"><canvas id="sig"></canvas></div>
+      <div class="row"><button class="btn ghost" type="button" onclick="clearSig()">Clear</button></div>
+      <div class="auth"><input type="checkbox" id="agree">
+        <span>I have read and agree to this loan agreement. I authorize the salary deduction described above. I understand my electronic signature has the same effect as a handwritten one (RA 8792).</span></div>
+      <div class="msg" id="msg"></div>
+      <button class="btn full" id="submitBtn" onclick="submitSig()">Agree &amp; sign</button>
+      <div class="note">By signing you confirm the terms above. The amount and release remain subject to HR's final approval.</div>
+    </div>`;
+  setupCanvas();
+}
+function setupCanvas(){
+  canvas=document.getElementById("sig"); ctx=canvas.getContext("2d");
+  const ratio=window.devicePixelRatio||1; const rect=canvas.getBoundingClientRect();
+  canvas.width=rect.width*ratio; canvas.height=rect.height*ratio; ctx.scale(ratio,ratio);
+  ctx.lineWidth=2.2; ctx.lineCap="round"; ctx.strokeStyle="#0f1f33";
+  const pos=e=>{ const r=canvas.getBoundingClientRect(); const t=e.touches?e.touches[0]:e; return {x:t.clientX-r.left,y:t.clientY-r.top}; };
+  const start=e=>{ drawing=true; const p=pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); e.preventDefault(); };
+  const move=e=>{ if(!drawing) return; const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); hasInk=true; e.preventDefault(); };
+  const end=()=>{ drawing=false; };
+  canvas.addEventListener("mousedown",start); canvas.addEventListener("mousemove",move); window.addEventListener("mouseup",end);
+  canvas.addEventListener("touchstart",start,{passive:false}); canvas.addEventListener("touchmove",move,{passive:false}); canvas.addEventListener("touchend",end);
+}
+function clearSig(){ ctx.clearRect(0,0,canvas.width,canvas.height); hasInk=false; }
+async function submitSig(){
+  const msg=document.getElementById("msg");
+  const signer=document.getElementById("signer").value.trim();
+  if(!signer){ msg.style.color="#c0392b"; msg.textContent="Please type your full name."; return; }
+  if(!hasInk){ msg.style.color="#c0392b"; msg.textContent="Please sign in the box."; return; }
+  if(!document.getElementById("agree").checked){ msg.style.color="#c0392b"; msg.textContent="Please tick the box to agree."; return; }
+  const btn=document.getElementById("submitBtn"); btn.disabled=true; btn.textContent="Submitting…";
+  const signature=canvas.toDataURL("image/png");
+  try{
+    const r=await fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"sign",ref:REF,token:TOKEN,signer:signer,signature:signature})});
+    const d=await r.json();
+    if(!d.ok){ btn.disabled=false; btn.textContent="Agree & sign"; msg.style.color="#c0392b"; msg.textContent=d.error||"Couldn't submit. Please try again."; return; }
+    document.getElementById("wrap").innerHTML=`<div class="card done"><div class="ok">✓</div>
+      <h2 style="font-size:18px;margin:10px 0 6px;">Agreement signed</h2>
+      <div style="color:var(--muted);font-size:13.5px;">Thank you. HR will process the release of your loan. You can close this page.</div></div>`;
+  }catch(e){ btn.disabled=false; btn.textContent="Agree & sign"; msg.style.color="#c0392b"; msg.textContent="Couldn't submit. Please try again."; }
+}
+load();
+</script></body></html>

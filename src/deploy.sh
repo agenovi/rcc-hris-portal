@@ -30,6 +30,7 @@ console.log("build ok");
 [ -f "$APP_DIR/loans.html" ] && cp "$APP_DIR/loans.html" "$SITE_DIR/loans.html"
 [ -f "$APP_DIR/agency.html" ] && cp "$APP_DIR/agency.html" "$SITE_DIR/agency.html"
 [ -f "$APP_DIR/loan-apply.html" ] && cp "$APP_DIR/loan-apply.html" "$SITE_DIR/loan-apply.html"
+[ -f "$APP_DIR/loan-sign.html" ] && cp "$APP_DIR/loan-sign.html" "$SITE_DIR/loan-sign.html"
 [ -f "$APP_DIR/direct-apply.html" ] && cp "$APP_DIR/direct-apply.html" "$SITE_DIR/direct-apply.html"
 [ -f "$APP_DIR/feedback.html" ] && cp "$APP_DIR/feedback.html" "$SITE_DIR/feedback.html"
 rm -f "$SITE_DIR/candidate-feedback.html"  # old name retired → feedback.html

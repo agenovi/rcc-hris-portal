@@ -2658,6 +2658,35 @@ async function openLoanDoc(path,btn){
   window.open(data.signedUrl,"_blank");
 }
 window.openLoanDoc=openLoanDoc;
+const LOAN_SIGN_BASE="https://agenovi.github.io/rcc-hris-portal/loan-sign.html";
+const LOAN_RATES={discretionary:12,emergency:12,educational:0,moto:6};
+// Per-department approver routing (Anj 2026-06-18): Head Office → Anj, Store/Warehouse → Kaira.
+function loanApprover(l){ const t=((l.department||"")+" "+(l.position||"")).toLowerCase(); return /warehouse|store/.test(t)?"Kaira":"Anj"; }
+function newLoanToken(){ try{ if(crypto&&crypto.randomUUID) return crypto.randomUUID().replace(/-/g,""); }catch(e){} return Date.now().toString(36)+Math.random().toString(36).slice(2,12); }
+// DOLE-cleaned loan agreement (Art. 113 compliant; no void post-separation penalty interest).
+function buildLoanAgreement(l,approver){
+  const P=n=>"PHP "+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:2});
+  const rate=LOAN_RATES[l.loan_type]??12, term=l.term_months||12, amt=Number(l.amount||0);
+  const monthly=term?(amt+amt*(rate/100)*(term/12))/term:0;
+  const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  const moto=l.loan_type==="moto", L=[];
+  L.push(`This Employee Loan Agreement is made on ${today} between ROSHAN COMMERCIAL CORPORATION ("the Company") and ${l.applicant_name} ("the Borrower"), ${l.department||"employee"}.`,"");
+  L.push(`1. LOAN. The Company grants the Borrower a ${loanTypeLabel(l.loan_type)} loan of ${P(amt)} for the purpose stated by the Borrower: ${l.purpose||"—"}.`);
+  if(l.loan_type==="educational"){
+    L.push(`2. NATURE. This is educational assistance covering up to 50% of the child's tuition, paid directly to the school, at 0% interest. The Borrower's family shoulders the remaining tuition. The student/child shall sign a waiver as a condition of release.`);
+    L.push(`3. REPAYMENT. The Borrower shall repay ${P(amt)} over ${term} month(s) in equal amortizations of approximately ${P(monthly)} each, by salary deduction every payroll.`);
+  } else {
+    L.push(`2. INTEREST. Interest is ${rate}% per annum, computed on a flat basis.`);
+    L.push(`3. REPAYMENT. The Borrower shall repay over ${term} month(s) in equal amortizations of approximately ${P(monthly)} each (principal plus interest), by salary deduction every payroll.`);
+  }
+  L.push(`4. SALARY DEDUCTION AUTHORIZATION. The Borrower freely authorizes the Company, in writing, to deduct the agreed amortization from his/her salary each payroll until the loan is fully paid. Such deductions shall not reduce the Borrower's take-home pay below the applicable minimum wage (Article 113, Labor Code).`);
+  L.push(`5. SEPARATION. Upon separation for any cause, the outstanding balance becomes due and may be deducted from the Borrower's final pay only to the extent allowed by law. Any remaining balance is settled directly, without additional penalty interest.`);
+  if(moto) L.push(`6. OWNERSHIP. The motorcycle remains the property of the Company until the loan and all related charges are fully paid; ownership transfers to the Borrower upon full payment.`);
+  L.push(`${moto?7:6}. APPROVAL. The amount and terms are subject to the Company's approval and the Borrower's capacity to pay.`);
+  L.push(`${moto?8:7}. ELECTRONIC SIGNATURE (RA 8792). The Borrower's electronic signature below has the same legal effect as a handwritten signature.`,"");
+  L.push(`Borrower: ${l.applicant_name}`,`Approved for the Company: ${approver||loanApprover(l)}`);
+  return L.join("\n");
+}
 const loanStatusPill=(s)=>{ const m={"Submitted":"a","HR Review":"a","Supervisor":"a","Management":"a","Approved":"g","Released":"g","Rejected":"r"}; return `<span class="pill ${({a:'probation',g:'active',r:'closed'})[m[s]||'a']}">${esc(s)}</span>`; };
 function renderLoans(){
   const pg=$("#page-loans"); if(!pg) return;
@@ -2731,6 +2760,22 @@ function openLoan(id){
         </label>
         <button class="btn" id="waiverSave" style="margin-top:12px;">Save waiver status</button>
       </div>`:""}
+      ${(l.status==="Approved"||l.status==="Released"||l.agreement_status!=="none")?`
+      <div class="panel" style="border:2px solid ${l.agreement_status==="signed"?'var(--green)':l.agreement_status==="declined"?'#f1c9c5':'#e0b400'};">
+        <h2>Loan agreement ${l.agreement_status==="signed"?'<span style="color:var(--green);font-size:13px;">✓ signed</span>':l.agreement_status==="declined"?'<span style="color:var(--red);font-size:13px;">declined</span>':'<span style="color:#9a7500;font-size:13px;">— awaiting employee signature</span>'}</h2>
+        <div class="psub">Approver: <b>${esc(l.mgmt_approver||loanApprover(l))}</b> · This loan <b>cannot be released</b> until the employee signs the agreement.</div>
+        ${l.agreement_status==="none"
+          ? `<button class="btn" id="loanGenAgr" style="margin-top:10px;">Generate agreement</button>`
+          : `<button class="btn ghost" id="loanViewAgr" style="margin-top:10px;">View agreement</button>
+             ${l.agreement_status==="signed"
+               ? `<div style="margin-top:10px;color:var(--green);font-weight:700;">✓ Signed by ${esc(l.agreement_signer||"")}${l.agreement_signed_at?(" · "+fmtDate(l.agreement_signed_at)):""}</div>${l.agreement_signature?`<img src="${esc(l.agreement_signature)}" alt="signature" style="max-height:80px;margin-top:6px;border:1px solid var(--line);border-radius:6px;background:#fff;">`:""}`
+               : l.agreement_status==="declined"
+                 ? `<div class="note" style="margin-top:10px;">Employee declined: ${esc(l.agreement_decline_reason||"no reason given")}</div>`
+                 : `<label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-top:12px;">Employee signing link — send this to the employee</label>
+                    <div style="display:flex;gap:8px;margin-top:4px;"><input id="agrLink" readonly value="${esc(LOAN_SIGN_BASE+'?ref='+encodeURIComponent(l.loan_ref)+'&t='+encodeURIComponent(l.agreement_token||''))}" style="flex:1;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:12px;">
+                    <button class="btn" id="agrCopy" style="flex:none;">Copy</button></div>
+                    <div class="psub" style="margin-top:6px;">They read &amp; sign on their phone (RA 8792). Once signed, release unlocks.</div>`}`}
+      </div>`:""}
       <div class="panel">
         <h2>Status</h2>
         <div class="psub">Current: ${loanStatusPill(l.status)}</div>
@@ -2754,8 +2799,23 @@ function openLoan(id){
     }
     return false;
   };
-  const adv=document.getElementById("loanAdv"); if(adv) adv.addEventListener("click",()=>{ if(next==="Released"&&waiverBlocked()) return; setLoan({status:next}); });
-  const rel=document.getElementById("loanRel"); if(rel) rel.addEventListener("click",()=>{ if(waiverBlocked()) return; setLoan({status:"Released"}); });
+  const agreementBlocked=()=>{
+    if(l.agreement_status!=="signed"){
+      alert("The loan agreement isn't signed yet.\n\nIn the “Loan agreement” panel, copy the employee's signing link and have them sign it. Once signed, you can release.");
+      return true;
+    }
+    return false;
+  };
+  const approvePatch=()=>{ const approver=loanApprover(l); return { status:"Approved", mgmt_approver:approver, agreement_body:buildLoanAgreement(l,approver), agreement_token:newLoanToken(), agreement_status:"awaiting" }; };
+  const adv=document.getElementById("loanAdv"); if(adv) adv.addEventListener("click",()=>{
+    if(next==="Approved"){ setLoan(approvePatch()); return; }
+    if(next==="Released"&&(waiverBlocked()||agreementBlocked())) return;
+    setLoan({status:next});
+  });
+  const rel=document.getElementById("loanRel"); if(rel) rel.addEventListener("click",()=>{ if(waiverBlocked()||agreementBlocked()) return; setLoan({status:"Released"}); });
+  const genAgr=document.getElementById("loanGenAgr"); if(genAgr) genAgr.addEventListener("click",()=>{ const approver=loanApprover(l); setLoan({mgmt_approver:approver,agreement_body:buildLoanAgreement(l,approver),agreement_token:newLoanToken(),agreement_status:"awaiting"}); });
+  const viewAgr=document.getElementById("loanViewAgr"); if(viewAgr) viewAgr.addEventListener("click",()=>{ const w=window.open("","_blank"); if(w){ w.document.write(`<title>${esc(l.loan_ref)} — Loan Agreement</title><pre style="white-space:pre-wrap;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;padding:28px;max-width:680px;margin:0 auto;color:#1F2A37;">${esc(l.agreement_body||"")}</pre>`); w.document.close(); } });
+  const agrCopy=document.getElementById("agrCopy"); if(agrCopy) agrCopy.addEventListener("click",()=>{ const inp=document.getElementById("agrLink"); inp.select(); navigator.clipboard.writeText(inp.value).then(()=>{ agrCopy.textContent="Copied"; setTimeout(()=>agrCopy.textContent="Copy",1500); }); });
   const wSave=document.getElementById("waiverSave");
   if(wSave) wSave.addEventListener("click",async()=>{
     wSave.disabled=true; wSave.textContent="Saving…";

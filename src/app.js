@@ -409,6 +409,18 @@ function openLoan(id){
               <button class="btn ghost" style="flex:none;" onclick="openLoanDoc('${esc(d.path)}',this)">View</button></div>`).join("")
           : `<div class="psub">No documents were attached. Use the applicant's mobile / email above to request them.</div>`}
       </div>
+      ${l.loan_type==="educational"?`
+      <div class="panel" style="border:2px solid ${l.waiver_signed?'var(--green)':'#e0b400'};">
+        <h2>Educational waiver ${l.waiver_signed?'<span style="color:var(--green);font-size:13px;">✓ signed</span>':'<span style="color:#9a7500;font-size:13px;">— required before release</span>'}</h2>
+        <div class="psub">This loan <b>cannot be released</b> until the student/child has signed the waiver.</div>
+        ${l.waiver_doc?`<div style="margin-top:8px;"><button class="btn ghost" onclick="openLoanDoc('${esc(l.waiver_doc.path)}',this)">View signed waiver</button></div>`:""}
+        <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-top:12px;">Upload the signed waiver</label>
+        <input type="file" id="waiverFile" accept="image/*,application/pdf,.pdf" style="margin-top:4px;">
+        <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13.5px;cursor:pointer;">
+          <input type="checkbox" id="waiverChk" ${l.waiver_signed?"checked":""}> The student/child has signed the waiver
+        </label>
+        <button class="btn" id="waiverSave" style="margin-top:12px;">Save waiver status</button>
+      </div>`:""}
       <div class="panel">
         <h2>Status</h2>
         <div class="psub">Current: ${loanStatusPill(l.status)}</div>
@@ -425,8 +437,32 @@ function openLoan(id){
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   const setLoan=async(patch)=>{ patch.hr_notes=document.getElementById("loanNotes").value; patch.updated_at=new Date().toISOString();
     const {error}=await sb.from("loans").update(patch).eq("id",l.id); if(error){alert(error.message);return;} await loadEmployees(); m.remove(); };
-  const adv=document.getElementById("loanAdv"); if(adv) adv.addEventListener("click",()=>setLoan({status:next}));
-  const rel=document.getElementById("loanRel"); if(rel) rel.addEventListener("click",()=>setLoan({status:"Released"}));
+  const waiverBlocked=()=>{
+    if(l.loan_type==="educational" && !l.waiver_signed){
+      alert("Educational loan — the student/child's signed waiver is required before release.\n\nIn the Educational waiver panel: upload the signed waiver, tick “The student/child has signed the waiver”, Save, then release.");
+      return true;
+    }
+    return false;
+  };
+  const adv=document.getElementById("loanAdv"); if(adv) adv.addEventListener("click",()=>{ if(next==="Released"&&waiverBlocked()) return; setLoan({status:next}); });
+  const rel=document.getElementById("loanRel"); if(rel) rel.addEventListener("click",()=>{ if(waiverBlocked()) return; setLoan({status:"Released"}); });
+  const wSave=document.getElementById("waiverSave");
+  if(wSave) wSave.addEventListener("click",async()=>{
+    wSave.disabled=true; wSave.textContent="Saving…";
+    const chk=document.getElementById("waiverChk").checked;
+    const fi=document.getElementById("waiverFile"); let waiver_doc=l.waiver_doc||null;
+    if(fi&&fi.files&&fi.files[0]){
+      const f=fi.files[0];
+      const path="waivers/"+l.loan_ref+"-"+Date.now().toString(36)+"-"+f.name.replace(/[^a-zA-Z0-9._-]+/g,"_").slice(0,80);
+      const {error:upErr}=await sb.storage.from("loan-docs").upload(path,f,{upsert:true});
+      if(upErr){ alert("Couldn't upload the waiver: "+upErr.message); wSave.disabled=false; wSave.textContent="Save waiver status"; return; }
+      waiver_doc={path:path,name:f.name};
+    }
+    if(chk && !waiver_doc){ if(!confirm("No waiver file uploaded. Mark the waiver as signed anyway?")){ wSave.disabled=false; wSave.textContent="Save waiver status"; return; } }
+    const {error}=await sb.from("loans").update({waiver_signed:chk,waiver_doc:waiver_doc,hr_notes:document.getElementById("loanNotes").value,updated_at:new Date().toISOString()}).eq("id",l.id);
+    if(error){ alert(error.message); wSave.disabled=false; wSave.textContent="Save waiver status"; return; }
+    await loadEmployees(); m.remove();
+  });
   const rej=document.getElementById("loanRej"); if(rej) rej.addEventListener("click",()=>setLoan({status:"Rejected"}));
 }
 const isActive=(e)=>e.status==="Active";

@@ -3901,6 +3901,7 @@ function phAppRows(a){
   const row=(l,val)=>val?`<div class="efield"><div class="el">${esc(l)}</div><div class="ev">${esc(val)}</div></div>`:"";
   const yn=(l,val,d)=>val?`<div class="efield"><div class="el">${esc(l)}</div><div class="ev">${esc(val)}${val==="Yes"&&d?" — "+esc(d):""}</div></div>`:"";
   const out=[
+    row("Can start",a.availability),
     row("Nickname",a.nickname), row("Place of birth",a.place_of_birth), row("Sex",a.sex),
     row("Telegram",a.telegram), row("Viber",a.viber), row("Facebook",a.facebook),
     row("Religion (SM)",a.religion), row("Height",a.height), row("Weight",a.weight),

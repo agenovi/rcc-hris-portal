@@ -116,6 +116,15 @@
       <label>Are you able to perform the physical and work tasks this role requires — for example, standing for long periods, lifting and arranging stock, and working retail hours? If you would need any support to do so, you may tell us.</label>
       <div class="yn"><label><input type="radio" name="q3" value="Yes" onchange="showD('q3')"> Yes</label><label><input type="radio" name="q3" value="No" onchange="showD('q3')"> No</label></div>
       <textarea id="f_q3d" rows="2" placeholder="If no, tell us what support you would need" style="display:none;margin-top:6px;"></textarea>
+
+      <label>How soon can you start?</label>
+      <select id="f_avail">
+        <option value="">Select…</option>
+        <option value="Immediately">Immediately</option>
+        <option value="Within 2 weeks">Within 2 weeks</option>
+        <option value="1 month notice">1 month notice (still serving notice)</option>
+        <option value="More than 1 month">More than 1 month</option>
+      </select>
     </div>
 
     <div class="card">
@@ -176,6 +185,7 @@ async function submitApp(){
     q_discharged:radio("q1"), q_discharged_detail:val("f_q1d"),
     q_criminal:radio("q2"), q_criminal_detail:val("f_q2d"),
     q_can_perform:radio("q3"), q_can_perform_detail:val("f_q3d"),
+    availability:val("f_avail"),
     agency_token:(new URLSearchParams(location.search).get("ag")||""),
     source:"Direct", confirmed:true
   };

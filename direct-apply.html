@@ -97,6 +97,8 @@
         <div><label>Dates (from – to)</label><input id="f_prevdur"></div>
       </div>
       <label>Reason for leaving</label><input id="f_prevreason">
+      <label>May we contact this employer for a reference?</label>
+      <select id="f_refok"><option value="">Select…</option><option>Yes</option><option>No</option><option>Not yet — please ask me first</option></select>
       <div class="grid" style="margin-top:4px;">
         <div><label>Highest education / school</label><input id="f_school"></div>
         <div><label>Year graduated</label><input id="f_year"></div>
@@ -160,11 +162,24 @@ function togglePos(){
   const storeRole = (p==="Merchandiser" || p==="Store Representative");
   document.getElementById("storeBlock").style.display = storeRole ? "block" : "none";   // store list: only store-based roles
   document.getElementById("smExtras").style.display = (p==="Merchandiser") ? "block" : "none"; // SM mall-ID fields: merchandiser only
-  document.getElementById("f_pos_other").style.display = p==="Other" ? "block" : "none";
+  // Head Office / Warehouse / Other → ask them to name the specific position
+  const specify = (p==="Head Office / Admin" || p==="Warehouse Staff" || p==="Other");
+  const po=document.getElementById("f_pos_other");
+  po.style.display = specify ? "block" : "none";
+  po.placeholder = p==="Head Office / Admin" ? "Specific position — e.g. Accounting Staff, Admin Assistant, HR Officer"
+                 : p==="Warehouse Staff" ? "Specific position — e.g. Picker, Inventory Clerk, Warehouse Staff"
+                 : "Please specify the position";
 }
 function toggleStore(){ const o=document.getElementById("f_store").value==="__other__"; document.getElementById("f_store_other").style.display=o?"block":"none"; document.getElementById("storeOtherNote").style.display=o?"block":"none"; }
 function storeValue(){ return document.getElementById("f_store").value==="__other__" ? val("f_store_other") : val("f_store"); }
-function posValue(){ const p=document.getElementById("f_pos").value; return p==="Other" ? (val("f_pos_other")||"Other") : p; }
+function posValue(){ const p=document.getElementById("f_pos").value;
+  if(p==="Other") return val("f_pos_other")||"Other";
+  if(p==="Head Office / Admin" || p==="Warehouse Staff") return val("f_pos_other")||p;
+  return p; }
+function worksiteValue(){ const p=document.getElementById("f_pos").value;
+  if(p==="Head Office / Admin") return "Head Office";
+  if(p==="Warehouse Staff") return "Warehouse Solaris";
+  return storeValue(); }
 function showD(n){ const m={q1:"f_q1d",q2:"f_q2d",q3:"f_q3d"}; document.getElementById(m[n]).style.display = radio(n)===(n==="q3"?"No":"Yes") ? "block" : "none"; }
 async function submitApp(){
   const msg=document.getElementById("msg"), name=val("f_name");
@@ -179,8 +194,9 @@ async function submitApp(){
     full_name:name, nickname:val("f_nick"), date_of_birth:val("f_dob"), place_of_birth:val("f_pob"),
     sex:val("f_sex"), civil_status:val("f_civil"),
     email:val("f_email"), phone:val("f_phone"), telegram:val("f_tg"), viber:val("f_vb"), facebook:val("f_fb"),
-    position:posValue(), worksite:storeValue(), religion:val("f_religion"), height:val("f_height"), weight:val("f_weight"),
+    position:posValue(), worksite:worksiteValue(), religion:val("f_religion"), height:val("f_height"), weight:val("f_weight"),
     prev_employer:val("f_prevemp"), prev_position:val("f_prevpos"), prev_duration:val("f_prevdur"), prev_reason:val("f_prevreason"),
+    may_contact_employer:val("f_refok"),
     education_school:val("f_school"), education_year:val("f_year"),
     q_discharged:radio("q1"), q_discharged_detail:val("f_q1d"),
     q_criminal:radio("q2"), q_criminal_detail:val("f_q2d"),

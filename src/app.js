@@ -1596,6 +1596,7 @@ function phAppRows(a){
     row("Telegram",a.telegram), row("Viber",a.viber), row("Facebook",a.facebook),
     row("Religion (SM)",a.religion), row("Height",a.height), row("Weight",a.weight),
     row("Recent employer",a.prev_employer), row("Position held",a.prev_position), row("Dates",a.prev_duration), row("Reason for leaving",a.prev_reason),
+    row("OK to contact employer?",a.may_contact_employer),
     row("Education / school",a.education_school), row("Year graduated",a.education_year),
     yn("Discharged / asked to resign?",a.q_discharged,a.q_discharged_detail),
     yn("Convicted of a crime?",a.q_criminal,a.q_criminal_detail),

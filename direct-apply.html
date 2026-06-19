@@ -62,6 +62,9 @@
           </div>
           <div class="note">Religion, height and weight are required for SM mall ID issuance.</div>
         </div>
+        <div class="note" style="margin-top:8px;">This role is paid <b>basic pay (at least minimum wage) plus incentives based on sales</b>. The exact rate is confirmed by HR at offer.</div>
+        <label>Are you okay with this pay structure?</label>
+        <select id="f_payok"><option value="">Select…</option><option>Yes</option><option>No</option></select>
       </div>
     </div>
 
@@ -103,6 +106,8 @@
         <div><label>Highest education / school</label><input id="f_school"></div>
         <div><label>Year graduated</label><input id="f_year"></div>
       </div>
+      <label>Attach your resume <span style="font-weight:400;color:var(--muted);font-size:11px;">— optional, PDF or a clear photo</span></label>
+      <input type="file" id="f_resume" accept="image/*,application/pdf,.pdf">
     </div>
 
     <div class="card">
@@ -143,7 +148,9 @@
     </div>
   </div>
 <script>
-const FN="https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/apply";
+const SB="https://jtfkpmvievetihhfdmqb.supabase.co";
+const ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0ZmtwbXZpZXZldGloaGZkbXFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwODA1MTksImV4cCI6MjA5MTY1NjUxOX0.ozphoaGT7jVKr3NGmqQC1wMj5lp7MvVfdqO2HZWMl6k";
+const FN=SB+"/functions/v1/apply";
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const val=id=>document.getElementById(id).value.trim();
 const radio=n=>{ const el=document.querySelector(`input[name="${n}"]:checked`); return el?el.value:""; };
@@ -190,6 +197,17 @@ async function submitApp(){
   if(!document.getElementById("f_confirm").checked){ return fail("Please tick the confirmation to submit."); }
   function fail(t){ msg.style.color="#c0392b"; msg.textContent=t; return; }
   const btn=document.getElementById("submitBtn"); btn.disabled=true; btn.textContent="Submitting…";
+  // optional resume → private storage
+  let resume_doc=null; const rf=document.getElementById("f_resume");
+  if(rf&&rf.files&&rf.files[0]){
+    const f=rf.files[0]; btn.textContent="Uploading resume…";
+    const path=(Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8))+"/"+f.name.replace(/[^a-zA-Z0-9._-]+/g,"_").slice(0,100);
+    try{
+      const up=await fetch(SB+"/storage/v1/object/prehire-docs/"+path,{method:"POST",headers:{apikey:ANON,Authorization:"Bearer "+ANON,"x-upsert":"true"},body:f});
+      if(up.ok) resume_doc={path:path,name:f.name};
+    }catch(e){}
+    btn.textContent="Submitting…";
+  }
   const payload={
     full_name:name, nickname:val("f_nick"), date_of_birth:val("f_dob"), place_of_birth:val("f_pob"),
     sex:val("f_sex"), civil_status:val("f_civil"),
@@ -201,7 +219,7 @@ async function submitApp(){
     q_discharged:radio("q1"), q_discharged_detail:val("f_q1d"),
     q_criminal:radio("q2"), q_criminal_detail:val("f_q2d"),
     q_can_perform:radio("q3"), q_can_perform_detail:val("f_q3d"),
-    availability:val("f_avail"),
+    availability:val("f_avail"), pay_ack:val("f_payok"), resume_doc:resume_doc,
     agency_token:(new URLSearchParams(location.search).get("ag")||""),
     source:"Direct", confirmed:true
   };

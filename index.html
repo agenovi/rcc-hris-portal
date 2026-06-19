@@ -2658,6 +2658,14 @@ async function openLoanDoc(path,btn){
   window.open(data.signedUrl,"_blank");
 }
 window.openLoanDoc=openLoanDoc;
+async function openPrehireDoc(path,btn){
+  if(btn){ btn.disabled=true; btn.textContent="Opening…"; }
+  const {data,error}=await sb.storage.from("prehire-docs").createSignedUrl(path,3600);
+  if(btn){ btn.disabled=false; btn.textContent="View resume"; }
+  if(error||!data){ alert("Couldn't open this file: "+(error&&error.message||"unknown error")); return; }
+  window.open(data.signedUrl,"_blank");
+}
+window.openPrehireDoc=openPrehireDoc;
 const LOAN_SIGN_BASE="https://agenovi.github.io/rcc-hris-portal/loan-sign.html";
 const LOAN_RATES={discretionary:12,emergency:12,educational:0,moto:6};
 // Per-department approver routing (Anj 2026-06-18): Head Office → Anj, Store/Warehouse → Kaira.
@@ -3900,8 +3908,9 @@ function phAppRows(a){
   if(!a) return "";
   const row=(l,val)=>val?`<div class="efield"><div class="el">${esc(l)}</div><div class="ev">${esc(val)}</div></div>`:"";
   const yn=(l,val,d)=>val?`<div class="efield"><div class="el">${esc(l)}</div><div class="ev">${esc(val)}${val==="Yes"&&d?" — "+esc(d):""}</div></div>`:"";
+  const resumeRow=(a.resume_doc&&a.resume_doc.path)?`<div class="efield"><div class="el">Resume</div><div class="ev"><button class="btn ghost" style="padding:4px 10px;font-size:12px;" onclick="openPrehireDoc('${esc(a.resume_doc.path)}',this)">View resume</button></div></div>`:"";
   const out=[
-    row("Can start",a.availability),
+    row("Can start",a.availability), row("OK with pay structure?",a.pay_ack), resumeRow,
     row("Nickname",a.nickname), row("Place of birth",a.place_of_birth), row("Sex",a.sex),
     row("Telegram",a.telegram), row("Viber",a.viber), row("Facebook",a.facebook),
     row("Religion (SM)",a.religion), row("Height",a.height), row("Weight",a.weight),

@@ -2337,6 +2337,9 @@ let SIGNATURES=[];
 let CANDIDATE_FEEDBACK=[];
 let MEMOS=[];
 let CURRENT_USER=null;
+// HMO provider to notify on every separation — set these to the real provider + email.
+const HMO_NAME="our HMO provider";
+const HMO_EMAIL="";  // ← fill in the HMO's email address
 const DEFAULT_PH_DOCS=[["nbi","NBI / Police Clearance",true],["birth","PSA Birth Certificate",false],["sss","SSS (E-1 / number)",false],["philhealth","PhilHealth",false],["pagibig","Pag-IBIG (MID)",false],["tin","TIN / BIR 1902",false],["photo","2×2 ID Photos",false],["diploma","Diploma / TOR",false],["medical","Medical / Health Certificate",false]];
 let empFilter="All";
 let scFilter="All";
@@ -4598,7 +4601,14 @@ function openExitCase(id){
         <div class="task" style="align-items:center;"><div class="dot ${x.exit_interview_done?'g':'a'}"></div>
           <div style="flex:1;"><div class="tt">Exit interview</div><div class="td">${x.exit_interview_done?'Completed ✓':'6-question RCC exit interview'}</div></div>
           <button class="btn ghost" id="ex_interview_btn" style="flex-shrink:0;">${x.exit_interview_done?'View / edit':'Conduct interview'}</button></div>
-        <label style="display:block;font-size:13px;margin:8px 0;"><input type="checkbox" id="ex_hmo" ${x.hmo_cancelled?"checked":""}> HMO / insurance cancellation queued (advise sent to provider)</label>
+        <div style="border:1px solid ${x.hmo_notified_at?'var(--green)':'#f0c14b'};border-radius:9px;padding:11px 13px;margin:8px 0;background:${x.hmo_notified_at?'var(--green-light)':'#fffaf0'};">
+          <div style="font-weight:700;font-size:13.5px;">HMO delisting ${x.hmo_notified_at?`<span style="color:var(--green-dark);">✓ notified ${fmtDate(x.hmo_notified_at)}</span>`:`<span style="color:#9a6a00;">— not yet sent</span>`}</div>
+          <div class="td" style="margin:3px 0 8px;">Tell ${esc(HMO_NAME)} to remove this employee, or coverage keeps billing.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn ghost" id="ex_hmo_email" type="button">✉️ Email HMO to delist</button>
+            <button class="btn ghost" id="ex_hmo_mark" type="button">${x.hmo_notified_at?"Undo notified":"Mark HMO notified"}</button>
+          </div>
+        </div>
         <label style="display:block;font-size:13px;margin:5px 0;"><input type="checkbox" id="ex_coe" ${x.coe_issued?"checked":""}> Certificate of Employment issued <span style="color:var(--muted);">(DOLE: within 3 days of request)</span></label>
         <label style="display:block;font-size:13px;margin:5px 0;"><input type="checkbox" id="ex_quitclaim" ${x.quitclaim_signed?"checked":""}> Quitclaim / release &amp; waiver signed by employee <span style="color:var(--muted);">(on receipt of final pay — keep their signed copy)</span></label>
       </div>
@@ -4621,6 +4631,22 @@ function openExitCase(id){
   $("#exSave").addEventListener("click",()=>saveExitCase(x,m,false));
   const cmp=document.getElementById("exComplete"); if(cmp) cmp.addEventListener("click",()=>saveExitCase(x,m,true));
   document.getElementById("ex_interview_btn").addEventListener("click",()=>openExitInterview(x));
+  const hmoEmailBtn=document.getElementById("ex_hmo_email");
+  if(hmoEmailBtn) hmoEmailBtn.addEventListener("click",()=>{
+    const lwd=x.last_working_day?fmtDate(x.last_working_day):"(last working day)";
+    const subject="HMO delisting request — "+x.employee_name;
+    const body="Hello "+HMO_NAME+",\n\nPlease remove the following employee from our HMO coverage, effective their last working day:\n\nName: "+x.employee_name+"\nPosition: "+(x.position||"—")+"\nLast working day: "+lwd+"\nSeparation type: "+(x.separation_type||"—")+"\n\nKindly confirm once the delisting is done.\n\nThank you,\nRCC HR";
+    window.location.href="mailto:"+HMO_EMAIL+"?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(body);
+  });
+  const hmoMarkBtn=document.getElementById("ex_hmo_mark");
+  if(hmoMarkBtn) hmoMarkBtn.addEventListener("click",async()=>{
+    hmoMarkBtn.disabled=true;
+    const patch=x.hmo_notified_at?{hmo_notified_at:null,hmo_notified_by:null}
+      :{hmo_notified_at:new Date().toISOString(),hmo_notified_by:(CURRENT_USER&&CURRENT_USER.email)||"HR"};
+    const {error}=await sb.from("exit_clearance").update(patch).eq("id",x.id);
+    if(error){ alert(error.message); hmoMarkBtn.disabled=false; return; }
+    await loadEmployees(); openExitCase(x.id);
+  });
 }
 function openExitInterview(x){
   const ei=x.exit_interview||{};
@@ -4652,7 +4678,7 @@ function collectExit(x){
     tax_refund:num("ex_tax_refund"), pending_commission:num("ex_pending_commission"),
     uniform_deduction:num("ex_uniform_deduction"),
     uniform_auth_on_file:!!(m.querySelector("#ex_uniform_auth")&&m.querySelector("#ex_uniform_auth").checked),
-    hmo_cancelled:m.querySelector("#ex_hmo").checked, coe_issued:m.querySelector("#ex_coe").checked,
+    hmo_cancelled:!!(m.querySelector("#ex_hmo")&&m.querySelector("#ex_hmo").checked), coe_issued:m.querySelector("#ex_coe").checked,
     quitclaim_signed:!!(m.querySelector("#ex_quitclaim")&&m.querySelector("#ex_quitclaim").checked) };
   const ret={}; m.querySelectorAll("[data-return]").forEach(el=>{ ret[el.dataset.return]=el.checked; });
   const otherEl=m.querySelector("#ex_other_return"); if(otherEl) ret.other=otherEl.value.trim();

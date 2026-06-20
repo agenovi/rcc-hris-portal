@@ -2337,6 +2337,9 @@ let SIGNATURES=[];
 let CANDIDATE_FEEDBACK=[];
 let MEMOS=[];
 let CURRENT_USER=null;
+// Who may see salary / bank / government IDs. Locked to anj for now (add more emails here when decided).
+const PAY_VIEWERS=["anj@hassarams.com"];
+function canSeePay(){ return PAY_VIEWERS.includes(((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()); }
 // HMO provider to notify on every separation — set these to the real provider + email.
 const HMO_NAME="our HMO provider";
 const HMO_EMAIL="";  // ← fill in the HMO's email address
@@ -3159,14 +3162,20 @@ function openRecord(e){
         f("Email",e.email,TAGEMP)+f("Mobile",e.phone,TAGEMP)+f("Date of Birth",e.date_of_birth?fmtDate(e.date_of_birth):"",TAGEMP)+f("Gender",e.gender,TAGEMP)+f("Civil Status",e.civil_status,TAGEMP)+f("Permanent Address",e.permanent_address,TAGEMP)+f("Current Address",e.current_address,TAGEMP))}
       ${sec(3,"Emergency Contact",
         f("Name",e.emergency_contact_name,TAGEMP)+f("Relationship",e.emergency_contact_relation,TAGEMP)+f("Contact Number",e.emergency_contact_number,TAGEMP))}
-      ${sec(4,"Government Numbers",
-        f("SSS",e.sss_number,TAGHR)+f("PhilHealth",e.philhealth_number,TAGHR)+f("Pag-IBIG",e.pagibig_number,TAGHR)+f("TIN",e.tin_number,TAGHR))}
-      ${sec(5,"Bank",
-        f("Bank Name",e.bank_name,TAGAUTO)+f("Account Number",e.bank_account_number,TAGHR))}
+      ${canSeePay()?sec(4,"Government Numbers",
+        f("SSS",e.sss_number,TAGHR)+f("PhilHealth",e.philhealth_number,TAGHR)+f("Pag-IBIG",e.pagibig_number,TAGHR)+f("TIN",e.tin_number,TAGHR))
+        :sec(4,"Government Numbers",`<div class="efield"><div class="ev"><span class="note">🔒 Restricted — visible to authorised payroll only</span></div></div>`)}
+      ${canSeePay()?sec(5,"Bank",
+        f("Bank Name",e.bank_name,TAGAUTO)+f("Account Number",e.bank_account_number,TAGHR))
+        :sec(5,"Bank",`<div class="efield"><div class="ev"><span class="note">🔒 Restricted — visible to authorised payroll only</span></div></div>`)}
       ${sec(6,"Placement",
         f("Department",e.department,TAGHR)+f("Position",e.position,TAGHR)+f("Worksite",e.worksite,TAGHR)+f("Supervisor",e.supervisor_name,TAGHR)+f("Approver 2",e.approver2_name||e.approver2_email,TAGAUTO))}
       ${sec(7,"Employment Terms, Pay &amp; Dates",
-        f("Contract Type",e.contract_type,TAGHR)+f("Daily Rate",e.daily_rate?("₱"+Number(e.daily_rate).toLocaleString()):"",TAGHR)+f("Daily Allowance",e.daily_allowance?("₱"+Number(e.daily_allowance).toLocaleString()):"",TAGHR)+f("Hire Date",e.hire_date?fmtDate(e.hire_date):"",TAGHR)+f("Regularization Date",e.regularization_date?fmtDate(e.regularization_date):"",TAGHR)+f("End Date",e.end_date?fmtDate(e.end_date):"",TAGHR)+f("End Reason",e.end_reason,TAGHR))}
+        f("Contract Type",e.contract_type,TAGHR)
+        +(canSeePay()
+          ? f("Daily Rate",e.daily_rate?("₱"+Number(e.daily_rate).toLocaleString()):"",TAGHR)+f("Daily Allowance",e.daily_allowance?("₱"+Number(e.daily_allowance).toLocaleString()):"",TAGHR)
+          : `<div class="efield"><div class="el">Pay</div><div class="ev"><span class="note">🔒 Restricted — payroll only</span></div></div>`)
+        +f("Hire Date",e.hire_date?fmtDate(e.hire_date):"",TAGHR)+f("Regularization Date",e.regularization_date?fmtDate(e.regularization_date):"",TAGHR)+f("End Date",e.end_date?fmtDate(e.end_date):"",TAGHR)+f("End Reason",e.end_reason,TAGHR))}
       ${e.notes?sec(8,"Notes",`<div style="font-size:13.5px;white-space:pre-wrap;padding:4px 8px;">${esc(e.notes)}</div>`):""}
     </div>`;
   window.go("employee");
@@ -3612,15 +3621,15 @@ function openForm(e){
         ${sel("f_emergency_contact_relation","Relationship",RELATIONS,e.emergency_contact_relation)}
         ${fld("f_emergency_contact_number","Emergency contact number",e.emergency_contact_number)}
       </div>
-      <div class="panel">
+      ${canSeePay()?`<div class="panel">
         ${fld("f_sss_number","SSS",e.sss_number)}${fld("f_philhealth_number","PhilHealth",e.philhealth_number)}
         ${fld("f_pagibig_number","Pag-IBIG",e.pagibig_number)}${fld("f_tin_number","TIN",e.tin_number)}
         ${fld("f_bank_name","Bank name",e.bank_name)}${fld("f_bank_account_number","Bank account number",e.bank_account_number)}
-      </div>
+      </div>`:`<div class="panel"><div style="font-size:13px;color:#6a766f;">🔒 Government IDs &amp; bank details are restricted to authorised payroll.</div></div>`}
       <div class="panel">
         ${fld("f_worksite","Worksite",e.worksite)}${fld("f_supervisor_name","Supervisor",e.supervisor_name)}${fld("f_approver2_name","Approver 2",e.approver2_name)}
         ${sel("f_contract_type","Contract type",CONTRACT_TYPES,e.contract_type)}
-        ${fld("f_daily_rate","Daily rate (₱)",e.daily_rate,"number")}${fld("f_daily_allowance","Daily allowance (₱)",e.daily_allowance,"number")}
+        ${canSeePay()?`${fld("f_daily_rate","Daily rate (₱)",e.daily_rate,"number")}${fld("f_daily_allowance","Daily allowance (₱)",e.daily_allowance,"number")}`:`<div style="margin-bottom:10px;font-size:13px;color:#6a766f;">🔒 Pay (daily rate / allowance) is restricted to authorised payroll.</div>`}
         ${fld("f_hire_date","Hire date",e.hire_date,"date")}${fld("f_regularization_date","Regularization date",e.regularization_date,"date")}
         ${fld("f_end_date","End date",e.end_date,"date")}${sel("f_end_reason","End reason",END_REASONS,e.end_reason)}
         <div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Notes</label><textarea id="f_notes" rows="3" style="width:100%;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;">${esc(e.notes||"")}</textarea></div>
@@ -3632,13 +3641,13 @@ function openForm(e){
       </div>
     </div></div>`;
   const dept=document.getElementById("f_department");
-  dept.addEventListener("change",()=>{ const g=deriveGroup(dept.value); document.getElementById("f_group_name").value=g; const b=document.getElementById("f_bank_name"); if(!b.value) b.value=deriveBank(g); });
+  dept.addEventListener("change",()=>{ const g=deriveGroup(dept.value); document.getElementById("f_group_name").value=g; const b=document.getElementById("f_bank_name"); if(b&&!b.value) b.value=deriveBank(g); });
   document.getElementById("fCancel").addEventListener("click",()=>m.remove());
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   document.getElementById("fSave").addEventListener("click",()=>saveEmployee(isNew?null:e.id,m));
 }
-const v=(id)=>{ const x=document.getElementById(id).value.trim(); return x===""?null:x; };
-const nv=(id)=>{ const x=document.getElementById(id).value.trim(); return x===""?null:Number(x); };
+const v=(id)=>{ const el=document.getElementById(id); if(!el) return null; const x=el.value.trim(); return x===""?null:x; };
+const nv=(id)=>{ const el=document.getElementById(id); if(!el) return null; const x=el.value.trim(); return x===""?null:Number(x); };
 async function saveEmployee(id,modal){
   const msg=document.getElementById("fMsg"), btn=document.getElementById("fSave");
   let phone=v("f_phone"); if(phone) phone=phone.replace(/[\s-]/g,"");
@@ -3647,11 +3656,12 @@ async function saveEmployee(id,modal){
     email:v("f_email"), phone, date_of_birth:v("f_date_of_birth"), gender:v("f_gender"), civil_status:v("f_civil_status"),
     permanent_address:v("f_permanent_address"), current_address:v("f_current_address"),
     emergency_contact_name:v("f_emergency_contact_name"), emergency_contact_relation:v("f_emergency_contact_relation"), emergency_contact_number:v("f_emergency_contact_number"),
-    sss_number:v("f_sss_number"), philhealth_number:v("f_philhealth_number"), pagibig_number:v("f_pagibig_number"), tin_number:v("f_tin_number"),
-    bank_name:v("f_bank_name"), bank_account_number:v("f_bank_account_number"), worksite:v("f_worksite"), supervisor_name:v("f_supervisor_name"), approver2_name:v("f_approver2_name"),
-    contract_type:v("f_contract_type"), daily_rate:nv("f_daily_rate"), daily_allowance:nv("f_daily_allowance"),
+    worksite:v("f_worksite"), supervisor_name:v("f_supervisor_name"), approver2_name:v("f_approver2_name"),
+    contract_type:v("f_contract_type"),
     hire_date:v("f_hire_date"), regularization_date:v("f_regularization_date"), end_date:v("f_end_date"), end_reason:v("f_end_reason"),
     notes:v("f_notes"), updated_at:new Date().toISOString() };
+  // salary / bank / government IDs only written by an authorised payroll viewer — others never touch these columns
+  if(canSeePay()){ Object.assign(p,{ sss_number:v("f_sss_number"), philhealth_number:v("f_philhealth_number"), pagibig_number:v("f_pagibig_number"), tin_number:v("f_tin_number"), bank_name:v("f_bank_name"), bank_account_number:v("f_bank_account_number"), daily_rate:nv("f_daily_rate"), daily_allowance:nv("f_daily_allowance") }); }
   if(!p.full_name){ msg.textContent="Full name is required."; return; }
   btn.disabled=true; btn.textContent="Saving…";
   const res=id? await sb.from("employees").update(p).eq("id",id) : await sb.from("employees").insert(p);

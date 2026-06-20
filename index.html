@@ -1248,13 +1248,7 @@
           </table>
         </div>
       </section>
-      <section class="page" id="page-evaluations">
-        <div class="panel" style="margin-top:0;"><div class="placeholder">
-          <div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 17l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg></div>
-          <h2>Evaluations</h2>
-          <p>Probationary reviews (3rd and 5th month) and annual evaluations,<br>scored across eight areas. We will design this screen together.</p>
-        </div></div>
-      </section>
+      <section class="page" id="page-evaluations"></section>
       <section class="page" id="page-exit">
         <div class="panel" style="margin-top:0;"><div class="placeholder">
           <div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M14 3H5v18h9"/><path d="M10 12h11M17 8l4 4-4 4"/></svg></div>
@@ -2336,6 +2330,7 @@ let MANPOWER=[];
 let SIGNATURES=[];
 let CANDIDATE_FEEDBACK=[];
 let MEMOS=[];
+let EVALUATIONS=[];
 let CURRENT_USER=null;
 // Who may see salary / bank / government IDs. Locked to anj for now (add more emails here when decided).
 const PAY_VIEWERS=["anj@hassarams.com"];
@@ -2415,7 +2410,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2430,7 +2425,8 @@ async function loadEmployees(){
     sb.from("manpower_requests").select("*").order("date_posted", {ascending:false}),
     sb.from("signature_requests").select("*").order("created_at", {ascending:false}),
     sb.from("candidate_feedback").select("*").order("created_at", {ascending:false}),
-    sb.from("memos").select("*").order("created_at", {ascending:false})
+    sb.from("memos").select("*").order("created_at", {ascending:false}),
+    sb.from("evaluations").select("*").order("eval_date", {ascending:false})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2448,6 +2444,7 @@ async function loadEmployees(){
   SIGNATURES=(sg&&sg.data)||[];
   CANDIDATE_FEEDBACK=(cf&&cf.data)||[];
   MEMOS=(me&&me.data)||[];
+  EVALUATIONS=(evl&&evl.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -2461,6 +2458,7 @@ async function loadEmployees(){
   renderSettings();
   renderSignatures();
   renderMemos();
+  renderEvaluations();
   tagPreviewPages();
   wireGlobalSearch();
   if(!landed){ landed=true; if(typeof window.go==="function") window.go("dashboard"); }
@@ -2487,7 +2485,7 @@ async function ppSyncFetch(params){
 
 // Honesty pass: every screen NOT backed by live data gets a visible "Preview" ribbon,
 // so HR never mistakes an illustrative mock-up for real data. Real pages are listed here.
-const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos"]);
+const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations"]);
 function tagPreviewPages(){
   document.querySelectorAll('section.page').forEach(sec=>{
     const id=(sec.id||"").replace("page-","");
@@ -2953,6 +2951,7 @@ function renderDashboard(){
   PREHIRE.filter(p=>p.phase==="RECRUITER_REVIEW").slice(0,2).forEach(p=>waiting.push({t:"Recruiter review — "+p.full_name, d:"Vetting / offer", go:"prehire"}));
   EXITCASES.filter(x=>x.overall_status!=="Complete").slice(0,2).forEach(x=>{const pend=EXIT_STAGES.filter(s=>x[s.s]==="Pending").length; waiting.push({t:"Exit sign-off — "+x.employee_name, d:pend+" department(s) still to clear", go:"exit"});});
   ONBOARDING.filter(c=>c.status!=="Complete").slice(0,2).forEach(c=>{const op=tasksFor(c.id).filter(t=>t.status!=="Done").length; waiting.push({t:"Onboarding — "+c.employee_name, d:op+" task(s) outstanding", go:"onboarding"});});
+  try{ const _ev=evDueList(); const _evDue=_ev.filter(x=>x.bucket==="due"||x.bucket==="overdue"); if(_evDue.length) waiting.push({t:_evDue.length+" evaluation(s) due", d:"3rd/5th-month · regularization · annual", go:"evaluations"}); }catch(e){}
 
   const pg=$("#page-dashboard");
   pg.innerHTML=`
@@ -3669,6 +3668,100 @@ async function saveEmployee(id,modal){
   if(res.error){ msg.textContent=res.error.message; return; }
   modal.remove(); await loadEmployees();
 }
+
+/* ============================ EVALUATIONS MODULE ============================ */
+const EVAL_CRITERIA=["Quality of work","Attendance & punctuality","Attitude & teamwork","Job knowledge","Initiative & reliability"];
+const EVAL_RECS={ "regularization":["Regularize","Extend probation","Do not regularize"], "3rd-month":["On track","Needs coaching","At risk"], "5th-month":["On track","Needs coaching","At risk"], "annual":["Exceeds expectations","Meets expectations","Below expectations"] };
+const EVAL_LABEL={ "3rd-month":"3rd-month review","5th-month":"5th-month review","regularization":"Regularization","annual":"Annual review" };
+function evAddMonths(d,n){ const x=new Date(d); const day=x.getDate(); x.setMonth(x.getMonth()+n); if(x.getDate()<day) x.setDate(0); return x; }
+function evIso(d){ const p=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
+function evVal(id){ const el=document.getElementById(id); return el&&el.value.trim()!==""?el.value.trim():null; }
+function evRecorded(empId,type,due){ return EVALUATIONS.some(e=>String(e.employee_ref)===String(empId)&&e.eval_type===type&&e.period_due&&Math.abs((new Date(e.period_due)-new Date(due))/86400000)<45); }
+function evDueList(){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const horizon=new Date(today); horizon.setDate(horizon.getDate()+60);
+  const backstop=new Date(today); backstop.setMonth(backstop.getMonth()-4);
+  const monthStart=new Date(today.getFullYear(),today.getMonth(),1);
+  const out=[];
+  EMPLOYEES.filter(e=>(e.status||"").toLowerCase().startsWith("active")&&e.hire_date).forEach(e=>{
+    const hire=new Date(e.hire_date+"T00:00:00"); if(isNaN(hire)) return;
+    const tenureMo=(today-hire)/(86400000*30.44);
+    const cands=[];
+    if(tenureMo<8){ cands.push(["3rd-month",evAddMonths(hire,3)]); cands.push(["5th-month",evAddMonths(hire,5)]); cands.push(["regularization",evAddMonths(hire,6)]); }
+    if(tenureMo>=11){ let ann=new Date(today.getFullYear(),hire.getMonth(),hire.getDate()); if(ann<backstop) ann=new Date(today.getFullYear()+1,hire.getMonth(),hire.getDate()); cands.push(["annual",ann]); }
+    cands.forEach(([type,due])=>{
+      if(due<backstop||due>horizon) return;
+      if(evRecorded(e.id,type,due)) return;
+      const overdue=due<monthStart, thisMonth=due.getFullYear()===today.getFullYear()&&due.getMonth()===today.getMonth();
+      out.push({emp:e,type,due:evIso(due),bucket:overdue?"overdue":(thisMonth?"due":"upcoming")});
+    });
+  });
+  out.sort((a,b)=>a.due<b.due?-1:1);
+  return out;
+}
+function renderEvaluations(){
+  const pg=$("#page-evaluations"); if(!pg) return;
+  const list=evDueList();
+  const due=list.filter(x=>x.bucket==="due"), overdue=list.filter(x=>x.bucket==="overdue"), upcoming=list.filter(x=>x.bucket==="upcoming");
+  const noHire=EMPLOYEES.filter(e=>(e.status||"").toLowerCase().startsWith("active")&&!e.hire_date).length;
+  const card=(l,n)=>`<div class="kpi"><div class="k-l">${l}</div><div class="k-n">${n}</div></div>`;
+  const itemRow=(x)=>`<div class="task" style="cursor:pointer;align-items:center;" onclick="openEvalForm('${x.emp.id}','${x.type}','${x.due}')">
+      <div class="dot ${x.bucket==='overdue'?'r':(x.bucket==='due'?'a':'g')}"></div>
+      <div style="flex:1;min-width:0;"><div class="tt">${esc(x.emp.full_name)}</div><div class="td">${EVAL_LABEL[x.type]} · ${esc(x.emp.position||x.emp.department||"")}</div></div>
+      <div style="text-align:right;flex-shrink:0;"><div style="font-size:12px;font-weight:700;color:${x.bucket==='overdue'?'#c0392b':'#6a766f'};">${fmtDate(x.due)}</div><button class="btn ghost" style="padding:4px 10px;font-size:12px;margin-top:3px;">Record</button></div></div>`;
+  const section=(title,arr,empty)=>`<div class="panel"><h2>${title} <span class="count-tag">${arr.length}</span></h2>${arr.length?arr.map(itemRow).join(""):`<div class="psub">${empty}</div>`}</div>`;
+  const recent=EVALUATIONS.slice(0,10).map(e=>`<div class="task" style="align-items:center;"><div class="dot g"></div><div style="flex:1;"><div class="tt">${esc(e.employee_name||"")}</div><div class="td">${EVAL_LABEL[e.eval_type]||e.eval_type} · ${esc(e.recommendation||"")}${e.overall_rating?` · ${e.overall_rating}/5`:""}</div></div><div style="font-size:12px;color:#6a766f;flex-shrink:0;">${e.eval_date?fmtDate(e.eval_date):""}${e.evaluator?`<div style="font-size:10.5px;">${esc(e.evaluator)}</div>`:""}</div></div>`).join("");
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Evaluations</h2>
+      <div class="psub">Computed from each employee's <b>hire date</b> — 3rd &amp; 5th-month probationary reviews, the 6-month regularization decision, and annual reviews.${noHire?` <span style="color:#9a6a00;">⚠ ${noHire} active staff have no hire date yet — upload the hires list to include them.</span>`:""}</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px;">${card("Due this month",due.length)}${card("Overdue",overdue.length)}${card("Upcoming 60d",upcoming.length)}${card("Completed",EVALUATIONS.length)}</div>
+    </div>
+    ${section("Due this month",due,"Nothing due this month.")}
+    ${overdue.length?section("Overdue — needs attention",overdue,""):""}
+    ${section("Upcoming (next 60 days)",upcoming,"Nothing upcoming.")}
+    ${EVALUATIONS.length?`<div class="panel"><h2>Recently completed</h2>${recent}</div>`:""}`;
+}
+function openEvalForm(empId,type,due){
+  const e=EMPLOYEES.find(x=>String(x.id)===String(empId)); if(!e) return;
+  const recs=EVAL_RECS[type]||["Meets expectations"];
+  let m=document.getElementById("evalModal"); if(!m){ m=document.createElement("div"); m.id="evalModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  const ratingSel=(id)=>`<select id="${id}" style="padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:13px;background:#fff;"><option value="">—</option>${[5,4,3,2,1].map(n=>`<option value="${n}">${n} — ${["","Poor","Fair","Good","Very good","Excellent"][n]}</option>`).join("")}</select>`;
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:560px;height:100%;overflow-y:auto;">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;">
+      <div style="font-size:20px;font-weight:800;">${esc(e.full_name)}</div>
+      <div style="font-size:12.5px;opacity:.9;">${EVAL_LABEL[type]} · due ${fmtDate(due)} · ${esc(e.position||e.department||"")}</div>
+    </div>
+    <div style="padding:18px 22px 60px;">
+      <div class="panel" style="margin-top:0;"><h2>Ratings</h2>
+        ${EVAL_CRITERIA.map((c,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);"><span style="font-size:13.5px;">${c}</span>${ratingSel("ev_r"+i)}</div>`).join("")}
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0 2px;"><span style="font-size:13.5px;font-weight:700;">Overall</span>${ratingSel("ev_overall")}</div>
+      </div>
+      <div class="panel"><h2>Recommendation</h2>
+        <select id="ev_rec" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:#fff;">${recs.map(r=>`<option>${r}</option>`).join("")}</select>
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:12px 0 4px;">Strengths</label><textarea id="ev_str" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;"></textarea>
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 4px;">Areas to improve</label><textarea id="ev_imp" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;"></textarea>
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 4px;">Evaluator</label><input id="ev_by" value="${esc((CURRENT_USER&&CURRENT_USER.email)||'')}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;">
+        <div id="evMsg" style="font-size:13px;color:#a4322a;margin:8px 0;"></div>
+        <div style="display:flex;gap:10px;"><button class="btn" id="evSave">Save evaluation</button><button class="btn ghost" id="evClose" style="margin-left:auto;">Close</button></div>
+      </div>
+    </div></div>`;
+  $("#evClose").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  $("#evSave").addEventListener("click",async()=>{
+    const btn=$("#evSave"); btn.disabled=true; btn.textContent="Saving…";
+    const ratings={}; EVAL_CRITERIA.forEach((c,i)=>{ const val=document.getElementById("ev_r"+i).value; if(val) ratings[c]=Number(val); });
+    const ov=document.getElementById("ev_overall").value;
+    const row={ employee_ref:e.id, employee_name:e.full_name, position:e.position||e.department||null, eval_type:type, period_due:due,
+      overall_rating: ov?Number(ov):null, ratings, recommendation:document.getElementById("ev_rec").value,
+      strengths:evVal("ev_str"), improvements:evVal("ev_imp"), evaluator:evVal("ev_by"), eval_date:evIso(new Date()) };
+    const {error}=await sb.from("evaluations").insert(row);
+    if(error){ document.getElementById("evMsg").textContent=error.message; btn.disabled=false; btn.textContent="Save evaluation"; return; }
+    m.remove(); await loadEmployees();
+  });
+}
+window.openEvalForm=openEvalForm;
 
 /* ============================ PRE-HIRE MODULE ============================ */
 const PH_PHASES=[

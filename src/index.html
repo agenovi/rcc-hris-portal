@@ -1884,6 +1884,7 @@
   };
   var NAVFOR={employee:'employees', store:'branches'};
   function go(id){
+    if(window.isLimitedUser&&window.isLimitedUser()&&window.LIMITED_ALLOWED&&window.LIMITED_ALLOWED.indexOf(id)===-1){ id='dashboard'; }
     document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
     var pg=document.getElementById('page-'+id);
     if(pg) pg.classList.add('active');

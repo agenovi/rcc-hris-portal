@@ -31,6 +31,17 @@ let CURRENT_USER=null;
 // Who may see salary / bank / government IDs. Locked to anj for now (add more emails here when decided).
 const PAY_VIEWERS=["anj@hassarams.com"];
 function canSeePay(){ return PAY_VIEWERS.includes(((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()); }
+// Access roles: anj = full admin. Every other login = limited HR (recruiting): headcount + manning + pre-hire only.
+const ADMIN_EMAILS=["anj@hassarams.com"];
+function isAdminUser(){ return ADMIN_EMAILS.includes(((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()); }
+function isLimitedUser(){ return !!CURRENT_USER && !isAdminUser(); }
+const LIMITED_ALLOWED=["dashboard","manning","prehire","onboarding"];
+window.isLimitedUser=isLimitedUser; window.LIMITED_ALLOWED=LIMITED_ALLOWED;
+function applyRoleUI(){
+  const limited=isLimitedUser();
+  document.querySelectorAll('.nav-item[data-page]').forEach(n=>{ n.style.display=(limited&&LIMITED_ALLOWED.indexOf(n.getAttribute('data-page'))===-1)?'none':''; });
+  document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display=limited?'none':''; });
+}
 // HMO provider to notify on every separation — set these to the real provider + email.
 const HMO_NAME="our HMO provider";
 const HMO_EMAIL="";  // ← fill in the HMO's email address
@@ -58,6 +69,7 @@ $("#loginForm").addEventListener("submit", async (e)=>{
 async function showApp(user){
   CURRENT_USER=user; $("#login").style.display="none";
   patchSidebarFoot(user);
+  applyRoleUI();
   await loadEmployees();
 }
 function patchSidebarFoot(user){
@@ -648,6 +660,7 @@ function renderDashboard(){
   EXITCASES.filter(x=>x.overall_status!=="Complete").slice(0,2).forEach(x=>{const pend=EXIT_STAGES.filter(s=>x[s.s]==="Pending").length; waiting.push({t:"Exit sign-off — "+x.employee_name, d:pend+" department(s) still to clear", go:"exit"});});
   ONBOARDING.filter(c=>c.status!=="Complete").slice(0,2).forEach(c=>{const op=tasksFor(c.id).filter(t=>t.status!=="Done").length; waiting.push({t:"Onboarding — "+c.employee_name, d:op+" task(s) outstanding", go:"onboarding"});});
   try{ const _ev=evDueList(); const _evDue=_ev.filter(x=>x.bucket==="due"||x.bucket==="overdue"); if(_evDue.length) waiting.push({t:_evDue.length+" evaluation(s) due", d:"3rd/5th-month · regularization · annual", go:"evaluations"}); }catch(e){}
+  if(isLimitedUser()){ for(let i=waiting.length-1;i>=0;i--){ if(LIMITED_ALLOWED.indexOf(waiting[i].go)===-1) waiting.splice(i,1); } }
 
   const pg=$("#page-dashboard");
   pg.innerHTML=`
@@ -1166,6 +1179,7 @@ function renderManning(){
       <div class="actionbar"><button class="btn" id="opNew">+ Post opening</button></div>
       ${OPENINGS.length?`<table><thead><tr><th>Store</th><th>SC</th><th>Need</th><th>In review</th><th>Posted</th><th>Deadline</th><th></th></tr></thead><tbody id="opRows"></tbody></table>`:`<div class="psub" style="margin-top:6px;">No open requests yet — click “Post opening”.</div>`}
     </div>
+    ${phLinksBar()}
     <div class="panel">
       <h2>Manning / Headcount <span class="count-tag">by Sales Coordinator</span></h2>
       <div class="psub">Every Sales Coordinator → their stores → approved vs. confirmed headcount. Store sales and live attendance plug in here once PayPlus and the sales system are connected.</div>
@@ -1752,15 +1766,17 @@ function openPrehire(c){
       <div class="panel">
         ${sec(5,"Offer &amp; Compensation",
           phRow("Contract type",c.contract_type)
-          + `<div class="efield"><div class="el">Daily rate (offered)</div><div class="ev">${c.daily_rate?("₱"+Number(c.daily_rate).toLocaleString()):'<span class="note">—</span>'} <span class="note">— may change at the contract stage</span></div><div class="em"></div></div>`
-          + phRow("Daily allowance",c.daily_allowance?("₱"+Number(c.daily_allowance).toLocaleString()):"")+phRow("Target start date",c.start_date?fmtDate(c.start_date):"")+phRow("Supervisor",c.supervisor_name)+phRow("Approver 2",c.approver2_email))}
+          + (canSeePay()
+              ? `<div class="efield"><div class="el">Daily rate (offered)</div><div class="ev">${c.daily_rate?("₱"+Number(c.daily_rate).toLocaleString()):'<span class="note">—</span>'} <span class="note">— may change at the contract stage</span></div><div class="em"></div></div>`+phRow("Daily allowance",c.daily_allowance?("₱"+Number(c.daily_allowance).toLocaleString()):"")
+              : `<div class="efield"><div class="el">Daily rate</div><div class="ev"><span class="note">🔒 restricted — payroll only</span></div></div>`)
+          + phRow("Target start date",c.start_date?fmtDate(c.start_date):"")+phRow("Supervisor",c.supervisor_name)+phRow("Approver 2",c.approver2_email))}
       </div>
-      <div class="panel">
+      ${canSeePay()?`<div class="panel">
         ${sec(6,"Government Numbers", phRow("SSS",c.sss_number)+phRow("PhilHealth",c.philhealth_number)+phRow("Pag-IBIG",c.pagibig_number)+phRow("TIN",c.tin_number))}
       </div>
       <div class="panel">
         ${sec(7,"Bank", phRow("Bank name",c.bank_name)+phRow("Account number",c.bank_account_number))}
-      </div>
+      </div>`:""}
       <div class="panel">
         ${sec(8,"Review, Gates &amp; Onboarding", phRow("HR officer notes",c.hr_officer_notes)+phRow("Juvelyn sign-off",c.juvelyn_review_date?"Signed":"")+phRow("SM acceptance (hard gate)",c.sm_acceptance)+phRow("Contract ID",c.contract_id)+phRow("PayPlus setup",c.payplus_setup?"Done":"")+phRow("Assigned Employee ID",c.assigned_employee_id))}
       </div>
@@ -1823,11 +1839,11 @@ function editPrehire(c){
         ${fld("pe_atype","Type",c.assessment_type)}${fld("pe_ascore","Score",c.assessment_score,"number")}
       </div>
       <div class="panel"><div class="subhead">Offer &amp; compensation <span class="sh-note">daily rate may change at contract</span></div>
-        ${sel("pe_ctype","Contract type",CONTRACT_TYPES,c.contract_type)}${sel("pe_paybasis","Pay basis — Head Office only (others are daily-rated)",["Daily","Monthly"],c.pay_basis)}${fld("pe_rate","Daily rate offered (₱)",c.daily_rate,"number")}${fld("pe_allow","Daily allowance (₱)",c.daily_allowance,"number")}${fld("pe_start","Target start date",c.start_date,"date")}${fld("pe_super","Supervisor",c.supervisor_name)}
+        ${sel("pe_ctype","Contract type",CONTRACT_TYPES,c.contract_type)}${sel("pe_paybasis","Pay basis — Head Office only (others are daily-rated)",["Daily","Monthly"],c.pay_basis)}${canSeePay()?`${fld("pe_rate","Daily rate offered (₱)",c.daily_rate,"number")}${fld("pe_allow","Daily allowance (₱)",c.daily_allowance,"number")}`:`<div style="font-size:12.5px;color:#6a766f;margin:6px 0;">🔒 Daily rate is restricted to payroll.</div>`}${fld("pe_start","Target start date",c.start_date,"date")}${fld("pe_super","Supervisor",c.supervisor_name)}
       </div>
-      <div class="panel"><div class="subhead">Government numbers &amp; bank</div>
+      ${canSeePay()?`<div class="panel"><div class="subhead">Government numbers &amp; bank</div>
         ${fld("pe_sss","SSS",c.sss_number)}${fld("pe_phil","PhilHealth",c.philhealth_number)}${fld("pe_pag","Pag-IBIG",c.pagibig_number)}${fld("pe_tin","TIN",c.tin_number)}${fld("pe_bank","Bank name",c.bank_name)}${fld("pe_acct","Bank account number",c.bank_account_number)}
-      </div>
+      </div>`:""}
       <div class="panel"><div class="subhead">HR notes &amp; gate</div>
         <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">HR officer notes</label><textarea id="pe_notes" rows="2" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;">${esc(c.hr_officer_notes||"")}</textarea></div>
         ${sel("pe_sm","SM / Retail-ops acceptance",["Pending","Accepted","Rejected","NA"],c.sm_acceptance)}
@@ -1848,10 +1864,10 @@ function editPrehire(c){
       email:v("pe_email"), phone, date_of_birth:v("pe_dob"), civil_status:v("pe_civil"), permanent_address:v("pe_perm"), current_address:v("pe_curr"),
       emergency_contact_name:v("pe_ecn"), emergency_contact_relation:v("pe_ecr"), emergency_contact_number:v("pe_ecnum"),
       assessment_type:v("pe_atype"), assessment_score:nv("pe_ascore"),
-      contract_type:v("pe_ctype"), pay_basis:v("pe_paybasis"), daily_rate:nv("pe_rate"), daily_allowance:nv("pe_allow"), start_date:v("pe_start"), supervisor_name:v("pe_super"),
-      sss_number:v("pe_sss"), philhealth_number:v("pe_phil"), pagibig_number:v("pe_pag"), tin_number:v("pe_tin"), bank_name:v("pe_bank"), bank_account_number:v("pe_acct"),
+      contract_type:v("pe_ctype"), pay_basis:v("pe_paybasis"), start_date:v("pe_start"), supervisor_name:v("pe_super"),
       hr_officer_notes:v("pe_notes"), sm_acceptance:v("pe_sm"),
       interview_status:v("pe_istatus"), interview_date:v("pe_idate"), interviewer:v("pe_interviewer"), updated_at:new Date().toISOString() };
+    if(canSeePay()){ Object.assign(p,{ daily_rate:nv("pe_rate"), daily_allowance:nv("pe_allow"), sss_number:v("pe_sss"), philhealth_number:v("pe_phil"), pagibig_number:v("pe_pag"), tin_number:v("pe_tin"), bank_name:v("pe_bank"), bank_account_number:v("pe_acct") }); }
     const { error } = await sb.from("prehire").update(p).eq("id",c.id);
     if(error){ document.getElementById("peMsg").textContent=error.message; return; }
     m.remove(); const pm=document.getElementById("phModal"); if(pm) pm.remove();

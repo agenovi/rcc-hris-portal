@@ -2346,6 +2346,7 @@ function applyRoleUI(){
   const limited=isLimitedUser();
   document.querySelectorAll('.nav-item[data-page]').forEach(n=>{ n.style.display=(limited&&LIMITED_ALLOWED.indexOf(n.getAttribute('data-page'))===-1)?'none':''; });
   document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display=limited?'none':''; });
+  const topSearch=document.querySelector('.topbar .search'); if(topSearch) topSearch.style.display=limited?'none':'';
 }
 // HMO provider to notify on every separation — set these to the real provider + email.
 const HMO_NAME="our HMO provider";

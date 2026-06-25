@@ -3209,6 +3209,11 @@ const disersAt=(store)=> DISERS.filter(d=>d.store===store && (d.status||"").toLo
 const chcFor=(store)=> disersAt(store).length;
 
 /* ---------- STORE DRILL-DOWN (drawer) ---------- */
+function diserSourceBadge(h){ const x=(h||"").toLowerCase();
+  const lbl=/jell/.test(x)?"Jell-on":(/(^|[^a-z])(mg|m&g)/.test(x)?"M&G":(/smi/.test(x)?"SMI":(/rcc|direct/.test(x)?"Direct":"—")));
+  if(lbl==="—") return '<span class="note">—</span>';
+  return `<span class="pill ${lbl==="Direct"?"active":"di"}">${lbl}</span>`;
+}
 function openStore(b){
   const here=disersAt(b.name).sort((a,c)=>(a.name||"").localeCompare(c.name||""));
   const ahc=(b.ahc_stationary||0)+(b.ahc_reliever||0); const chc=here.length; const def=Math.max(0,ahc-chc);
@@ -3228,10 +3233,11 @@ function openStore(b){
       <div class="panel" style="margin-top:14px;">
         <h2>Merchandisers at this store <span class="count-tag">${here.length}</span></h2>
         <div class="psub">From your Manning Sheet · live placement completes when PayPlus connects</div>
-        ${here.length? `<table><thead><tr><th>Name</th><th>Type</th><th>Position</th><th>Daily Rate</th><th>Status</th></tr></thead>
+        ${here.length? `<table><thead><tr><th>Name</th><th>Source</th><th>Type</th><th>Position</th>${canSeePay()?'<th>Daily Rate</th>':''}<th>Status</th></tr></thead>
           <tbody>${here.map(d=>`<tr><td><b>${esc(d.name)}</b><div style="font-size:11px;color:var(--muted);">${esc(d.emp_no||"")}</div></td>
+            <td>${diserSourceBadge(d.hired_by)}</td>
             <td>${esc(d.diser_type||"—")}</td><td>${esc(d.position||"—")}</td>
-            <td>${d.total_rate?("₱"+Number(d.total_rate).toLocaleString()):"—"}</td>
+            ${canSeePay()?`<td>${d.total_rate?("₱"+Number(d.total_rate).toLocaleString()):"—"}</td>`:''}
             <td><span class="pill ${(d.status||'').includes('Probation')?'probation':'active'}">${esc(d.status||"—")}</span></td></tr>`).join("")}</tbody></table>`
           : `<div class="placeholder" style="padding:30px;"><p>No current merchandiser placement on file for this store.<br>Live placement comes through the PayPlus connection.</p></div>`}
       </div>

@@ -814,7 +814,7 @@ function renderEmployeesPage(){
     </div>
     <input id="empSearch" class="search" style="width:100%;margin-bottom:12px;" placeholder="Search name, position, worksite, department…">
     <table>
-      <thead><tr><th>Name</th><th>Job Title</th><th>Department</th><th>Worksite</th><th>Type</th><th>Status</th></tr></thead>
+      <thead><tr><th>Name</th><th>Job Title</th><th>Department</th><th>Worksite</th><th>Source</th><th>Type</th><th>Status</th></tr></thead>
       <tbody id="empRows"></tbody>
     </table>
     <div id="empCount" style="font-size:12px;color:var(--muted);margin-top:10px;"></div>`;
@@ -829,6 +829,14 @@ function empMatchesFilter(e){
   if(empFilter==="Agency") return e.hire_source&&e.hire_source!=="Direct";
   return e.group_name===empFilter;
 }
+function hireSourceBadge(e){ const s=(e.hire_source||"").toLowerCase();
+  if(!s||s==="payplus") return '<span class="note">—</span>';
+  if(s==="direct") return '<span class="pill active">Direct</span>';
+  if(/jell/.test(s)) return '<span class="pill di">Jell-on</span>';
+  if(/mg|m&g/.test(s)) return '<span class="pill di">M&amp;G</span>';
+  if(/smi/.test(s)) return '<span class="pill di">SMI</span>';
+  return `<span class="pill di">${esc(e.hire_source)}</span>`;
+}
 function paintEmpRows(){
   const q=($("#empSearch")?.value||"").trim().toLowerCase();
   const list=EMPLOYEES.filter(e=>{
@@ -840,7 +848,7 @@ function paintEmpRows(){
   rows.innerHTML=list.slice(0,400).map((e,i)=>`
     <tr class="clickable" data-idx="${EMPLOYEES.indexOf(e)}">
       <td><b>${esc(e.full_name)}</b></td><td>${esc(e.position||"—")}</td><td>${esc(e.department||"—")}</td>
-      <td>${esc(e.worksite||"—")}</td><td>${typePill(e)}</td><td>${statusPill(e.status)}</td></tr>`).join("");
+      <td>${esc(e.worksite||"—")}</td><td>${hireSourceBadge(e)}</td><td>${typePill(e)}</td><td>${statusPill(e.status)}</td></tr>`).join("");
   $("#empCount").textContent=`Showing ${Math.min(list.length,400)} of ${list.length} matching · ${EMPLOYEES.length} total`;
   $$("#empRows tr").forEach(tr=>tr.addEventListener("click",()=>openRecord(EMPLOYEES[+tr.dataset.idx])));
 }
@@ -909,6 +917,34 @@ function diserSourceBadge(h){ const x=(h||"").toLowerCase();
   if(lbl==="—") return '<span class="note">—</span>';
   return `<span class="pill ${lbl==="Direct"?"active":"di"}">${lbl}</span>`;
 }
+function storeForm(b){
+  const isNew=!b; b=b||{};
+  let m=document.getElementById("stModal"); if(!m){ m=document.createElement("div"); m.id="stModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;padding:22px;max-height:90vh;overflow-y:auto;">
+    <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:10px;">${isNew?"Add a store":"Edit store"}</h2>
+    ${fld("st_name","Store name *",b.name)}
+    <div class="form-grid">${fld("st_city","City",b.city)}${fld("st_area","Area",b.area)}</div>
+    ${fld("st_sc","Sales Coordinator",b.sc)}
+    <div class="form-grid">${sel("st_cat","Type",["CO","CN"],b.category||"CO")}${sel("st_status","Status",["Open","Closed","No Manning","Pending"],b.status||"Open")}</div>
+    <div class="form-grid">${fld("st_ahcs","Approved stationary",b.ahc_stationary??0,"number")}${fld("st_ahcr","Approved reliever",b.ahc_reliever??0,"number")}</div>
+    <div class="psub" style="margin:2px 0 6px;">CO = Company Store · CN = Concession. Approved headcount = how many this store should have.</div>
+    <div id="stMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
+    <div style="display:flex;gap:10px;"><button class="btn ghost" id="stCancel" style="flex:1;">Cancel</button><button class="btn" id="stSave" style="flex:1;">${isNew?"Add store":"Save"}</button></div>
+  </div>`;
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("stCancel").addEventListener("click",()=>m.remove());
+  document.getElementById("stSave").addEventListener("click",async()=>{
+    const name=v("st_name"); if(!name){ document.getElementById("stMsg").textContent="Store name is required."; return; }
+    const payload={ name, city:v("st_city"), area:v("st_area"), sc:v("st_sc"), category:v("st_cat"), status:v("st_status"),
+      ahc_stationary:nv("st_ahcs")||0, ahc_reliever:nv("st_ahcr")||0 };
+    const btn=document.getElementById("stSave"); btn.disabled=true; btn.textContent="Saving…";
+    const res= isNew ? await sb.from("branches").insert(payload) : await sb.from("branches").update(payload).eq("id",b.id);
+    if(res.error){ document.getElementById("stMsg").textContent=res.error.message; btn.disabled=false; btn.textContent=isNew?"Add store":"Save"; return; }
+    m.remove(); const sm=document.getElementById("storeModal"); if(sm) sm.remove(); await loadEmployees(); window.go("manning");
+  });
+}
+window.storeForm=storeForm;
 function openStore(b){
   const here=disersAt(b.name).sort((a,c)=>(a.name||"").localeCompare(c.name||""));
   const ahc=(b.ahc_stationary||0)+(b.ahc_reliever||0); const chc=here.length; const def=Math.max(0,ahc-chc);
@@ -936,9 +972,21 @@ function openStore(b){
             <td><span class="pill ${(d.status||'').includes('Probation')?'probation':'active'}">${esc(d.status||"—")}</span></td></tr>`).join("")}</tbody></table>`
           : `<div class="placeholder" style="padding:30px;"><p>No current merchandiser placement on file for this store.<br>Live placement comes through the PayPlus connection.</p></div>`}
       </div>
-      <div style="display:flex;justify-content:flex-end;margin-top:14px;"><button class="btn ghost" id="storeClose">Close</button></div>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button class="btn" id="storeEdit">Edit store</button>
+        <button class="btn ghost" id="storeToggle" style="color:${b.status==='Closed'?'var(--green-dark)':'var(--red)'};border-color:#e2e7e4;">${b.status==='Closed'?'Reopen store':'Close store'}</button>
+        <button class="btn ghost" id="storeClose" style="margin-left:auto;">Close</button>
+      </div>
     </div></div>`;
   document.getElementById("storeClose").addEventListener("click",()=>m.remove());
+  document.getElementById("storeEdit").addEventListener("click",()=>storeForm(b));
+  document.getElementById("storeToggle").addEventListener("click",async()=>{
+    const ns=b.status==="Closed"?"Open":"Closed";
+    if(ns==="Closed" && !confirm("Close "+b.name+"? It drops out of manning totals and openings (you can reopen anytime).")) return;
+    const {error}=await sb.from("branches").update({status:ns}).eq("id",b.id);
+    if(error){ alert(error.message); return; }
+    m.remove(); await loadEmployees(); window.go("manning");
+  });
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
 }
 function renderBranchesPage(){
@@ -1188,7 +1236,7 @@ function renderManning(){
     <div class="panel" style="margin-top:0;">
       <h2>Openings <span class="count-tag">${OPENINGS.length} stores · ${OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0)} positions</span></h2>
       <div class="psub">Manpower requests you post. These drive the agency links — each agency sees the shortfall + an in-review count, then submits candidates into the pipeline.</div>
-      <div class="actionbar"><button class="btn" id="opNew">+ Post opening</button></div>
+      <div class="actionbar"><button class="btn" id="opNew">+ Post opening</button> <button class="btn ghost" id="stNew">+ Add store</button></div>
       ${OPENINGS.length?`<table><thead><tr><th>Store</th><th>SC</th><th>Need</th><th>In review</th><th>Posted</th><th>Deadline</th><th></th></tr></thead><tbody id="opRows"></tbody></table>`:`<div class="psub" style="margin-top:6px;">No open requests yet — click “Post opening”.</div>`}
     </div>
     ${phLinksBar()}
@@ -1207,6 +1255,7 @@ function renderManning(){
       <div id="scBlocks"></div>
     </div>`;
   const opNewBtn=$("#opNew"); if(opNewBtn) opNewBtn.addEventListener("click",()=>openingForm());
+  const stNewBtn=$("#stNew"); if(stNewBtn) stNewBtn.addEventListener("click",()=>storeForm());
   const opRows=$("#opRows");
   if(opRows){
     const today=new Date(new Date().toDateString());

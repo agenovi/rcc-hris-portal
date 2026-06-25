@@ -27,7 +27,11 @@ let SIGNATURES=[];
 let CANDIDATE_FEEDBACK=[];
 let MEMOS=[];
 let EVALUATIONS=[];
+let CHANGE_LOG=[];
 let CURRENT_USER=null;
+async function logChange(entity,id,name,action,detail){
+  try{ await sb.from("change_log").insert({ entity, entity_id:id||null, entity_name:name||null, action, detail:detail||null, changed_by:(CURRENT_USER&&CURRENT_USER.email)||"unknown" }); }catch(e){}
+}
 // Who may see salary / bank / government IDs. Locked to anj for now (add more emails here when decided).
 // Access roles by login:
 //   admin    (anj)    = everything
@@ -124,7 +128,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -140,7 +144,8 @@ async function loadEmployees(){
     sb.from("signature_requests").select("*").order("created_at", {ascending:false}),
     sb.from("candidate_feedback").select("*").order("created_at", {ascending:false}),
     sb.from("memos").select("*").order("created_at", {ascending:false}),
-    sb.from("evaluations").select("*").order("eval_date", {ascending:false})
+    sb.from("evaluations").select("*").order("eval_date", {ascending:false}),
+    sb.from("change_log").select("*").order("created_at", {ascending:false}).limit(500)
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -159,6 +164,7 @@ async function loadEmployees(){
   CANDIDATE_FEEDBACK=(cf&&cf.data)||[];
   MEMOS=(me&&me.data)||[];
   EVALUATIONS=(evl&&evl.data)||[];
+  CHANGE_LOG=(clg&&clg.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -939,8 +945,17 @@ function storeForm(b){
     const payload={ name, city:v("st_city"), area:v("st_area"), sc:v("st_sc"), category:v("st_cat"), status:v("st_status"),
       ahc_stationary:nv("st_ahcs")||0, ahc_reliever:nv("st_ahcr")||0 };
     const btn=document.getElementById("stSave"); btn.disabled=true; btn.textContent="Saving…";
-    const res= isNew ? await sb.from("branches").insert(payload) : await sb.from("branches").update(payload).eq("id",b.id);
+    let res, newId=b.id;
+    if(isNew){ res=await sb.from("branches").insert(payload).select().single(); newId=res.data&&res.data.id; }
+    else res=await sb.from("branches").update(payload).eq("id",b.id);
     if(res.error){ document.getElementById("stMsg").textContent=res.error.message; btn.disabled=false; btn.textContent=isNew?"Add store":"Save"; return; }
+    if(isNew){ await logChange("branch",newId,name,"Added","Approved "+payload.ahc_stationary+" stationary · "+payload.ahc_reliever+" reliever · SC "+(payload.sc||"—")); }
+    else { const ch=[];
+      if((b.ahc_stationary||0)!=payload.ahc_stationary||(b.ahc_reliever||0)!=payload.ahc_reliever) ch.push("Approved "+(b.ahc_stationary||0)+"/"+(b.ahc_reliever||0)+" → "+payload.ahc_stationary+"/"+payload.ahc_reliever);
+      if((b.sc||"")!=(payload.sc||"")) ch.push("SC "+(b.sc||"—")+" → "+(payload.sc||"—"));
+      if((b.status||"")!=(payload.status||"")) ch.push("Status "+(b.status||"—")+" → "+payload.status);
+      if((b.name||"")!=name) ch.push("Renamed "+(b.name||"")+" → "+name);
+      await logChange("branch",b.id,name,"Edited", ch.length?ch.join(" · "):"Details updated"); }
     m.remove(); const sm=document.getElementById("storeModal"); if(sm) sm.remove(); await loadEmployees(); window.go("manning");
   });
 }
@@ -972,6 +987,7 @@ function openStore(b){
             <td><span class="pill ${(d.status||'').includes('Probation')?'probation':'active'}">${esc(d.status||"—")}</span></td></tr>`).join("")}</tbody></table>`
           : `<div class="placeholder" style="padding:30px;"><p>No current merchandiser placement on file for this store.<br>Live placement comes through the PayPlus connection.</p></div>`}
       </div>
+      ${(()=>{ const h=CHANGE_LOG.filter(c=>c.entity==='branch'&&String(c.entity_id)===String(b.id)).slice(0,8); return h.length?`<div class="panel" style="margin-top:14px;"><h2>Change log <span class="count-tag">${h.length}</span></h2>${h.map(c=>`<div class="task" style="align-items:flex-start;"><div style="flex:1;"><div class="tt">${esc(c.action)}${c.detail?` — ${esc(c.detail)}`:""}</div><div class="td">${esc(c.changed_by||"")} · ${c.created_at?fmtDate(c.created_at):""}</div></div></div>`).join("")}</div>`:""; })()}
       <div style="display:flex;gap:10px;margin-top:14px;">
         <button class="btn" id="storeEdit">Edit store</button>
         <button class="btn ghost" id="storeToggle" style="color:${b.status==='Closed'?'var(--green-dark)':'var(--red)'};border-color:#e2e7e4;">${b.status==='Closed'?'Reopen store':'Close store'}</button>
@@ -981,10 +997,12 @@ function openStore(b){
   document.getElementById("storeClose").addEventListener("click",()=>m.remove());
   document.getElementById("storeEdit").addEventListener("click",()=>storeForm(b));
   document.getElementById("storeToggle").addEventListener("click",async()=>{
-    const ns=b.status==="Closed"?"Open":"Closed";
-    if(ns==="Closed" && !confirm("Close "+b.name+"? It drops out of manning totals and openings (you can reopen anytime).")) return;
+    const closing=b.status!=="Closed"; const ns=closing?"Closed":"Open";
+    let reason="";
+    if(closing){ reason=prompt("Close "+b.name+"? Give a brief reason (this is logged):",""); if(reason===null) return; }
     const {error}=await sb.from("branches").update({status:ns}).eq("id",b.id);
     if(error){ alert(error.message); return; }
+    await logChange("branch",b.id,b.name, closing?"Closed":"Reopened", reason||null);
     m.remove(); await loadEmployees(); window.go("manning");
   });
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });

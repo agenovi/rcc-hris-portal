@@ -29,17 +29,22 @@ let MEMOS=[];
 let EVALUATIONS=[];
 let CURRENT_USER=null;
 // Who may see salary / bank / government IDs. Locked to anj for now (add more emails here when decided).
-const PAY_VIEWERS=["anj@hassarams.com"];
-function canSeePay(){ return PAY_VIEWERS.includes(((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()); }
-// Access roles: anj = full admin. Every other login = limited HR (recruiting): headcount + manning + pre-hire only.
-const ADMIN_EMAILS=["anj@hassarams.com"];
-function isAdminUser(){ return ADMIN_EMAILS.includes(((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()); }
-function isLimitedUser(){ return !!CURRENT_USER && !isAdminUser(); }
-const LIMITED_ALLOWED=["dashboard","manning","prehire","onboarding"];
-window.isLimitedUser=isLimitedUser; window.LIMITED_ALLOWED=LIMITED_ALLOWED;
+// Access roles by login:
+//   admin    (anj)    = everything
+//   payroll  (Grazel) = recruiting view + Employees + sees pay/bank/government
+//   recruiter(others) = recruiting only, pay hidden
+const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "hr@hassarams.com":"payroll" };
+function userRole(){ return ROLE_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()] || "recruiter"; }
+function isAdminUser(){ return userRole()==="admin"; }
+function canSeePay(){ const r=userRole(); return r==="admin"||r==="payroll"; }
+function isLimitedUser(){ return userRole()!=="admin"; }
+const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding"];
+function allowedPages(){ const r=userRole(); if(r==="admin") return null; if(r==="payroll") return RECRUITER_PAGES.concat(["employees"]); return RECRUITER_PAGES; }
+function pageAllowed(id){ const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
 function applyRoleUI(){
-  const limited=isLimitedUser();
-  document.querySelectorAll('.nav-item[data-page]').forEach(n=>{ n.style.display=(limited&&LIMITED_ALLOWED.indexOf(n.getAttribute('data-page'))===-1)?'none':''; });
+  const allow=allowedPages(), limited=isLimitedUser();
+  document.querySelectorAll('.nav-item[data-page]').forEach(n=>{ n.style.display=(allow&&allow.indexOf(n.getAttribute('data-page'))===-1)?'none':''; });
   document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display=limited?'none':''; });
   const topSearch=document.querySelector('.topbar .search'); if(topSearch) topSearch.style.display=limited?'none':'';
 }
@@ -661,7 +666,7 @@ function renderDashboard(){
   EXITCASES.filter(x=>x.overall_status!=="Complete").slice(0,2).forEach(x=>{const pend=EXIT_STAGES.filter(s=>x[s.s]==="Pending").length; waiting.push({t:"Exit sign-off — "+x.employee_name, d:pend+" department(s) still to clear", go:"exit"});});
   ONBOARDING.filter(c=>c.status!=="Complete").slice(0,2).forEach(c=>{const op=tasksFor(c.id).filter(t=>t.status!=="Done").length; waiting.push({t:"Onboarding — "+c.employee_name, d:op+" task(s) outstanding", go:"onboarding"});});
   try{ const _ev=evDueList(); const _evDue=_ev.filter(x=>x.bucket==="due"||x.bucket==="overdue"); if(_evDue.length) waiting.push({t:_evDue.length+" evaluation(s) due", d:"3rd/5th-month · regularization · annual", go:"evaluations"}); }catch(e){}
-  if(isLimitedUser()){ for(let i=waiting.length-1;i>=0;i--){ if(LIMITED_ALLOWED.indexOf(waiting[i].go)===-1) waiting.splice(i,1); } }
+  { const _allow=allowedPages(); if(_allow){ for(let i=waiting.length-1;i>=0;i--){ if(_allow.indexOf(waiting[i].go)===-1) waiting.splice(i,1); } } }
 
   const pg=$("#page-dashboard");
   pg.innerHTML=`

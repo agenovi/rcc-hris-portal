@@ -42,6 +42,7 @@ function userRole(){ return ROLE_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"
 function isAdminUser(){ return userRole()==="admin"; }
 function canSeePay(){ const r=userRole(); return r==="admin"||r==="payroll"; }
 function isLimitedUser(){ return userRole()!=="admin"; }
+function canManageStores(){ const r=userRole(); return r==="admin"||r==="payroll"; }  // Anj + Grazel
 const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding"];
 function allowedPages(){ const r=userRole(); if(r==="admin") return null; if(r==="payroll") return RECRUITER_PAGES.concat(["employees"]); return RECRUITER_PAGES; }
 function pageAllowed(id){ const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
@@ -989,7 +990,7 @@ function openStore(b){
       </div>
       ${(()=>{ const h=CHANGE_LOG.filter(c=>c.entity==='branch'&&String(c.entity_id)===String(b.id)).slice(0,8); return h.length?`<div class="panel" style="margin-top:14px;"><h2>Change log <span class="count-tag">${h.length}</span></h2>${h.map(c=>`<div class="task" style="align-items:flex-start;"><div style="flex:1;"><div class="tt">${esc(c.action)}${c.detail?` — ${esc(c.detail)}`:""}</div><div class="td">${esc(c.changed_by||"")} · ${c.created_at?fmtDate(c.created_at):""}</div></div></div>`).join("")}</div>`:""; })()}
       <div style="display:flex;gap:10px;margin-top:14px;">
-        ${isAdminUser()?`<button class="btn" id="storeEdit">Edit store</button>
+        ${canManageStores()?`<button class="btn" id="storeEdit">Edit store</button>
         <button class="btn ghost" id="storeToggle" style="color:${b.status==='Closed'?'var(--green-dark)':'var(--red)'};border-color:#e2e7e4;">${b.status==='Closed'?'Reopen store':'Close store'}</button>`:`<span class="psub" style="align-self:center;">Store setup (headcount · open/close) is set by Management.</span>`}
         <button class="btn ghost" id="storeClose" style="margin-left:auto;">Close</button>
       </div>
@@ -1254,7 +1255,7 @@ function renderManning(){
     <div class="panel" style="margin-top:0;">
       <h2>Openings <span class="count-tag">${OPENINGS.length} stores · ${OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0)} positions</span></h2>
       <div class="psub">Manpower requests you post. These drive the agency links — each agency sees the shortfall + an in-review count, then submits candidates into the pipeline.</div>
-      <div class="actionbar"><button class="btn" id="opNew">+ Post opening</button>${isAdminUser()?' <button class="btn ghost" id="stNew">+ Add store</button>':''}</div>
+      <div class="actionbar"><button class="btn" id="opNew">+ Post opening</button>${canManageStores()?' <button class="btn ghost" id="stNew">+ Add store</button>':''}</div>
       ${OPENINGS.length?`<table><thead><tr><th>Store</th><th>SC</th><th>Need</th><th>In review</th><th>Posted</th><th>Deadline</th><th></th></tr></thead><tbody id="opRows"></tbody></table>`:`<div class="psub" style="margin-top:6px;">No open requests yet — click “Post opening”.</div>`}
     </div>
     ${phLinksBar()}

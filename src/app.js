@@ -37,7 +37,7 @@ async function logChange(entity,id,name,action,detail){
 //   admin    (anj)    = everything
 //   payroll  (Grazel) = recruiting view + Employees + sees pay/bank/government
 //   recruiter(others) = recruiting only, pay hidden
-const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "hr@hassarams.com":"payroll" };
+const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "sanjay@hassarams.com":"admin", "hr@hassarams.com":"payroll" };
 function userRole(){ return ROLE_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()] || "recruiter"; }
 function isAdminUser(){ return userRole()==="admin"; }
 function canSeePay(){ const r=userRole(); return r==="admin"||r==="payroll"; }

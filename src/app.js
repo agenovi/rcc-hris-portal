@@ -1255,7 +1255,7 @@ function renderManning(){
     <div class="panel" style="margin-top:0;">
       <h2>Openings <span class="count-tag">${OPENINGS.length} stores · ${OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0)} positions</span></h2>
       <div class="psub">Manpower requests you post. These drive the agency links — each agency sees the shortfall + an in-review count, then submits candidates into the pipeline.</div>
-      <div class="actionbar"><button class="btn" id="opNew">+ Post opening</button>${canManageStores()?' <button class="btn ghost" id="stNew">+ Add store</button>':''}</div>
+      <div class="actionbar">${canManageStores()?'<button class="btn" id="opNew">+ Post opening</button> <button class="btn ghost" id="stNew">+ Add store</button>':'<span class="psub" style="margin:0;">Openings are posted by Grazel, and open automatically when someone resigns. You can view and fill them below.</span>'}</div>
       ${OPENINGS.length?`<table><thead><tr><th>Store</th><th>SC</th><th>Need</th><th>In review</th><th>Posted</th><th>Deadline</th><th></th></tr></thead><tbody id="opRows"></tbody></table>`:`<div class="psub" style="margin-top:6px;">No open requests yet — click “Post opening”.</div>`}
     </div>
     ${phLinksBar()}
@@ -1285,7 +1285,7 @@ function renderManning(){
       else if(o.target_fill_date) dl=`${fmtDate(o.target_fill_date)}${overdue?' <span class="pill awol">overdue</span>':''}`;
       else dl=`<span class="note">—</span>`;
       return `<tr><td><b>${esc(o.worksite)}</b></td><td>${esc(o.sc||"—")}</td><td>${o.count_needed}</td><td>${opInReview(o.worksite)}</td><td>${o.date_posted?fmtDate(o.date_posted):"—"}</td><td>${dl}</td>
-        <td style="text-align:right;white-space:nowrap;"><button class="btn ghost" data-opedit="${o.id}">Edit</button> <button class="btn ghost" data-opclose="${o.id}" style="color:var(--red);border-color:#f1c9c5;">Close</button></td></tr>`;
+        <td style="text-align:right;white-space:nowrap;">${canManageStores()?`<button class="btn ghost" data-opedit="${o.id}">Edit</button> <button class="btn ghost" data-opclose="${o.id}" style="color:var(--red);border-color:#f1c9c5;">Close</button>`:'<span class="note">—</span>'}</td></tr>`;
     }).join("");
     $$("#opRows [data-opedit]").forEach(b=>b.addEventListener("click",()=>openingForm(MANPOWER.find(o=>o.id===b.dataset.opedit))));
     $$("#opRows [data-opclose]").forEach(b=>b.addEventListener("click",()=>closeOpening(MANPOWER.find(o=>o.id===b.dataset.opclose))));

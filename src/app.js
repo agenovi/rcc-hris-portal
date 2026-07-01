@@ -44,7 +44,12 @@ function canSeePay(){ const r=userRole(); return r==="admin"||r==="payroll"; }
 function isLimitedUser(){ return userRole()!=="admin"; }
 function canManageStores(){ const r=userRole(); return r==="admin"||r==="payroll"; }  // Anj + Grazel
 const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding"];
-function allowedPages(){ const r=userRole(); if(r==="admin") return null; if(r==="payroll") return RECRUITER_PAGES.concat(["employees"]); return RECRUITER_PAGES; }
+// Per-person extra pages on top of their role (e.g. Juvy = the loans officer).
+const EXTRA_PAGES_BY_EMAIL={ "hr@hassarams.com":["loans"] };
+function allowedPages(){ const r=userRole(); if(r==="admin") return null;
+  const base = r==="payroll" ? RECRUITER_PAGES.concat(["employees"]) : RECRUITER_PAGES.slice();
+  const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
+  return base.concat(extra); }
 function pageAllowed(id){ const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
 function applyRoleUI(){

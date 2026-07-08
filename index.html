@@ -3193,6 +3193,7 @@ function openRecord(e){
         <div style="flex:1;"><div class="en">${esc(e.full_name)}</div>
           <div class="em">${esc(e.position||"—")} · ${esc(e.department||"—")} · ${esc(e.group_name||"—")}${e.hire_source?(" · "+esc(e.hire_source)):""}</div></div>
         ${typePill(e)} ${statusPill(e.status)}
+        ${canManageStores()?'<button class="btn ghost" id="recNpa" style="margin-left:6px;">Personnel Action</button>':''}
         <button class="btn" id="recEdit" style="margin-left:6px;">Edit</button>
       </div>
       ${sec(1,"Identity &amp; Status",
@@ -3220,7 +3221,103 @@ function openRecord(e){
   window.go("employee");
   $("#recBack").addEventListener("click",()=>window.go("employees"));
   $("#recEdit").addEventListener("click",()=>openForm(e));
+  const _npa=$("#recNpa"); if(_npa) _npa.addEventListener("click",()=>openNpaForm(e));
 }
+
+/* ---------- NOTICE OF PERSONNEL ACTION (NPA) — generated from the employee record ---------- */
+const NPA_ACTIONS=["Regularization","Reappointment","Promotion in Rank","Separation from Employment","Job / Lateral Transfer","Salary Adjustment"];
+const NPA_SIGNATORIES=[["Grazel Lyn Agulto","HR Officer","PREPARED BY"],["Pervin Chaltani","AVP, Admin & Logistics","NOTED BY"],["Anju C. Genomal","Director, Admin & Finance","APPROVED BY"]];
+function openNpaForm(e){
+  let m=document.getElementById("npaModal"); if(!m){ m=document.createElement("div"); m.id="npaModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;padding:22px;max-height:92vh;overflow-y:auto;">
+    <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:2px;">Notice of Personnel Action</h2>
+    <div class="psub" style="margin-bottom:10px;">${esc(e.full_name)} · ${esc(e.position||"—")} · ${esc(e.worksite||e.department||"—")} — employee details fill in automatically.</div>
+    ${sel("npa_action","Action *",NPA_ACTIONS,"")}
+    <div id="npa_extra"></div>
+    ${fld("npa_eff","Effective date *","","date")}
+    <div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Remarks</label><textarea id="npa_remarks" rows="2" style="width:100%;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:13.5px;"></textarea></div>
+    <div id="npaMsg" style="font-size:13px;color:#a4322a;margin:4px 0;"></div>
+    <div style="display:flex;gap:10px;"><button class="btn ghost" id="npaCancel" style="flex:1;">Cancel</button><button class="btn" id="npaGo" style="flex:1;">Generate form</button></div>
+  </div>`;
+  const extra=()=>{
+    const a=document.getElementById("npa_action").value, x=document.getElementById("npa_extra");
+    if(a==="Separation from Employment") x.innerHTML=sel("npa_sep","Separation type",["Resignation","End of Contract"],"Resignation");
+    else if(a==="Job / Lateral Transfer") x.innerHTML=fld("npa_from","From (old location / position)",(e.worksite||"")+(e.position?" · "+e.position:""))+fld("npa_to","To (new location / position)","");
+    else if(a==="Salary Adjustment") x.innerHTML=canSeePay()
+      ? `<div class="form-grid">${fld("npa_bp_from","Basic pay — FROM","","number")}${fld("npa_bp_adj","Basic pay — adjustment","","number")}</div>
+         <div class="form-grid">${fld("npa_al_from","Allowance — FROM","","number")}${fld("npa_al_adj","Allowance — adjustment","","number")}</div>
+         <div class="psub">Totals compute automatically on the form. Salary data is confidential.</div>`
+      : `<div class="note">🔒 Salary adjustments can only be prepared by authorised payroll.</div>`;
+    else x.innerHTML="";
+  };
+  document.getElementById("npa_action").addEventListener("change",extra);
+  document.getElementById("npaCancel").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("npaGo").addEventListener("click",async()=>{
+    const a=v("npa_action"), eff=v("npa_eff"), msg=document.getElementById("npaMsg");
+    if(!a){ msg.textContent="Pick the action."; return; }
+    if(!eff){ msg.textContent="Set the effective date."; return; }
+    if(a==="Salary Adjustment"&&!canSeePay()){ msg.textContent="Salary adjustments are payroll-only."; return; }
+    const d={ action:a, eff, remarks:v("npa_remarks"), sep:v("npa_sep"), from:v("npa_from"), to:v("npa_to"),
+      bp_from:nv("npa_bp_from"), bp_adj:nv("npa_bp_adj"), al_from:nv("npa_al_from"), al_adj:nv("npa_al_adj") };
+    const ref="NPA-"+new Date().toISOString().slice(0,10).replace(/-/g,"")+"-"+Math.random().toString(36).slice(2,6).toUpperCase();
+    try{ await sb.from("memos").insert({ ref_no:ref, memo_type:"Personnel Action", subject_name:e.full_name, title:a,
+      body:"NPA — "+a+(d.sep?" ("+d.sep+")":"")+(d.to?" → "+d.to:"")+" · effective "+eff+(d.remarks?" · "+d.remarks:""),
+      relevant_date:eff, status:"Issued", created_by:(CURRENT_USER&&CURRENT_USER.email)||"HR" }); }catch(_){}
+    printNpa(e,d,ref); m.remove(); await loadEmployees();
+  });
+}
+function printNpa(e,d,ref){
+  const P=n=>(n==null||isNaN(n))?"":"₱"+Number(n).toLocaleString(undefined,{minimumFractionDigits:2});
+  const T=(f,adj)=>(f==null&&adj==null)?"":P((Number(f)||0)+(Number(adj)||0));
+  const cb=(on)=>on?"☒":"☐";
+  const st=(e.status||"").toLowerCase(); const ct=(e.contract_type||"").toLowerCase();
+  const statusLine=["Regular","Probationary","Contractual","Seasonal"].map(s=>cb(ct.includes(s.toLowerCase())||(s==="Regular"&&e.regularization_date&&!ct))+" "+s).join("&nbsp;&nbsp;&nbsp;");
+  const acts=NPA_ACTIONS.map(a=>{ let line=cb(a===d.action)+" <b>"+a.toUpperCase()+"</b>";
+    if(a==="Separation from Employment"&&a===d.action) line+=" — "+cb(d.sep==="Resignation")+" Resignation &nbsp;"+cb(d.sep==="End of Contract")+" End of Contract";
+    if(a==="Job / Lateral Transfer"&&a===d.action) line+="<br><span style='margin-left:22px'>From: "+esc(d.from||"")+" &nbsp;→&nbsp; To: "+esc(d.to||"")+"</span>";
+    return "<div style='margin:3px 0'>"+line+"</div>"; }).join("");
+  const fin=d.action==="Salary Adjustment"?`
+    <h3>III. FINANCIAL DETAILS</h3>
+    <table><tr><th></th><th>FROM</th><th>ADJUSTMENT</th><th>TOTAL</th></tr>
+    <tr><td><b>BASIC PAY</b></td><td>${P(d.bp_from)}</td><td>${P(d.bp_adj)}</td><td>${T(d.bp_from,d.bp_adj)}</td></tr>
+    <tr><td><b>ALLOWANCE</b></td><td>${P(d.al_from)}</td><td>${P(d.al_adj)}</td><td>${T(d.al_from,d.al_adj)}</td></tr>
+    <tr><td><b>TOTAL COMPENSATION</b></td><td>${T(d.bp_from,d.al_from)}</td><td>${T(d.bp_adj,d.al_adj)}</td><td>${P((Number(d.bp_from)||0)+(Number(d.bp_adj)||0)+(Number(d.al_from)||0)+(Number(d.al_adj)||0))}</td></tr></table>
+    <div class="conf">SALARY data in this form is strictly CONFIDENTIAL.</div>`:"";
+  const sigs=NPA_SIGNATORIES.map(s=>`<td style="width:33%"><div class="sr">${s[2]}</div><div class="sl">&nbsp;</div><b>${s[0]}</b><br><span class="mut">${s[1]}</span><br><span class="mut">Date: ____________</span></td>`).join("");
+  const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to print the form."); return; }
+  w.document.write(`<!DOCTYPE html><html><head><title>${ref} — Notice of Personnel Action</title><style>
+    body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#1F2A37;max-width:760px;margin:24px auto;padding:0 24px;font-size:13.5px;line-height:1.5;}
+    .lh{text-align:center;border-bottom:2.5px solid #1E3A5F;padding-bottom:8px;margin-bottom:14px;}
+    .lh b{font-size:17px;color:#1E3A5F;letter-spacing:.5px;} .lh div{font-size:11px;color:#667;}
+    h2{text-align:center;font-size:15px;margin:10px 0 14px;} h3{font-size:12.5px;color:#1E3A5F;border-bottom:1px solid #ccd;padding-bottom:2px;margin:16px 0 8px;}
+    table{width:100%;border-collapse:collapse;margin:6px 0;} td,th{border:1px solid #bbc;padding:6px 8px;text-align:left;font-size:12.5px;}
+    .sr{font-size:10.5px;color:#667;font-weight:700;} .sl{border-bottom:1px solid #333;height:34px;margin-bottom:4px;} .mut{color:#667;font-size:11.5px;}
+    .conf{background:#fdf6e3;border:1px solid #ecdca6;padding:6px 10px;font-size:11.5px;font-weight:600;color:#8a6a14;margin-top:6px;}
+    @media print{ body{margin:0 auto;} }
+  </style></head><body>
+    <div class="lh"><b>ROSHAN COMMERCIAL CORPORATION</b><div>104 Shaw Boulevard, Pasig City</div></div>
+    <h2>NOTICE OF PERSONNEL ACTION &nbsp;·&nbsp; ${ref}</h2>
+    <h3>I. EMPLOYEE INFORMATION</h3>
+    <table>
+      <tr><td><b>Employee Name</b></td><td>${esc(e.full_name)}</td><td><b>Date Issued</b></td><td>${new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}</td></tr>
+      <tr><td><b>Employee ID</b></td><td>${esc(e.employee_id||"—")}</td><td><b>Position</b></td><td>${esc(e.position||"—")}</td></tr>
+      <tr><td><b>Location</b></td><td>${esc(e.worksite||e.department||"—")}</td><td><b>Effective Date</b></td><td>${fmtDate(d.eff)}</td></tr>
+    </table>
+    <div style="margin:6px 0"><b>Employment Status:</b> ${statusLine}</div>
+    <h3>II. REASON FOR PERSONNEL ACTION</h3>${acts}
+    ${fin}
+    ${d.remarks?`<div style="margin-top:8px"><b>Remarks:</b> ${esc(d.remarks)}</div>`:""}
+    <h3>IV. SIGNATURES AND APPROVALS</h3>
+    <table><tr>${sigs}</tr></table>
+    <h3>V. ACKNOWLEDGEMENT</h3>
+    <div><b>EMPLOYEE CONFORME</b> &nbsp;·&nbsp; Signature: ______________________ &nbsp;·&nbsp; Date Received: ______________</div>
+    <div class="mut" style="margin-top:8px;">Distribution: Original — HR 201 File · Duplicate — Employee Copy · Triplicate — Payroll</div>
+    <script>window.print();</` + `script></body></html>`);
+  w.document.close();
+}
+window.openNpaForm=openNpaForm;
 
 /* ---------- WORKSITES (Branches page) — real store list from Branch Directory ---------- */
 const catPill=(c)=> c==="CN"?'<span class="pill cn">Concession</span>':(c==="CO"?'<span class="pill co">Company-Op</span>':'<span class="pill ho">'+esc(c||"—")+'</span>');

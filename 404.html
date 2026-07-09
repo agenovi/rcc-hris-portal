@@ -4592,7 +4592,7 @@ async function toggleOnbTask(t){
   if(error){ alert(error.message); return; }
   await loadEmployees(); openOnboardingCase(t.case_id);
 }
-// ONE ID EVERYWHERE: the portal never invents employee IDs — it records the PayPlus ID (Grazel's mismatch report, 2026-07-01).
+// ONE ID EVERYWHERE: the portal never invents employee IDs — it PULLS the PayPlus ID (Grazel's mismatch report, 2026-07-01; auto-lookup added per anj: avoid manual errors).
 function askPayPlusId(name){
   const raw=prompt("Enter "+name+"'s PayPlus Employee ID (numbers only, e.g. 500020).\n\nGet it from PayPlus after payroll enrolls them — the portal and PayPlus must carry the SAME number.","");
   if(raw===null) return null;
@@ -4600,8 +4600,37 @@ function askPayPlusId(name){
   if(!/^[0-9]{4,8}$/.test(pid)){ alert("That doesn't look like a PayPlus ID (numbers only, e.g. 500020). Enroll them in PayPlus first, then enter the ID it assigns."); return null; }
   return pid;
 }
+async function lookupPayPlusId(name){
+  try{
+    const {data:{session}}=await sb.auth.getSession();
+    const r=await fetch(window.RCC_CONFIG.SUPABASE_URL+"/functions/v1/payplus-sync?lookup="+encodeURIComponent(name),
+      {method:"POST",headers:{Authorization:"Bearer "+(session?session.access_token:window.RCC_CONFIG.SUPABASE_ANON_KEY),apikey:window.RCC_CONFIG.SUPABASE_ANON_KEY}});
+    const d=await r.json(); return (d&&d.candidates)||[];
+  }catch(e){ return []; }
+}
+async function resolvePayPlusId(name){
+  const c=await lookupPayPlusId(name);
+  if(c.length===1){
+    if(confirm("Found in PayPlus:\n\n"+c[0].employeeId+" — "+c[0].name+"\n"+(c[0].location||"")+" · "+(c[0].company||"")+"\n\nUse this Employee ID?")) return c[0].employeeId;
+    return askPayPlusId(name);
+  }
+  if(c.length>1){
+    const list=c.map((x,i)=>(i+1)+") "+x.employeeId+" — "+x.name+" ("+(x.location||"—")+")").join("\n");
+    const pick=prompt("PayPlus matches for "+name+":\n\n"+list+"\n\nType the number to use (or type the Employee ID directly):","1");
+    if(pick===null) return null;
+    const n=parseInt(pick,10);
+    if(n>=1&&n<=c.length) return c[n-1].employeeId;
+    if(/^[0-9]{4,8}$/.test(pick.trim())) return pick.trim();
+    alert("Didn't recognize that choice — try again."); return null;
+  }
+  alert("No PayPlus match found for \""+name+"\" — they may not be enrolled in PayPlus yet.\n\nIf payroll already enrolled them, you can type the ID on the next screen.");
+  return askPayPlusId(name);
+}
 async function assignEmployeeId(c){
-  const data=askPayPlusId(c.employee_name); if(!data) return;
+  const btn=document.getElementById("onbAssignId"); if(btn){ btn.disabled=true; btn.textContent="Looking up PayPlus…"; }
+  const data=await resolvePayPlusId(c.employee_name);
+  if(btn){ btn.disabled=false; btn.textContent="Enter PayPlus Employee ID →"; }
+  if(!data) return;
   await sb.from("onboarding_cases").update({assigned_employee_id:data, updated_at:new Date().toISOString()}).eq("id",c.id);
   const t=ONBTASKS.find(x=>x.case_id===c.id&&x.task_key==="employee_id");
   if(t) await sb.from("onboarding_tasks").update({status:"Done"}).eq("id",t.id);
@@ -4739,7 +4768,7 @@ async function advanceContract(c,step,modal){
     patch.se_status="Signed"; patch.se_date=now; patch.deployment_date=dv; }
   else if(step===4){ patch.supervisor_status="Approved"; patch.supervisor_date=now; }
   else if(step===5){ patch.mgmt_status="Approved"; patch.mgmt_date=now; }
-  else if(step===6){ const data=askPayPlusId(c.employee_name||"this employee"); if(!data) return; patch.employee_id_assigned=data; patch.employee_id_assigned_at=now; patch.stage="fully_executed";
+  else if(step===6){ const data=await resolvePayPlusId(c.employee_name||"this employee"); if(!data) return; patch.employee_id_assigned=data; patch.employee_id_assigned_at=now; patch.stage="fully_executed";
     if(c.prehire_id) await sb.from("prehire").update({assigned_employee_id:data}).eq("id",c.prehire_id); }
   const { error } = await sb.from("contracts").update(patch).eq("id",c.id);
   if(error){ document.getElementById("ctMsg").textContent=error.message; return; }

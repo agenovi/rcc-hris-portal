@@ -2009,7 +2009,10 @@ function editPrehire(c){
     <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">Edit applicant — ${esc(c.full_name)}</div><div style="font-size:12.5px;opacity:.85;">${esc(c.prehire_id)} · ${esc(phLabel(c.phase))}</div></div>
     <div style="padding:18px 22px;">
       <div class="panel" style="margin-top:0;"><div class="subhead">Identity</div>
-        ${fld("pe_full_name","Full name *",c.full_name)}${sel("pe_department","Department",DEPARTMENTS,c.department)}${fld("pe_position","Position",c.position)}${sel("pe_hire_source","Hire source",HIRE_SOURCES,c.hire_source||"Direct")}${sel("pe_worksite","Worksite / location",[...new Set(["Head Office","Warehouse Solaris",...BRANCHES.map(b=>b.name).sort(),...(c.worksite?[c.worksite]:[])])],c.worksite)}
+        ${fld("pe_full_name","Full name *",c.full_name)}${sel("pe_department","Department",DEPARTMENTS,c.department)}${fld("pe_position","Position",c.position)}${sel("pe_hire_source","Hire source",HIRE_SOURCES,c.hire_source||"Direct")}${(()=>{ const parts=(c.worksite||"").split(" · "); const w1=parts[0]||"", w2=parts[1]||"";
+          const opts=[...new Set(["Head Office","Warehouse Solaris",...BRANCHES.map(b=>b.name).sort()])];
+          return sel("pe_worksite","Worksite / location",[...new Set([...opts,...(w1?[w1]:[])])],w1)
+               + sel("pe_worksite2","2nd store — roving/reliever only (optional)",["",...opts.filter(o=>o!=="Head Office"),...(w2&&!opts.includes(w2)?[w2]:[])],w2); })()}
       </div>
       <div class="panel"><div class="subhead">Personal details</div>
         ${fld("pe_email","Email",c.email,"email")}${fld("pe_phone","Mobile (09XXXXXXXXX)",c.phone)}${fld("pe_dob","Date of birth",c.date_of_birth,"date")}${sel("pe_civil","Civil status",CIVIL,c.civil_status)}${fld("pe_perm","Permanent address",c.permanent_address)}${fld("pe_curr","Current address",c.current_address)}
@@ -2042,7 +2045,8 @@ function editPrehire(c){
     const name=document.getElementById("pe_full_name").value.trim();
     if(!name){ document.getElementById("peMsg").textContent="Full name is required."; return; }
     let phone=v("pe_phone"); if(phone) phone=phone.replace(/[\s-]/g,"");
-    const p={ full_name:name, department:v("pe_department"), position:v("pe_position"), hire_source:v("pe_hire_source"), worksite:v("pe_worksite"),
+    const _w2=v("pe_worksite2");
+    const p={ full_name:name, department:v("pe_department"), position:v("pe_position"), hire_source:v("pe_hire_source"), worksite:(v("pe_worksite")||"")+(_w2?" · "+_w2:"")||null,
       email:v("pe_email"), phone, date_of_birth:v("pe_dob"), civil_status:v("pe_civil"), permanent_address:v("pe_perm"), current_address:v("pe_curr"),
       emergency_contact_name:v("pe_ecn"), emergency_contact_relation:v("pe_ecr"), emergency_contact_number:v("pe_ecnum"),
       assessment_type:v("pe_atype"), assessment_score:nv("pe_ascore"),
@@ -2248,11 +2252,11 @@ function openOnboardingCase(id){
     </div>
     <div style="padding:18px 22px 60px;">
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-        <div class="kpi"><div class="k-l">Employee ID</div><div class="k-n" style="font-size:18px;">${c.assigned_employee_id?esc(c.assigned_employee_id):"—"}</div><div class="k-s">${scheme} scheme</div></div>
+        <div class="kpi"><div class="k-l">Employee ID</div><div class="k-n" style="font-size:18px;">${c.assigned_employee_id?esc(c.assigned_employee_id):"—"}</div><div class="k-s">PayPlus number</div></div>
         <div class="kpi"><div class="k-l">Pay method</div><div class="k-n" style="font-size:18px;">${esc(c.pay_method||"GCash")}</div></div>
         <div class="kpi"><div class="k-l">Deployment</div><div class="k-n" style="font-size:18px;">${c.deployment_date?fmtDate(c.deployment_date):"—"}</div></div>
       </div>
-      ${!c.assigned_employee_id?`<button class="btn" id="onbAssignId" style="margin-top:12px;">Assign ${scheme} Employee ID →</button>`:""}
+      ${!c.assigned_employee_id?`<button class="btn" id="onbAssignId" style="margin-top:12px;">Enter PayPlus Employee ID →</button>`:""}
       <div class="panel" style="margin-top:14px;"><h2>Onboarding checklist</h2>
         <div class="psub">Grouped by <b>when it's due</b> relative to the start date. Tap a task to mark it done. Bank &amp; ID set by group; iTime shows only for SM department-store hires; government registration stays early (legal deadlines).</div>
         ${ONB_TIMING_GROUPS.map(g=>{
@@ -2283,10 +2287,16 @@ async function toggleOnbTask(t){
   if(error){ alert(error.message); return; }
   await loadEmployees(); openOnboardingCase(t.case_id);
 }
+// ONE ID EVERYWHERE: the portal never invents employee IDs — it records the PayPlus ID (Grazel's mismatch report, 2026-07-01).
+function askPayPlusId(name){
+  const raw=prompt("Enter "+name+"'s PayPlus Employee ID (numbers only, e.g. 500020).\n\nGet it from PayPlus after payroll enrolls them — the portal and PayPlus must carry the SAME number.","");
+  if(raw===null) return null;
+  const pid=raw.trim();
+  if(!/^[0-9]{4,8}$/.test(pid)){ alert("That doesn't look like a PayPlus ID (numbers only, e.g. 500020). Enroll them in PayPlus first, then enter the ID it assigns."); return null; }
+  return pid;
+}
 async function assignEmployeeId(c){
-  const scheme=c.group_name==="Retail"?"DISER":"RCC";
-  const { data, error } = await sb.rpc("next_employee_id",{ p_scheme:scheme });
-  if(error){ alert(error.message); return; }
+  const data=askPayPlusId(c.employee_name); if(!data) return;
   await sb.from("onboarding_cases").update({assigned_employee_id:data, updated_at:new Date().toISOString()}).eq("id",c.id);
   const t=ONBTASKS.find(x=>x.case_id===c.id&&x.task_key==="employee_id");
   if(t) await sb.from("onboarding_tasks").update({status:"Done"}).eq("id",t.id);
@@ -2400,10 +2410,10 @@ function openContract(id){
       </div>
       ${cs===3?`<div class="panel"><h2>Set deployment date</h2><div class="psub">Required for the SE signature (within 5 days of employee signing).</div>
         <input id="ct_deploy" type="date" value="${esc(c.deployment_date||"")}" style="width:100%;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;"></div>`:""}
-      ${cs===6?`<div class="panel"><h2>Employee ID</h2><div class="psub">Final step — mint the ${scheme} Employee ID, then this contract is fully executed.</div></div>`:""}
+      ${cs===6?`<div class="panel"><h2>Employee ID</h2><div class="psub">Final step — record the <b>PayPlus Employee ID</b> (payroll assigns it on enrollment), then this contract is fully executed.</div></div>`:""}
       <div id="ctMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
-        ${dn<7&&!c.rejected_at?`<button class="btn" id="ctAdvance">${cs===6?`Assign ${scheme} ID & execute`:'Advance — '+esc(CONTRACT_STEPS[cs].label)}</button>`:(dn===7?'<span class="pill active">Fully executed ✓</span>':'')}
+        ${dn<7&&!c.rejected_at?`<button class="btn" id="ctAdvance">${cs===6?'Enter PayPlus ID & execute':'Advance — '+esc(CONTRACT_STEPS[cs].label)}</button>`:(dn===7?'<span class="pill active">Fully executed ✓</span>':'')}
         ${!c.rejected_at&&dn<7?'<button class="btn ghost" id="ctReject" style="color:var(--red);border-color:#f1c9c5;">Reject</button>':''}
         <button class="btn ghost" id="ctClose" style="margin-left:auto;">Close</button>
       </div>
@@ -2424,7 +2434,7 @@ async function advanceContract(c,step,modal){
     patch.se_status="Signed"; patch.se_date=now; patch.deployment_date=dv; }
   else if(step===4){ patch.supervisor_status="Approved"; patch.supervisor_date=now; }
   else if(step===5){ patch.mgmt_status="Approved"; patch.mgmt_date=now; }
-  else if(step===6){ const scheme=c.group_name==="Retail"?"DISER":"RCC"; const { data, error } = await sb.rpc("next_employee_id",{p_scheme:scheme}); if(error){ document.getElementById("ctMsg").textContent=error.message; return; } patch.employee_id_assigned=data; patch.employee_id_assigned_at=now; patch.stage="fully_executed";
+  else if(step===6){ const data=askPayPlusId(c.employee_name||"this employee"); if(!data) return; patch.employee_id_assigned=data; patch.employee_id_assigned_at=now; patch.stage="fully_executed";
     if(c.prehire_id) await sb.from("prehire").update({assigned_employee_id:data}).eq("id",c.prehire_id); }
   const { error } = await sb.from("contracts").update(patch).eq("id",c.id);
   if(error){ document.getElementById("ctMsg").textContent=error.message; return; }

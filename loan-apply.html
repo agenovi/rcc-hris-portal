@@ -64,7 +64,7 @@
       <div id="docSlots"></div>
     </div>
     <div class="card">
-      <h2>5 · Affordability check <span style="font-weight:400;color:var(--muted);font-size:12px;">(recommended)</span></h2>
+      <h2>5 · Affordability check <span class="req">*</span> <span style="font-weight:400;color:var(--muted);font-size:12px;">(required — the 15%-of-pay rule is checked before you can submit)</span></h2>
       <div class="sub">Enter your monthly earnings and any existing government-loan deductions — we'll check whether the loan you asked for <b>fits within your pay</b>. <span style="color:var(--muted);">Daily-rated? Use daily rate × working days/month.</span></div>
       <div class="grid">
         <div><label>Monthly earnings (₱)</label><input id="f_base" type="number" oninput="calc()"></div>
@@ -160,7 +160,9 @@ function calc(){
   const term=parseInt(document.getElementById("f_term").value)||12;
   const cb=document.getElementById("calcBox");
   if(SEL&&amt>0){ const m=monthly(amt,TYPES[SEL].rate,term);
-    cb.innerHTML=`Estimated monthly amortization: <b>${peso(m)}</b> over ${term} month(s) at ${TYPES[SEL].rate}% p.a. <span style="color:var(--muted);">(indicative — subject to approval)</span>`;
+    cb.innerHTML=`Estimated monthly amortization: <b>${peso(m)}</b> over ${term} month(s) at ${TYPES[SEL].rate}% p.a. <span style="color:var(--muted);">(indicative — subject to approval)</span>`
+      +(TYPES[SEL].max&&amt>TYPES[SEL].max?`<div style="color:var(--red);font-weight:700;margin-top:4px;">⚠ Above the ${TYPES[SEL].n} cap of ${peso(TYPES[SEL].max)} — the form won't accept this amount.</div>`:"")
+      +(SEL==="moto"?`<div style="margin-top:4px;">10% down payment (paid by you): <b>${peso(amt*0.10)}</b> · the unit remains RCC-owned until fully paid.</div>`:"");
     window.__monthly=m;
   } else { cb.textContent="Pick a loan type and enter an amount to see the estimated monthly."; window.__monthly=0; }
   const base=parseFloat(document.getElementById("f_base").value)||0;
@@ -203,6 +205,19 @@ async function submitLoan(){
   if(amt<=0){ msg.style.color="#c0392b"; msg.textContent="Please enter the amount needed."; return; }
   if(!document.getElementById("f_purpose").value.trim()){ msg.style.color="#c0392b"; msg.textContent="Please give a brief reason for this loan."; return; }
   if(!document.getElementById("f_auth").checked){ msg.style.color="#c0392b"; msg.textContent="Please tick the authorization to continue."; return; }
+  // ---- HARD POLICY GATES: cap · term · 15%-of-pay. Outside these, the application is not accepted. ----
+  const gT=TYPES[SEL], gTerm=parseInt(document.getElementById("f_term").value)||12;
+  if(gT.max && amt>gT.max){ msg.style.color="#c0392b"; msg.textContent=gT.n+" loans are capped at "+peso(gT.max)+(SEL==="moto"?" (your 10% down payment covers the rest of the price)":"")+". Please lower the amount."; return; }
+  const gBase=parseFloat(document.getElementById("f_base").value)||0;
+  if(!(gBase>0)){ msg.style.color="#c0392b"; msg.textContent="Please fill in your Monthly earnings (section 5) — we need it to check the 15%-of-pay rule before submitting."; document.getElementById("f_base").focus(); return; }
+  const gGov=govDeductions_(gBase), gLoan=parseFloat(document.getElementById("f_govloan").value)||0;
+  const gDisp=Math.max(0,gGov.net-gLoan), gMaxM=gDisp*0.15, gReqM=monthly(amt,gT.rate,gTerm);
+  if(gReqM>gMaxM){
+    let gMaxRel=gMaxM*gTerm/(1+(gT.rate/100)*gTerm/12); if(gT.max) gMaxRel=Math.min(gMaxRel,gT.max);
+    msg.style.color="#c0392b";
+    msg.textContent="This loan needs "+peso(gReqM)+"/month — above the "+peso(gMaxM)+" your pay can support (15% rule). Over "+gTerm+" months the most you can borrow is about "+peso(gMaxRel)+". Please lower the amount"+(gTerm<gT.term?" or lengthen the term":"")+".";
+    return;
+  }
   const pickedFiles=DOCFILES.slice();
   if(TYPES[SEL].docs&&TYPES[SEL].docs.length&&pickedFiles.length===0){
     if(!confirm("You haven't attached any supporting documents.\n\nHR will need them before this loan can be approved. Submit anyway and send the documents later?")) return;

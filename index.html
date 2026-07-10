@@ -541,6 +541,10 @@
       </div>
 
       <div class="nav-sec">Merchandiser Ops</div>
+      <div class="nav-item" data-page="reports" onclick="go('reports')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg>
+        Reports
+      </div>
       <div class="nav-item" data-page="manning" onclick="go('manning')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="9" r="2.5"/><circle cx="17" cy="9" r="2.5"/><circle cx="12" cy="9" r="2.5"/><path d="M3 18c0-2.5 1.5-4 4-4M21 18c0-2.5-1.5-4-4-4M8 18c0-2.5 1.5-4 4-4s4 1.5 4 4"/></svg>
         Manning / Headcount
@@ -1249,6 +1253,7 @@
         </div>
       </section>
       <section class="page" id="page-evaluations"></section>
+      <section class="page" id="page-reports"></section>
       <section class="page" id="page-exit">
         <div class="panel" style="margin-top:0;"><div class="placeholder">
           <div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1f6b3a" stroke-width="2"><path d="M14 3H5v18h9"/><path d="M10 12h11M17 8l4 4-4 4"/></svg></div>
@@ -1874,7 +1879,7 @@
     dashboard:'Dashboard', employees:'Employee Master', employee:'Employee Record',
     branches:'Branch Master', store:'Branch Detail',
     prehire:'Pre-hire & Recruiting', contracts:'Contracts', memos:'Notices',
-    evaluations:'Evaluations', timekeeping:'Timekeeping & Attendance', exit:'Exit Clearance',
+    evaluations:'Evaluations', reports:'Recruitment Reports', timekeeping:'Timekeeping & Attendance', exit:'Exit Clearance',
     loans:'Loans', signatures:'Signatures', positions:'Positions & Job Descriptions',
     agencies:'Agencies', onboarding:'Onboarding Tasks', purchases:'Employee Purchases',
     claims:'Government Claims', manning:'Manning / Headcount', agencysubs:'Agency Submissions',
@@ -2348,7 +2353,7 @@ function isAdminUser(){ return userRole()==="admin"; }
 function canSeePay(){ const r=userRole(); return r==="admin"||r==="payroll"; }
 function isLimitedUser(){ return userRole()!=="admin"; }
 function canManageStores(){ const r=userRole(); return r==="admin"||r==="payroll"; }  // Anj + Grazel
-const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding"];
+const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding","reports"];
 // Per-person extra pages on top of their role (e.g. Juvy = the loans officer).
 const EXTRA_PAGES_BY_EMAIL={ "hr@hassarams.com":["loans"] };
 function allowedPages(){ const r=userRole(); if(r==="admin") return null;
@@ -2490,6 +2495,7 @@ async function loadEmployees(){
   renderSignatures();
   renderMemos();
   renderEvaluations();
+  renderReports();
   tagPreviewPages();
   wireGlobalSearch();
   if(!landed){ landed=true; if(typeof window.go==="function") window.go("dashboard"); }
@@ -2516,7 +2522,7 @@ async function ppSyncFetch(params){
 
 // Honesty pass: every screen NOT backed by live data gets a visible "Preview" ribbon,
 // so HR never mistakes an illustrative mock-up for real data. Real pages are listed here.
-const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations"]);
+const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports"]);
 function tagPreviewPages(){
   document.querySelectorAll('section.page').forEach(sec=>{
     const id=(sec.id||"").replace("page-","");
@@ -3981,6 +3987,106 @@ function openEvalForm(empId,type,due){
   });
 }
 window.openEvalForm=openEvalForm;
+
+/* ============================ RECRUITMENT REPORTS (Rhel's KPI workbook, computed live) ============================ */
+const RPT_DAY=86400000;
+function rptDays(a,b){ const x=new Date(a), y=new Date(b); return (isNaN(x)||isNaN(y))?null:Math.max(0,Math.round((y-x)/RPT_DAY)); }
+function rptAvg(arr){ const v=arr.filter(n=>n!=null); return v.length?v.reduce((s,n)=>s+n,0)/v.length:null; }
+function rptStatus(actual,target,dir){
+  if(actual==null||target==null) return '<span class="note">no data yet</span>';
+  const good = dir==="low" ? actual<=target : actual>=target;
+  const near = dir==="low" ? actual<=target*1.15 : actual>=target*0.9;
+  const cls = good?"active":(near?"probation":"awol");
+  const lbl = good?"On target":(near?"Near target":"Below target");
+  return `<span class="pill ${cls}">${lbl}</span>`;
+}
+function renderReports(){
+  const pg=$("#page-reports"); if(!pg) return;
+  const now=new Date(); const mStart=new Date(now.getFullYear(),now.getMonth(),1);
+  const inMonth=d=>{ const x=new Date(d); return !isNaN(x)&&x>=mStart&&x<=now; };
+
+  // Openings
+  const filled=MANPOWER.filter(o=>o.status==="Filled");
+  const open=MANPOWER.filter(o=>o.status==="Open");
+  const aging=open.map(o=>({o,days:o.date_posted?rptDays(o.date_posted,now):null}));
+  const aged=aging.filter(x=>x.days!=null&&x.days>45);
+  const fillRate=(filled.length+open.length)?filled.length/(filled.length+open.length):null;
+  const ttf=rptAvg(filled.map(o=>o.date_posted&&o.updated_at?rptDays(o.date_posted,o.updated_at):null));
+
+  // Candidates
+  const hiredPh=PREHIRE.filter(p=>p.phase==="HIRED");
+  const tth=rptAvg(hiredPh.map(p=>p.created_at&&p.updated_at?rptDays(p.created_at,p.updated_at):null));
+  const IS=s=>PREHIRE.filter(p=>(p.interview_status||"")===s).length;
+  const attended=IS("Interviewed")+IS("Final interview")+IS("Offered")+IS("Declined")+PREHIRE.filter(p=>p.interview_status==="Hired"||p.phase==="HIRED").length;
+  const noshow=IS("No-show");
+  const attendRate=(attended+noshow)?attended/(attended+noshow):null;
+  const accepted=hiredPh.length, declined=IS("Declined");
+  const offerRate=(accepted+declined)?accepted/(accepted+declined):null;
+
+  // Retention: hired 90–365 days ago, still active
+  const cohort=EMPLOYEES.filter(e=>{ if(!e.hire_date) return false; const d=rptDays(e.hire_date,now); return d!=null&&d>=90&&d<=365; });
+  const retained=cohort.filter(e=>(e.status||"").toLowerCase().startsWith("active"));
+  const retRate=cohort.length?retained.length/cohort.length:null;
+
+  // This month
+  const appsMo=PREHIRE.filter(p=>inMonth(p.created_at)).length;
+  const hiredMo=hiredPh.filter(p=>inMonth(p.updated_at)).length;
+  const postedMo=MANPOWER.filter(o=>inMonth(o.date_posted)).length;
+  const filledMo=filled.filter(o=>inMonth(o.updated_at)).length;
+
+  // Hires by month (last 6) from employees.hire_date, HO/WH vs Retail; separations where end_date known
+  const months=[]; for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push(d); }
+  const mLbl=d=>d.toLocaleDateString("en-US",{month:"short",year:"2-digit"});
+  const rowsHires=months.map(d=>{
+    const e2=new Date(d.getFullYear(),d.getMonth()+1,0);
+    const hs=EMPLOYEES.filter(e=>e.hire_date&&new Date(e.hire_date)>=d&&new Date(e.hire_date)<=e2);
+    const ho=hs.filter(e=>e.group_name==="Head Office"||e.group_name==="Warehouse").length;
+    const rt=hs.length-ho;
+    const seps=EMPLOYEES.filter(e=>e.end_date&&new Date(e.end_date)>=d&&new Date(e.end_date)<=e2).length;
+    return `<tr><td><b>${mLbl(d)}</b></td><td>${ho}</td><td>${rt}</td><td>${hs.length}</td><td>${seps||"—"}</td></tr>`;
+  }).join("");
+
+  const pct=v=>v==null?"—":(Math.round(v*100)+"%");
+  const days=v=>v==null?"—":(Math.round(v)+" days");
+  const funnelOrder=["Screened","Invited","Interviewed","No-show","Failed","Final interview","Offered","Declined","Hired"];
+  const funnelRow=funnelOrder.map(s=>`<td style="text-align:center;"><div style="font-size:17px;font-weight:800;">${s==="Hired"?hiredPh.length:IS(s)}</div><div style="font-size:10.5px;color:var(--muted);">${s}</div></td>`).join("");
+
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Recruitment Reports <span class="count-tag">live — computed from portal data</span></h2>
+      <div class="psub">The KPIs from the recruitment workbook, calculated automatically. Targets from the agreed KPI sheet. Data updates as the team works — no manual encoding.</div>
+      <table><thead><tr><th>KPI</th><th>Target</th><th>Actual</th><th>Status</th></tr></thead><tbody>
+        <tr><td>Open positions (now)</td><td>—</td><td><b>${open.length}</b> req${open.length===1?"":"s"} · ${open.reduce((s,o)=>s+(Number(o.count_needed)||0),0)} heads</td><td><span class="pill di">informational</span></td></tr>
+        <tr><td>Open-position aging</td><td>≤ 45 days</td><td>${aged.length} over 45d${aging.length?` · oldest ${Math.max(...aging.map(x=>x.days||0))}d`:""}</td><td>${rptStatus(aged.length,0,"low")}</td></tr>
+        <tr><td>Vacancy fill rate (cumulative)</td><td>≥ 85%</td><td>${pct(fillRate)} <span class="note">(${filled.length} filled / ${filled.length+open.length} posted)</span></td><td>${rptStatus(fillRate,0.85,"high")}</td></tr>
+        <tr><td>Time to fill (avg, filled reqs)</td><td>≤ 30 days</td><td>${days(ttf)}</td><td>${rptStatus(ttf,30,"low")}</td></tr>
+        <tr><td>Time to hire (avg, applicant → hired)</td><td>≤ 14 days</td><td>${days(tth)}</td><td>${rptStatus(tth,14,"low")}</td></tr>
+        <tr><td>Interview attendance</td><td>≥ 80%</td><td>${pct(attendRate)} <span class="note">(${noshow} no-show)</span></td><td>${rptStatus(attendRate,0.8,"high")}</td></tr>
+        <tr><td>Offer acceptance</td><td>≥ 90%</td><td>${pct(offerRate)} <span class="note">(${accepted} hired · ${declined} declined)</span></td><td>${rptStatus(offerRate,0.9,"high")}</td></tr>
+        <tr><td>90-day retention (hired 3–12 mo ago)</td><td>≥ 90%</td><td>${pct(retRate)} <span class="note">(${retained.length}/${cohort.length} still active)</span></td><td>${rptStatus(retRate,0.9,"high")}</td></tr>
+      </tbody></table>
+      <div class="psub" style="margin-top:8px;">Not computable from portal data (stay manual for now): <b>recruitment cost per hire</b> · <b>applicant response time</b>. Time-to-hire uses the hired date recorded in the pipeline.</div>
+    </div>
+    <div class="panel">
+      <h2>This month <span class="count-tag">${now.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</span></h2>
+      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
+        <div class="kpi"><div class="k-l">Applications</div><div class="k-n">${appsMo}</div></div>
+        <div class="kpi"><div class="k-l">Hired</div><div class="k-n">${hiredMo}</div></div>
+        <div class="kpi"><div class="k-l">Openings posted</div><div class="k-n">${postedMo}</div></div>
+        <div class="kpi"><div class="k-l">Openings filled</div><div class="k-n">${filledMo}</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Candidate funnel <span class="count-tag">current pipeline</span></h2>
+      <table><tbody><tr>${funnelRow}</tr></tbody></table>
+      <div class="psub" style="margin-top:6px;">Set each candidate's funnel stage in Pre-hire → Edit applicant → Recruiting/interview.</div>
+    </div>
+    <div class="panel">
+      <h2>Hires &amp; separations by month <span class="count-tag">last 6 months</span></h2>
+      <table><thead><tr><th>Month</th><th>HO / Warehouse</th><th>Retail</th><th>Total hired</th><th>Separations*</th></tr></thead><tbody>${rowsHires}</tbody></table>
+      <div class="psub" style="margin-top:6px;">*Separations count only exits recorded with an end date in the portal — PayPlus-side attrition isn't fully captured yet, so treat as a minimum.</div>
+    </div>`;
+}
 
 /* ============================ PRE-HIRE MODULE ============================ */
 const PH_PHASES=[

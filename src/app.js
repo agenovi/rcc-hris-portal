@@ -2252,7 +2252,7 @@ function openOnboardingCase(id){
     </div>
     <div style="padding:18px 22px 60px;">
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-        <div class="kpi"><div class="k-l">Employee ID</div><div class="k-n" style="font-size:18px;">${c.assigned_employee_id?esc(c.assigned_employee_id):"—"}</div><div class="k-s">PayPlus number</div></div>
+        <div class="kpi"><div class="k-l">Employee ID</div><div class="k-n" style="font-size:18px;">${c.assigned_employee_id?esc(c.assigned_employee_id):"—"}</div><div class="k-s">PayPlus number${c.assigned_employee_id&&canManageStores()?' · <span id="onbFixId" style="color:var(--red);cursor:pointer;text-decoration:underline;">correct</span>':''}</div></div>
         <div class="kpi"><div class="k-l">Pay method</div><div class="k-n" style="font-size:18px;">${esc(c.pay_method||"GCash")}</div></div>
         <div class="kpi"><div class="k-l">Deployment</div><div class="k-n" style="font-size:18px;">${c.deployment_date?fmtDate(c.deployment_date):"—"}</div></div>
       </div>
@@ -2277,6 +2277,15 @@ function openOnboardingCase(id){
   $("#onbClose").addEventListener("click",()=>m.remove());
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   const aid=document.getElementById("onbAssignId"); if(aid) aid.addEventListener("click",()=>assignEmployeeId(c));
+  const fid=document.getElementById("onbFixId"); if(fid) fid.addEventListener("click",async()=>{
+    fid.textContent="looking up…";
+    const pid=await resolvePayPlusId(c.employee_name);
+    if(!pid){ fid.textContent="correct"; return; }
+    await sb.from("onboarding_cases").update({assigned_employee_id:pid, updated_at:new Date().toISOString()}).eq("id",c.id);
+    if(c.prehire_id) await sb.from("prehire").update({assigned_employee_id:pid}).eq("id",c.prehire_id);
+    await logChange("onboarding",c.id,c.employee_name,"Edited","Employee ID corrected → "+pid);
+    await loadEmployees(); openOnboardingCase(c.id);
+  });
   const cmp=document.getElementById("onbComplete"); if(cmp) cmp.addEventListener("click",()=>completeOnboarding(c));
   $$("#onbModal .task.clickable").forEach(el=>el.addEventListener("click",()=>toggleOnbTask(ts.find(t=>t.id===el.dataset.tid))));
 }

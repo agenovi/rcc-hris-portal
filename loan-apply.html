@@ -110,14 +110,30 @@ function pick(k){ SEL=k; [...document.querySelectorAll('.lt')].forEach(e=>e.clas
   renderDocs(k);
   calc();
 }
+// Attached files live in DOCFILES (a JS list), NOT in the file input — so re-tapping a
+// loan type (which redraws this section) can never wipe what the applicant attached.
+let DOCFILES=[];
 function renderDocs(k){
   const t=TYPES[k]; const hint=document.getElementById("docHint"), slots=document.getElementById("docSlots");
-  const chooser=`<label>Attach your files <span style="font-weight:400;color:var(--muted);font-size:11px;">— you can select more than one</span></label>
-     <input type="file" class="docfile" multiple accept="image/*,application/pdf,.pdf">`;
-  if(!t.docs||!t.docs.length){ hint.innerHTML="Attach anything that supports your request — a valid ID, quotation, bill, or estimate.";
-    slots.innerHTML=chooser; return; }
-  hint.innerHTML=`Please attach the following for a <b>${t.n}</b> loan. Clear phone photos or PDFs are fine.`;
-  slots.innerHTML=`<ul style="margin:8px 0 12px 18px;padding:0;font-size:13.5px;color:var(--ink);line-height:1.7;">${t.docs.map(d=>`<li>${esc(d)}</li>`).join("")}</ul>${chooser}`;
+  const chooser=`<label>Attach your files <span style="font-weight:400;color:var(--muted);font-size:11px;">— photos or PDFs, one or many</span></label>
+     <input type="file" id="docPick" multiple accept="image/*,application/pdf,.pdf">
+     <div id="docList" style="margin-top:8px;"></div>`;
+  if(!t.docs||!t.docs.length){ hint.innerHTML="Attach anything that supports your request — a valid ID, quotation, bill, or estimate."; slots.innerHTML=chooser; }
+  else { hint.innerHTML=`Please attach the following for a <b>${t.n}</b> loan. Clear phone photos or PDFs are fine.`;
+    slots.innerHTML=`<ul style="margin:8px 0 12px 18px;padding:0;font-size:13.5px;color:var(--ink);line-height:1.7;">${t.docs.map(d=>`<li>${esc(d)}</li>`).join("")}</ul>${chooser}`; }
+  document.getElementById("docPick").addEventListener("change",function(){
+    for(let i=0;i<this.files.length;i++) DOCFILES.push(this.files[i]);
+    this.value=""; paintDocList();
+  });
+  paintDocList();
+}
+function paintDocList(){
+  const el=document.getElementById("docList"); if(!el) return;
+  el.innerHTML = DOCFILES.length
+    ? `<div style="font-size:12px;font-weight:700;color:var(--green);">✓ ${DOCFILES.length} file${DOCFILES.length>1?"s":""} attached</div>`+
+      DOCFILES.map((f,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line);"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name)}</span><span data-rm="${i}" style="color:var(--red);cursor:pointer;font-weight:700;padding:0 6px;">✕</span></div>`).join("")
+    : `<div style="font-size:12px;color:var(--muted);">No files attached yet.</div>`;
+  el.querySelectorAll("[data-rm]").forEach(x=>x.addEventListener("click",()=>{ DOCFILES.splice(+x.dataset.rm,1); paintDocList(); }));
 }
 function monthly(amount,rate,term){ const interest=amount*(rate/100)*(term/12); return (amount+interest)/term; }
 // Estimate of mandatory PH government deductions (employee share) on monthly basic salary — ESTIMATE only; payroll is the truth.
@@ -187,14 +203,13 @@ async function submitLoan(){
   if(amt<=0){ msg.style.color="#c0392b"; msg.textContent="Please enter the amount needed."; return; }
   if(!document.getElementById("f_purpose").value.trim()){ msg.style.color="#c0392b"; msg.textContent="Please give a brief reason for this loan."; return; }
   if(!document.getElementById("f_auth").checked){ msg.style.color="#c0392b"; msg.textContent="Please tick the authorization to continue."; return; }
-  const pickedFiles=[];
-  document.querySelectorAll(".docfile").forEach(inp=>{ if(inp.files) for(const f of inp.files) pickedFiles.push(f); });
-  if(TYPES[SEL].docs&&TYPES[SEL].docs.length&&!TYPES[SEL].optional&&pickedFiles.length===0){
+  const pickedFiles=DOCFILES.slice();
+  if(TYPES[SEL].docs&&TYPES[SEL].docs.length&&pickedFiles.length===0){
     if(!confirm("You haven't attached any supporting documents.\n\nHR will need them before this loan can be approved. Submit anyway and send the documents later?")) return;
   }
   const btn=document.getElementById("submitBtn"); btn.disabled=true;
   // upload supporting documents to private storage; collect their references
-  const documents=[]; msg.style.color="#6B7785";
+  const documents=[]; const failed=[]; msg.style.color="#6B7785";
   for(let i=0;i<pickedFiles.length;i++){
     const f=pickedFiles[i], label=f.name;
     btn.textContent="Uploading file "+(i+1)+" of "+pickedFiles.length+"…";
@@ -205,8 +220,16 @@ async function submitLoan(){
       const up=await fetch(SB+"/storage/v1/object/loan-docs/"+path,{method:"POST",
         headers:{apikey:ANON,Authorization:"Bearer "+ANON,"x-upsert":"true"},body:f});
       if(up.ok) documents.push({label:label,path:path,name:f.name});
-      else msg.textContent="One file couldn't upload — HR can still collect it later.";
-    }catch(e){ msg.textContent="One file couldn't upload — HR can still collect it later."; }
+      else failed.push(f.name);
+    }catch(e){ failed.push(f.name); }
+  }
+  // fail LOUDLY: never quietly submit with missing documents
+  if(failed.length){
+    btn.disabled=false; btn.textContent="Submit application";
+    msg.style.color="#c0392b";
+    msg.textContent=failed.length+" of "+pickedFiles.length+" file(s) didn't upload ("+failed.join(", ")+").";
+    if(!confirm(failed.length+" of "+pickedFiles.length+" document(s) FAILED to upload:\n\n"+failed.join("\n")+"\n\nPress Cancel to try again (recommended — check your signal), or OK to submit WITHOUT them.")) return;
+    btn.disabled=true;
   }
   btn.textContent="Submitting…";
   const payload={ applicant_name:name, contact_number:contact, email:email, employee_id:document.getElementById("f_eid").value,
@@ -220,7 +243,9 @@ async function submitLoan(){
     if(!d.ok){ btn.disabled=false; btn.textContent="Submit application"; msg.style.color="#c0392b"; msg.textContent=d.error||"Couldn't submit. Please try again."; return; }
     document.getElementById("wrap").innerHTML=`<div class="card done"><div class="ok">✓</div>
       <h2 style="font-size:18px;margin:10px 0 6px;">Application submitted</h2>
-      <div class="sub">Your reference: <b>${esc(d.ref)}</b><br>HR will review it and contact you. You can close this page.</div></div>`;
+      <div class="sub">Your reference: <b>${esc(d.ref)}</b><br>
+      <b>${documents.length}</b> document${documents.length===1?"":"s"} attached${documents.length?" ✓":" — HR will ask you for them"}.<br>
+      HR will review it and contact you. You can close this page.</div></div>`;
   }catch(e){ btn.disabled=false; btn.textContent="Submit application"; msg.style.color="#c0392b"; msg.textContent="Couldn't submit. Please try again."; }
 }
 </script></body></html>

@@ -2790,6 +2790,11 @@ function openLoan(id){
               <div><div style="font-weight:600;">${esc(d.label||d.name||"Document")}</div><div class="esub">${esc(d.name||"")}</div></div>
               <button class="btn ghost" style="flex:none;" onclick="openLoanDoc('${esc(d.path)}',this)">View</button></div>`).join("")
           : `<div class="psub">No documents were attached. Use the applicant's mobile / email above to request them.</div>`}
+        <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-top:12px;">Add documents (HR — e.g. handed over after applying)</label>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+          <input type="file" id="loanDocAdd" multiple accept="image/*,application/pdf,.pdf" style="flex:1;">
+          <button class="btn ghost" id="loanDocUp" style="flex:none;">Upload</button>
+        </div>
       </div>
       ${l.loan_type==="educational"?`
       <div class="panel" style="border:2px solid ${l.waiver_signed?'var(--green)':'#e0b400'};">
@@ -2832,6 +2837,23 @@ function openLoan(id){
       </div>
     </div></div>`;
   $("#loanClose").addEventListener("click",()=>m.remove());
+  const dUp=document.getElementById("loanDocUp"); if(dUp) dUp.addEventListener("click",async()=>{
+    const inp=document.getElementById("loanDocAdd");
+    if(!inp||!inp.files||!inp.files.length){ alert("Choose the file(s) first."); return; }
+    dUp.disabled=true; dUp.textContent="Uploading…";
+    const added=[];
+    for(let i=0;i<inp.files.length;i++){
+      const f=inp.files[i];
+      const path=(l.loan_ref||"loan")+"/hr-"+Date.now().toString(36)+"-"+f.name.replace(/[^a-zA-Z0-9._-]+/g,"_").slice(0,100);
+      const {error:upErr}=await sb.storage.from("loan-docs").upload(path,f,{upsert:true});
+      if(upErr){ alert("Couldn't upload "+f.name+": "+upErr.message); dUp.disabled=false; dUp.textContent="Upload"; return; }
+      added.push({label:f.name+" (added by HR)",path:path,name:f.name});
+    }
+    const docs=(Array.isArray(l.documents)?l.documents:[]).concat(added);
+    const {error}=await sb.from("loans").update({documents:docs,updated_at:new Date().toISOString()}).eq("id",l.id);
+    if(error){ alert(error.message); dUp.disabled=false; dUp.textContent="Upload"; return; }
+    await loadEmployees(); m.remove(); openLoan(l.id);
+  });
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   const setLoan=async(patch)=>{ patch.hr_notes=document.getElementById("loanNotes").value; patch.updated_at=new Date().toISOString();
     const {error}=await sb.from("loans").update(patch).eq("id",l.id); if(error){alert(error.message);return;} await loadEmployees(); m.remove(); };

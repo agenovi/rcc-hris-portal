@@ -42,7 +42,7 @@
       <label>Full name <span class="req">*</span></label><input id="f_name">
       <label>Mobile number <span class="req">*</span></label><input id="f_contact" inputmode="tel" placeholder="09xx xxx xxxx">
       <label>Email <span class="req">*</span></label><input id="f_email" type="email" placeholder="so HR can reach you">
-      <label>Employee ID (if you know it)</label><input id="f_eid">
+      <label>Employee ID <span class="req">*</span> <span style="font-weight:400;color:var(--muted);font-size:11px;">— on your payslip; we use it to check your eligibility</span></label><input id="f_eid" placeholder="e.g. 102059">
       <label>Position</label><input id="f_dept">
     </div>
     <div class="card">
@@ -86,14 +86,14 @@ const SB="https://jtfkpmvievetihhfdmqb.supabase.co";
 const ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0ZmtwbXZpZXZldGloaGZkbXFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwODA1MTksImV4cCI6MjA5MTY1NjUxOX0.ozphoaGT7jVKr3NGmqQC1wMj5lp7MvVfdqO2HZWMl6k";
 const FN=SB+"/functions/v1/loan-apply";
 const TYPES={
-  discretionary:{n:"Discretionary",rate:12,max:50000,term:12,d:"7+ yrs service · brief reason required",
+  discretionary:{n:"Discretionary",rate:12,max:50000,term:12,d:"regular · 5+ yrs service · brief reason required",
     docs:["Valid government-issued ID","Proof of your reason — quotation, bill, or estimate (if applicable)"]},
   emergency:{n:"Emergency",rate:12,max:20000,term:12,d:"medical · accident · death · urgent repair",
     docs:["Photos or images of the situation / damage","Medical certificate, police, or incident report","Repair estimate, receipts, or proof of loss"]},
   educational:{n:"Educational",rate:0,max:null,term:12,d:"0% · child's tuition (50%)",
     docs:["School invoice / Statement of Account","Proof of payment on any previous educational loan"]},
-  moto:{n:"Motorcycle",rate:6,max:100000,term:36,d:"purchase only · RCC-owned until paid · 10% DP",
-    docs:["Dealer quotation","Valid driver's license","Proof of capacity to pay"]},
+  moto:{n:"Motorcycle",rate:6,max:100000,term:36,d:"work use only · 2+ yrs service · RCC-owned until paid · 10% DP",
+    docs:["Dealer quotation","Valid driver's license","Proof of capacity to pay","Supervisor endorsement — the unit is used for your work"]},
 };
 let SEL=null;
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -200,6 +200,7 @@ async function submitLoan(){
   if(!name){ msg.style.color="#c0392b"; msg.textContent="Please enter your full name."; return; }
   if(!contact){ msg.style.color="#c0392b"; msg.textContent="Please enter a mobile number so HR can reach you."; return; }
   if(!email||!/^\S+@\S+\.\S+$/.test(email)){ msg.style.color="#c0392b"; msg.textContent="Please enter a valid email so HR can reach you."; return; }
+  if(!document.getElementById("f_eid").value.trim()){ msg.style.color="#c0392b"; msg.textContent="Please enter your Employee ID (it's on your payslip) — we use it to check your eligibility."; document.getElementById("f_eid").focus(); return; }
   if(!SEL){ msg.style.color="#c0392b"; msg.textContent="Please choose a loan type."; return; }
   const amt=parseFloat(document.getElementById("f_amount").value)||0;
   if(amt<=0){ msg.style.color="#c0392b"; msg.textContent="Please enter the amount needed."; return; }

@@ -703,14 +703,16 @@ function renderDashboard(){
   try{ const _ev=evDueList(); const _evDue=_ev.filter(x=>x.bucket==="due"||x.bucket==="overdue"); if(_evDue.length) waiting.push({t:_evDue.length+" evaluation(s) due", d:"3rd/5th-month · regularization · annual", go:"evaluations"}); }catch(e){}
   { const _allow=allowedPages(); if(_allow){ for(let i=waiting.length-1;i>=0;i--){ if(_allow.indexOf(waiting[i].go)===-1) waiting.splice(i,1); } } }
 
+  const recruiterMode = isLimitedUser() && userRole()!=="payroll";  // Juvy/Rhel/Vina land on a recruitment-first dashboard
   const pg=$("#page-dashboard");
   pg.innerHTML=`
     <div class="hello">
       <div class="hd">${new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"}).toUpperCase()}</div>
       <div class="hh">${greet}, <span>${esc(nm)}.</span></div>
-      <div class="hsub">Your whole workforce, live from the database — ${A.length} active people across ${open.length} stores.</div>
+      <div class="hsub">${recruiterMode?`Recruitment at a glance — ${openSlots} open position${openSlots===1?"":"s"} across ${openStores} stores, ${phPipe} candidate${phPipe===1?"":"s"} in the pipeline.`:`Your whole workforce, live from the database — ${A.length} active people across ${open.length} stores.`}</div>
       <button class="btn ghost" id="dashCust" style="margin-top:10px;font-size:12.5px;padding:5px 12px;">Customize dashboard</button>
     </div>
+    ${recruiterMode?recruitmentScorecard():""}
     <div class="grid kpis">
       <div class="kpi" style="cursor:pointer;" onclick="go('employees')"><div class="k-l">Active Employees</div><div class="k-n">${A.length}</div><div class="k-break"><span>HO+WH<b>${ho+wh}</b></span><span>Retail<b>${rt}</b></span></div></div>
       <div class="kpi" style="cursor:pointer;" onclick="go('branches')"><div class="k-l">Agency Merchandisers</div><div class="k-n">${agency}</div><div class="k-break"><span>Jell-on<b>${agJellon}</b></span><span>M&amp;G<b>${agMG}</b></span></div></div>
@@ -1689,6 +1691,37 @@ function rptStatus(actual,target,dir){
   const cls = good?"active":(near?"probation":"awol");
   const lbl = good?"On target":(near?"Near target":"Below target");
   return `<span class="pill ${cls}">${lbl}</span>`;
+}
+// Compact recruitment KPI band for the recruiters' dashboard (same maths as the Reports page).
+function recruitmentScorecard(){
+  const now=new Date(); const mStart=new Date(now.getFullYear(),now.getMonth(),1);
+  const inMonth=d=>{ const x=new Date(d); return !isNaN(x)&&x>=mStart&&x<=now; };
+  const filled=MANPOWER.filter(o=>o.status==="Filled"), open=MANPOWER.filter(o=>o.status==="Open");
+  const aged=open.filter(o=>o.date_posted&&rptDays(o.date_posted,now)>45).length;
+  const fillRate=(filled.length+open.length)?filled.length/(filled.length+open.length):null;
+  const ttf=rptAvg(filled.map(o=>o.date_posted&&o.updated_at?rptDays(o.date_posted,o.updated_at):null));
+  const hiredPh=PREHIRE.filter(p=>p.phase==="HIRED");
+  const IS=s=>PREHIRE.filter(p=>(p.interview_status||"")===s).length;
+  const attended=IS("Interviewed")+IS("Final interview")+IS("Offered")+IS("Declined")+PREHIRE.filter(p=>p.phase==="HIRED").length, noshow=IS("No-show");
+  const attendRate=(attended+noshow)?attended/(attended+noshow):null;
+  const cohort=EMPLOYEES.filter(e=>{ if(!e.hire_date) return false; const d=rptDays(e.hire_date,now); return d!=null&&d>=90&&d<=365; });
+  const retRate=cohort.length?cohort.filter(e=>(e.status||"").toLowerCase().startsWith("active")).length/cohort.length:null;
+  const appsMo=PREHIRE.filter(p=>inMonth(p.created_at)).length, hiredMo=hiredPh.filter(p=>inMonth(p.updated_at)).length;
+  const pct=v=>v==null?"—":Math.round(v*100)+"%";
+  const cell=(label,val,sub,st)=>`<div class="kpi" style="cursor:pointer;" onclick="go('reports')"><div class="k-l">${label}</div><div class="k-n" style="font-size:22px;">${val}</div><div class="k-s">${sub||""} ${st||""}</div></div>`;
+  return `<div style="margin-top:14px;"><div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:0 2px 8px;">Recruitment scorecard · this month <span style="font-weight:400;text-transform:none;">— tap any tile for the full report</span></div>
+    <div class="grid kpis">
+      ${cell("Applications",appsMo,"this month")}
+      ${cell("Hired",hiredMo,"this month")}
+      ${cell("Fill rate",pct(fillRate),"target ≥85%",rptStatus(fillRate,0.85,"high"))}
+      ${cell("Interview attendance",pct(attendRate),"target ≥80%",rptStatus(attendRate,0.8,"high"))}
+    </div>
+    <div class="grid kpis" style="margin-top:13px;">
+      ${cell("Time to fill",ttf==null?"—":Math.round(ttf)+"d","target ≤30d",rptStatus(ttf,30,"low"))}
+      ${cell("90-day retention",pct(retRate),cohort.length+" in cohort",rptStatus(retRate,0.9,"high"))}
+      ${cell("Aging openings",aged,">45 days old",rptStatus(aged,0,"low"))}
+      ${cell("Full report","→","open the Reports tab")}
+    </div></div>`;
 }
 function renderReports(){
   const pg=$("#page-reports"); if(!pg) return;

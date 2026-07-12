@@ -37,17 +37,22 @@ async function logChange(entity,id,name,action,detail){
 //   admin    (anj)    = everything
 //   payroll  (Grazel) = recruiting view + Employees + sees pay/bank/government
 //   recruiter(others) = recruiting only, pay hidden
-const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "sanjay@hassarams.com":"admin", "hr3@hassarams.com":"payroll" };  // hr3@ = Grazel
+const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "sanjay@hassarams.com":"admin", "hr3@hassarams.com":"payroll", "hr4@hassarams.com":"manager" };  // hr3@=Grazel(payroll) · hr4@=Rhel(HR Manager)
 function userRole(){ return ROLE_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()] || "recruiter"; }
 function isAdminUser(){ return userRole()==="admin"; }
 function canSeePay(){ const r=userRole(); return r==="admin"||r==="payroll"; }
 function isLimitedUser(){ return userRole()!=="admin"; }
-function canManageStores(){ const r=userRole(); return r==="admin"||r==="payroll"; }  // Anj + Grazel
+function canManageStores(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"; }  // Anj + Grazel + Rhel (HR Mgr)
 const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding","reports"];
+// HR Manager (Rhel) — oversees the whole department: every page except owner-only Settings.
+const MANAGER_PAGES=["dashboard","employees","branches","prehire","contracts","onboarding","evaluations","loans","exit","manning","compliance","signatures","memos","reports"];
 // Per-person extra pages on top of their role (e.g. Juvy = the loans officer).
 const EXTRA_PAGES_BY_EMAIL={ "hr@hassarams.com":["loans"] };
 function allowedPages(){ const r=userRole(); if(r==="admin") return null;
-  const base = r==="payroll" ? RECRUITER_PAGES.concat(["employees"]) : RECRUITER_PAGES.slice();
+  let base;
+  if(r==="manager") base = MANAGER_PAGES.slice();
+  else if(r==="payroll") base = RECRUITER_PAGES.concat(["employees"]);
+  else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
 function pageAllowed(id){ const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
@@ -703,7 +708,7 @@ function renderDashboard(){
   try{ const _ev=evDueList(); const _evDue=_ev.filter(x=>x.bucket==="due"||x.bucket==="overdue"); if(_evDue.length) waiting.push({t:_evDue.length+" evaluation(s) due", d:"3rd/5th-month · regularization · annual", go:"evaluations"}); }catch(e){}
   { const _allow=allowedPages(); if(_allow){ for(let i=waiting.length-1;i>=0;i--){ if(_allow.indexOf(waiting[i].go)===-1) waiting.splice(i,1); } } }
 
-  const recruiterMode = isLimitedUser() && userRole()!=="payroll";  // Juvy/Rhel/Vina land on a recruitment-first dashboard
+  const recruiterMode = ["recruiter","manager"].includes(userRole());  // recruiters + HR Manager land on a recruitment-first scorecard
   const pg=$("#page-dashboard");
   pg.innerHTML=`
     <div class="hello">
@@ -782,7 +787,7 @@ function renderDashboard(){
         <div class="psub">${ho} head-office staff across ${Object.keys(byDept).length} departments</div>
         ${chartRows(byDept)}
       </div>
-      <div class="panel" style="margin-top:0;">
+      ${canSeePay()?`<div class="panel" style="margin-top:0;">
         <h2>Merchandiser pay <span class="count-tag">daily basic</span></h2>
         <div class="psub">Basic daily rate across ${basics.length} merchandisers (Manning Sheet)</div>
         <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
@@ -791,7 +796,7 @@ function renderDashboard(){
           <div class="kpi"><div class="k-l">Lead Diser</div><div class="k-n">₱${leadAvg.toLocaleString()}</div><div class="k-s">higher basic + allowances</div></div>
         </div>
         <div class="task" style="margin-top:10px;"><div class="dot a"></div><div><div class="tt">Company allowances (COLA / SOLA / SA / LA) — mostly for Lead Disers</div><div class="td">Not reliably recorded in the Manning Sheet, so they're not in the totals above. The actual per-person allowance comes from <b>PayPlus</b> once connected.</div></div></div>
-      </div>
+      </div>`:""}
     </div>`;
   const dc=document.getElementById("dashCust"); if(dc) dc.addEventListener("click",customizeDash);
   applyDashPrefs();

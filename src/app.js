@@ -55,11 +55,15 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='activity') return isAdminUser(); const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
 function applyRoleUI(){
   const allow=allowedPages(), limited=isLimitedUser();
-  document.querySelectorAll('.nav-item[data-page]').forEach(n=>{ n.style.display=(allow&&allow.indexOf(n.getAttribute('data-page'))===-1)?'none':''; });
+  document.querySelectorAll('.nav-item[data-page]').forEach(n=>{
+    const pg=n.getAttribute('data-page');
+    if(pg==='activity'){ n.style.display=isAdminUser()?'':'none'; return; }  // Access & Activity = owners only
+    n.style.display=(allow&&allow.indexOf(pg)===-1)?'none':'';
+  });
   document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display=limited?'none':''; });
   const topSearch=document.querySelector('.topbar .search'); if(topSearch) topSearch.style.display=limited?'none':'';
 }
@@ -191,6 +195,7 @@ async function loadEmployees(){
   renderMemos();
   renderEvaluations();
   renderReports();
+  renderActivity();
   tagPreviewPages();
   wireGlobalSearch();
   if(!landed){ landed=true; if(typeof window.go==="function") window.go("dashboard"); }
@@ -217,7 +222,7 @@ async function ppSyncFetch(params){
 
 // Honesty pass: every screen NOT backed by live data gets a visible "Preview" ribbon,
 // so HR never mistakes an illustrative mock-up for real data. Real pages are listed here.
-const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports"]);
+const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity"]);
 function tagPreviewPages(){
   document.querySelectorAll('section.page').forEach(sec=>{
     const id=(sec.id||"").replace("page-","");
@@ -557,7 +562,9 @@ function openLoan(id){
   });
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   const setLoan=async(patch)=>{ patch.hr_notes=document.getElementById("loanNotes").value; patch.updated_at=new Date().toISOString();
-    const {error}=await sb.from("loans").update(patch).eq("id",l.id); if(error){alert(error.message);return;} await loadEmployees(); m.remove(); };
+    const {error}=await sb.from("loans").update(patch).eq("id",l.id); if(error){alert(error.message);return;}
+    if(patch.status && patch.status!==l.status) await logChange("loan",l.id,l.applicant_name,patch.status,l.loan_ref+" · "+loanTypeLabel(l.loan_type)+" "+peso(l.amount));
+    await loadEmployees(); m.remove(); };
   const waiverBlocked=()=>{
     if(l.loan_type==="educational" && !l.waiver_signed){
       alert("Educational loan — the student/child's signed waiver is required before release.\n\nIn the Educational waiver panel: upload the signed waiver, tick “The student/child has signed the waiver”, Save, then release.");
@@ -1585,9 +1592,18 @@ async function saveEmployee(id,modal){
   if(canSeePay()){ Object.assign(p,{ sss_number:v("f_sss_number"), philhealth_number:v("f_philhealth_number"), pagibig_number:v("f_pagibig_number"), tin_number:v("f_tin_number"), bank_name:v("f_bank_name"), bank_account_number:v("f_bank_account_number"), daily_rate:nv("f_daily_rate"), daily_allowance:nv("f_daily_allowance") }); }
   if(!p.full_name){ msg.textContent="Full name is required."; return; }
   btn.disabled=true; btn.textContent="Saving…";
+  const before = id ? (EMPLOYEES.find(e=>e.id===id)||{}) : {};
   const res=id? await sb.from("employees").update(p).eq("id",id) : await sb.from("employees").insert(p);
   btn.disabled=false; btn.textContent=id?"Save changes":"Create";
   if(res.error){ msg.textContent=res.error.message; return; }
+  // log SENSITIVE changes (pay/bank) for the owner audit trail
+  if(id && canSeePay()){
+    const ch=[];
+    if(Number(before.daily_rate||0)!==Number(p.daily_rate||0)) ch.push("Daily rate "+(before.daily_rate?"₱"+Number(before.daily_rate).toLocaleString():"—")+" → "+(p.daily_rate?"₱"+Number(p.daily_rate).toLocaleString():"—"));
+    if(Number(before.daily_allowance||0)!==Number(p.daily_allowance||0)) ch.push("Allowance "+(before.daily_allowance?"₱"+Number(before.daily_allowance).toLocaleString():"—")+" → "+(p.daily_allowance?"₱"+Number(p.daily_allowance).toLocaleString():"—"));
+    if((before.bank_account_number||"")!==(p.bank_account_number||"")) ch.push("Bank account changed");
+    if(ch.length) await logChange("employee",id,p.full_name,"Pay/bank edited",ch.join(" · "));
+  } else if(!id){ await logChange("employee",null,p.full_name,"Added",""); }
   modal.remove(); await loadEmployees();
 }
 
@@ -1678,6 +1694,7 @@ function openEvalForm(empId,type,due){
     const row={ employee_ref:e.id, employee_name:e.full_name, position:e.position||e.department||null, eval_type:type, period_due:due,
       overall_rating: ov?Number(ov):null, ratings, recommendation:document.getElementById("ev_rec").value,
       strengths:evVal("ev_str"), improvements:evVal("ev_imp"), evaluator:evVal("ev_by"), eval_date:evIso(new Date()) };
+    await logChange("evaluation",e.id,e.full_name,"Recorded",EVAL_LABEL[type]+" · "+(row.recommendation||"")+(row.overall_rating?" · "+row.overall_rating+"/5":""));
     const {error}=await sb.from("evaluations").insert(row);
     if(error){ document.getElementById("evMsg").textContent=error.message; btn.disabled=false; btn.textContent="Save evaluation"; return; }
     m.remove(); await loadEmployees();
@@ -1728,6 +1745,70 @@ function recruitmentScorecard(){
       ${cell("Full report","→","open the Reports tab")}
     </div></div>`;
 }
+/* ===================== ACCESS & ACTIVITY (owners only) ===================== */
+const PERSON_BY_EMAIL={ "anj@hassarams.com":"Anj", "sanjay@hassarams.com":"Sanjay", "hr@hassarams.com":"Juvy", "hr2@hassarams.com":"Vina", "hr3@hassarams.com":"Grazel", "hr4@hassarams.com":"Rhel" };
+const ROLE_LABEL={ admin:"Full admin", manager:"HR Manager", payroll:"Payroll / HR officer", recruiter:"Recruiter" };
+function whoName(email){ const e=(email||"").toLowerCase(); return PERSON_BY_EMAIL[e]||(e.split("@")[0]||"—"); }
+async function renderActivity(){
+  const pg=$("#page-activity"); if(!pg||!isAdminUser()) return;
+  // Build the role matrix from the live config
+  const allEmails=["anj@hassarams.com","sanjay@hassarams.com","hr4@hassarams.com","hr3@hassarams.com","hr@hassarams.com","hr2@hassarams.com"];
+  const roleFor=e=>ROLE_BY_EMAIL[e]||"recruiter";
+  const seesPay=e=>{const r=roleFor(e);return r==="admin"||r==="payroll";};
+  const matrix=allEmails.map(e=>{
+    const r=roleFor(e);
+    const pages = r==="admin" ? "Everything" :
+      (r==="manager" ? "All HR (no Settings)" :
+      (r==="payroll" ? "Recruiting + Employees" :
+      "Recruiting"+(EXTRA_PAGES_BY_EMAIL[e]?" + "+EXTRA_PAGES_BY_EMAIL[e].join("/"):"")));
+    return `<tr>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);"><b>${esc(whoName(e))}</b><div class="esub">${esc(e)}</div></td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);">${esc(ROLE_LABEL[r]||r)}</td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);">${pages}</td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);text-align:center;">${seesPay(e)?'<span class="pill di">Yes</span>':'<span class="note">—</span>'}</td>
+    </tr>`;}).join("");
+  // Login history (RPC — owners only)
+  let loginRows='<tr><td colspan="3" class="psub" style="padding:8px;">Loading…</td></tr>';
+  // Activity feed from change_log
+  const feed = (CHANGE_LOG||[]).slice(0,60).map(c=>`<div class="task" style="align-items:flex-start;">
+      <div class="dot ${/reject|separat|correct|pay/i.test(c.action)?'r':(/add|record|edit/i.test(c.action)?'a':'g')}" style="margin-top:6px;"></div>
+      <div style="flex:1;min-width:0;"><div class="tt">${esc(c.action)} — ${esc(c.entity_name||c.entity||"")}${c.detail?` <span style="font-weight:400;color:var(--muted);">· ${esc(c.detail)}</span>`:""}</div>
+      <div class="td">${esc(whoName(c.changed_by))} · ${c.created_at?fmtDateTime(c.created_at):""}</div></div>
+    </div>`).join("");
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Access &amp; Activity <span class="count-tag">owners only</span></h2>
+      <div class="psub">Who has access, who's logging in, and every change made — the accountability trail for the handover.</div>
+    </div>
+    <div class="panel">
+      <h2>Who can access what</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="text-align:left;color:var(--muted);">
+        <th style="padding:6px 9px;font-weight:600;">Person</th><th style="padding:6px 9px;font-weight:600;">Role</th><th style="padding:6px 9px;font-weight:600;">Sees</th><th style="padding:6px 9px;font-weight:600;text-align:center;">Salary?</th></tr></thead>
+        <tbody>${matrix}</tbody></table>
+    </div>
+    <div class="panel">
+      <h2>Sign-in history</h2>
+      <div class="psub">Last time each person logged in — spot who's actually using the portal.</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="text-align:left;color:var(--muted);">
+        <th style="padding:6px 9px;font-weight:600;">Person</th><th style="padding:6px 9px;font-weight:600;">Last sign-in</th><th style="padding:6px 9px;font-weight:600;">Account created</th></tr></thead>
+        <tbody id="loginRows">${loginRows}</tbody></table>
+    </div>
+    <div class="panel">
+      <h2>Activity log <span class="count-tag">${(CHANGE_LOG||[]).length} recorded</span></h2>
+      <div class="psub">Every change made in the portal — stores, salary/bank edits, loans, exits, evaluations, ID corrections — with who and when.</div>
+      ${feed||'<div class="psub" style="margin-top:8px;">No changes logged yet.</div>'}
+    </div>`;
+  // fill login history via owner-only RPC
+  sb.rpc("login_history").then(({data,error})=>{
+    const el=document.getElementById("loginRows"); if(!el) return;
+    if(error||!data){ el.innerHTML='<tr><td colspan="3" class="psub" style="padding:8px;">Could not load sign-in history.</td></tr>'; return; }
+    el.innerHTML=data.map(u=>`<tr>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);"><b>${esc(whoName(u.email))}</b><div class="esub">${esc(u.email)}</div></td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);">${u.last_sign_in?fmtDateTime(u.last_sign_in):'<span class="note">never</span>'}</td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);color:var(--muted);">${u.created_at?fmtDate(u.created_at):""}</td></tr>`).join("");
+  });
+}
+function fmtDateTime(d){ if(!d) return "—"; const x=new Date(d); if(isNaN(x)) return String(d); return x.toLocaleDateString("en-US",{month:"short",day:"numeric"})+", "+x.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}); }
 function renderReports(){
   const pg=$("#page-reports"); if(!pg) return;
   const now=new Date(); const mStart=new Date(now.getFullYear(),now.getMonth(),1);
@@ -2914,6 +2995,7 @@ async function saveExitCase(x,modal,complete){
   if(complete && x.employee_id){
     const er=o.separation_type==="AWOL"?"AWOL":(o.separation_type==="Termination"?"Terminated":(o.separation_type==="End of Contract"?"End of Contract":(o.separation_type==="Retirement"?"Retired":"Resigned")));
     await sb.from("employees").update({status:"Separated", end_date:o.last_working_day, end_reason:er}).eq("id",x.employee_id);
+    await logChange("exit",x.id,x.employee_name,"Separated",er+" · last day "+(o.last_working_day||"—")+" · net pay "+peso(o.net_payable||0));
   }
   if(modal) modal.remove();
   await loadEmployees(); window.go("exit");

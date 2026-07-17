@@ -2352,6 +2352,8 @@ const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "sanjay@hassarams.com":"admin
 function userRole(){ return ROLE_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()] || "recruiter"; }
 function isAdminUser(){ return userRole()==="admin"; }
 function canSeePay(){ const r=userRole(); return r==="admin"||r==="payroll"; }
+// Gov IDs (SSS/PhilHealth/Pag-IBIG/TIN) + bank = visible to ALL logged-in HR (anj call, 2026-07-17). Only SALARY stays payroll-only via canSeePay(). Tighten here if bank ever needs re-locking.
+function canSeeIds(){ return !!CURRENT_USER; }
 function isLimitedUser(){ return userRole()!=="admin"; }
 function canManageStores(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"; }  // Anj + Grazel + Rhel (HR Mgr)
 const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding","reports"];
@@ -3249,12 +3251,12 @@ function openRecord(e){
         f("Email",e.email,TAGEMP)+f("Mobile",e.phone,TAGEMP)+f("Date of Birth",e.date_of_birth?fmtDate(e.date_of_birth):"",TAGEMP)+f("Gender",e.gender,TAGEMP)+f("Civil Status",e.civil_status,TAGEMP)+f("Permanent Address",e.permanent_address,TAGEMP)+f("Current Address",e.current_address,TAGEMP))}
       ${sec(3,"Emergency Contact",
         f("Name",e.emergency_contact_name,TAGEMP)+f("Relationship",e.emergency_contact_relation,TAGEMP)+f("Contact Number",e.emergency_contact_number,TAGEMP))}
-      ${canSeePay()?sec(4,"Government Numbers",
+      ${canSeeIds()?sec(4,"Government Numbers",
         f("SSS",e.sss_number,TAGHR)+f("PhilHealth",e.philhealth_number,TAGHR)+f("Pag-IBIG",e.pagibig_number,TAGHR)+f("TIN",e.tin_number,TAGHR))
-        :sec(4,"Government Numbers",`<div class="efield"><div class="ev"><span class="note">🔒 Restricted — visible to authorised payroll only</span></div></div>`)}
-      ${canSeePay()?sec(5,"Bank",
+        :sec(4,"Government Numbers",`<div class="efield"><div class="ev"><span class="note">🔒 Restricted</span></div></div>`)}
+      ${canSeeIds()?sec(5,"Bank",
         f("Bank Name",e.bank_name,TAGAUTO)+f("Account Number",e.bank_account_number,TAGHR))
-        :sec(5,"Bank",`<div class="efield"><div class="ev"><span class="note">🔒 Restricted — visible to authorised payroll only</span></div></div>`)}
+        :sec(5,"Bank",`<div class="efield"><div class="ev"><span class="note">🔒 Restricted</span></div></div>`)}
       ${sec(6,"Placement",
         f("Department",e.department,TAGHR)+f("Position",e.position,TAGHR)+f("Worksite",e.worksite,TAGHR)+f("Supervisor",e.supervisor_name,TAGHR)+f("Approver 2",e.approver2_name||e.approver2_email,TAGAUTO))}
       ${sec(7,"Employment Terms, Pay &amp; Dates",
@@ -3869,11 +3871,11 @@ function openForm(e){
         ${sel("f_emergency_contact_relation","Relationship",RELATIONS,e.emergency_contact_relation)}
         ${fld("f_emergency_contact_number","Emergency contact number",e.emergency_contact_number)}
       </div>
-      ${canSeePay()?`<div class="panel">
+      ${canSeeIds()?`<div class="panel">
         ${fld("f_sss_number","SSS",e.sss_number)}${fld("f_philhealth_number","PhilHealth",e.philhealth_number)}
         ${fld("f_pagibig_number","Pag-IBIG",e.pagibig_number)}${fld("f_tin_number","TIN",e.tin_number)}
         ${fld("f_bank_name","Bank name",e.bank_name)}${fld("f_bank_account_number","Bank account number",e.bank_account_number)}
-      </div>`:`<div class="panel"><div style="font-size:13px;color:#6a766f;">🔒 Government IDs &amp; bank details are restricted to authorised payroll.</div></div>`}
+      </div>`:`<div class="panel"><div style="font-size:13px;color:#6a766f;">🔒 Government IDs &amp; bank details are restricted.</div></div>`}
       <div class="panel">
         ${fld("f_worksite","Worksite",e.worksite)}${fld("f_supervisor_name","Supervisor",e.supervisor_name)}${fld("f_approver2_name","Approver 2",e.approver2_name)}
         ${sel("f_contract_type","Contract type",CONTRACT_TYPES,e.contract_type)}
@@ -3908,22 +3910,29 @@ async function saveEmployee(id,modal){
     contract_type:v("f_contract_type"),
     hire_date:v("f_hire_date"), regularization_date:v("f_regularization_date"), end_date:v("f_end_date"), end_reason:v("f_end_reason"),
     notes:v("f_notes"), updated_at:new Date().toISOString() };
-  // salary / bank / government IDs only written by an authorised payroll viewer — others never touch these columns
-  if(canSeePay()){ Object.assign(p,{ sss_number:v("f_sss_number"), philhealth_number:v("f_philhealth_number"), pagibig_number:v("f_pagibig_number"), tin_number:v("f_tin_number"), bank_name:v("f_bank_name"), bank_account_number:v("f_bank_account_number"), daily_rate:nv("f_daily_rate"), daily_allowance:nv("f_daily_allowance") }); }
+  // gov IDs + bank writable by any HR (canSeeIds); SALARY (daily_rate/allowance) still payroll-only (canSeePay)
+  if(canSeeIds()){ Object.assign(p,{ sss_number:v("f_sss_number"), philhealth_number:v("f_philhealth_number"), pagibig_number:v("f_pagibig_number"), tin_number:v("f_tin_number"), bank_name:v("f_bank_name"), bank_account_number:v("f_bank_account_number") }); }
+  if(canSeePay()){ Object.assign(p,{ daily_rate:nv("f_daily_rate"), daily_allowance:nv("f_daily_allowance") }); }
   if(!p.full_name){ msg.textContent="Full name is required."; return; }
   btn.disabled=true; btn.textContent="Saving…";
   const before = id ? (EMPLOYEES.find(e=>e.id===id)||{}) : {};
   const res=id? await sb.from("employees").update(p).eq("id",id) : await sb.from("employees").insert(p);
   btn.disabled=false; btn.textContent=id?"Save changes":"Create";
   if(res.error){ msg.textContent=res.error.message; return; }
-  // log SENSITIVE changes (pay/bank) for the owner audit trail
-  if(id && canSeePay()){
+  // log SENSITIVE changes for the owner audit trail
+  if(id){
     const ch=[];
-    if(Number(before.daily_rate||0)!==Number(p.daily_rate||0)) ch.push("Daily rate "+(before.daily_rate?"₱"+Number(before.daily_rate).toLocaleString():"—")+" → "+(p.daily_rate?"₱"+Number(p.daily_rate).toLocaleString():"—"));
-    if(Number(before.daily_allowance||0)!==Number(p.daily_allowance||0)) ch.push("Allowance "+(before.daily_allowance?"₱"+Number(before.daily_allowance).toLocaleString():"—")+" → "+(p.daily_allowance?"₱"+Number(p.daily_allowance).toLocaleString():"—"));
-    if((before.bank_account_number||"")!==(p.bank_account_number||"")) ch.push("Bank account changed");
-    if(ch.length) await logChange("employee",id,p.full_name,"Pay/bank edited",ch.join(" · "));
-  } else if(!id){ await logChange("employee",null,p.full_name,"Added",""); }
+    if(canSeePay()){
+      if(Number(before.daily_rate||0)!==Number(p.daily_rate||0)) ch.push("Daily rate "+(before.daily_rate?"₱"+Number(before.daily_rate).toLocaleString():"—")+" → "+(p.daily_rate?"₱"+Number(p.daily_rate).toLocaleString():"—"));
+      if(Number(before.daily_allowance||0)!==Number(p.daily_allowance||0)) ch.push("Allowance "+(before.daily_allowance?"₱"+Number(before.daily_allowance).toLocaleString():"—")+" → "+(p.daily_allowance?"₱"+Number(p.daily_allowance).toLocaleString():"—"));
+    }
+    if(canSeeIds()){  // bank/gov now editable by any HR — log who changed them
+      if((before.bank_account_number||"")!==(p.bank_account_number||"")) ch.push("Bank account changed");
+      if((before.bank_name||"")!==(p.bank_name||"")) ch.push("Bank name changed");
+      ["sss_number","philhealth_number","pagibig_number","tin_number"].forEach(k=>{ if((before[k]||"")!==(p[k]||"")) ch.push(k.replace("_number","").toUpperCase()+" changed"); });
+    }
+    if(ch.length) await logChange("employee",id,p.full_name,"Sensitive field edited",ch.join(" · "));
+  } else { await logChange("employee",null,p.full_name,"Added",""); }
   modal.remove(); await loadEmployees();
 }
 
@@ -4106,6 +4115,7 @@ async function renderActivity(){
       <table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="text-align:left;color:var(--muted);">
         <th style="padding:6px 9px;font-weight:600;">Person</th><th style="padding:6px 9px;font-weight:600;">Role</th><th style="padding:6px 9px;font-weight:600;">Sees</th><th style="padding:6px 9px;font-weight:600;text-align:center;">Salary?</th></tr></thead>
         <tbody>${matrix}</tbody></table>
+      <div class="psub" style="margin-top:9px;">🔓 Government IDs (SSS/PhilHealth/Pag-IBIG/TIN) &amp; bank details are visible to all HR logins — needed for onboarding &amp; enrolment. Only <b>salary</b> stays restricted to you, Sanjay &amp; Grazel. Every edit to a bank or gov number is logged in the activity feed below.</div>
     </div>
     <div class="panel">
       <h2>Sign-in history</h2>
@@ -4594,7 +4604,7 @@ function editPrehire(c){
       <div class="panel"><div class="subhead">Offer &amp; compensation <span class="sh-note">daily rate may change at contract</span></div>
         ${sel("pe_ctype","Contract type",CONTRACT_TYPES,c.contract_type)}${sel("pe_paybasis","Pay basis — Head Office only (others are daily-rated)",["Daily","Monthly"],c.pay_basis)}${canSeePay()?`${fld("pe_rate","Daily rate offered (₱)",c.daily_rate,"number")}${fld("pe_allow","Daily allowance (₱)",c.daily_allowance,"number")}`:`<div style="font-size:12.5px;color:#6a766f;margin:6px 0;">🔒 Daily rate is restricted to payroll.</div>`}${fld("pe_start","Target start date",c.start_date,"date")}${fld("pe_super","Supervisor",c.supervisor_name)}
       </div>
-      ${canSeePay()?`<div class="panel"><div class="subhead">Government numbers &amp; bank</div>
+      ${canSeeIds()?`<div class="panel"><div class="subhead">Government numbers &amp; bank</div>
         ${fld("pe_sss","SSS",c.sss_number)}${fld("pe_phil","PhilHealth",c.philhealth_number)}${fld("pe_pag","Pag-IBIG",c.pagibig_number)}${fld("pe_tin","TIN",c.tin_number)}${fld("pe_bank","Bank name",c.bank_name)}${fld("pe_acct","Bank account number",c.bank_account_number)}
       </div>`:""}
       <div class="panel"><div class="subhead">HR notes &amp; gate</div>
@@ -4621,7 +4631,8 @@ function editPrehire(c){
       contract_type:v("pe_ctype"), pay_basis:v("pe_paybasis"), start_date:v("pe_start"), supervisor_name:v("pe_super"),
       hr_officer_notes:v("pe_notes"), sm_acceptance:v("pe_sm"),
       interview_status:v("pe_istatus"), interview_date:v("pe_idate"), interviewer:v("pe_interviewer"), updated_at:new Date().toISOString() };
-    if(canSeePay()){ Object.assign(p,{ daily_rate:nv("pe_rate"), daily_allowance:nv("pe_allow"), sss_number:v("pe_sss"), philhealth_number:v("pe_phil"), pagibig_number:v("pe_pag"), tin_number:v("pe_tin"), bank_name:v("pe_bank"), bank_account_number:v("pe_acct") }); }
+    if(canSeeIds()){ Object.assign(p,{ sss_number:v("pe_sss"), philhealth_number:v("pe_phil"), pagibig_number:v("pe_pag"), tin_number:v("pe_tin"), bank_name:v("pe_bank"), bank_account_number:v("pe_acct") }); }
+    if(canSeePay()){ Object.assign(p,{ daily_rate:nv("pe_rate"), daily_allowance:nv("pe_allow") }); }
     const { error } = await sb.from("prehire").update(p).eq("id",c.id);
     if(error){ document.getElementById("peMsg").textContent=error.message; return; }
     m.remove(); const pm=document.getElementById("phModal"); if(pm) pm.remove();

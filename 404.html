@@ -3053,6 +3053,7 @@ function renderDashboard(){
       <div class="panel" style="margin-top:0;">
         <h2>Your pending tasks <span class="count-tag">live · click to act</span></h2>
         <div class="psub">Computed from your data — most actionable first</div>
+        ${(()=>{ if(!canSeePay()) return ''; const fpAwait=(SIGNATURES||[]).filter(s=>s.doc_type==="claim"&&s.awaiting==="you"&&s.status==="pending"); return fpAwait.length?`<div class="task" style="cursor:pointer;" onclick="go('signatures')"><div class="dot r"></div><div><div class="tt">${fpAwait.length} final-pay quitclaim(s) awaiting your sign-off</div><div class="td">Full figures are on the sign screen — review &amp; e-sign in one place${fpAwait[0]?` · e.g. ${esc(fpAwait[0].subject_name||"")} ${fpAwait[0].amount!=null?"("+peso(fpAwait[0].amount)+")":""}`:""}</div></div><div class="due r">sign-off</div></div>`:''; })()}
         ${phReady?`<div class="task" style="cursor:pointer;" onclick="go('prehire')"><div class="dot r"></div><div><div class="tt">${phReady} candidate(s) ready for contract / onboarding</div><div class="td">Move them into an onboarding case</div></div><div class="due r">hiring</div></div>`:''}
         ${onbTasksOpen?`<div class="task" style="cursor:pointer;" onclick="go('onboarding')"><div class="dot a"></div><div><div class="tt">${onbTasksOpen} open onboarding task(s)</div><div class="td">${onbOpen} case(s) in progress — bank, uniform, gov forms, Employee ID</div></div><div class="due a">onboarding</div></div>`:''}
         ${exitOpen?`<div class="task" style="cursor:pointer;" onclick="go('exit')"><div class="dot a"></div><div><div class="tt">${exitOpen} exit clearance(s) in progress</div><div class="td">Department sign-offs &amp; final-pay computation</div></div><div class="due a">offboarding</div></div>`:''}
@@ -3585,6 +3586,11 @@ function openSignDoc(id){
     const signer=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"Signed-in user";
     const { error } = await sb.from("signature_requests").update({ status:"signed", signed_at:new Date().toISOString(), signer_name:signer, signature_data:cv.toDataURL("image/png"), updated_at:new Date().toISOString() }).eq("id",s.id);
     if(error){ document.getElementById("sigMsg").textContent=error.message; btn.disabled=false; btn.textContent="Sign document"; return; }
+    // Final-pay quitclaim signed → mark the linked exit case Approved (this signature IS the approval, replacing the old email request).
+    if(s.doc_type==="claim"){
+      await sb.from("exit_clearance").update({ quitclaim_status:"Approved", quitclaim_signed:true, quitclaim_date:new Date().toISOString().slice(0,10), updated_at:new Date().toISOString() }).eq("quitclaim_signature_id",s.id);
+      try{ await logChange("exit",null,s.subject_name||"",  "Final pay approved (e-signed)","Net "+(s.amount!=null?peso(s.amount):"—")); }catch(_){}
+    }
     m.remove(); await loadEmployees(); window.go("signatures");
   };
   document.getElementById("sigDecline").onclick=async()=>{
@@ -4241,7 +4247,8 @@ function phLinksBar(){
 }
 function renderPrehire(){
   const pg=$("#page-prehire"); if(!pg) return;
-  const inPipe=PREHIRE.filter(p=>p.phase!=="HIRED"&&p.phase!=="REJECTED");
+  const inPipe=PREHIRE.filter(p=>p.phase!=="HIRED"&&p.phase!=="REJECTED"&&p.phase!=="DRAFT");  // DRAFT = agency not-yet-submitted; not in RCC's pipeline
+  const drafts=PREHIRE.filter(p=>p.phase==="DRAFT");
   const docs=PREHIRE.filter(p=>p.phase==="DOCUMENTS").length;
   const ready=PREHIRE.filter(p=>p.phase==="HR_SIGNOFF").length;
   const rejected=PREHIRE.filter(p=>p.phase==="REJECTED").length;
@@ -4262,6 +4269,7 @@ function renderPrehire(){
         <div class="kpi"><div class="k-l">HR Sign-off</div><div class="k-n">${ready}</div><div class="k-s">ready for contract</div></div>
         <div class="kpi ${rejected?'':''}"><div class="k-l">Rejected</div><div class="k-n">${rejected}</div><div class="k-s">pipeline closed</div></div>
       </div>
+      ${drafts.length?`<div style="margin-top:10px;padding:9px 12px;background:#fdf6e3;border:1px solid #ecdca6;border-radius:9px;font-size:12.5px;color:#7a5c12;">🟡 <b>${drafts.length}</b> candidate${drafts.length>1?'s':''} saved in agency drafts but <b>not yet submitted to RCC</b> ${(()=>{const bs={};drafts.forEach(d=>{const s=d.hire_source||'Direct';bs[s]=(bs[s]||0)+1;});return '('+Object.entries(bs).map(([s,n])=>esc(s)+' '+n).join(' · ')+')';})()}. They appear in the <b>Agency Draft</b> lane below — the agency must click “Submit to RCC” on their own page before these enter your pipeline.</div>`:""}
       <div class="tabs" id="phTabs" style="margin-top:14px;">
         <div class="tab ${prehireTab==='pipeline'?'active':''}" data-t="pipeline">Pipeline</div>
         <div class="tab ${prehireTab==='funnel'?'active':''}" data-t="funnel">Recruitment Funnel</div>
@@ -4290,8 +4298,11 @@ function renderPrehire(){
 
 function phBodyPipeline(){
   const srcMatch=p=>!prehireSrc || (prehireSrc==="Direct"?(!p.hire_source||p.hire_source==="Direct"):p.hire_source===prehireSrc);
-  const cols=PH_PHASES.map(ph=>{
+  // DRAFT = agency in-progress submissions (not yet shipped to RCC). Show as the leftmost lane so nothing is hidden.
+  const draftPhase={key:"DRAFT",label:"Agency Draft",actor:"agency · not yet submitted"};
+  const cols=[draftPhase].concat(PH_PHASES).map(ph=>{
     const cards=PREHIRE.filter(p=>p.phase===ph.key && srcMatch(p));
+    if(ph.key==="DRAFT" && cards.length===0) return "";  // hide the draft lane entirely when empty
     return `<div class="col"><div class="col-h">${ph.label}<span>${cards.length} · ${esc(ph.actor)}</span></div>
       ${cards.map(c=>`<div class="ccard clickable" data-id="${c.id}" ${ph.key==="HR_SIGNOFF"?'style="border-color:#bcdcc7;background:var(--green-light);"':''}>
         <div class="cn">${esc(c.full_name)}</div>
@@ -5062,8 +5073,30 @@ const EXIT_STATUSES=["Pending","Cleared","With Charges"];
 const SEPARATION_TYPES=["Resignation","End of Contract","Termination","AWOL","Retirement","Redundancy"];
 function monthsBetween(a,b){ if(!a||!b) return null; const d1=new Date(a), d2=new Date(b); if(isNaN(d1)||isNaN(d2)) return null; return Math.max(0, (d2.getFullYear()-d1.getFullYear())*12 + (d2.getMonth()-d1.getMonth()) - (d2.getDate()<d1.getDate()?1:0)); }
 function exitStagesDone(x){ return EXIT_STAGES.filter(s=>x[s.s]&&x[s.s]!=="Pending").length; }
-function exitDeductions(x){ let d=Number(x.uniform_deduction||0); EXIT_STAGES.forEach(s=>{ if(s.c) d+=Number(x[s.c]||0); }); return d; }
-function exitPayables(x){ return Number(x.outstanding_salary||0)+Number(x.sil_payment||0)+Number(x.thirteenth_month||0)+Number(x.tax_refund||0)+Number(x.pending_commission||0); }
+/* ---------- QUITCLAIM / FINAL-PAY breakdown — mirrors HR's Excel computation, line by line ---------- */
+const FP_CLAIMS=[
+  ["last_payroll","Last payroll","Unpaid salary for the last worked period — state the period."],
+  ["thirteenth_month","13th-month pro-rata","Earned 13th month for the year, prorated to the last day."],
+  ["leave_incentive","Leave incentive / SIL","Unused Service Incentive Leave converted to cash."],
+  ["hmo_reversal","HMO reversal",""],
+  ["tax_refund","Tax refund",""],
+  ["rebates_incentives","Rebates on incentives",""],
+  ["commission","Commission / incentives",""]
+];
+const FP_DEDUCTIONS=[
+  ["breach_of_contract","Breach of contract","⚖ Needs a signed contract clause (liquidated damages) & must not drop net below wage due — flag with counsel if unsure."],
+  ["advances_office_loan","Advances / office loan","Outstanding cash advance or office / loan balance."],
+  ["other_charges","Other charges",""],
+  ["inventory_short","Inventory short","Signed NTE / ATD is the deduct gate — cite the ref #."]
+];
+const FP_ALL=FP_CLAIMS.concat(FP_DEDUCTIONS);
+function fpSum(fp,defs){ return defs.reduce((t,[k])=>t+Number((fp&&fp[k])||0),0); }
+function fpClaims(fp){ return fpSum(fp,FP_CLAIMS); }
+function fpDeductions(fp){ return fpSum(fp,FP_DEDUCTIONS); }
+function fpNet(fp){ return fpClaims(fp)-fpDeductions(fp); }
+function hasFinalPay(x){ return !!(x && x.final_pay && typeof x.final_pay==="object"); }
+function exitDeductions(x){ if(hasFinalPay(x)) return fpDeductions(x.final_pay); let d=Number(x.uniform_deduction||0); EXIT_STAGES.forEach(s=>{ if(s.c) d+=Number(x[s.c]||0); }); return d; }
+function exitPayables(x){ if(hasFinalPay(x)) return fpClaims(x.final_pay); return Number(x.outstanding_salary||0)+Number(x.sil_payment||0)+Number(x.thirteenth_month||0)+Number(x.tax_refund||0)+Number(x.pending_commission||0); }
 function exitNet(x){ return exitPayables(x)-exitDeductions(x); }
 const peso=(n)=>"₱"+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2});
 
@@ -5136,9 +5169,55 @@ async function createExitCase(emp){
   await loadEmployees(); window.go("exit"); openExitCase(data.id);
 }
 function exNumField(id,label,val){ return `<div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px;">${label}</label><input id="${id}" type="number" step="0.01" value="${val??""}" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;"></div>`; }
+// One quitclaim line: amount + an optional remarks note (matches the Excel's per-line REMARKS column).
+function fpField(key,label,hint,fp){ const v=fp&&fp[key], n=fp&&fp[key+"_note"];
+  return `<div style="margin-bottom:9px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px;">${label}</label>
+    <input id="fp_${key}" type="number" step="0.01" value="${v??""}" placeholder="0.00" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;">
+    <input id="fpn_${key}" value="${esc(n||"")}" placeholder="${esc(hint||"note / remarks (optional)")}" style="width:100%;margin-top:4px;padding:5px 9px;border:1px solid #eef1ee;border-radius:6px;font-size:11.5px;color:#5c6b60;background:#fbfcfb;"></div>`; }
+// Read the quitclaim form back out of the open exit modal.
+function collectFinalPay(){ const m=document.getElementById("exModal"); if(!m) return {};
+  const num=id=>{ const e=m.querySelector("#fp_"+id); return e&&e.value.trim()!==""?Number(e.value):0; };
+  const note=id=>{ const e=m.querySelector("#fpn_"+id); return e?e.value.trim():""; };
+  const fp={}; FP_ALL.forEach(([k])=>{ fp[k]=num(k); const nt=note(k); if(nt) fp[k+"_note"]=nt; });
+  const ba=m.querySelector("#fp_bank_account"), pi=m.querySelector("#fp_payment_instruction");
+  if(ba) fp.bank_account=ba.value.trim(); if(pi) fp.payment_instruction=pi.value.trim();
+  fp.total_claims=fpClaims(fp); fp.total_deductions=fpDeductions(fp); fp.net=fpNet(fp); return fp; }
+const qcPill=(s)=>{ const m={"Draft":["probation","Draft"],"Awaiting Sign-off":["awol","Awaiting your sign-off"],"Approved":["active","Approved · signed"],"Declined":["closed","Declined"]}; const p=m[s]; return p?`<span class="pill ${p[0]}">${p[1]}</span>`:""; };
+// Plain-text quitclaim the Director sees on the sign screen — the figures travel WITH the signature.
+function finalPayBody(x,fp){ const emp=(EMPLOYEES||[]).find(e=>e.id===x.employee_id)||{};
+  const money=n=>"PHP "+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  const pad=(lbl,amt,note)=>{ const L=("  "+lbl).padEnd(34,".").slice(0,34); return L+" "+money(amt).padStart(15)+(note?"   ("+note+")":""); };
+  const line="  "+"-".repeat(48);
+  const L=[];
+  L.push("QUITCLAIM — FINAL PAY COMPUTATION","");
+  L.push("Employee: "+(x.employee_name||"—"));
+  L.push("Employee ID: "+(emp.employee_id||"—")+"  ·  "+(x.position||emp.position||"—"));
+  if(emp.worksite||x.department) L.push("Branch: "+(emp.worksite||x.department));
+  L.push("Date hired: "+(x.hire_date?fmtDate(x.hire_date):"—")+"  ·  Last day: "+(x.last_working_day?fmtDate(x.last_working_day):"—"));
+  L.push("Separation: "+(x.separation_type||"—"),"");
+  L.push("CLAIMS (owed to employee)");
+  FP_CLAIMS.forEach(([k,lbl])=>{ if(Number(fp[k]||0)!==0||fp[k+"_note"]) L.push(pad(lbl,fp[k],fp[k+"_note"])); });
+  L.push(line, pad("Total claims",fpClaims(fp)),"");
+  L.push("LESS: DEDUCTIONS");
+  FP_DEDUCTIONS.forEach(([k,lbl])=>{ if(Number(fp[k]||0)!==0||fp[k+"_note"]) L.push(pad(lbl,fp[k],fp[k+"_note"])); });
+  L.push(line, pad("Total deductions",fpDeductions(fp)),"");
+  L.push(line.replace(/-/g,"="));
+  L.push(("  NET PAID TO EMPLOYEE").padEnd(34," ")+" "+money(fpNet(fp)).padStart(15));
+  L.push(line.replace(/-/g,"="),"");
+  if(fp.payment_instruction||fp.bank_account) L.push("Payment: "+[fp.payment_instruction,fp.bank_account].filter(Boolean).join("  ·  "));
+  L.push("","Prepared by: "+((CURRENT_USER&&CURRENT_USER.email)||"HR"));
+  L.push("Approving: Director, Admin & Finance");
+  L.push("","Your signature below approves this final-pay computation for release (RA 8792).");
+  return L.join("\n"); }
 function openExitCase(id){
   const x=EXITCASES.find(v=>String(v.id)===String(id)); if(!x) return;
   const t=x.tenure_months; const under6=t!=null&&t<6;
+  // Seed the quitclaim form: use the saved breakdown if present, else pre-fill from any legacy final-pay fields so nothing is lost.
+  const fp = hasFinalPay(x) ? x.final_pay : {
+    last_payroll:x.outstanding_salary||"", thirteenth_month:x.thirteenth_month||"", leave_incentive:x.sil_payment||"",
+    tax_refund:x.tax_refund||"", commission:x.pending_commission||"",
+    inventory_short:Number(x.finance_inventory_charges||0)||"", advances_office_loan:Number(x.finance_disbursement_charges||0)||""
+  };
   let m=document.getElementById("exModal"); if(!m){ m=document.createElement("div"); m.id="exModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
@@ -5183,16 +5262,27 @@ function openExitCase(id){
         ${exNumField("ex_uniform_deduction","Uniform cost to deduct (₱)",x.uniform_deduction)}
         </div>`:""}
 
-      <div class="panel"><h2>Final pay computation</h2>
-        <div class="psub">Amounts owed to the employee, less lawful deductions. (Salary is entered manually — not stored as a queryable field.)</div>
+      <div class="panel"><h2>Final pay — quitclaim computation ${x.quitclaim_status?qcPill(x.quitclaim_status):""}</h2>
+        <div class="psub">This is exactly what the Director reviews and signs. Enter each line as on the quitclaim — the net updates live and travels with the signature request, so no one hunts the email later.</div>
+        ${x.quitclaim_status==="Awaiting Sign-off"?`<div class="note" style="background:#fffaf0;border-color:#f0c14b;">✉️ Sent to the Director${x.quitclaim_sent_at?" on "+fmtDate(x.quitclaim_sent_at):""} — now in their Signatures inbox, awaiting signature. Editing here and re-sending will replace it.</div>`:""}
+        ${x.quitclaim_status==="Approved"?`<div class="note" style="background:var(--green-light);border-color:var(--green);">✓ Approved &amp; e-signed by the Director${x.quitclaim_date?" on "+fmtDate(x.quitclaim_date):""}. Safe to release.</div>`:""}
+        <div style="font-weight:800;color:var(--green-dark);font-size:11.5px;letter-spacing:.4px;text-transform:uppercase;margin:10px 0 4px;">Claims — owed to employee</div>
         <div class="form-grid">
-          ${exNumField("ex_outstanding_salary","Outstanding salary",x.outstanding_salary)}
-          ${exNumField("ex_sil_payment","SIL conversion",x.sil_payment)}
-          ${exNumField("ex_thirteenth_month","13th-month pro-rata",x.thirteenth_month)}
-          ${exNumField("ex_tax_refund","Tax refund",x.tax_refund)}
-          ${exNumField("ex_pending_commission","Pending commission",x.pending_commission)}
+          ${FP_CLAIMS.map(([k,l,h])=>fpField(k,l,h,fp)).join("")}
         </div>
-        <div id="ex_netbox" style="background:var(--green-light);border-radius:9px;padding:12px 14px;margin-top:6px;font-size:13.5px;"></div>
+        <div style="font-weight:800;color:var(--red);font-size:11.5px;letter-spacing:.4px;text-transform:uppercase;margin:14px 0 4px;">Less: deductions</div>
+        <div class="form-grid">
+          ${FP_DEDUCTIONS.map(([k,l,h])=>fpField(k,l,h,fp)).join("")}
+        </div>
+        <div style="font-weight:800;color:#6a766f;font-size:11.5px;letter-spacing:.4px;text-transform:uppercase;margin:14px 0 4px;">How it's paid</div>
+        <div class="form-grid">
+          <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Payment instruction</label><input id="fp_payment_instruction" value="${esc((fp&&fp.payment_instruction)||"")}" placeholder="e.g. GCash transfer / cheque / bank" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;"></div>
+          <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Account / reference</label><input id="fp_bank_account" value="${esc((fp&&fp.bank_account)||"")}" placeholder="e.g. GCash 0994 5009 668" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;"></div>
+        </div>
+        <div id="ex_netbox" style="background:var(--green-light);border-radius:9px;padding:12px 14px;margin-top:8px;font-size:13.5px;"></div>
+        <div style="margin-top:10px;">${x.quitclaim_status==="Approved"
+          ? `<button class="btn ghost" id="exViewFP">View / print signed quitclaim</button>`
+          : `<button class="btn blue" id="exSendFP">${x.quitclaim_status==="Awaiting Sign-off"?"Re-send to Director for sign-off":"Send to Director for sign-off"}</button>`}</div>
       </div>
 
       <div class="panel"><h2>Closeout</h2>
@@ -5219,8 +5309,9 @@ function openExitCase(id){
       </div>
     </div></div>`;
   const recompute=()=>{
-    const tmp=collectExit(x);
-    $("#ex_netbox").innerHTML=`Payables <b>${peso(exitPayables(tmp))}</b> − Deductions <b>${peso(exitDeductions(tmp))}</b> = <b style="color:var(--green-dark);font-size:15px;">Net ${peso(exitNet(tmp))}</b>`;
+    const q=collectFinalPay(), c=fpClaims(q), d=fpDeductions(q), n=c-d;
+    $("#ex_netbox").innerHTML=`Total claims <b>${peso(c)}</b> − Deductions <b>${peso(d)}</b> = <b style="color:var(--green-dark);font-size:16px;">Net to employee ${peso(n)}</b>`
+      +(n<0?` <span style="color:var(--red);font-weight:700;">— negative: the employee would owe. Recheck before sending.</span>`:"");
   };
   m.querySelectorAll("input,select").forEach(el=>el.addEventListener("input",recompute));
   recompute();
@@ -5228,6 +5319,8 @@ function openExitCase(id){
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   $("#exSave").addEventListener("click",()=>saveExitCase(x,m,false));
   const cmp=document.getElementById("exComplete"); if(cmp) cmp.addEventListener("click",()=>saveExitCase(x,m,true));
+  const sendFP=document.getElementById("exSendFP"); if(sendFP) sendFP.addEventListener("click",()=>sendFinalPayForSignoff(x,m));
+  const viewFP=document.getElementById("exViewFP"); if(viewFP) viewFP.addEventListener("click",()=>printQuitclaim(x));
   document.getElementById("ex_interview_btn").addEventListener("click",()=>openExitInterview(x));
   const hmoEmailBtn=document.getElementById("ex_hmo_email");
   if(hmoEmailBtn) hmoEmailBtn.addEventListener("click",()=>{
@@ -5284,6 +5377,7 @@ function collectExit(x){
   m.querySelectorAll("[data-stage]").forEach(el=>{ o[el.dataset.stage]=el.value; });
   m.querySelectorAll("[data-charge]").forEach(el=>{ o[el.dataset.charge]=el.value.trim()!==""?Number(el.value):0; });
   if(o.last_working_day) o.tenure_months=monthsBetween(x.hire_date,o.last_working_day);
+  o.final_pay=collectFinalPay();   // the quitclaim breakdown is now the source of truth for payables/deductions/net
   return o;
 }
 async function saveExitCase(x,modal,complete){
@@ -5311,6 +5405,73 @@ async function saveExitCase(x,modal,complete){
   if(modal) modal.remove();
   await loadEmployees(); window.go("exit");
 }
+
+/* ---------- SEND THE QUITCLAIM TO THE DIRECTOR'S SIGNATURES INBOX ----------
+   Persists the breakdown on the exit case, then drops one "claim" item into the
+   Director's sign-this inbox with the FULL figures in its body — so review + sign
+   happen in one place and the separate email request goes away. */
+async function sendFinalPayForSignoff(x,modal){
+  const msg=document.getElementById("exMsg");
+  const fp=collectFinalPay();
+  if(fpClaims(fp)<=0 && fpDeductions(fp)<=0){ if(msg) msg.textContent="Enter the final-pay figures first."; return; }
+  const net=fpNet(fp);
+  if(net<0 && !confirm("The net is negative — the employee would owe money. Send anyway?")) return;
+  if(Number(fp.breach_of_contract||0)>0 && !confirm("A ₱"+Number(fp.breach_of_contract).toLocaleString()+" breach-of-contract deduction is included.\n\nUnder DOLE this needs a signed contractual basis (liquidated-damages clause) and must not drop net below the wage due. Send for the Director to review?")) return;
+  const btn=document.getElementById("exSendFP"); if(btn){ btn.disabled=true; btn.textContent="Sending…"; }
+  const sender=(CURRENT_USER&&CURRENT_USER.email)||"HR";
+  // 1) save the breakdown + status on the exit case
+  const patch={ final_pay:fp, total_payable:fpClaims(fp), total_deductions:fpDeductions(fp), net_payable:net,
+    quitclaim_status:"Awaiting Sign-off", quitclaim_sent_at:new Date().toISOString(), quitclaim_sent_by:sender, updated_at:new Date().toISOString() };
+  const e1=(await sb.from("exit_clearance").update(patch).eq("id",x.id)).error;
+  if(e1){ if(msg) msg.textContent=e1.message; if(btn){ btn.disabled=false; btn.textContent="Send to Director for sign-off"; } return; }
+  // 2) supersede any earlier pending request for this case, then create a fresh one
+  if(x.quitclaim_signature_id) await sb.from("signature_requests").update({status:"superseded",updated_at:new Date().toISOString()}).eq("id",x.quitclaim_signature_id).eq("status","pending");
+  const { data:sig, error:e2 } = await sb.from("signature_requests").insert({
+    doc_type:"claim", doc_title:"Quitclaim — Final Pay Computation", subject_name:x.employee_name,
+    body:finalPayBody(x,fp), from_name:sender, amount:net, meta:x.clearance_id,
+    awaiting:"you", with_whom:"Director (approval)", status:"pending" }).select().single();
+  if(e2){ if(msg) msg.textContent=e2.message; if(btn){ btn.disabled=false; btn.textContent="Send to Director for sign-off"; } return; }
+  await sb.from("exit_clearance").update({quitclaim_signature_id:sig.id}).eq("id",x.id);
+  await logChange("exit",x.id,x.employee_name,"Final pay sent for sign-off","Net "+peso(net)+" · to Director");
+  if(modal) modal.remove();
+  await loadEmployees(); window.go("signatures");
+}
+// Print/PDF the approved quitclaim on RCC letterhead-style layout (for the employee's signed copy).
+function printQuitclaim(x){
+  const fp=hasFinalPay(x)?x.final_pay:collectFinalPay();
+  const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to print the quitclaim."); return; }
+  const emp=(EMPLOYEES||[]).find(e=>e.id===x.employee_id)||{};
+  const P=n=>"₱"+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  const rowsC=FP_CLAIMS.filter(([k])=>Number(fp[k]||0)!==0||fp[k+"_note"]).map(([k,l])=>`<tr><td>${esc(l)}</td><td class="n">${P(fp[k])}</td><td class="rm">${esc(fp[k+"_note"]||"")}</td></tr>`).join("");
+  const rowsD=FP_DEDUCTIONS.filter(([k])=>Number(fp[k]||0)!==0||fp[k+"_note"]).map(([k,l])=>`<tr><td>${esc(l)}</td><td class="n">${P(fp[k])}</td><td class="rm">${esc(fp[k+"_note"]||"")}</td></tr>`).join("");
+  w.document.write(`<!DOCTYPE html><html><head><title>Quitclaim — ${esc(x.employee_name)}</title><style>
+    body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#1F2A37;max-width:720px;margin:24px auto;padding:0 24px;font-size:13px;}
+    .lh{text-align:center;border-bottom:2.5px solid #1E3A5F;padding-bottom:8px;margin-bottom:14px;}
+    .lh b{font-size:17px;color:#1E3A5F;} .lh div{font-size:11px;color:#667;}
+    h2{text-align:center;font-size:15px;margin:10px 0 6px;} h3{font-size:12px;color:#1E3A5F;margin:14px 0 4px;}
+    table{width:100%;border-collapse:collapse;} td,th{border:1px solid #ccd;padding:5px 8px;} td.n{text-align:right;white-space:nowrap;} td.rm{color:#667;font-size:11px;}
+    .tot td{font-weight:800;background:#f4f7fb;} .net td{font-weight:800;background:#eaf4ec;font-size:14px;}
+    .meta td{border:none;padding:2px 4px;font-size:12px;} .sig{margin-top:34px;display:flex;justify-content:space-between;gap:30px;} .sig div{flex:1;text-align:center;} .sl{border-top:1px solid #333;margin-top:34px;padding-top:4px;font-size:11.5px;}
+  </style></head><body>
+    <div class="lh"><b>ROSHAN COMMERCIAL CORPORATION</b><div>104 Shaw Boulevard, Pasig City</div></div>
+    <h2>QUITCLAIM — FINAL PAY COMPUTATION</h2>
+    <table><tr class="meta"><td><b>Employee:</b> ${esc(x.employee_name)}</td><td><b>ID:</b> ${esc(emp.employee_id||"—")}</td></tr>
+      <tr class="meta"><td><b>Position:</b> ${esc(x.position||emp.position||"—")}</td><td><b>Branch:</b> ${esc(emp.worksite||x.department||"—")}</td></tr>
+      <tr class="meta"><td><b>Date hired:</b> ${x.hire_date?fmtDate(x.hire_date):"—"}</td><td><b>Last day:</b> ${x.last_working_day?fmtDate(x.last_working_day):"—"}</td></tr>
+      <tr class="meta"><td><b>Separation:</b> ${esc(x.separation_type||"—")}</td><td><b>Status:</b> ${esc(x.quitclaim_status||"—")}</td></tr></table>
+    <h3>Claims — owed to employee</h3>
+    <table>${rowsC||'<tr><td colspan="3">—</td></tr>'}<tr class="tot"><td>Total claims</td><td class="n">${P(fpClaims(fp))}</td><td></td></tr></table>
+    <h3>Less: deductions</h3>
+    <table>${rowsD||'<tr><td colspan="3">—</td></tr>'}<tr class="tot"><td>Total deductions</td><td class="n">${P(fpDeductions(fp))}</td><td></td></tr></table>
+    <table style="margin-top:8px;"><tr class="net"><td>NET PAID TO EMPLOYEE</td><td class="n">${P(fpNet(fp))}</td></tr></table>
+    ${(fp.payment_instruction||fp.bank_account)?`<div style="margin-top:8px;font-size:12px;"><b>Payment:</b> ${esc([fp.payment_instruction,fp.bank_account].filter(Boolean).join(" · "))}</div>`:""}
+    <div class="sig"><div><div class="sl">Juvelyn M. Belvistre<br><span style="color:#667;">HR Officer — Prepared by</span></div></div>
+      <div><div class="sl">Anju Genomal<br><span style="color:#667;">Director, Admin &amp; Finance — Approved${x.quitclaim_date?" "+fmtDate(x.quitclaim_date):""}</span></div></div></div>
+    <div class="sig"><div><div class="sl">${esc(x.employee_name)}<br><span style="color:#667;">Received &amp; conforme / Date</span></div></div></div>
+    <script>window.print();</`+`script></body></html>`);
+  w.document.close();
+}
+window.sendFinalPayForSignoff=sendFinalPayForSignoff; window.printQuitclaim=printQuitclaim;
 
 init();
 

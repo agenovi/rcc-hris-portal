@@ -2340,6 +2340,14 @@ let MEMOS=[];
 let EVALUATIONS=[];
 let CHANGE_LOG=[];
 let CURRENT_USER=null;
+let SC_STATUS={};  // sc_name -> {status:'Active'|'Vacant'|'Pending', note}
+function scStatus(sc){ return (SC_STATUS[sc]&&SC_STATUS[sc].status)||"Active"; }
+function scIsGone(sc){ const s=scStatus(sc); return s==="Vacant"||s==="Pending"; }
+async function setScStatus(sc,status,note){
+  SC_STATUS[sc]={sc_name:sc,status,note:note||null};
+  await sb.from("sc_status").upsert({ sc_name:sc, status, note:note||null, updated_at:new Date().toISOString() }, { onConflict:"sc_name" });
+  await logChange("coordinator",null,sc,status==="Active"?"Coordinator restored":"Coordinator "+status.toLowerCase(),note||"");
+}
 async function logChange(entity,id,name,action,detail){
   try{ await sb.from("change_log").insert({ entity, entity_id:id||null, entity_name:name||null, action, detail:detail||null, changed_by:(CURRENT_USER&&CURRENT_USER.email)||"unknown" }); }catch(e){}
 }
@@ -2465,7 +2473,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2482,7 +2490,8 @@ async function loadEmployees(){
     sb.from("candidate_feedback").select("*").order("created_at", {ascending:false}),
     sb.from("memos").select("*").order("created_at", {ascending:false}),
     sb.from("evaluations").select("*").order("eval_date", {ascending:false}),
-    sb.from("change_log").select("*").order("created_at", {ascending:false}).limit(500)
+    sb.from("change_log").select("*").order("created_at", {ascending:false}).limit(500),
+    sb.from("sc_status").select("*")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2502,6 +2511,7 @@ async function loadEmployees(){
   MEMOS=(me&&me.data)||[];
   EVALUATIONS=(evl&&evl.data)||[];
   CHANGE_LOG=(clg&&clg.data)||[];
+  SC_STATUS={}; ((scs&&scs.data)||[]).forEach(r=>{ SC_STATUS[r.sc_name]=r; });
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -3068,6 +3078,7 @@ function renderDashboard(){
         ${phReady?`<div class="task" style="cursor:pointer;" onclick="go('prehire')"><div class="dot r"></div><div><div class="tt">${phReady} candidate(s) ready for contract / onboarding</div><div class="td">Move them into an onboarding case</div></div><div class="due r">hiring</div></div>`:''}
         ${onbTasksOpen?`<div class="task" style="cursor:pointer;" onclick="go('onboarding')"><div class="dot a"></div><div><div class="tt">${onbTasksOpen} open onboarding task(s)</div><div class="td">${onbOpen} case(s) in progress — bank, uniform, gov forms, Employee ID</div></div><div class="due a">onboarding</div></div>`:''}
         ${exitOpen?`<div class="task" style="cursor:pointer;" onclick="go('exit')"><div class="dot a"></div><div><div class="tt">${exitOpen} exit clearance(s) in progress</div><div class="td">Department sign-offs &amp; final-pay computation</div></div><div class="due a">offboarding</div></div>`:''}
+        ${(()=>{ const gone=Object.keys(SC_STATUS).filter(k=>scIsGone(k)); if(!gone.length) return ''; const stn=BRANCHES.filter(b=>b.status==='Open'&&gone.includes(b.sc)).length; return `<div class="task" style="cursor:pointer;" onclick="go('manning')"><div class="dot r"></div><div><div class="tt">${gone.length} sales coordinator seat(s) vacant — ${gone.map(esc).join(", ")}</div><div class="td">${stn} store(s) with no active SC · reassign or backfill</div></div><div class="due r">manning</div></div>`; })()}
         ${compVerify?`<div class="task" style="cursor:pointer;" onclick="go('compliance')"><div class="dot r"></div><div><div class="tt">${compVerify} trademark(s) past a deadline on file — verify with IPO records</div><div class="td">Renewal year has passed (e.g. SPYDER, AIRFLEX) — confirm renewed or lapsed</div></div><div class="due r">compliance</div></div>`:''}
         ${compDue?`<div class="task" style="cursor:pointer;" onclick="go('compliance')"><div class="dot a"></div><div><div class="tt">${compDue} trademark deadline(s) due ${CY}</div><div class="td">DAU filings &amp; renewals — missing a DAU can cancel the mark</div></div><div class="due a">compliance</div></div>`:''}
         <div class="task" style="cursor:pointer;" onclick="go('employees')"><div class="dot a"></div><div><div class="tt">${prob} employees on probation</div><div class="td">3rd / 5th-month evaluations &amp; regularization reviews</div></div><div class="due a">review</div></div>
@@ -3561,14 +3572,41 @@ function renderSignatures(){
   $$('#page-signatures [data-jump]').forEach(c=>c.addEventListener("click",()=>{ const el=document.getElementById(c.dataset.jump); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); }));
   $$('#page-signatures [data-nudge]').forEach(b=>b.addEventListener("click",()=>{ b.textContent="Reminded ✓"; b.disabled=true; }));
 }
+// Default sign-screen header (memos, contracts, advances) — plain document body.
+function defaultSignTop(s){ return `<h2 style="font-size:18px;color:#1E3A5F;margin-bottom:2px;">${esc(s.doc_title)}${s.subject_name?" — "+esc(s.subject_name):""}</h2>
+    <div class="psub">From ${esc(s.from_name||"HR")}${s.amount?" · ₱"+Number(s.amount).toLocaleString():""}${s.meta?" · "+esc(s.meta):""}</div>
+    <div style="background:#f7f9fb;border:1px solid #E3E8EF;border-radius:10px;padding:14px 16px;margin:12px 0;white-space:pre-wrap;font-size:13.5px;line-height:1.6;max-height:34vh;overflow-y:auto;">${esc(s.body||"(document body)")}</div>`; }
+// Branded approval card for final-pay quitclaims — the figures you review sit in one clean table (RCC-Portal style).
+function claimCard(s){ const d=s.details||{}; const P=n=>"₱"+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  const row=(k,v)=>`<tr><td style="padding:9px 14px;color:#6B7785;font-size:12.5px;border-bottom:1px solid #eef1f4;white-space:nowrap;vertical-align:top;">${k}</td><td style="padding:9px 14px;font-weight:700;font-size:13px;border-bottom:1px solid #eef1f4;">${v}</td></tr>`;
+  return `<div style="background:linear-gradient(135deg,#12352a,#1c4b39);margin:-22px -22px 0;padding:15px 20px;border-radius:14px 14px 0 0;color:#fff;">
+      <div style="font-weight:800;font-size:15px;letter-spacing:.2px;">RCC Portal <span style="opacity:.72;font-weight:500;font-size:12.5px;">Roshan Commercial Corporation</span></div>
+    </div>
+    <div style="padding:16px 2px 0;">
+      <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#6B7785;">FINAL PAY · QUITCLAIM</div>
+      <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 3px;">Final pay needs your approval</div>
+      <div class="psub" style="margin-bottom:11px;">Submitted by ${esc(s.from_name||"HR")}${s.created_at?" · "+fmtAgo(s.created_at):""}. Review the figures, then e-sign below.</div>
+      <table style="width:100%;border:1px solid #e6eaee;border-radius:10px;border-collapse:separate;border-spacing:0;overflow:hidden;">
+        ${row("Employee",esc(d.employee||s.subject_name||"—"))}
+        ${(d.employee_id||d.position)?row("ID / Position",esc([d.employee_id,d.position].filter(Boolean).join(" · ")||"—")):""}
+        ${d.branch?row("Branch",esc(d.branch)):""}
+        ${d.last_day?row("Last day",fmtDate(d.last_day)):""}
+        ${d.separation?row("Separation",esc(d.separation)):""}
+        ${row("Total claims",P(d.claims))}
+        ${row("Less: deductions",P(d.deductions))}
+        <tr><td style="padding:12px 14px;background:#eaf4ec;font-size:12.5px;font-weight:800;color:#12352a;">NET TO EMPLOYEE</td><td style="padding:12px 14px;background:#eaf4ec;font-weight:800;font-size:15.5px;color:#12352a;">${P(d.net!=null?d.net:s.amount)}</td></tr>
+        ${d.payment?row("Payment",esc(d.payment)):""}
+      </table>
+      <details style="margin:11px 0 2px;"><summary style="cursor:pointer;font-size:12.5px;color:#1E3A5F;font-weight:600;">View full line-by-line breakdown</summary>
+        <div style="background:#f7f9fb;border:1px solid #E3E8EF;border-radius:10px;padding:12px 14px;margin-top:8px;white-space:pre-wrap;font-size:12.5px;line-height:1.55;max-height:30vh;overflow-y:auto;">${esc(s.body||"")}</div>
+      </details>
+    </div>`; }
 function openSignDoc(id){
   const s=SIGNATURES.find(x=>String(x.id)===String(id)); if(!s) return;
   let m=document.getElementById("sigModal"); if(!m){ m=document.createElement("div"); m.id="sigModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
-    <h2 style="font-size:18px;color:#1E3A5F;margin-bottom:2px;">${esc(s.doc_title)}${s.subject_name?" — "+esc(s.subject_name):""}</h2>
-    <div class="psub">From ${esc(s.from_name||"HR")}${s.amount?" · ₱"+Number(s.amount).toLocaleString():""}${s.meta?" · "+esc(s.meta):""}</div>
-    <div style="background:#f7f9fb;border:1px solid #E3E8EF;border-radius:10px;padding:14px 16px;margin:12px 0;white-space:pre-wrap;font-size:13.5px;line-height:1.6;max-height:34vh;overflow-y:auto;">${esc(s.body||"(document body)")}</div>
+    ${(s.doc_type==="claim"&&s.details)?claimCard(s):defaultSignTop(s)}
     <div style="font-size:12px;color:#6B7785;margin-bottom:6px;">Sign below — drawn with your finger or mouse. RA 8792 e-signature · timestamped + recorded against your account.</div>
     <canvas id="sigPad" width="500" height="150" style="width:100%;height:150px;border:1px dashed #b9c4cf;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
     <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
@@ -3578,7 +3616,7 @@ function openSignDoc(id){
     <div style="display:flex;gap:10px;margin-top:14px;">
       <button class="btn ghost" id="sigDecline" style="color:#c0392b;border-color:#f1c9c5;">Decline</button>
       <button class="btn ghost" id="sigCancel" style="margin-left:auto;">Cancel</button>
-      <button class="btn" id="sigDo">Sign document</button>
+      <button class="btn" id="sigDo">${s.doc_type==="claim"?"Approve &amp; Sign":"Sign document"}</button>
     </div></div>`;
   m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
   document.getElementById("sigCancel").onclick=()=>m.remove();
@@ -3736,7 +3774,7 @@ function renderManning(){
         <div class="kpi warn"><div class="k-l">Confirmed HC (CHC)</div><div class="k-n">${totCHC}</div><div class="k-s">matched from active list</div></div>
       </div>
       <div class="filterbar" id="scChips">
-        ${["All",...SCs].map(s=>`<div class="chip${s===scFilter?' active':''}" data-sc="${esc(s)}">${esc(s)}${s!=="All"?` (${open.filter(b=>b.sc===s).length})`:""}</div>`).join("")}
+        ${["All",...SCs].map(s=>{ const gone=s!=="All"&&scIsGone(s); return `<div class="chip${s===scFilter?' active':''}" data-sc="${esc(s)}"${gone?' style="color:var(--red);border-color:#f1c9c5;font-weight:700;"':''}>${gone?'● ':''}${esc(s)}${s!=="All"?` (${open.filter(b=>b.sc===s).length})`:""}</div>`; }).join("")}
       </div>
       <div id="scBlocks"></div>
     </div>`;
@@ -3765,15 +3803,18 @@ function renderManning(){
       const ahc=stores.reduce((s,b)=>s+b.ahc_stationary+b.ahc_reliever,0);
       const chc=stores.reduce((s,b)=>s+chcFor(b.name),0);
       const def=Math.max(0,ahc-chc);
-      return `<div class="panel" style="margin-top:14px;">
+      const st=scStatus(sc), gone=scIsGone(sc), snote=(SC_STATUS[sc]&&SC_STATUS[sc].note)||"";
+      return `<div class="panel" style="margin-top:14px;${gone?'border:1.5px solid #e5b4ae;background:#fdf4f2;':''}">
         <div class="sc-card">
-          <div class="sc-av">${esc(sc[0])}</div>
-          <div style="flex:1;"><div class="sc-l">Sales Coordinator</div><div class="sc-n">${esc(sc)}</div></div>
+          <div class="sc-av"${gone?' style="background:var(--red);"':''}>${esc(sc[0])}</div>
+          <div style="flex:1;"><div class="sc-l">Sales Coordinator</div><div class="sc-n">${esc(sc)}${gone?` <span class="pill awol">${st==="Pending"?"Replacement pending":"Vacant — needs replacement"}</span>`:""}</div>${gone&&snote?`<div style="font-size:11.5px;color:var(--red);margin-top:2px;">${esc(snote)}</div>`:""}</div>
           <div style="text-align:center;"><div class="sc-l">Stores</div><div class="sc-n">${stores.length}</div></div>
           <div style="text-align:center;"><div class="sc-l">Approved</div><div class="sc-n">${ahc}</div></div>
           <div style="text-align:center;"><div class="sc-l">Confirmed</div><div class="sc-n">${chc}</div></div>
           <div style="text-align:center;"><div class="sc-l">Shortfall</div><div class="sc-n" style="color:${def>0?'var(--red)':'var(--green-dark)'}">${def}</div></div>
+          ${canManageStores()?`<button class="btn ghost" data-scstatus="${esc(sc)}" style="flex-shrink:0;${gone?'color:var(--green-dark);':'color:var(--red);border-color:#f1c9c5;'}">${gone?"Mark filled":"Coordinator left"}</button>`:""}
         </div>
+        ${gone?`<div class="psub" style="margin:2px 0 8px;color:#8a3a30;">⚠ This coordinator has left — the ${stores.length} store${stores.length>1?'s':''} below currently have no active SC. Reassign or backfill.</div>`:""}
         <table>
           <thead><tr><th>Store</th><th>City · Area</th><th>Type</th><th>AHC</th><th>CHC</th><th>Shortfall</th><th>Store Sales</th><th>Attendance</th></tr></thead>
           <tbody>${stores.map(b=>{
@@ -3786,9 +3827,30 @@ function renderManning(){
       </div>`;
     }).join("");
     $$("#scBlocks tr.clickable").forEach(tr=>tr.addEventListener("click",()=>openStore(BRANCHES[+tr.dataset.bi])));
+    $$("#scBlocks [data-scstatus]").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); scStatusPrompt(b.dataset.scstatus); }));
   };
   $$("#scChips .chip").forEach(c=>c.addEventListener("click",()=>{ scFilter=c.dataset.sc; renderManning(); }));
   paint();
+}
+function scStatusPrompt(sc){
+  const cur=scStatus(sc), curNote=(SC_STATUS[sc]&&SC_STATUS[sc].note)||"";
+  let m=document.getElementById("scModal"); if(!m){ m=document.createElement("div"); m.id="scModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:22px;">
+    <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:4px;">Coordinator status — ${esc(sc)}</h2>
+    <div class="psub">Marks the SC seat. When it's Vacant or Pending, ${esc(sc)}'s stores show red in Manning so the gap is visible.</div>
+    ${sel("sc_status","Status",["Active","Vacant","Pending"],cur)}
+    <div style="margin:6px 0 10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Note (optional)</label>
+      <input id="sc_note" value="${esc(curNote)}" placeholder="e.g. resigned 07/15 — Bryan covering interim" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;"></div>
+    <div style="display:flex;gap:10px;"><button class="btn ghost" id="scCancel" style="flex:1;">Cancel</button><button class="btn" id="scSave" style="flex:1;">Save</button></div>
+  </div>`;
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("scCancel").onclick=()=>m.remove();
+  document.getElementById("scSave").onclick=async()=>{
+    const btn=document.getElementById("scSave"); btn.disabled=true; btn.textContent="Saving…";
+    await setScStatus(sc, v("sc_status")||"Active", v("sc_note"));
+    m.remove(); renderManning(); renderDashboard();
+  };
 }
 function openingForm(o){
   const isNew=!o; o=o||{};
@@ -5459,9 +5521,14 @@ async function sendFinalPayForSignoff(x,modal){
   if(e1){ if(msg) msg.textContent=e1.message; if(btn){ btn.disabled=false; btn.textContent="Send to Director for sign-off"; } return; }
   // 2) supersede any earlier pending request for this case, then create a fresh one
   if(x.quitclaim_signature_id) await sb.from("signature_requests").update({status:"superseded",updated_at:new Date().toISOString()}).eq("id",x.quitclaim_signature_id).eq("status","pending");
+  const emp=(EMPLOYEES||[]).find(e=>e.id===x.employee_id)||{};
+  const details={ employee:x.employee_name, employee_id:emp.employee_id||"", position:x.position||emp.position||"",
+    branch:emp.worksite||x.department||"", last_day:x.last_working_day||"", separation:x.separation_type||"",
+    claims:fpClaims(fp), deductions:fpDeductions(fp), net:net,
+    payment:[fp.payment_instruction,fp.bank_account].filter(Boolean).join(" · "), clearance_id:x.clearance_id };
   const { data:sig, error:e2 } = await sb.from("signature_requests").insert({
     doc_type:"claim", doc_title:"Quitclaim — Final Pay Computation", subject_name:x.employee_name,
-    body:finalPayBody(x,fp), from_name:sender, amount:net, meta:x.clearance_id,
+    body:finalPayBody(x,fp), from_name:sender, amount:net, meta:x.clearance_id, details,
     awaiting:"you", with_whom:"Director (approval)", status:"pending" }).select().single();
   if(e2){ if(msg) msg.textContent=e2.message; if(btn){ btn.disabled=false; btn.textContent="Send to Director for sign-off"; } return; }
   await sb.from("exit_clearance").update({quitclaim_signature_id:sig.id}).eq("id",x.id);

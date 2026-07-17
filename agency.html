@@ -102,8 +102,9 @@ function render(){
       else if(o.target_fill_date) when=`<span class="${overdue?'od':''}">Fill by ${fmtD(o.target_fill_date)}${overdue?" · overdue":""}</span>`;
       else when=`Open`;
       return `<div class="card">
-      <div style="flex:1;min-width:140px;"><div class="nm">${esc(o.store)}</div>
+      <div style="flex:1;min-width:140px;"><div class="nm">${esc(o.store)}${o.diser_type==="Roving"?` <span style="font-size:11px;font-weight:600;color:#8a6a14;background:#fdf6e3;padding:1px 7px;border-radius:8px;">Roving</span>`:""}</div>
         <div class="loc">${esc(o.city||"")}${o.area?" · "+esc(o.area):""}${o.category?" · "+(o.category==="CN"?"Concession":"Company-Op"):""}</div>
+        ${o.diser_type==="Roving"&&o.second_worksite?`<div class="loc" style="color:#8a6a14;">Roving — also covers ${esc(o.second_worksite)}</div>`:""}
         <div class="dates">Posted ${fmtD(o.date_posted)} · ${when}</div></div>
       <div class="chips">
         <span class="chip open">${o.open_slots} shortfall</span>

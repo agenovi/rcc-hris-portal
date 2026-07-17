@@ -1438,7 +1438,8 @@ function renderManning(){
       if(o.priority==="Urgent"&&!o.target_fill_date) dl=`<span class="pill awol">Urgent</span>`;
       else if(o.target_fill_date) dl=`${fmtDate(o.target_fill_date)}${overdue?' <span class="pill awol">overdue</span>':''}`;
       else dl=`<span class="note">—</span>`;
-      return `<tr><td><b>${esc(o.worksite)}</b></td><td>${esc(o.sc||"—")}</td><td>${o.count_needed}</td><td>${opInReview(o.worksite)}</td><td>${o.date_posted?fmtDate(o.date_posted):"—"}</td><td>${dl}</td>
+      const dtag=o.diser_type==="Roving"?` <span class="pill ag">Roving</span>${o.second_worksite?`<div style="font-size:11px;color:var(--muted);">+ ${esc(o.second_worksite)}</div>`:""}`:` <span class="pill di">Stationary</span>`;
+      return `<tr><td><b>${esc(o.worksite)}</b>${dtag}</td><td>${esc(o.sc||"—")}</td><td>${o.count_needed}</td><td>${opInReview(o.worksite)}</td><td>${o.date_posted?fmtDate(o.date_posted):"—"}</td><td>${dl}</td>
         <td style="text-align:right;white-space:nowrap;">${canManageStores()?`<button class="btn ghost" data-opedit="${o.id}">Edit</button> <button class="btn ghost" data-opclose="${o.id}" style="color:var(--red);border-color:#f1c9c5;">Close</button>`:'<span class="note">—</span>'}</td></tr>`;
     }).join("");
     $$("#opRows [data-opedit]").forEach(b=>b.addEventListener("click",()=>openingForm(MANPOWER.find(o=>o.id===b.dataset.opedit))));
@@ -1484,6 +1485,9 @@ function openingForm(o){
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:440px;width:100%;padding:22px;">
     <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:8px;">${isNew?"Post an opening":"Edit opening"}</h2>
     ${sel("op_store","Store *",stores,o.worksite)}
+    ${sel("op_dtype","Diser type *",["Stationary","Roving"],o.diser_type||"Stationary")}
+    <div id="op_secondWrap" style="display:${(o.diser_type==="Roving")?'block':'none'};">${sel("op_store2","Also covers (2nd branch)",stores,o.second_worksite)}
+      <div class="psub" style="margin:-4px 0 8px;">Roving diser — the other store this person will also be assigned to.</div></div>
     ${fld("op_count","How many needed *",o.count_needed??1,"number")}
     ${sel("op_priority","Priority",["Normal","Urgent"],o.priority||"Normal")}
     ${fld("op_fill","Fill-by date (optional)",o.target_fill_date,"date")}
@@ -1492,11 +1496,15 @@ function openingForm(o){
     <div style="display:flex;gap:10px;"><button class="btn ghost" id="opCancel" style="flex:1;">Cancel</button><button class="btn" id="opSave" style="flex:1;">${isNew?"Post opening":"Save"}</button></div>
   </div>`;
   m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  const dtypeSel=document.getElementById("op_dtype");
+  if(dtypeSel) dtypeSel.addEventListener("change",()=>{ const w=document.getElementById("op_secondWrap"); if(w) w.style.display=dtypeSel.value==="Roving"?'block':'none'; });
   document.getElementById("opCancel").addEventListener("click",()=>m.remove());
   document.getElementById("opSave").addEventListener("click",async()=>{
     const store=v("op_store"); if(!store){ document.getElementById("opMsg").textContent="Pick a store."; return; }
     const br=BRANCHES.find(b=>b.name===store);
+    const dtype=v("op_dtype")||"Stationary";
     const payload={ worksite:store, sc:br?br.sc:null, count_needed:nv("op_count")||1, priority:v("op_priority")||"Normal",
+      diser_type:dtype, second_worksite:dtype==="Roving"?(v("op_store2")||null):null,
       target_fill_date:v("op_fill")||null, status:"Open", updated_at:new Date().toISOString() };
     let res;
     if(isNew){ payload.date_posted=new Date().toISOString().slice(0,10); res=await sb.from("manpower_requests").insert(payload); }

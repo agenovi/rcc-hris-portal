@@ -48,7 +48,9 @@ const IDS_EDITOR_BACKUP="hr3@hassarams.com"; // Grazel — backup encoder (anj, 
 function canEditIds(){ const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return isAdminUser()||e===IDS_EDITOR||e===IDS_EDITOR_BACKUP; }
 function roField(label,val){ return `<div class="efield"><div class="el">${esc(label)}</div><div class="ev">${val?esc(val):'<span class="note">—</span>'}</div></div>`; }
 function isLimitedUser(){ return userRole()!=="admin"; }
-function canManageStores(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"; }  // Anj + Grazel + Rhel (HR Mgr)
+function canManageStores(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"; }  // Anj + Grazel + Rhel (HR Mgr) — add/edit/close STORES
+// Posting/editing OPENINGS = Recruitment owns it too (anj, 2026-07-17, per Grazel's note). Anyone with the Manning page except HR-Relations.
+function canPostOpenings(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"||r==="recruiter"; }
 const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding","reports"];
 // HR Relations (Juvy) — employee-relations desk: onboarding→exit lifecycle, discipline/compliance, notices, loans/benefits. NO salary, NO recruiting funnel.
 const RELATIONS_PAGES=["dashboard","onboarding","evaluations","exit","compliance","memos","signatures","loans"];
@@ -1409,7 +1411,7 @@ function renderManning(){
     <div class="panel" style="margin-top:0;">
       <h2>Openings <span class="count-tag">${OPENINGS.length} stores · ${OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0)} positions</span></h2>
       <div class="psub">Manpower requests you post. These drive the agency links — each agency sees the shortfall + an in-review count, then submits candidates into the pipeline.</div>
-      <div class="actionbar">${canManageStores()?'<button class="btn" id="opNew">+ Post opening</button> <button class="btn ghost" id="stNew">+ Add store</button>':'<span class="psub" style="margin:0;">Openings are posted by Grazel, and open automatically when someone resigns. You can view and fill them below.</span>'}</div>
+      <div class="actionbar">${canPostOpenings()?'<button class="btn" id="opNew">+ Post opening</button> ':''}${canManageStores()?'<button class="btn ghost" id="stNew">+ Add store</button>':''}${!canPostOpenings()?'<span class="psub" style="margin:0;">Openings open automatically when someone resigns. You can view and fill them below.</span>':''}</div>
       ${OPENINGS.length?`<table><thead><tr><th>Store</th><th>SC</th><th>Need</th><th>In review</th><th>Posted</th><th>Deadline</th><th></th></tr></thead><tbody id="opRows"></tbody></table>`:`<div class="psub" style="margin-top:6px;">No open requests yet — click “Post opening”.</div>`}
     </div>
     ${phLinksBar()}
@@ -1440,7 +1442,7 @@ function renderManning(){
       else dl=`<span class="note">—</span>`;
       const dtag=o.diser_type==="Roving"?` <span class="pill ag">Roving</span>${o.second_worksite?`<div style="font-size:11px;color:var(--muted);">+ ${esc(o.second_worksite)}</div>`:""}`:` <span class="pill di">Stationary</span>`;
       return `<tr><td><b>${esc(o.worksite)}</b>${dtag}</td><td>${esc(o.sc||"—")}</td><td>${o.count_needed}</td><td>${opInReview(o.worksite)}</td><td>${o.date_posted?fmtDate(o.date_posted):"—"}</td><td>${dl}</td>
-        <td style="text-align:right;white-space:nowrap;">${canManageStores()?`<button class="btn ghost" data-opedit="${o.id}">Edit</button> <button class="btn ghost" data-opclose="${o.id}" style="color:var(--red);border-color:#f1c9c5;">Close</button>`:'<span class="note">—</span>'}</td></tr>`;
+        <td style="text-align:right;white-space:nowrap;">${canPostOpenings()?`<button class="btn ghost" data-opedit="${o.id}">Edit</button> <button class="btn ghost" data-opclose="${o.id}" style="color:var(--red);border-color:#f1c9c5;">Close</button>`:'<span class="note">—</span>'}</td></tr>`;
     }).join("");
     $$("#opRows [data-opedit]").forEach(b=>b.addEventListener("click",()=>openingForm(MANPOWER.find(o=>o.id===b.dataset.opedit))));
     $$("#opRows [data-opclose]").forEach(b=>b.addEventListener("click",()=>closeOpening(MANPOWER.find(o=>o.id===b.dataset.opclose))));

@@ -2348,21 +2348,24 @@ async function logChange(entity,id,name,action,detail){
 //   admin    (anj)    = everything
 //   payroll  (Grazel) = recruiting view + Employees + sees pay/bank/government
 //   recruiter(others) = recruiting only, pay hidden
-const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "sanjay@hassarams.com":"admin", "hr3@hassarams.com":"payroll", "hr4@hassarams.com":"manager" };  // hr3@=Grazel(payroll) · hr4@=Rhel(HR Manager)
+const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "sanjay@hassarams.com":"admin", "hr3@hassarams.com":"payroll", "hr4@hassarams.com":"manager", "hr@hassarams.com":"relations" };  // hr3@=Grazel(payroll) · hr4@=Rhel(HR Manager) · hr@=Juvy(HR Relations)
 function userRole(){ return ROLE_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()] || "recruiter"; }
 function isAdminUser(){ return userRole()==="admin"; }
 function canSeePay(){ const r=userRole(); return r==="admin"||r==="payroll"; }
 function isLimitedUser(){ return userRole()!=="admin"; }
 function canManageStores(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"; }  // Anj + Grazel + Rhel (HR Mgr)
 const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding","reports"];
+// HR Relations (Juvy) — employee-relations desk: onboarding→exit lifecycle, discipline/compliance, notices, loans/benefits. NO salary, NO recruiting funnel.
+const RELATIONS_PAGES=["dashboard","onboarding","evaluations","exit","compliance","memos","signatures","loans"];
 // HR Manager (Rhel) — oversees the whole department: every page except owner-only Settings.
 const MANAGER_PAGES=["dashboard","employees","branches","prehire","contracts","onboarding","evaluations","loans","exit","manning","compliance","signatures","memos","reports"];
-// Per-person extra pages on top of their role (e.g. Juvy = the loans officer).
-const EXTRA_PAGES_BY_EMAIL={ "hr@hassarams.com":["loans"] };
+// Per-person extra pages on top of their role.
+const EXTRA_PAGES_BY_EMAIL={};
 function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   let base;
   if(r==="manager") base = MANAGER_PAGES.slice();
   else if(r==="payroll") base = RECRUITER_PAGES.concat(["employees"]);
+  else if(r==="relations") base = RELATIONS_PAGES.slice();
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
@@ -4064,7 +4067,7 @@ function recruitmentScorecard(){
 }
 /* ===================== ACCESS & ACTIVITY (owners only) ===================== */
 const PERSON_BY_EMAIL={ "anj@hassarams.com":"Anj", "sanjay@hassarams.com":"Sanjay", "hr@hassarams.com":"Juvy", "hr2@hassarams.com":"Vina", "hr3@hassarams.com":"Grazel", "hr4@hassarams.com":"Rhel" };
-const ROLE_LABEL={ admin:"Full admin", manager:"HR Manager", payroll:"Payroll / HR officer", recruiter:"Recruiter" };
+const ROLE_LABEL={ admin:"Full admin", manager:"HR Manager", payroll:"Payroll / HR officer", relations:"HR Relations", recruiter:"Recruiter" };
 function whoName(email){ const e=(email||"").toLowerCase(); return PERSON_BY_EMAIL[e]||(e.split("@")[0]||"—"); }
 async function renderActivity(){
   const pg=$("#page-activity"); if(!pg||!isAdminUser()) return;
@@ -4077,7 +4080,8 @@ async function renderActivity(){
     const pages = r==="admin" ? "Everything" :
       (r==="manager" ? "All HR (no Settings)" :
       (r==="payroll" ? "Recruiting + Employees" :
-      "Recruiting"+(EXTRA_PAGES_BY_EMAIL[e]?" + "+EXTRA_PAGES_BY_EMAIL[e].join("/"):"")));
+      (r==="relations" ? "Onboarding · Exit · Evaluations · Compliance · Memos · Loans" :
+      "Recruiting"+(EXTRA_PAGES_BY_EMAIL[e]?" + "+EXTRA_PAGES_BY_EMAIL[e].join("/"):""))));
     return `<tr>
       <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);"><b>${esc(whoName(e))}</b><div class="esub">${esc(e)}</div></td>
       <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);">${esc(ROLE_LABEL[r]||r)}</td>

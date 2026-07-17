@@ -4855,7 +4855,20 @@ function renderOnboarding(){
       ${ONBOARDING.length? `<table><thead><tr><th>New hire</th><th>Group · Worksite</th><th>Employee ID</th><th>Progress</th><th>Status</th></tr></thead>
         <tbody id="onbRows"></tbody></table>`
         : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1E3A5F" stroke-width="2"><path d="M3 12l5 5L21 5"/></svg></div><h2>No onboarding cases yet</h2><p>Click “Start onboarding” to create a case from a pre-hire who has reached the contract stage.</p></div>`}
-    </div>`;
+    </div>
+    ${(()=>{ // Uniform send-out list — every hire's size + whether the uniform's been issued
+      const rows=ONBOARDING.map(c=>{ const ut=ONBTASKS.find(t=>t.case_id===c.id&&t.task_key==="uniform"); return {c, sent:ut&&ut.status==="Done"}; });
+      const pend=rows.filter(r=>!r.sent).length, needSize=rows.filter(r=>!r.c.uniform_size).length;
+      if(!rows.length) return "";
+      return `<div class="panel"><h2>Uniform send-out list <span class="count-tag">${pend} to send</span></h2>
+        <div class="psub">Every hire's size and whether their uniform's gone out. ${needSize?`<b style="color:var(--red);">${needSize} still need a size recorded</b> (open the case → Uniform).`:"All sizes recorded ✓"} Mark "Issue uniform" done in the case once sent.</div>
+        <table><thead><tr><th>Hire</th><th>Worksite</th><th>Position</th><th>Size</th><th>Uniform</th></tr></thead><tbody>
+        ${rows.sort((a,b)=>(a.sent?1:0)-(b.sent?1:0)).map(r=>`<tr class="clickable" data-uid="${r.c.id}">
+          <td><b>${esc(r.c.employee_name)}</b></td><td>${esc(r.c.worksite||"—")}</td><td>${esc(r.c.position||"—")}</td>
+          <td>${r.c.uniform_size?`<span class="pill di">${esc(r.c.uniform_size)}</span>`:'<span class="pill awol">no size</span>'}</td>
+          <td>${r.sent?'<span class="pill active">Sent ✓</span>':'<span class="pill probation">To send</span>'}</td></tr>`).join("")}
+        </tbody></table></div>`;
+    })()}`;
   $("#onbNew").addEventListener("click",pickPrehireForOnboarding);
   const rows=$("#onbRows");
   if(rows){
@@ -4868,6 +4881,7 @@ function renderOnboarding(){
     }).join("");
     $$("#onbRows tr").forEach(tr=>tr.addEventListener("click",()=>openOnboardingCase(tr.dataset.id)));
   }
+  $$("#page-onboarding tr.clickable[data-uid]").forEach(tr=>tr.addEventListener("click",()=>openOnboardingCase(tr.dataset.uid)));
 }
 function pickPrehireForOnboarding(){
   const has=new Set(ONBOARDING.map(c=>c.prehire_id).filter(Boolean));
@@ -4916,6 +4930,10 @@ function openOnboardingCase(id){
         <div class="kpi"><div class="k-l">Deployment</div><div class="k-n" style="font-size:18px;">${c.deployment_date?fmtDate(c.deployment_date):"—"}</div></div>
       </div>
       ${!c.assigned_employee_id?`<button class="btn" id="onbAssignId" style="margin-top:12px;">Enter PayPlus Employee ID →</button>`:""}
+      <div class="panel" style="margin-top:14px;"><h2>Uniform</h2>
+        <div class="psub">Size drives the send-out list. Mark the "Issue uniform" task done once it's sent.</div>
+        ${sel("onb_usize","Uniform size",["","XS","S","M","L","XL","2XL","3XL"],c.uniform_size||"")}
+      </div>
       <div class="panel" style="margin-top:14px;"><h2>Onboarding checklist</h2>
         <div class="psub">Grouped by <b>when it's due</b> relative to the start date. Tap a task to mark it done. Bank &amp; ID set by group; iTime shows only for SM department-store hires; government registration stays early (legal deadlines).</div>
         ${ONB_TIMING_GROUPS.map(g=>{
@@ -4935,6 +4953,7 @@ function openOnboardingCase(id){
     </div></div>`;
   $("#onbClose").addEventListener("click",()=>m.remove());
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  const usz=document.getElementById("onb_usize"); if(usz) usz.addEventListener("change",async()=>{ await sb.from("onboarding_cases").update({uniform_size:usz.value||null, updated_at:new Date().toISOString()}).eq("id",c.id); c.uniform_size=usz.value||null; const idx=ONBOARDING.findIndex(x=>x.id===c.id); if(idx>=0) ONBOARDING[idx].uniform_size=usz.value||null; renderOnboarding(); });
   const aid=document.getElementById("onbAssignId"); if(aid) aid.addEventListener("click",()=>assignEmployeeId(c));
   const fid=document.getElementById("onbFixId"); if(fid) fid.addEventListener("click",async()=>{
     fid.textContent="looking up…";

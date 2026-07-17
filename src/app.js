@@ -112,6 +112,7 @@ $("#loginForm").addEventListener("submit", async (e)=>{
 });
 async function showApp(user){
   CURRENT_USER=user; $("#login").style.display="none";
+  try{ sb.rpc("touch_presence"); }catch(e){}  // stamp real last-active (updates even on a resumed session, unlike last_sign_in_at)
   patchSidebarFoot(user);
   applyRoleUI();
   await loadEmployees();
@@ -1865,7 +1866,7 @@ async function renderActivity(){
       <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);text-align:center;">${seesPay(e)?'<span class="pill di">Yes</span>':'<span class="note">—</span>'}</td>
     </tr>`;}).join("");
   // Login history (RPC — owners only)
-  let loginRows='<tr><td colspan="3" class="psub" style="padding:8px;">Loading…</td></tr>';
+  let loginRows='<tr><td colspan="5" class="psub" style="padding:8px;">Loading…</td></tr>';
   // Activity feed from change_log
   const feed = (CHANGE_LOG||[]).slice(0,60).map(c=>`<div class="task" style="align-items:flex-start;">
       <div class="dot ${/reject|separat|correct|pay/i.test(c.action)?'r':(/add|record|edit/i.test(c.action)?'a':'g')}" style="margin-top:6px;"></div>
@@ -1886,9 +1887,9 @@ async function renderActivity(){
     </div>
     <div class="panel">
       <h2>Sign-in history</h2>
-      <div class="psub">Last time each person logged in — spot who's actually using the portal.</div>
+      <div class="psub"><b>Last active</b> is the real signal — it updates every time someone opens the portal, even on a saved session. <b>Password sign-in</b> only changes when they re-type their password, so it lags (that's why yours showed an old date while you were logged in).</div>
       <table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="text-align:left;color:var(--muted);">
-        <th style="padding:6px 9px;font-weight:600;">Person</th><th style="padding:6px 9px;font-weight:600;">Last sign-in</th><th style="padding:6px 9px;font-weight:600;">Account created</th></tr></thead>
+        <th style="padding:6px 9px;font-weight:600;">Person</th><th style="padding:6px 9px;font-weight:600;">Last active</th><th style="padding:6px 9px;font-weight:600;">Visits</th><th style="padding:6px 9px;font-weight:600;">Password sign-in</th><th style="padding:6px 9px;font-weight:600;">Account created</th></tr></thead>
         <tbody id="loginRows">${loginRows}</tbody></table>
     </div>
     <div class="panel">
@@ -1899,10 +1900,13 @@ async function renderActivity(){
   // fill login history via owner-only RPC
   sb.rpc("login_history").then(({data,error})=>{
     const el=document.getElementById("loginRows"); if(!el) return;
-    if(error||!data){ el.innerHTML='<tr><td colspan="3" class="psub" style="padding:8px;">Could not load sign-in history.</td></tr>'; return; }
+    if(error||!data){ el.innerHTML='<tr><td colspan="5" class="psub" style="padding:8px;">Could not load sign-in history.</td></tr>'; return; }
+    const recent=(d)=>d&&((Date.now()-new Date(d))/86400000)<=3;
     el.innerHTML=data.map(u=>`<tr>
       <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);"><b>${esc(whoName(u.email))}</b><div class="esub">${esc(u.email)}</div></td>
-      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);">${u.last_sign_in?fmtDateTime(u.last_sign_in):'<span class="note">never</span>'}</td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);font-weight:600;color:${recent(u.last_active)?'var(--green-dark)':(u.last_active?'inherit':'var(--muted)')};">${u.last_active?fmtDateTime(u.last_active):'<span class="note">not since heartbeat added</span>'}</td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);color:var(--muted);">${u.visits||'—'}</td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);color:var(--muted);">${u.last_sign_in?fmtDateTime(u.last_sign_in):'<span class="note">never</span>'}</td>
       <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);color:var(--muted);">${u.created_at?fmtDate(u.created_at):""}</td></tr>`).join("");
   });
 }

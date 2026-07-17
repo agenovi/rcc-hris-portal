@@ -2354,8 +2354,9 @@ function isAdminUser(){ return userRole()==="admin"; }
 function canSeePay(){ const r=userRole(); return r==="admin"||r==="payroll"; }
 // Gov IDs (SSS/PhilHealth/Pag-IBIG/TIN) + bank: VIEWABLE by all logged-in HR, but ENTERED/EDITED by ONE person only — Vina (anj call, 2026-07-17), so there's a single source of truth for these numbers. Owners retain override. Salary stays payroll-only via canSeePay().
 function canSeeIds(){ return !!CURRENT_USER; }
-const IDS_EDITOR="hr2@hassarams.com";  // Vina — sole bank/gov data-entry person
-function canEditIds(){ const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return isAdminUser()||e===IDS_EDITOR; }
+const IDS_EDITOR="hr2@hassarams.com";      // Vina — primary bank/gov data-entry
+const IDS_EDITOR_BACKUP="hr3@hassarams.com"; // Grazel — backup encoder (anj, 2026-07-17)
+function canEditIds(){ const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return isAdminUser()||e===IDS_EDITOR||e===IDS_EDITOR_BACKUP; }
 function roField(label,val){ return `<div class="efield"><div class="el">${esc(label)}</div><div class="ev">${val?esc(val):'<span class="note">—</span>'}</div></div>`; }
 function isLimitedUser(){ return userRole()!=="admin"; }
 function canManageStores(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"; }  // Anj + Grazel + Rhel (HR Mgr)
@@ -3878,7 +3879,7 @@ function openForm(e){
         ${fld("f_sss_number","SSS",e.sss_number)}${fld("f_philhealth_number","PhilHealth",e.philhealth_number)}
         ${fld("f_pagibig_number","Pag-IBIG",e.pagibig_number)}${fld("f_tin_number","TIN",e.tin_number)}
         ${fld("f_bank_name","Bank name",e.bank_name)}${fld("f_bank_account_number","Bank account number",e.bank_account_number)}
-      </div>`:canSeeIds()?`<div class="panel"><div class="subhead">Government numbers &amp; bank <span class="sh-note">view only — entered by Vina</span></div>
+      </div>`:canSeeIds()?`<div class="panel"><div class="subhead">Government numbers &amp; bank <span class="sh-note">view only — entered by Vina (backup: Grazel)</span></div>
         ${roField("SSS",e.sss_number)}${roField("PhilHealth",e.philhealth_number)}${roField("Pag-IBIG",e.pagibig_number)}${roField("TIN",e.tin_number)}${roField("Bank name",e.bank_name)}${roField("Bank account number",e.bank_account_number)}
       </div>`:`<div class="panel"><div style="font-size:13px;color:#6a766f;">🔒 Government IDs &amp; bank details are restricted.</div></div>`}
       <div class="panel">
@@ -4120,7 +4121,7 @@ async function renderActivity(){
       <table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="text-align:left;color:var(--muted);">
         <th style="padding:6px 9px;font-weight:600;">Person</th><th style="padding:6px 9px;font-weight:600;">Role</th><th style="padding:6px 9px;font-weight:600;">Sees</th><th style="padding:6px 9px;font-weight:600;text-align:center;">Salary?</th></tr></thead>
         <tbody>${matrix}</tbody></table>
-      <div class="psub" style="margin-top:9px;">🔓 Government IDs (SSS/PhilHealth/Pag-IBIG/TIN) &amp; bank details are <b>viewable by all HR</b> — needed for onboarding &amp; enrolment — but <b>entered/edited by Vina only</b> (single source of truth; you &amp; Sanjay can override). Everyone else sees them read-only. <b>Salary</b> stays restricted to you, Sanjay &amp; Grazel. Every bank/gov edit is logged below.</div>
+      <div class="psub" style="margin-top:9px;">🔓 Government IDs (SSS/PhilHealth/Pag-IBIG/TIN) &amp; bank details are <b>viewable by all HR</b> — needed for onboarding &amp; enrolment — but <b>entered/edited by Vina</b> (backup: Grazel; you &amp; Sanjay can override). Everyone else sees them read-only. <b>Salary</b> stays restricted to you, Sanjay &amp; Grazel. Every bank/gov edit is logged below.</div>
     </div>
     <div class="panel">
       <h2>Sign-in history</h2>
@@ -4611,7 +4612,7 @@ function editPrehire(c){
       </div>
       ${canEditIds()?`<div class="panel"><div class="subhead">Government numbers &amp; bank</div>
         ${fld("pe_sss","SSS",c.sss_number)}${fld("pe_phil","PhilHealth",c.philhealth_number)}${fld("pe_pag","Pag-IBIG",c.pagibig_number)}${fld("pe_tin","TIN",c.tin_number)}${fld("pe_bank","Bank name",c.bank_name)}${fld("pe_acct","Bank account number",c.bank_account_number)}
-      </div>`:canSeeIds()?`<div class="panel"><div class="subhead">Government numbers &amp; bank <span class="sh-note">view only — entered by Vina</span></div>
+      </div>`:canSeeIds()?`<div class="panel"><div class="subhead">Government numbers &amp; bank <span class="sh-note">view only — entered by Vina (backup: Grazel)</span></div>
         ${roField("SSS",c.sss_number)}${roField("PhilHealth",c.philhealth_number)}${roField("Pag-IBIG",c.pagibig_number)}${roField("TIN",c.tin_number)}${roField("Bank name",c.bank_name)}${roField("Bank account number",c.bank_account_number)}
       </div>`:""}
       <div class="panel"><div class="subhead">HR notes &amp; gate</div>

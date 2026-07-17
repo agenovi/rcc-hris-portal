@@ -2352,8 +2352,11 @@ const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "sanjay@hassarams.com":"admin
 function userRole(){ return ROLE_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()] || "recruiter"; }
 function isAdminUser(){ return userRole()==="admin"; }
 function canSeePay(){ const r=userRole(); return r==="admin"||r==="payroll"; }
-// Gov IDs (SSS/PhilHealth/Pag-IBIG/TIN) + bank = visible to ALL logged-in HR (anj call, 2026-07-17). Only SALARY stays payroll-only via canSeePay(). Tighten here if bank ever needs re-locking.
+// Gov IDs (SSS/PhilHealth/Pag-IBIG/TIN) + bank: VIEWABLE by all logged-in HR, but ENTERED/EDITED by ONE person only — Vina (anj call, 2026-07-17), so there's a single source of truth for these numbers. Owners retain override. Salary stays payroll-only via canSeePay().
 function canSeeIds(){ return !!CURRENT_USER; }
+const IDS_EDITOR="hr2@hassarams.com";  // Vina — sole bank/gov data-entry person
+function canEditIds(){ const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return isAdminUser()||e===IDS_EDITOR; }
+function roField(label,val){ return `<div class="efield"><div class="el">${esc(label)}</div><div class="ev">${val?esc(val):'<span class="note">—</span>'}</div></div>`; }
 function isLimitedUser(){ return userRole()!=="admin"; }
 function canManageStores(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"; }  // Anj + Grazel + Rhel (HR Mgr)
 const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding","reports"];
@@ -2361,8 +2364,8 @@ const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding","reports"];
 const RELATIONS_PAGES=["dashboard","onboarding","evaluations","exit","compliance","memos","signatures","loans"];
 // HR Manager (Rhel) — oversees the whole department: every page except owner-only Settings.
 const MANAGER_PAGES=["dashboard","employees","branches","prehire","contracts","onboarding","evaluations","loans","exit","manning","compliance","signatures","memos","reports"];
-// Per-person extra pages on top of their role.
-const EXTRA_PAGES_BY_EMAIL={};
+// Per-person extra pages on top of their role. Vina = sole bank/gov encoder → needs the Employees directory to enter/correct those numbers (salary stays masked for her).
+const EXTRA_PAGES_BY_EMAIL={ "hr2@hassarams.com":["employees"] };
 function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   let base;
   if(r==="manager") base = MANAGER_PAGES.slice();
@@ -3871,10 +3874,12 @@ function openForm(e){
         ${sel("f_emergency_contact_relation","Relationship",RELATIONS,e.emergency_contact_relation)}
         ${fld("f_emergency_contact_number","Emergency contact number",e.emergency_contact_number)}
       </div>
-      ${canSeeIds()?`<div class="panel">
+      ${canEditIds()?`<div class="panel">
         ${fld("f_sss_number","SSS",e.sss_number)}${fld("f_philhealth_number","PhilHealth",e.philhealth_number)}
         ${fld("f_pagibig_number","Pag-IBIG",e.pagibig_number)}${fld("f_tin_number","TIN",e.tin_number)}
         ${fld("f_bank_name","Bank name",e.bank_name)}${fld("f_bank_account_number","Bank account number",e.bank_account_number)}
+      </div>`:canSeeIds()?`<div class="panel"><div class="subhead">Government numbers &amp; bank <span class="sh-note">view only — entered by Vina</span></div>
+        ${roField("SSS",e.sss_number)}${roField("PhilHealth",e.philhealth_number)}${roField("Pag-IBIG",e.pagibig_number)}${roField("TIN",e.tin_number)}${roField("Bank name",e.bank_name)}${roField("Bank account number",e.bank_account_number)}
       </div>`:`<div class="panel"><div style="font-size:13px;color:#6a766f;">🔒 Government IDs &amp; bank details are restricted.</div></div>`}
       <div class="panel">
         ${fld("f_worksite","Worksite",e.worksite)}${fld("f_supervisor_name","Supervisor",e.supervisor_name)}${fld("f_approver2_name","Approver 2",e.approver2_name)}
@@ -3910,8 +3915,8 @@ async function saveEmployee(id,modal){
     contract_type:v("f_contract_type"),
     hire_date:v("f_hire_date"), regularization_date:v("f_regularization_date"), end_date:v("f_end_date"), end_reason:v("f_end_reason"),
     notes:v("f_notes"), updated_at:new Date().toISOString() };
-  // gov IDs + bank writable by any HR (canSeeIds); SALARY (daily_rate/allowance) still payroll-only (canSeePay)
-  if(canSeeIds()){ Object.assign(p,{ sss_number:v("f_sss_number"), philhealth_number:v("f_philhealth_number"), pagibig_number:v("f_pagibig_number"), tin_number:v("f_tin_number"), bank_name:v("f_bank_name"), bank_account_number:v("f_bank_account_number") }); }
+  // gov IDs + bank written ONLY by the sole editor (Vina/owners) — others never touch these columns (their form shows read-only, no inputs)
+  if(canEditIds()){ Object.assign(p,{ sss_number:v("f_sss_number"), philhealth_number:v("f_philhealth_number"), pagibig_number:v("f_pagibig_number"), tin_number:v("f_tin_number"), bank_name:v("f_bank_name"), bank_account_number:v("f_bank_account_number") }); }
   if(canSeePay()){ Object.assign(p,{ daily_rate:nv("f_daily_rate"), daily_allowance:nv("f_daily_allowance") }); }
   if(!p.full_name){ msg.textContent="Full name is required."; return; }
   btn.disabled=true; btn.textContent="Saving…";
@@ -3926,7 +3931,7 @@ async function saveEmployee(id,modal){
       if(Number(before.daily_rate||0)!==Number(p.daily_rate||0)) ch.push("Daily rate "+(before.daily_rate?"₱"+Number(before.daily_rate).toLocaleString():"—")+" → "+(p.daily_rate?"₱"+Number(p.daily_rate).toLocaleString():"—"));
       if(Number(before.daily_allowance||0)!==Number(p.daily_allowance||0)) ch.push("Allowance "+(before.daily_allowance?"₱"+Number(before.daily_allowance).toLocaleString():"—")+" → "+(p.daily_allowance?"₱"+Number(p.daily_allowance).toLocaleString():"—"));
     }
-    if(canSeeIds()){  // bank/gov now editable by any HR — log who changed them
+    if(canEditIds()){  // bank/gov entered by Vina/owners — log who changed them
       if((before.bank_account_number||"")!==(p.bank_account_number||"")) ch.push("Bank account changed");
       if((before.bank_name||"")!==(p.bank_name||"")) ch.push("Bank name changed");
       ["sss_number","philhealth_number","pagibig_number","tin_number"].forEach(k=>{ if((before[k]||"")!==(p[k]||"")) ch.push(k.replace("_number","").toUpperCase()+" changed"); });
@@ -4115,7 +4120,7 @@ async function renderActivity(){
       <table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="text-align:left;color:var(--muted);">
         <th style="padding:6px 9px;font-weight:600;">Person</th><th style="padding:6px 9px;font-weight:600;">Role</th><th style="padding:6px 9px;font-weight:600;">Sees</th><th style="padding:6px 9px;font-weight:600;text-align:center;">Salary?</th></tr></thead>
         <tbody>${matrix}</tbody></table>
-      <div class="psub" style="margin-top:9px;">🔓 Government IDs (SSS/PhilHealth/Pag-IBIG/TIN) &amp; bank details are visible to all HR logins — needed for onboarding &amp; enrolment. Only <b>salary</b> stays restricted to you, Sanjay &amp; Grazel. Every edit to a bank or gov number is logged in the activity feed below.</div>
+      <div class="psub" style="margin-top:9px;">🔓 Government IDs (SSS/PhilHealth/Pag-IBIG/TIN) &amp; bank details are <b>viewable by all HR</b> — needed for onboarding &amp; enrolment — but <b>entered/edited by Vina only</b> (single source of truth; you &amp; Sanjay can override). Everyone else sees them read-only. <b>Salary</b> stays restricted to you, Sanjay &amp; Grazel. Every bank/gov edit is logged below.</div>
     </div>
     <div class="panel">
       <h2>Sign-in history</h2>
@@ -4604,8 +4609,10 @@ function editPrehire(c){
       <div class="panel"><div class="subhead">Offer &amp; compensation <span class="sh-note">daily rate may change at contract</span></div>
         ${sel("pe_ctype","Contract type",CONTRACT_TYPES,c.contract_type)}${sel("pe_paybasis","Pay basis — Head Office only (others are daily-rated)",["Daily","Monthly"],c.pay_basis)}${canSeePay()?`${fld("pe_rate","Daily rate offered (₱)",c.daily_rate,"number")}${fld("pe_allow","Daily allowance (₱)",c.daily_allowance,"number")}`:`<div style="font-size:12.5px;color:#6a766f;margin:6px 0;">🔒 Daily rate is restricted to payroll.</div>`}${fld("pe_start","Target start date",c.start_date,"date")}${fld("pe_super","Supervisor",c.supervisor_name)}
       </div>
-      ${canSeeIds()?`<div class="panel"><div class="subhead">Government numbers &amp; bank</div>
+      ${canEditIds()?`<div class="panel"><div class="subhead">Government numbers &amp; bank</div>
         ${fld("pe_sss","SSS",c.sss_number)}${fld("pe_phil","PhilHealth",c.philhealth_number)}${fld("pe_pag","Pag-IBIG",c.pagibig_number)}${fld("pe_tin","TIN",c.tin_number)}${fld("pe_bank","Bank name",c.bank_name)}${fld("pe_acct","Bank account number",c.bank_account_number)}
+      </div>`:canSeeIds()?`<div class="panel"><div class="subhead">Government numbers &amp; bank <span class="sh-note">view only — entered by Vina</span></div>
+        ${roField("SSS",c.sss_number)}${roField("PhilHealth",c.philhealth_number)}${roField("Pag-IBIG",c.pagibig_number)}${roField("TIN",c.tin_number)}${roField("Bank name",c.bank_name)}${roField("Bank account number",c.bank_account_number)}
       </div>`:""}
       <div class="panel"><div class="subhead">HR notes &amp; gate</div>
         <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">HR officer notes</label><textarea id="pe_notes" rows="2" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;">${esc(c.hr_officer_notes||"")}</textarea></div>
@@ -4631,7 +4638,7 @@ function editPrehire(c){
       contract_type:v("pe_ctype"), pay_basis:v("pe_paybasis"), start_date:v("pe_start"), supervisor_name:v("pe_super"),
       hr_officer_notes:v("pe_notes"), sm_acceptance:v("pe_sm"),
       interview_status:v("pe_istatus"), interview_date:v("pe_idate"), interviewer:v("pe_interviewer"), updated_at:new Date().toISOString() };
-    if(canSeeIds()){ Object.assign(p,{ sss_number:v("pe_sss"), philhealth_number:v("pe_phil"), pagibig_number:v("pe_pag"), tin_number:v("pe_tin"), bank_name:v("pe_bank"), bank_account_number:v("pe_acct") }); }
+    if(canEditIds()){ Object.assign(p,{ sss_number:v("pe_sss"), philhealth_number:v("pe_phil"), pagibig_number:v("pe_pag"), tin_number:v("pe_tin"), bank_name:v("pe_bank"), bank_account_number:v("pe_acct") }); }
     if(canSeePay()){ Object.assign(p,{ daily_rate:nv("pe_rate"), daily_allowance:nv("pe_allow") }); }
     const { error } = await sb.from("prehire").update(p).eq("id",c.id);
     if(error){ document.getElementById("peMsg").textContent=error.message; return; }

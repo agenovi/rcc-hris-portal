@@ -220,7 +220,14 @@ async function loadEmployees(){
   renderActivity();
   tagPreviewPages();
   wireGlobalSearch();
-  if(!landed){ landed=true; if(typeof window.go==="function") window.go("dashboard"); }
+  if(!landed){ landed=true;
+    // Deep link from the approval email: ?sign=<id> opens that item straight on the sign screen.
+    let deep=null; try{ deep=new URLSearchParams(location.search).get("sign"); }catch(_){}
+    if(deep && (SIGNATURES||[]).some(s=>String(s.id)===String(deep))){
+      if(typeof window.go==="function") window.go("signatures");
+      setTimeout(()=>{ try{ openSignDoc(deep); }catch(_){} history.replaceState(null,"",location.pathname); }, 60);
+    } else if(typeof window.go==="function") window.go("dashboard");
+  }
 }
 /* ---------- SETTINGS — PayPlus Sync ----------
    Pulls the PayPlus masterlist + recent attendance and reconciles employee
@@ -3272,7 +3279,12 @@ async function sendFinalPayForSignoff(x,modal){
     awaiting:"you", with_whom:"Director (approval)", status:"pending" }).select().single();
   if(e2){ if(msg) msg.textContent=e2.message; if(btn){ btn.disabled=false; btn.textContent="Send to Director for sign-off"; } return; }
   await sb.from("exit_clearance").update({quitclaim_signature_id:sig.id}).eq("id",x.id);
-  await logChange("exit",x.id,x.employee_name,"Final pay sent for sign-off","Net "+peso(net)+" · to Director");
+  // Email the Director the branded approval card (Supabase → Resend → their inbox). Best-effort: never block the sign-off.
+  try{ const {data:{session}}=await sb.auth.getSession();
+    fetch(`${SUPABASE_URL}/functions/v1/notify-signoff`,{ method:"POST",
+      headers:{ apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${(session&&session.access_token)||SUPABASE_ANON_KEY}`, "Content-Type":"application/json" },
+      body:JSON.stringify({ signature_id:sig.id }) }); }catch(_){}
+  await logChange("exit",x.id,x.employee_name,"Final pay sent for sign-off","Net "+peso(net)+" · emailed to Director");
   if(modal) modal.remove();
   await loadEmployees(); window.go("signatures");
 }

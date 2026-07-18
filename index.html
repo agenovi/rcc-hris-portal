@@ -4272,17 +4272,24 @@ let MAT_EDIT=null;
 function matDefaultDays(type,solo){ return type==="Miscarriage"?60:(solo?120:105); }
 function matMSC(raw){ let a=[]; if(Array.isArray(raw)) a=raw; else if(typeof raw==="string") a=raw.split(/[,\s]+/); return a.map(Number).filter(x=>!isNaN(x)&&x>0); }
 // The RCC standard computation for a daily-paid employee.
+// DOLE Labor Advisory 01-2019 formula (see the ruling): full pay = monthly rate × maternity months
+// (month = 30 days); differential = full pay − SSS benefit − employee contributions; differential is TAXABLE.
 function computeMaternity(c){
   const dpm=Number(c.days_per_month)||26, dr=Number(c.daily_rate)||0, days=Number(c.leave_days)||0;
-  const useActual=(c.full_pay_basis==="Actual")&&Number(c.actual_avg_days)>0;
-  const effDays=useActual?Number(c.actual_avg_days):dpm;          // actual PayPlus attendance vs theoretical days/month
-  const monthly=dr*effDays, fullPayDaily=monthly/30, fpmb=fullPayDaily*days;
+  const months=days/30;                            // Art.13 Civil Code: a month = 30 days
+  const monthly=dr*dpm;                            // equivalent monthly rate = (daily × factor)/12 ≈ daily × 26
+  const fpmb=monthly*months;                        // full pay = monthly × maternity months (normal working days — NOT actual attendance)
   const msc=matMSC(c.msc).sort((a,b)=>b-a), sum6=msc.slice(0,6).reduce((s,x)=>s+x,0), adsc=sum6/180;
   const ov=(c.sss_benefit_override!=null&&c.sss_benefit_override!=="")?Number(c.sss_benefit_override):null;
   const sssBenefit=ov!=null?ov:adsc*days;
-  const employerShare=Math.max(0,fpmb-sssBenefit), gross=sssBenefit+employerShare;
-  const deductions=["deduct_sss","deduct_philhealth","deduct_pagibig","deduct_loans","deduct_advance","deduct_other"].reduce((s,k)=>s+(Number(c[k])||0),0);
-  return { dpm,dr,days,effDays,useActual,monthly,fullPayDaily,fpmb,msc,sum6,adsc,sssBenefit,employerShare,gross,deductions,net:gross-deductions,override:ov!=null };
+  const contributions=(Number(c.deduct_sss)||0)+(Number(c.deduct_philhealth)||0)+(Number(c.deduct_pagibig)||0);
+  const otherDeduct=(Number(c.deduct_loans)||0)+(Number(c.deduct_advance)||0)+(Number(c.deduct_other)||0);
+  const rawDiff=fpmb-sssBenefit-contributions;      // DOLE salary differential (can be ≤ 0 → nothing owed)
+  const salaryDifferential=Math.max(0,rawDiff);
+  const tax=Number(c.tax_on_differential)||0;       // the differential is taxable income (DOLE §III)
+  const employerNet=Math.max(0,salaryDifferential-tax-otherDeduct);
+  const net=sssBenefit+employerNet;                 // total the employee receives
+  return { dpm,dr,days,months,monthly,fpmb,fullPayDaily:monthly/30,msc,sum6,adsc,sssBenefit,contributions,otherDeduct,rawDiff,salaryDifferential,tax,employerNet,net,override:ov!=null };
 }
 function renderMaternity(){
   const pg=$("#page-maternity"); if(!pg||!canSeePay()) return;
@@ -4291,7 +4298,7 @@ function renderMaternity(){
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
       <h2>Maternity Benefits</h2>
-      <div class="psub">RA 11210 · 105-Day Expanded Maternity Leave. RCC standard: <b>Full-pay maternity benefit</b> vs <b>SSS benefit</b> → employer pays the <b>differential only when full pay is higher</b> (for most daily-paid disers the SSS benefit is higher, so employer share = ₱0). Salary-restricted — visible to you &amp; Grazel only.</div>
+      <div class="psub">RA 11210 · computed per <b>DOLE Labor Advisory 01-2019</b>: full pay (daily rate × working days/month × maternity months — <b>normal working days, not attendance</b>) − SSS benefit − contributions = <b>salary differential</b> (taxable, forms part of 13th-month). Employer pays it only when full pay exceeds the SSS benefit. Salary-restricted — you &amp; Grazel only.</div>
       <div class="actionbar"><button class="btn" id="matNew">+ New maternity claim</button></div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
         <div class="kpi"><div class="k-l">Draft</div><div class="k-n">${draft}</div></div>
@@ -4362,16 +4369,9 @@ function openMaternityForm(c){
         <div class="form-grid">${df("mat_mat2","SSS MAT-2 date",c.mat2_date)}${df("mat_lstart","Leave start",c.leave_start)}</div>
         <div class="form-grid">${df("mat_lend","Leave end",c.leave_end)}<div></div></div>
       </div>
-      <div class="panel"><div class="subhead">C · Salary basis → full pay</div>
-        <div class="form-grid">${mf("mat_dr","Daily salary rate (₱)",c.daily_rate)}${sel("mat_basis","Full-pay basis",["Contractual","Actual"],c.full_pay_basis||"Contractual")}</div>
-        <div id="mat_basisC">
-          <div id="mat_contractRow" style="display:${(c.full_pay_basis==="Actual")?'none':'block'};">${mf("mat_dpm","Days / month (theoretical)",c.days_per_month||26)}
-            <div class="psub" style="margin:-4px 0 4px;">Contractual = rate × days/month ÷ 30. Assumes a full month with no absences/late/undertime.</div></div>
-          <div id="mat_actualRow" style="display:${(c.full_pay_basis==="Actual")?'block':'none'};">
-            <button class="btn ghost" id="mat_pullAtt" type="button">↻ Pull actual attendance from PayPlus</button>
-            <div id="mat_attBox" style="margin-top:8px;">${c.actual_avg_days?matAttSummaryHtml(c.attendance,c.actual_avg_days,c.days_per_month||26):'<div class="psub">Pulls the 6 completed months before the delivery month — present days (capped at a full month) net of late/undertime — for her true average.</div>'}</div>
-          </div>
-        </div>
+      <div class="panel"><div class="subhead">C · Full pay <span class="sh-note">DOLE LA 01-2019</span></div>
+        <div class="form-grid">${mf("mat_dr","Daily salary rate (₱)",c.daily_rate)}${mf("mat_dpm","Working days / month (factor)",c.days_per_month||26)}</div>
+        <div class="psub" style="margin:-4px 0 4px;">Full pay = daily rate × working days/month × maternity months (a month = 30 days). Per DOLE this uses <b>normal working days</b> — <b>not</b> actual attendance; absences, late &amp; undertime do NOT reduce it.</div>
       </div>
       <div class="panel"><div class="subhead">D · SSS contribution basis → SSS benefit</div>
         ${fld("mat_source","Source period (12 mos before semester of delivery)",c.source_period)}
@@ -4379,10 +4379,17 @@ function openMaternityForm(c){
           <textarea id="mat_msc" rows="2" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;" placeholder="e.g. 14000, 14500, 12500, 13000, 13500, 13500, 11500, 12500, 14000, 11500, 13500, 16500">${esc(matMSC(c.msc).join(", "))}</textarea></div>
         ${mf("mat_sss_benefit_override","OR paste SSS-approved benefit amount (optional — overrides the above)",c.sss_benefit_override)}
       </div>
-      <div class="panel"><div class="subhead">E · Deductions during the leave months</div>
+      <div class="panel"><div class="subhead">E · Contributions during leave <span class="sh-note">deducted from full pay per DOLE</span></div>
         <div class="form-grid">${mf("mat_deduct_sss","SSS employee share",c.deduct_sss)}${mf("mat_deduct_philhealth","PhilHealth share",c.deduct_philhealth)}</div>
-        <div class="form-grid">${mf("mat_deduct_pagibig","Pag-IBIG share",c.deduct_pagibig)}${mf("mat_deduct_loans","SSS / Pag-IBIG loan",c.deduct_loans)}</div>
-        <div class="form-grid">${mf("mat_deduct_advance","Company cash advance",c.deduct_advance)}${mf("mat_deduct_other","Other",c.deduct_other)}</div>
+        ${mf("mat_deduct_pagibig","Pag-IBIG share",c.deduct_pagibig)}
+        <div class="psub" style="margin:-2px 0 2px;">Her contributions for the leave period — DOLE deducts these from full pay when computing the differential.</div>
+      </div>
+      <div class="panel"><div class="subhead">F · Tax &amp; other deductions</div>
+        ${mf("mat_tax_on_differential","Withholding tax on the salary differential (₱)",c.tax_on_differential)}
+        <div class="psub" style="margin:-4px 0 6px;">⚠ The salary differential is <b>taxable income</b> (DOLE §III). The SSS benefit stays tax-free. Payroll computes the tax on the differential.</div>
+        <div class="form-grid">${mf("mat_deduct_loans","SSS / Pag-IBIG loan",c.deduct_loans)}${mf("mat_deduct_advance","Company cash advance",c.deduct_advance)}</div>
+        ${mf("mat_deduct_other","Other agreed deduction",c.deduct_other)}
+        <label style="font-size:13px;display:flex;gap:7px;align-items:center;padding:6px 0;"><input type="checkbox" id="mat_include13" ${c.include_13th===false?"":"checked"}> Include this differential in her <b>&nbsp;13th-month&nbsp;</b> base (DOLE §IV)</label>
       </div>
       <div class="panel" style="border:1.5px solid #bcdcc7;background:var(--green-light);"><div class="subhead">Computation</div>
         <div id="matSummary"></div>
@@ -4405,9 +4412,6 @@ function openMaternityForm(c){
   const setDays=()=>{ const t=document.getElementById("mat_type").value, solo=document.getElementById("mat_solo").checked; document.getElementById("mat_days").value=matDefaultDays(t,solo); matRecalc(); };
   document.getElementById("mat_type").addEventListener("change",setDays);
   document.getElementById("mat_solo").addEventListener("change",setDays);
-  const basisSel=document.getElementById("mat_basis");
-  basisSel.addEventListener("change",()=>{ const act=basisSel.value==="Actual"; document.getElementById("mat_contractRow").style.display=act?"none":"block"; document.getElementById("mat_actualRow").style.display=act?"block":"none"; matRecalc(); });
-  const pullBtn=document.getElementById("mat_pullAtt"); if(pullBtn) pullBtn.addEventListener("click",matPullAttendance);
   document.getElementById("matForm").addEventListener("input",matRecalc);
   matRecalc();
 }
@@ -4458,11 +4462,11 @@ function matCollect(){
   c.delivery_date=g("mat_delivery")||null; c.mat1_date=g("mat_mat1")||null; c.mat2_date=g("mat_mat2")||null;
   c.leave_start=g("mat_lstart")||null; c.leave_end=g("mat_lend")||null;
   c.daily_rate=num("mat_dr"); c.days_per_month=num("mat_dpm")||26;
-  c.full_pay_basis=g("mat_basis")||"Contractual";
-  c.actual_avg_days=(MAT_EDIT&&MAT_EDIT.actual_avg_days)||null; c.attendance=(MAT_EDIT&&MAT_EDIT.attendance)||[];
   c.source_period=g("mat_source")||null; c.msc=matMSC(g("mat_msc"));
   const ov=g("mat_sss_benefit_override"); c.sss_benefit_override=(ov&&ov.trim()!=="")?Number(ov):null;
   ["deduct_sss","deduct_philhealth","deduct_pagibig","deduct_loans","deduct_advance","deduct_other"].forEach(k=>c[k]=num("mat_"+k));
+  c.tax_on_differential=num("mat_tax_on_differential");
+  const inc=document.getElementById("mat_include13"); c.include_13th=inc?inc.checked:true;
   c.notes=g("mat_notes")||null;
   return c;
 }
@@ -4470,19 +4474,19 @@ function matRecalc(){
   const c=matCollect(), r=computeMaternity(c), box=document.getElementById("matSummary"); if(!box) return;
   const row=(l,v,strong)=>`<div style="display:flex;justify-content:space-between;padding:3px 0;${strong?'font-weight:700;border-top:1px solid #bcdcc7;margin-top:3px;padding-top:6px;':''}"><span>${l}</span><span>${peso(v)}</span></div>`;
   box.innerHTML=`
-    <div style="font-size:11.5px;color:${r.useActual?'var(--green-dark)':'#8a6a14'};margin-bottom:4px;">${r.useActual?"✓ Actual attendance basis — "+Number(r.effDays).toFixed(2)+" real paid days/month (from PayPlus, net of late/undertime)":"Contractual basis — "+r.effDays+" days/month (theoretical full attendance)"}</div>
-    ${row("Full-pay-daily (₱"+Number(r.dr).toLocaleString()+" × "+(r.useActual?Number(r.effDays).toFixed(2):r.effDays)+" ÷ 30)",r.fullPayDaily)}
-    ${row("Full-pay maternity benefit (× "+r.days+" days)",r.fpmb,true)}
-    <div style="height:8px;"></div>
-    ${row("6 highest MSC total"+(r.override?" (overridden)":""),r.sum6)}
-    ${row("ADSC (÷ 180)",r.adsc)}
-    ${row("SSS maternity benefit (× "+r.days+" days)",r.sssBenefit,true)}
-    <div style="height:8px;"></div>
-    ${row("Employer salary differential"+(r.employerShare>0?"":" — none (SSS ≥ full pay)"),r.employerShare)}
-    ${row("Gross benefit to employee",r.gross,true)}
-    ${row("Less deductions",-r.deductions)}
-    <div style="display:flex;justify-content:space-between;padding:8px 0 2px;font-weight:800;font-size:16px;color:var(--green-dark);border-top:2px solid var(--green-dark);margin-top:5px;"><span>NET PAYABLE</span><span>${peso(r.net)}</span></div>
-    ${r.net<0?'<div class="note" style="background:#fdece9;border-color:#e5b4ae;color:#a4322a;margin-top:6px;">⚠ Net is negative — deductions exceed the benefit. Review.</div>':''}`;
+    <div style="font-size:11.5px;color:#8a6a14;margin-bottom:4px;">DOLE LA 01-2019 · full pay = ₱${Number(r.dr).toLocaleString()} × ${r.dpm} working days × ${r.months.toFixed(2)} months (normal working days, not attendance)</div>
+    ${row("Full pay (monthly ₱"+Number(r.monthly).toLocaleString()+" × "+r.months.toFixed(2)+" mo)",r.fpmb,true)}
+    ${row("Less: SSS maternity benefit",-r.sssBenefit)}
+    ${row("Less: her SSS/PhilHealth/Pag-IBIG contributions",-r.contributions)}
+    <div style="display:flex;justify-content:space-between;padding:6px 0 2px;font-weight:700;border-top:1px solid #bcdcc7;"><span>Salary differential (employer)${r.salaryDifferential>0?"":" — none (SSS+contrib ≥ full pay)"}</span><span>${peso(r.salaryDifferential)}</span></div>
+    ${r.salaryDifferential>0?`<div style="font-size:11px;color:#a4322a;margin:1px 0 4px;">⚠ taxable income — withholding tax applies (DOLE §III)</div>`:""}
+    ${r.tax>0?row("Less: withholding tax on differential",-r.tax):""}
+    ${r.otherDeduct>0?row("Less: loans / advances / other",-r.otherDeduct):""}
+    ${row("Employer pays (net)",r.employerNet,true)}
+    <div style="height:6px;"></div>
+    ${row("+ SSS benefit (tax-free, SSS-funded)",r.sssBenefit)}
+    <div style="display:flex;justify-content:space-between;padding:8px 0 2px;font-weight:800;font-size:16px;color:var(--green-dark);border-top:2px solid var(--green-dark);margin-top:5px;"><span>TOTAL TO EMPLOYEE</span><span>${peso(r.net)}</span></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:5px;">6 highest MSC ₱${Number(r.sum6).toLocaleString()} ÷ 180 = ADSC ₱${r.adsc.toFixed(2)} × ${r.days} days = SSS ₱${Number(r.sssBenefit).toLocaleString(undefined,{minimumFractionDigits:2})}${r.override?" (overridden)":""}${c.include_13th?" · differential enters 13th-month base (§IV)":""}</div>`;
   const eb=document.getElementById("matElig"); if(eb){ const f=matElig(c);
     eb.innerHTML=f.length?`<div class="panel" style="background:#fffaf0;border:1px solid #f0d9a6;"><div class="subhead">Eligibility checks</div>${f.map(x=>`<div class="task"><div class="dot ${x[0]}"></div><div><div class="td">${esc(x[1])}</div></div></div>`).join("")}</div>`:"";
   }
@@ -4494,9 +4498,10 @@ async function saveMaternity(){
   const payload={ employee_id:c.employee_id, employee_name:c.employee_name, category:c.category, worksite:c.worksite||MAT_EDIT.worksite, hire_date:c.hire_date, civil_status:c.civil_status,
     solo_parent:c.solo_parent, bank_name:c.bank_name, bank_account:c.bank_account, claim_type:c.claim_type, leave_days:c.leave_days,
     delivery_date:c.delivery_date, mat1_date:c.mat1_date, mat2_date:c.mat2_date, leave_start:c.leave_start, leave_end:c.leave_end,
-    daily_rate:c.daily_rate, days_per_month:c.days_per_month, full_pay_basis:c.full_pay_basis, actual_avg_days:c.actual_avg_days, attendance:c.attendance, source_period:c.source_period, msc:c.msc, sss_benefit_override:c.sss_benefit_override,
+    daily_rate:c.daily_rate, days_per_month:c.days_per_month, full_pay_basis:"DOLE", source_period:c.source_period, msc:c.msc, sss_benefit_override:c.sss_benefit_override,
     deduct_sss:c.deduct_sss, deduct_philhealth:c.deduct_philhealth, deduct_pagibig:c.deduct_pagibig, deduct_loans:c.deduct_loans, deduct_advance:c.deduct_advance, deduct_other:c.deduct_other,
-    full_pay_daily:r.fullPayDaily, fpmb:r.fpmb, sss_benefit:r.sssBenefit, employer_share:r.employerShare, gross_benefit:r.gross, net_payable:r.net,
+    tax_on_differential:c.tax_on_differential, include_13th:c.include_13th,
+    full_pay_daily:r.fullPayDaily, fpmb:r.fpmb, sss_benefit:r.sssBenefit, salary_differential:r.salaryDifferential, employer_share:r.employerNet, gross_benefit:r.sssBenefit+r.salaryDifferential, net_payable:r.net,
     notes:c.notes, updated_at:new Date().toISOString() };
   let res;
   if(MAT_EDIT._new||!MAT_EDIT.id){ payload.claim_ref="MAT-"+new Date().toISOString().slice(0,10).replace(/-/g,"")+"-"+Math.random().toString(36).slice(2,5).toUpperCase(); payload.status="Draft"; payload.created_by=(CURRENT_USER&&CURRENT_USER.email)||"HR"; res=await sb.from("maternity_claims").insert(payload).select().single(); }
@@ -4536,18 +4541,18 @@ function printMaternity(){
       <div class="lbl" style="margin-top:6px;">Leave period</div>${c.leave_start?fmtDate(c.leave_start):"—"} to ${c.leave_end?fmtDate(c.leave_end):"—"}<br>
       <div class="lbl" style="margin-top:6px;">Source period</div>${esc(c.source_period||"—")}
     </div></div>
-    <table><tr><th colspan="2">Computation${r.useActual?" · full pay on actual attendance ("+Number(r.effDays).toFixed(2)+" days/mo)":" · full pay on contractual "+r.effDays+" days/mo"}</th></tr>
-      <tr><td>Daily salary rate × ${r.useActual?Number(r.effDays).toFixed(2):r.effDays} ÷ 30 = full-pay-daily</td><td class="n">${P(r.fullPayDaily)}</td></tr>
-      <tr class="tot"><td>Full-Pay Maternity Benefit (× ${r.days} days)</td><td class="n">${P(r.fpmb)}</td></tr>
-      <tr><td>6 highest MSC total</td><td class="n">${P(r.sum6)}</td></tr>
-      <tr><td>ADSC (÷ 180)</td><td class="n">${P(r.adsc)}</td></tr>
-      <tr class="tot"><td>SSS Maternity Benefit (× ${r.days} days)</td><td class="n">${P(r.sssBenefit)}</td></tr>
-      <tr><td>Employer salary differential (if full pay &gt; SSS)</td><td class="n">${P(r.employerShare)}</td></tr>
-      <tr class="tot"><td>Gross benefit</td><td class="n">${P(r.gross)}</td></tr>
-      <tr><td>Less: deductions during leave</td><td class="n">(${P(r.deductions)})</td></tr>
-      <tr class="tot" style="font-size:15px;"><td>NET PAYABLE</td><td class="n">${P(r.net)}</td></tr>
+    <table><tr><th colspan="2">Computation · DOLE Labor Advisory No. 01, s. 2019</th></tr>
+      <tr><td>Full pay = ₱${Number(r.dr).toLocaleString()} × ${r.dpm} working days × ${r.months.toFixed(2)} months</td><td class="n">${P(r.fpmb)}</td></tr>
+      <tr><td>Less: SSS maternity benefit (6 highest MSC ₱${Number(r.sum6).toLocaleString()} ÷ 180 = ₱${r.adsc.toFixed(2)}/day × ${r.days})</td><td class="n">(${P(r.sssBenefit)})</td></tr>
+      <tr><td>Less: SSS/PhilHealth/Pag-IBIG contributions during leave</td><td class="n">(${P(r.contributions)})</td></tr>
+      <tr class="tot"><td>Salary differential (employer share) — taxable</td><td class="n">${P(r.salaryDifferential)}</td></tr>
+      ${r.tax>0?`<tr><td>Less: withholding tax on differential</td><td class="n">(${P(r.tax)})</td></tr>`:""}
+      ${r.otherDeduct>0?`<tr><td>Less: loans / advances / other</td><td class="n">(${P(r.otherDeduct)})</td></tr>`:""}
+      <tr class="tot"><td>Employer pays (net)</td><td class="n">${P(r.employerNet)}</td></tr>
+      <tr><td>Plus: SSS maternity benefit (tax-free, SSS-funded)</td><td class="n">${P(r.sssBenefit)}</td></tr>
+      <tr class="tot" style="font-size:15px;"><td>TOTAL TO EMPLOYEE</td><td class="n">${P(r.net)}</td></tr>
     </table>
-    <div class="conf">Maternity benefits are exempt from income tax. Salary data is confidential.</div>
+    <div class="conf">The SSS maternity benefit is tax-exempt; the salary differential is taxable income (DOLE §III) and forms part of the 13th-month base (§IV). Salary data is confidential.</div>
     <div class="grid" style="margin-top:40px;"><div>Prepared by<br><br><b>______________________</b><br><span class="lbl">HR — Compensation &amp; Benefits</span></div>
       <div>Approved by<br><br><b>Anju C. Genomal</b><br><span class="lbl">Director, Admin &amp; Finance</span></div></div>
     </body></html>`);

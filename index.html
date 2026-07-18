@@ -4369,7 +4369,7 @@ function openMaternityForm(c){
             <div class="psub" style="margin:-4px 0 4px;">Contractual = rate × days/month ÷ 30. Assumes a full month with no absences/late/undertime.</div></div>
           <div id="mat_actualRow" style="display:${(c.full_pay_basis==="Actual")?'block':'none'};">
             <button class="btn ghost" id="mat_pullAtt" type="button">↻ Pull actual attendance from PayPlus</button>
-            <div id="mat_attBox" style="margin-top:8px;">${c.actual_avg_days?matAttSummaryHtml(c.attendance,c.actual_avg_days):'<div class="psub">Pulls the 6 completed months before the delivery month — present days net of late/undertime — for her true average.</div>'}</div>
+            <div id="mat_attBox" style="margin-top:8px;">${c.actual_avg_days?matAttSummaryHtml(c.attendance,c.actual_avg_days,c.days_per_month||26):'<div class="psub">Pulls the 6 completed months before the delivery month — present days (capped at a full month) net of late/undertime — for her true average.</div>'}</div>
           </div>
         </div>
       </div>
@@ -4411,17 +4411,21 @@ function openMaternityForm(c){
   document.getElementById("matForm").addEventListener("input",matRecalc);
   matRecalc();
 }
-// Convert late+undertime minutes to day-equivalents (8h day) and net them off present days.
-function matAvgFromAttendance(months){
+// Present days CAPPED at the standard days/month (we never add days above a full month — extra days are premium, not base pay),
+// then late + undertime minutes netted off as day-equivalents (8h day). Only pulls the average DOWN for absences.
+function matAvgFromAttendance(months,cap){
   const m=(months||[]).filter(x=>x.hasData&&Number(x.present)>0);
   if(!m.length) return null;
-  const perMonth=m.map(x=>{ const lost=(Number(x.lateMinutes||0)+Number(x.undertimeMinutes||0))/480; return Math.max(0,Number(x.present||0)-lost); });
+  const c=Number(cap)||26;
+  const perMonth=m.map(x=>{ const lost=(Number(x.lateMinutes||0)+Number(x.undertimeMinutes||0))/480; return Math.max(0,Math.min(Number(x.present||0),c)-lost); });
   return perMonth.reduce((s,x)=>s+x,0)/perMonth.length;
 }
-function matAttSummaryHtml(months,avg){
-  const rows=(months||[]).filter(x=>x.hasData).map(x=>`<tr><td>${esc(x.month)}</td><td style="text-align:right;">${x.present}</td><td style="text-align:right;">${x.absent||0}</td><td style="text-align:right;">${Number(x.lateMinutes||0).toFixed(1)}</td><td style="text-align:right;">${Number(x.undertimeMinutes||0).toFixed(1)}</td></tr>`).join("");
+function matAttSummaryHtml(months,avg,cap){
+  const c=Number(cap)||26;
+  const rows=(months||[]).filter(x=>x.hasData).map(x=>{ const p=Number(x.present||0), capped=p>c;
+    return `<tr><td>${esc(x.month)}</td><td style="text-align:right;">${p}${capped?` <span style="color:var(--muted);">→${c}</span>`:""}</td><td style="text-align:right;">${x.absent||0}</td><td style="text-align:right;">${Number(x.lateMinutes||0).toFixed(1)}</td><td style="text-align:right;">${Number(x.undertimeMinutes||0).toFixed(1)}</td></tr>`;}).join("");
   return `<table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr style="color:var(--muted);"><th style="text-align:left;">Month</th><th style="text-align:right;">Present</th><th style="text-align:right;">Absent</th><th style="text-align:right;">Late(m)</th><th style="text-align:right;">UT(m)</th></tr></thead><tbody>${rows}</tbody></table>
-    <div style="margin-top:6px;font-weight:700;color:var(--green-dark);">Actual avg paid days/month: ${avg!=null?Number(avg).toFixed(2):"—"} <span style="font-weight:400;color:var(--muted);">(present net of late + undertime)</span></div>`;
+    <div style="margin-top:6px;font-weight:700;color:var(--green-dark);">Actual avg paid days/month: ${avg!=null?Number(avg).toFixed(2):"—"} <span style="font-weight:400;color:var(--muted);">(present capped at ${c}/mo, net of late + undertime — never above a full month)</span></div>`;
 }
 async function matPullAttendance(){
   const c=matCollect(); if(!c.employee_id){ alert("This employee has no PayPlus Employee ID on file — can't pull attendance."); return; }
@@ -4436,10 +4440,10 @@ async function matPullAttendance(){
     const r=await fetch(url,{ headers:{ Authorization:`Bearer ${session.access_token}`, apikey:SUPABASE_ANON_KEY } });
     const j=await r.json();
     if(j.error){ box.innerHTML=`<div class="note" style="background:#fdece9;border-color:#e5b4ae;color:#a4322a;">Couldn't pull: ${esc(j.error)}</div>`; return; }
-    const avg=matAvgFromAttendance(j.months);
+    const avg=matAvgFromAttendance(j.months, c.days_per_month||26);
     if(avg==null){ box.innerHTML='<div class="note" style="background:#fffaf0;border-color:#f0d9a6;">No attendance found in that window — she may have been hired after it, or not enrolled. Use Contractual basis.</div>'; return; }
     MAT_EDIT.attendance=j.months; MAT_EDIT.actual_avg_days=avg;
-    box.innerHTML=matAttSummaryHtml(j.months,avg);
+    box.innerHTML=matAttSummaryHtml(j.months,avg,c.days_per_month||26);
     matRecalc();
   }catch(e){ box.innerHTML=`<div class="note" style="background:#fdece9;border-color:#e5b4ae;color:#a4322a;">Couldn't reach PayPlus: ${esc(String(e&&e.message||e))}</div>`; }
 }

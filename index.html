@@ -4394,7 +4394,8 @@ function openMaternityForm(c){
       <div class="panel"><div class="subhead">E · Contributions during leave <span class="sh-note">deducted from full pay per DOLE</span></div>
         <div class="form-grid">${mf("mat_deduct_sss","SSS employee share",c.deduct_sss)}${mf("mat_deduct_philhealth","PhilHealth share",c.deduct_philhealth)}</div>
         ${mf("mat_deduct_pagibig","Pag-IBIG share",c.deduct_pagibig)}
-        <div class="psub" style="margin:-2px 0 2px;">Her contributions for the leave period — DOLE deducts these from full pay when computing the differential.</div>
+        <button class="btn ghost" id="mat_estContrib" type="button" style="margin-top:2px;">≈ Estimate at standard rates</button>
+        <div class="psub" style="margin:4px 0 2px;">Her contributions for the leave period — DOLE deducts these from full pay. The estimate uses SSS 5% (capped at ₱20k MSC) · PhilHealth 2.5% · Pag-IBIG ₱200/mo × the leave months; <b>payroll confirms the exact figures.</b></div>
       </div>
       <div class="panel"><div class="subhead">F · Tax &amp; other deductions</div>
         ${mf("mat_tax_on_differential","Withholding tax on the salary differential (₱)",c.tax_on_differential)}
@@ -4424,7 +4425,20 @@ function openMaternityForm(c){
   const setDays=()=>{ const t=document.getElementById("mat_type").value, solo=document.getElementById("mat_solo").checked; document.getElementById("mat_days").value=matDefaultDays(t,solo); matRecalc(); };
   document.getElementById("mat_type").addEventListener("change",setDays);
   document.getElementById("mat_solo").addEventListener("change",setDays);
+  const est=document.getElementById("mat_estContrib"); if(est) est.addEventListener("click",matEstimateContributions);
   document.getElementById("matForm").addEventListener("input",matRecalc);
+  matRecalc();
+}
+// Estimate the employee's contributions for the leave period at standard 2025 rates (payroll confirms exact).
+function matEstimateContributions(){
+  const c=matCollect(), factor=Number(c.pay_factor)||312, dr=Number(c.daily_rate)||0, days=Number(c.leave_days)||0;
+  if(!dr||!days){ alert("Enter the daily rate and leave days first."); return; }
+  const monthly=dr*factor/12, months=days/30;
+  const sss=Math.round(0.05*Math.min(monthly,20000)*months);
+  const phic=Math.round(0.025*monthly*months);
+  const hdmf=Math.round(Math.min(monthly*0.02,200)*months);
+  const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v; };
+  set("mat_deduct_sss",sss); set("mat_deduct_philhealth",phic); set("mat_deduct_pagibig",hdmf);
   matRecalc();
 }
 // Present days CAPPED at the standard days/month (we never add days above a full month — extra days are premium, not base pay),

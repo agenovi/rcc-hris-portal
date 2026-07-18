@@ -4279,7 +4279,7 @@ function computeMaternity(c){
   const months=days/30;                            // Art.13 Civil Code: a month = 30 days
   const monthly=dr*dpm;                            // equivalent monthly rate = (daily × factor)/12 ≈ daily × 26
   const fpmb=monthly*months;                        // full pay = monthly × maternity months (normal working days — NOT actual attendance)
-  const msc=matMSC(c.msc).sort((a,b)=>b-a), sum6=msc.slice(0,6).reduce((s,x)=>s+x,0), adsc=sum6/180;
+  const msc=matMSC(c.msc).map(x=>Math.min(x,20000)).sort((a,b)=>b-a), sum6=msc.slice(0,6).reduce((s,x)=>s+x,0), adsc=sum6/180;  // Regular SSS Program benefit caps each MSC at ₱20,000 (SSS Circular 2020-032; above 20k = WISP)
   const ov=(c.sss_benefit_override!=null&&c.sss_benefit_override!=="")?Number(c.sss_benefit_override):null;
   const sssBenefit=ov!=null?ov:adsc*days;
   const contributions=(Number(c.deduct_sss)||0)+(Number(c.deduct_philhealth)||0)+(Number(c.deduct_pagibig)||0);

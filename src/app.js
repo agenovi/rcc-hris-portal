@@ -1959,9 +1959,10 @@ function matMSC(raw){ let a=[]; if(Array.isArray(raw)) a=raw; else if(typeof raw
 // DOLE Labor Advisory 01-2019 formula (see the ruling): full pay = monthly rate × maternity months
 // (month = 30 days); differential = full pay − SSS benefit − employee contributions; differential is TAXABLE.
 function computeMaternity(c){
-  const dpm=Number(c.days_per_month)||26, dr=Number(c.daily_rate)||0, days=Number(c.leave_days)||0;
+  const factor=Number(c.pay_factor)||313, dr=Number(c.daily_rate)||0, days=Number(c.leave_days)||0;
+  const dpm=factor/12;                             // equivalent working days/month (313→26.08 disers · 305→25.42 office)
   const months=days/30;                            // Art.13 Civil Code: a month = 30 days
-  const monthly=dr*dpm;                            // equivalent monthly rate = (daily × factor)/12 ≈ daily × 26
+  const monthly=dr*factor/12;                       // DOLE footnote 2: equivalent monthly rate = (daily rate × factor)/12
   const fpmb=monthly*months;                        // full pay = monthly × maternity months (normal working days — NOT actual attendance)
   const msc=matMSC(c.msc).map(x=>Math.min(x,20000)).sort((a,b)=>b-a), sum6=msc.slice(0,6).reduce((s,x)=>s+x,0), adsc=sum6/180;  // Regular SSS Program benefit caps each MSC at ₱20,000 (SSS Circular 2020-032; above 20k = WISP)
   const ov=(c.sss_benefit_override!=null&&c.sss_benefit_override!=="")?Number(c.sss_benefit_override):null;
@@ -1996,7 +1997,7 @@ function renderMaternity(){
   const nb=$("#matNew"); if(nb) nb.addEventListener("click",matPickEmployee);
   $$("#page-maternity tr.clickable[data-mid]").forEach(tr=>tr.addEventListener("click",()=>openMaternityForm(MATERNITY.find(m=>String(m.id)===tr.dataset.mid))));
 }
-function matDraftFromEmployee(e){ return { _new:true, employee_id:e.employee_id||null, employee_name:e.full_name, category:e.contract_type||null, worksite:e.worksite||null, hire_date:e.hire_date||null, civil_status:e.civil_status||null, bank_name:e.bank_name||null, bank_account:e.bank_account_number||null, daily_rate:e.daily_rate||null, claim_type:"Live birth", solo_parent:false, leave_days:105, days_per_month:26, msc:[], status:"Draft" }; }
+function matDraftFromEmployee(e){ const office=/head office|104 shaw|\bH\.?O\.?\b/i.test((e.worksite||"")+" "+(e.department||"")); return { _new:true, employee_id:e.employee_id||null, employee_name:e.full_name, category:e.contract_type||null, worksite:e.worksite||null, hire_date:e.hire_date||null, civil_status:e.civil_status||null, bank_name:e.bank_name||null, bank_account:e.bank_account_number||null, daily_rate:e.daily_rate||null, claim_type:"Live birth", solo_parent:false, leave_days:105, pay_factor:office?305:313, msc:[], status:"Draft" }; }
 function matPickEmployee(){
   let m=document.getElementById("matPick"); if(!m){ m=document.createElement("div"); m.id="matPick"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
@@ -2054,8 +2055,16 @@ function openMaternityForm(c){
         <div class="form-grid">${df("mat_lend","Leave end",c.leave_end)}<div></div></div>
       </div>
       <div class="panel"><div class="subhead">C · Full pay <span class="sh-note">DOLE LA 01-2019</span></div>
-        <div class="form-grid">${mf("mat_dr","Daily salary rate (₱)",c.daily_rate)}${mf("mat_dpm","Working days / month (factor)",c.days_per_month||26)}</div>
-        <div class="psub" style="margin:-4px 0 4px;">Full pay = daily rate × working days/month × maternity months (a month = 30 days). Per DOLE this uses <b>normal working days</b> — <b>not</b> actual attendance; absences, late &amp; undertime do NOT reduce it.</div>
+        <div class="form-grid">${mf("mat_dr","Daily salary rate (₱)",c.daily_rate)}
+        <div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Pay factor</label>
+          <select id="mat_factor" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;">
+            <option value="313" ${(Number(c.pay_factor)||313)===313?"selected":""}>313 — Diser (6-day week, rest days unpaid)</option>
+            <option value="305" ${Number(c.pay_factor)===305?"selected":""}>305 — Office (special non-working days unpaid)</option>
+            <option value="261" ${Number(c.pay_factor)===261?"selected":""}>261 — 5-day week</option>
+            <option value="253" ${Number(c.pay_factor)===253?"selected":""}>253 — 5-day, special days unpaid</option>
+            <option value="365" ${Number(c.pay_factor)===365?"selected":""}>365 — all days paid</option>
+          </select></div></div>
+        <div class="psub" style="margin:-4px 0 4px;">Full pay = (daily rate × factor ÷ 12) × maternity months (a month = 30 days). The <b>factor</b> = paid days/year for the pay scheme — this is where "no-work-no-pay" enters, uniformly. Per DOLE it uses <b>normal working days, not actual attendance</b>; an individual's absences/late/undertime do NOT reduce it.</div>
       </div>
       <div class="panel"><div class="subhead">D · SSS contribution basis → SSS benefit</div>
         ${fld("mat_source","Source period (12 mos before semester of delivery)",c.source_period)}
@@ -2145,7 +2154,7 @@ function matCollect(){
   c.claim_type=g("mat_type"); c.leave_days=num("mat_days");
   c.delivery_date=g("mat_delivery")||null; c.mat1_date=g("mat_mat1")||null; c.mat2_date=g("mat_mat2")||null;
   c.leave_start=g("mat_lstart")||null; c.leave_end=g("mat_lend")||null;
-  c.daily_rate=num("mat_dr"); c.days_per_month=num("mat_dpm")||26;
+  c.daily_rate=num("mat_dr"); c.pay_factor=Number(g("mat_factor"))||313; c.days_per_month=c.pay_factor/12;
   c.source_period=g("mat_source")||null; c.msc=matMSC(g("mat_msc"));
   const ov=g("mat_sss_benefit_override"); c.sss_benefit_override=(ov&&ov.trim()!=="")?Number(ov):null;
   ["deduct_sss","deduct_philhealth","deduct_pagibig","deduct_loans","deduct_advance","deduct_other"].forEach(k=>c[k]=num("mat_"+k));
@@ -2158,8 +2167,8 @@ function matRecalc(){
   const c=matCollect(), r=computeMaternity(c), box=document.getElementById("matSummary"); if(!box) return;
   const row=(l,v,strong)=>`<div style="display:flex;justify-content:space-between;padding:3px 0;${strong?'font-weight:700;border-top:1px solid #bcdcc7;margin-top:3px;padding-top:6px;':''}"><span>${l}</span><span>${peso(v)}</span></div>`;
   box.innerHTML=`
-    <div style="font-size:11.5px;color:#8a6a14;margin-bottom:4px;">DOLE LA 01-2019 · full pay = ₱${Number(r.dr).toLocaleString()} × ${r.dpm} working days × ${r.months.toFixed(2)} months (normal working days, not attendance)</div>
-    ${row("Full pay (monthly ₱"+Number(r.monthly).toLocaleString()+" × "+r.months.toFixed(2)+" mo)",r.fpmb,true)}
+    <div style="font-size:11.5px;color:#8a6a14;margin-bottom:4px;">DOLE LA 01-2019 · monthly = ₱${Number(r.dr).toLocaleString()} × factor ${Number(c.pay_factor)||313} ÷ 12 = ₱${Number(r.monthly).toLocaleString(undefined,{maximumFractionDigits:2})} (${r.dpm.toFixed(2)} days/mo · normal working days, not attendance)</div>
+    ${row("Full pay (monthly ₱"+Number(r.monthly).toLocaleString(undefined,{maximumFractionDigits:2})+" × "+r.months.toFixed(2)+" mo)",r.fpmb,true)}
     ${row("Less: SSS maternity benefit",-r.sssBenefit)}
     ${row("Less: her SSS/PhilHealth/Pag-IBIG contributions",-r.contributions)}
     <div style="display:flex;justify-content:space-between;padding:6px 0 2px;font-weight:700;border-top:1px solid #bcdcc7;"><span>Salary differential (employer)${r.salaryDifferential>0?"":" — none (SSS+contrib ≥ full pay)"}</span><span>${peso(r.salaryDifferential)}</span></div>
@@ -2182,7 +2191,7 @@ async function saveMaternity(){
   const payload={ employee_id:c.employee_id, employee_name:c.employee_name, category:c.category, worksite:c.worksite||MAT_EDIT.worksite, hire_date:c.hire_date, civil_status:c.civil_status,
     solo_parent:c.solo_parent, bank_name:c.bank_name, bank_account:c.bank_account, claim_type:c.claim_type, leave_days:c.leave_days,
     delivery_date:c.delivery_date, mat1_date:c.mat1_date, mat2_date:c.mat2_date, leave_start:c.leave_start, leave_end:c.leave_end,
-    daily_rate:c.daily_rate, days_per_month:c.days_per_month, full_pay_basis:"DOLE", source_period:c.source_period, msc:c.msc, sss_benefit_override:c.sss_benefit_override,
+    daily_rate:c.daily_rate, days_per_month:c.days_per_month, pay_factor:c.pay_factor, full_pay_basis:"DOLE", source_period:c.source_period, msc:c.msc, sss_benefit_override:c.sss_benefit_override,
     deduct_sss:c.deduct_sss, deduct_philhealth:c.deduct_philhealth, deduct_pagibig:c.deduct_pagibig, deduct_loans:c.deduct_loans, deduct_advance:c.deduct_advance, deduct_other:c.deduct_other,
     tax_on_differential:c.tax_on_differential, include_13th:c.include_13th,
     full_pay_daily:r.fullPayDaily, fpmb:r.fpmb, sss_benefit:r.sssBenefit, salary_differential:r.salaryDifferential, employer_share:r.employerNet, gross_benefit:r.sssBenefit+r.salaryDifferential, net_payable:r.net,
@@ -2226,7 +2235,7 @@ function printMaternity(){
       <div class="lbl" style="margin-top:6px;">Source period</div>${esc(c.source_period||"—")}
     </div></div>
     <table><tr><th colspan="2">Computation · DOLE Labor Advisory No. 01, s. 2019</th></tr>
-      <tr><td>Full pay = ₱${Number(r.dr).toLocaleString()} × ${r.dpm} working days × ${r.months.toFixed(2)} months</td><td class="n">${P(r.fpmb)}</td></tr>
+      <tr><td>Full pay = (₱${Number(r.dr).toLocaleString()} × factor ${Number(c.pay_factor)||313} ÷ 12) × ${r.months.toFixed(2)} months</td><td class="n">${P(r.fpmb)}</td></tr>
       <tr><td>Less: SSS maternity benefit (6 highest MSC ₱${Number(r.sum6).toLocaleString()} ÷ 180 = ₱${r.adsc.toFixed(2)}/day × ${r.days})</td><td class="n">(${P(r.sssBenefit)})</td></tr>
       <tr><td>Less: SSS/PhilHealth/Pag-IBIG contributions during leave</td><td class="n">(${P(r.contributions)})</td></tr>
       <tr class="tot"><td>Salary differential (employer share) — taxable</td><td class="n">${P(r.salaryDifferential)}</td></tr>

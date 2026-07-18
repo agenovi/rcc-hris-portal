@@ -1997,7 +1997,7 @@ function renderMaternity(){
   const nb=$("#matNew"); if(nb) nb.addEventListener("click",matPickEmployee);
   $$("#page-maternity tr.clickable[data-mid]").forEach(tr=>tr.addEventListener("click",()=>openMaternityForm(MATERNITY.find(m=>String(m.id)===tr.dataset.mid))));
 }
-function matDraftFromEmployee(e){ const office=/head office|104 shaw|\bH\.?O\.?\b/i.test((e.worksite||"")+" "+(e.department||"")); return { _new:true, employee_id:e.employee_id||null, employee_name:e.full_name, category:e.contract_type||null, worksite:e.worksite||null, hire_date:e.hire_date||null, civil_status:e.civil_status||null, bank_name:e.bank_name||null, bank_account:e.bank_account_number||null, daily_rate:e.daily_rate||null, claim_type:"Live birth", solo_parent:false, leave_days:105, pay_factor:office?305:312, msc:[], status:"Draft" }; }
+function matDraftFromEmployee(e){ const office=/head office|104 shaw|\bH\.?O\.?\b/i.test((e.worksite||"")+" "+(e.department||"")); return { _new:true, employee_id:e.employee_id||null, employee_name:e.full_name, category:e.contract_type||null, worksite:e.worksite||null, hire_date:e.hire_date||null, civil_status:e.civil_status||null, bank_name:e.bank_name||null, bank_account:e.bank_account_number||null, daily_rate:e.daily_rate||null, claim_type:"Live birth", solo_parent:false, leave_days:105, pay_factor:office?288:312, msc:[], status:"Draft" }; }
 function matPickEmployee(){
   let m=document.getElementById("matPick"); if(!m){ m=document.createElement("div"); m.id="matPick"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
@@ -2059,7 +2059,8 @@ function openMaternityForm(c){
         <div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Pay factor</label>
           <select id="mat_factor" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;">
             <option value="312" ${(Number(c.pay_factor)||312)===312?"selected":""}>312 — Diser (26 days/month)</option>
-            <option value="305" ${Number(c.pay_factor)===305?"selected":""}>305 — Office (special non-working days unpaid)</option>
+            <option value="288" ${Number(c.pay_factor)===288?"selected":""}>288 — Head Office (24 days/month)</option>
+            <option value="305" ${Number(c.pay_factor)===305?"selected":""}>305 — 6-day, special non-working days unpaid</option>
             <option value="313" ${Number(c.pay_factor)===313?"selected":""}>313 — 6-day week, rest days unpaid</option>
             <option value="261" ${Number(c.pay_factor)===261?"selected":""}>261 — 5-day week</option>
             <option value="253" ${Number(c.pay_factor)===253?"selected":""}>253 — 5-day, special days unpaid</option>

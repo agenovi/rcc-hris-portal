@@ -4374,8 +4374,9 @@ function openMaternityForm(c){
         <div class="form-grid">${mf("mat_dr","Daily salary rate (₱)",c.daily_rate)}
         <div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Pay factor</label>
           <select id="mat_factor" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;">
-            <option value="312" ${(Number(c.pay_factor)||312)===312?"selected":""}>312 — Diser (26 days/month)</option>
-            <option value="288" ${Number(c.pay_factor)===288?"selected":""}>288 — Head Office (24 days/month)</option>
+            <option value="312" ${(Number(c.pay_factor)||312)===312?"selected":""}>312 — Retail / diser, daily-paid (26 days/mo)</option>
+            <option value="288" ${Number(c.pay_factor)===288?"selected":""}>288 — Head Office, daily-paid (24 days/mo)</option>
+            <option value="360" ${Number(c.pay_factor)===360?"selected":""}>360 — Head Office, monthly-paid (30 days/mo)</option>
             <option value="305" ${Number(c.pay_factor)===305?"selected":""}>305 — 6-day, special non-working days unpaid</option>
             <option value="313" ${Number(c.pay_factor)===313?"selected":""}>313 — 6-day week, rest days unpaid</option>
             <option value="261" ${Number(c.pay_factor)===261?"selected":""}>261 — 5-day week</option>

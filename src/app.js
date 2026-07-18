@@ -1118,17 +1118,10 @@ window.openNpaForm=openNpaForm;
 const catPill=(c)=> c==="CN"?'<span class="pill cn">Concession</span>':(c==="CO"?'<span class="pill co">Company-Op</span>':'<span class="pill ho">'+esc(c||"—")+'</span>');
 const statusBranchPill=(s)=> s==="Open"?'<span class="pill open">Open</span>':'<span class="pill closed">Closed</span>';
 const disersAt=(store)=> DISERS.filter(d=>d.store===store && (d.status||"").toLowerCase().startsWith("active"));
-// Normalize a name so "Bacane, Melody" and "Melody Bacane" match.
-const normNm=(s)=> String(s||"").toLowerCase().replace(/[^a-z ]/g," ").split(/\s+/).filter(Boolean).sort().join(" ");
-// Confirmed staff at a store = LIVE PayPlus roster (active, worksite match) MERGED with the Manning Sheet (for rate/type + any Manning-only people).
+// Confirmed staff at a store = LIVE PayPlus roster only (active employees whose worksite matches the store). Manning Sheet is retired now that PayPlus is the source.
 function staffAtStore(store){
-  const byKey={};
-  (EMPLOYEES||[]).filter(e=> e.worksite===store && (e.status||"Active")==="Active").forEach(e=>{
-    byKey[normNm(e.full_name)]={ name:e.full_name, emp_no:e.employee_id, position:e.position, diser_type:null, hired_by:e.hire_source, status:e.status||"Active", total_rate:e.daily_rate, source:"live" };
-  });
-  disersAt(store).forEach(d=>{ const k=normNm(d.name); if(byKey[k]){ if(byKey[k].total_rate==null&&d.total_rate!=null) byKey[k].total_rate=d.total_rate; if(!byKey[k].diser_type) byKey[k].diser_type=d.diser_type; if(!byKey[k].emp_no) byKey[k].emp_no=d.emp_no; }
-    else byKey[k]={ name:d.name, emp_no:d.emp_no, position:d.position, diser_type:d.diser_type, hired_by:d.hired_by, status:d.status, total_rate:d.total_rate, source:"manning" }; });
-  return Object.values(byKey);
+  return (EMPLOYEES||[]).filter(e=> e.worksite===store && (e.status||"Active")==="Active")
+    .map(e=>({ name:e.full_name, emp_no:e.employee_id, position:e.position, diser_type:null, hired_by:e.hire_source, status:e.status||"Active", total_rate:e.daily_rate }));
 }
 const chcFor=(store)=> staffAtStore(store).length;
 
@@ -1193,7 +1186,7 @@ function openStore(b){
       </div>
       <div class="panel" style="margin-top:14px;">
         <h2>Merchandisers at this store <span class="count-tag">${here.length}</span></h2>
-        <div class="psub">Live PayPlus roster + Manning Sheet, merged. Daily rate shows from the Manning Sheet where available (may be outdated) — live rate arrives once PayPlus exposes pay.</div>
+        <div class="psub">Live from PayPlus — active employees assigned to this worksite. Daily rate is blank until PayPlus exposes pay via the API.</div>
         ${here.length? `<table><thead><tr><th>Name</th><th>Source</th><th>Type</th><th>Position</th>${canSeePay()?'<th>Daily Rate</th>':''}<th>Status</th></tr></thead>
           <tbody>${here.map(d=>`<tr><td><b>${esc(d.name)}</b><div style="font-size:11px;color:var(--muted);">${esc(d.emp_no||"")}</div></td>
             <td>${diserSourceBadge(d.hired_by)}</td>

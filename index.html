@@ -3434,9 +3434,17 @@ window.openNpaForm=openNpaForm;
 const catPill=(c)=> c==="CN"?'<span class="pill cn">Concession</span>':(c==="CO"?'<span class="pill co">Company-Op</span>':'<span class="pill ho">'+esc(c||"—")+'</span>');
 const statusBranchPill=(s)=> s==="Open"?'<span class="pill open">Open</span>':'<span class="pill closed">Closed</span>';
 const disersAt=(store)=> DISERS.filter(d=>d.store===store && (d.status||"").toLowerCase().startsWith("active"));
+// Normalize PayPlus worksite labels that don't exactly match our store names (spelling/format only — same store).
+const WORKSITE_ALIAS={
+  "SM CUBAO":"SM Cubao", "The SM Store Caloocan":"SM Caloocan", "The SM Store Zamboanga":"SM Zamboanga",
+  "The SM Store La Union":"SM La Union", "The SM Store Sto.Tomas":"SM Sto. Tomas", "Spyder Northedsa":"Spyder NorthEdsa",
+  "GearUp MarketMarket":"GearUp Market Market", "Tiongsan Harrison Baguio":"Tiongsan Harrison",
+  "Metro Retail Store Group Inc. / Metro Ayala":"Metro Ayala"
+};
+const normWorksite=(w)=> WORKSITE_ALIAS[w]||w;
 // Confirmed staff at a store = LIVE PayPlus roster only (active employees whose worksite matches the store). Manning Sheet is retired now that PayPlus is the source.
 function staffAtStore(store){
-  return (EMPLOYEES||[]).filter(e=> e.worksite===store && (e.status||"Active")==="Active")
+  return (EMPLOYEES||[]).filter(e=> normWorksite(e.worksite)===store && (e.status||"Active")==="Active")
     .map(e=>({ name:e.full_name, emp_no:e.employee_id, position:e.position, diser_type:null, hired_by:e.hire_source, status:e.status||"Active", total_rate:e.daily_rate }));
 }
 const chcFor=(store)=> staffAtStore(store).length;

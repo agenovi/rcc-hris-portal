@@ -980,6 +980,33 @@ function openRecord(e){
   const _npa=$("#recNpa"); if(_npa) _npa.addEventListener("click",()=>openNpaForm(e));
 }
 
+// Standalone NPA entry: search who → opens the same NPA form (tick purpose → generate). No need to open the person first.
+function newNpa(){
+  let m=document.getElementById("npaPick"); if(!m){ m=document.createElement("div"); m.id="npaPick"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;padding:22px;max-height:82vh;display:flex;flex-direction:column;">
+    <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:2px;">New Personnel Action</h2>
+    <div class="psub">Search the employee — the NPA fills in from their live record, then you tick the purpose and generate.</div>
+    <input id="npaQ" placeholder="Type a name…" autocomplete="off" style="width:100%;padding:10px 12px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;margin:4px 0 8px;">
+    <div id="npaHits" style="overflow-y:auto;flex:1;"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:10px;"><button class="btn ghost" id="npaPickClose">Cancel</button></div>
+  </div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("npaPickClose").onclick=()=>m.remove();
+  const q=document.getElementById("npaQ"), hits=document.getElementById("npaHits");
+  const paint=()=>{
+    const s=(q.value||"").trim().toLowerCase();
+    let list=(EMPLOYEES||[]).slice().sort((a,b)=>(a.full_name||"").localeCompare(b.full_name||""));
+    if(s) list=list.filter(e=>(e.full_name||"").toLowerCase().includes(s)||String(e.employee_id||"").includes(s));
+    list=list.slice(0,20);
+    hits.innerHTML=list.length?list.map(e=>`<div class="task clickable" data-eid="${esc(String(e.id))}" style="cursor:pointer;">
+      <div class="dot ${(e.status||'Active')==='Active'?'g':'r'}"></div>
+      <div><div class="tt">${esc(e.full_name)}</div><div class="td">${esc(e.position||"—")} · ${esc(e.worksite||e.department||"—")}${e.employee_id?" · "+esc(e.employee_id):""}${(e.status&&e.status!=='Active')?" · "+esc(e.status):""}</div></div></div>`).join("")
+      : `<div class="psub" style="padding:8px 2px;">${s?"No match.":"Start typing a name…"}</div>`;
+    hits.querySelectorAll("[data-eid]").forEach(el=>el.addEventListener("click",()=>{ const emp=EMPLOYEES.find(x=>String(x.id)===el.dataset.eid); m.remove(); if(emp) openNpaForm(emp); }));
+  };
+  q.addEventListener("input",paint); paint(); q.focus();
+}
 /* ---------- NOTICE OF PERSONNEL ACTION (NPA) — generated from the employee record ---------- */
 const NPA_ACTIONS=["Regularization","Reappointment","Promotion in Rank","Separation from Employment","Job / Lateral Transfer","Salary Adjustment"];
 const NPA_SIGNATORIES=[["Grazel Lyn Agulto","HR Officer","PREPARED BY"],["Pervin Chaltani","AVP, Admin & Logistics","NOTED BY"],["Anju C. Genomal","Director, Admin & Finance","APPROVED BY"]];
@@ -1358,7 +1385,7 @@ function renderMemos(){
     <div class="panel" style="margin-top:0;">
       <h2>Memos &amp; Notices</h2>
       <div class="psub">The 7 standard HR letters + a custom memo — generated on RCC letterhead, routed through Signatures, and logged. DOLE twin-notice flow: <b>NTE → (employee explains) → Notice of Decision</b>.</div>
-      <div class="actionbar"><button class="btn" id="memoNew">+ New memo</button></div>
+      <div class="actionbar"><button class="btn" id="memoNew">+ New memo</button>${canManageStores()?' <button class="btn ghost" id="npaNew">+ New NPA</button>':''}</div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
         <div class="kpi"><div class="k-l">Drafts</div><div class="k-n">${drafts.length}</div></div>
         <div class="kpi warn"><div class="k-l">Awaiting signature</div><div class="k-n">${issued.length}</div></div>
@@ -1372,6 +1399,7 @@ function renderMemos(){
         `</tbody></table>`:'<div class="psub">No memos yet — click “New memo”.</div>'}
     </div>`;
   $("#memoNew").addEventListener("click",()=>newMemo());
+  const npaBtn=$("#npaNew"); if(npaBtn) npaBtn.addEventListener("click",()=>newNpa());
   $$('#page-memos [data-memoview]').forEach(b=>b.addEventListener("click",()=>viewMemo(b.dataset.memoview)));
   $$('#page-memos [data-memoissue]').forEach(b=>b.addEventListener("click",()=>issueMemo(b.dataset.memoissue)));
 }

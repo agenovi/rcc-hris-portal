@@ -4274,13 +4274,15 @@ function matMSC(raw){ let a=[]; if(Array.isArray(raw)) a=raw; else if(typeof raw
 // The RCC standard computation for a daily-paid employee.
 function computeMaternity(c){
   const dpm=Number(c.days_per_month)||26, dr=Number(c.daily_rate)||0, days=Number(c.leave_days)||0;
-  const monthly=dr*dpm, fullPayDaily=monthly/30, fpmb=fullPayDaily*days;
+  const useActual=(c.full_pay_basis==="Actual")&&Number(c.actual_avg_days)>0;
+  const effDays=useActual?Number(c.actual_avg_days):dpm;          // actual PayPlus attendance vs theoretical days/month
+  const monthly=dr*effDays, fullPayDaily=monthly/30, fpmb=fullPayDaily*days;
   const msc=matMSC(c.msc).sort((a,b)=>b-a), sum6=msc.slice(0,6).reduce((s,x)=>s+x,0), adsc=sum6/180;
   const ov=(c.sss_benefit_override!=null&&c.sss_benefit_override!=="")?Number(c.sss_benefit_override):null;
   const sssBenefit=ov!=null?ov:adsc*days;
   const employerShare=Math.max(0,fpmb-sssBenefit), gross=sssBenefit+employerShare;
   const deductions=["deduct_sss","deduct_philhealth","deduct_pagibig","deduct_loans","deduct_advance","deduct_other"].reduce((s,k)=>s+(Number(c[k])||0),0);
-  return { dpm,dr,days,monthly,fullPayDaily,fpmb,msc,sum6,adsc,sssBenefit,employerShare,gross,deductions,net:gross-deductions,override:ov!=null };
+  return { dpm,dr,days,effDays,useActual,monthly,fullPayDaily,fpmb,msc,sum6,adsc,sssBenefit,employerShare,gross,deductions,net:gross-deductions,override:ov!=null };
 }
 function renderMaternity(){
   const pg=$("#page-maternity"); if(!pg||!canSeePay()) return;
@@ -4361,8 +4363,15 @@ function openMaternityForm(c){
         <div class="form-grid">${df("mat_lend","Leave end",c.leave_end)}<div></div></div>
       </div>
       <div class="panel"><div class="subhead">C · Salary basis → full pay</div>
-        <div class="form-grid">${mf("mat_dr","Daily salary rate (₱)",c.daily_rate)}${mf("mat_dpm","Days / month",c.days_per_month||26)}</div>
-        <div class="psub" style="margin:-4px 0 4px;">Full-pay-daily = (rate × days/month) ÷ 30. Days/month basis is company policy — keep it consistent with prior claims.</div>
+        <div class="form-grid">${mf("mat_dr","Daily salary rate (₱)",c.daily_rate)}${sel("mat_basis","Full-pay basis",["Contractual","Actual"],c.full_pay_basis||"Contractual")}</div>
+        <div id="mat_basisC">
+          <div id="mat_contractRow" style="display:${(c.full_pay_basis==="Actual")?'none':'block'};">${mf("mat_dpm","Days / month (theoretical)",c.days_per_month||26)}
+            <div class="psub" style="margin:-4px 0 4px;">Contractual = rate × days/month ÷ 30. Assumes a full month with no absences/late/undertime.</div></div>
+          <div id="mat_actualRow" style="display:${(c.full_pay_basis==="Actual")?'block':'none'};">
+            <button class="btn ghost" id="mat_pullAtt" type="button">↻ Pull actual attendance from PayPlus</button>
+            <div id="mat_attBox" style="margin-top:8px;">${c.actual_avg_days?matAttSummaryHtml(c.attendance,c.actual_avg_days):'<div class="psub">Pulls the 6 completed months before the delivery month — present days net of late/undertime — for her true average.</div>'}</div>
+          </div>
+        </div>
       </div>
       <div class="panel"><div class="subhead">D · SSS contribution basis → SSS benefit</div>
         ${fld("mat_source","Source period (12 mos before semester of delivery)",c.source_period)}
@@ -4396,8 +4405,43 @@ function openMaternityForm(c){
   const setDays=()=>{ const t=document.getElementById("mat_type").value, solo=document.getElementById("mat_solo").checked; document.getElementById("mat_days").value=matDefaultDays(t,solo); matRecalc(); };
   document.getElementById("mat_type").addEventListener("change",setDays);
   document.getElementById("mat_solo").addEventListener("change",setDays);
+  const basisSel=document.getElementById("mat_basis");
+  basisSel.addEventListener("change",()=>{ const act=basisSel.value==="Actual"; document.getElementById("mat_contractRow").style.display=act?"none":"block"; document.getElementById("mat_actualRow").style.display=act?"block":"none"; matRecalc(); });
+  const pullBtn=document.getElementById("mat_pullAtt"); if(pullBtn) pullBtn.addEventListener("click",matPullAttendance);
   document.getElementById("matForm").addEventListener("input",matRecalc);
   matRecalc();
+}
+// Convert late+undertime minutes to day-equivalents (8h day) and net them off present days.
+function matAvgFromAttendance(months){
+  const m=(months||[]).filter(x=>x.hasData&&Number(x.present)>0);
+  if(!m.length) return null;
+  const perMonth=m.map(x=>{ const lost=(Number(x.lateMinutes||0)+Number(x.undertimeMinutes||0))/480; return Math.max(0,Number(x.present||0)-lost); });
+  return perMonth.reduce((s,x)=>s+x,0)/perMonth.length;
+}
+function matAttSummaryHtml(months,avg){
+  const rows=(months||[]).filter(x=>x.hasData).map(x=>`<tr><td>${esc(x.month)}</td><td style="text-align:right;">${x.present}</td><td style="text-align:right;">${x.absent||0}</td><td style="text-align:right;">${Number(x.lateMinutes||0).toFixed(1)}</td><td style="text-align:right;">${Number(x.undertimeMinutes||0).toFixed(1)}</td></tr>`).join("");
+  return `<table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr style="color:var(--muted);"><th style="text-align:left;">Month</th><th style="text-align:right;">Present</th><th style="text-align:right;">Absent</th><th style="text-align:right;">Late(m)</th><th style="text-align:right;">UT(m)</th></tr></thead><tbody>${rows}</tbody></table>
+    <div style="margin-top:6px;font-weight:700;color:var(--green-dark);">Actual avg paid days/month: ${avg!=null?Number(avg).toFixed(2):"—"} <span style="font-weight:400;color:var(--muted);">(present net of late + undertime)</span></div>`;
+}
+async function matPullAttendance(){
+  const c=matCollect(); if(!c.employee_id){ alert("This employee has no PayPlus Employee ID on file — can't pull attendance."); return; }
+  const del=c.delivery_date?new Date(c.delivery_date):null; if(!del||isNaN(del)){ alert("Set the delivery date first — attendance is pulled from the months before it."); return; }
+  const box=document.getElementById("mat_attBox"); box.innerHTML='<div class="psub">Pulling from PayPlus…</div>';
+  // 6 completed months before the delivery month
+  let ey=del.getFullYear(), em=del.getMonth(); if(em===0){ em=12; ey--; }   // month before delivery (1-12)
+  let sy=ey, sm=em-5; while(sm<1){ sm+=12; sy--; }
+  try{
+    const { data:{ session } } = await sb.auth.getSession();
+    const url=`${SUPABASE_URL}/functions/v1/payplus-attendance?emp=${encodeURIComponent(c.employee_id)}&y1=${sy}&m1=${sm}&y2=${ey}&m2=${em}`;
+    const r=await fetch(url,{ headers:{ Authorization:`Bearer ${session.access_token}`, apikey:SUPABASE_ANON_KEY } });
+    const j=await r.json();
+    if(j.error){ box.innerHTML=`<div class="note" style="background:#fdece9;border-color:#e5b4ae;color:#a4322a;">Couldn't pull: ${esc(j.error)}</div>`; return; }
+    const avg=matAvgFromAttendance(j.months);
+    if(avg==null){ box.innerHTML='<div class="note" style="background:#fffaf0;border-color:#f0d9a6;">No attendance found in that window — she may have been hired after it, or not enrolled. Use Contractual basis.</div>'; return; }
+    MAT_EDIT.attendance=j.months; MAT_EDIT.actual_avg_days=avg;
+    box.innerHTML=matAttSummaryHtml(j.months,avg);
+    matRecalc();
+  }catch(e){ box.innerHTML=`<div class="note" style="background:#fdece9;border-color:#e5b4ae;color:#a4322a;">Couldn't reach PayPlus: ${esc(String(e&&e.message||e))}</div>`; }
 }
 function matCollect(){
   const g=id=>{const el=document.getElementById(id);return el?el.value:null;};
@@ -4410,6 +4454,8 @@ function matCollect(){
   c.delivery_date=g("mat_delivery")||null; c.mat1_date=g("mat_mat1")||null; c.mat2_date=g("mat_mat2")||null;
   c.leave_start=g("mat_lstart")||null; c.leave_end=g("mat_lend")||null;
   c.daily_rate=num("mat_dr"); c.days_per_month=num("mat_dpm")||26;
+  c.full_pay_basis=g("mat_basis")||"Contractual";
+  c.actual_avg_days=(MAT_EDIT&&MAT_EDIT.actual_avg_days)||null; c.attendance=(MAT_EDIT&&MAT_EDIT.attendance)||[];
   c.source_period=g("mat_source")||null; c.msc=matMSC(g("mat_msc"));
   const ov=g("mat_sss_benefit_override"); c.sss_benefit_override=(ov&&ov.trim()!=="")?Number(ov):null;
   ["deduct_sss","deduct_philhealth","deduct_pagibig","deduct_loans","deduct_advance","deduct_other"].forEach(k=>c[k]=num("mat_"+k));
@@ -4420,7 +4466,8 @@ function matRecalc(){
   const c=matCollect(), r=computeMaternity(c), box=document.getElementById("matSummary"); if(!box) return;
   const row=(l,v,strong)=>`<div style="display:flex;justify-content:space-between;padding:3px 0;${strong?'font-weight:700;border-top:1px solid #bcdcc7;margin-top:3px;padding-top:6px;':''}"><span>${l}</span><span>${peso(v)}</span></div>`;
   box.innerHTML=`
-    ${row("Full-pay-daily (₱"+Number(r.dr).toLocaleString()+" × "+r.dpm+" ÷ 30)",r.fullPayDaily)}
+    <div style="font-size:11.5px;color:${r.useActual?'var(--green-dark)':'#8a6a14'};margin-bottom:4px;">${r.useActual?"✓ Actual attendance basis — "+Number(r.effDays).toFixed(2)+" real paid days/month (from PayPlus, net of late/undertime)":"Contractual basis — "+r.effDays+" days/month (theoretical full attendance)"}</div>
+    ${row("Full-pay-daily (₱"+Number(r.dr).toLocaleString()+" × "+(r.useActual?Number(r.effDays).toFixed(2):r.effDays)+" ÷ 30)",r.fullPayDaily)}
     ${row("Full-pay maternity benefit (× "+r.days+" days)",r.fpmb,true)}
     <div style="height:8px;"></div>
     ${row("6 highest MSC total"+(r.override?" (overridden)":""),r.sum6)}
@@ -4443,7 +4490,7 @@ async function saveMaternity(){
   const payload={ employee_id:c.employee_id, employee_name:c.employee_name, category:c.category, worksite:c.worksite||MAT_EDIT.worksite, hire_date:c.hire_date, civil_status:c.civil_status,
     solo_parent:c.solo_parent, bank_name:c.bank_name, bank_account:c.bank_account, claim_type:c.claim_type, leave_days:c.leave_days,
     delivery_date:c.delivery_date, mat1_date:c.mat1_date, mat2_date:c.mat2_date, leave_start:c.leave_start, leave_end:c.leave_end,
-    daily_rate:c.daily_rate, days_per_month:c.days_per_month, source_period:c.source_period, msc:c.msc, sss_benefit_override:c.sss_benefit_override,
+    daily_rate:c.daily_rate, days_per_month:c.days_per_month, full_pay_basis:c.full_pay_basis, actual_avg_days:c.actual_avg_days, attendance:c.attendance, source_period:c.source_period, msc:c.msc, sss_benefit_override:c.sss_benefit_override,
     deduct_sss:c.deduct_sss, deduct_philhealth:c.deduct_philhealth, deduct_pagibig:c.deduct_pagibig, deduct_loans:c.deduct_loans, deduct_advance:c.deduct_advance, deduct_other:c.deduct_other,
     full_pay_daily:r.fullPayDaily, fpmb:r.fpmb, sss_benefit:r.sssBenefit, employer_share:r.employerShare, gross_benefit:r.gross, net_payable:r.net,
     notes:c.notes, updated_at:new Date().toISOString() };
@@ -4485,8 +4532,8 @@ function printMaternity(){
       <div class="lbl" style="margin-top:6px;">Leave period</div>${c.leave_start?fmtDate(c.leave_start):"—"} to ${c.leave_end?fmtDate(c.leave_end):"—"}<br>
       <div class="lbl" style="margin-top:6px;">Source period</div>${esc(c.source_period||"—")}
     </div></div>
-    <table><tr><th colspan="2">Computation</th></tr>
-      <tr><td>Daily salary rate × ${r.dpm} ÷ 30 = full-pay-daily</td><td class="n">${P(r.fullPayDaily)}</td></tr>
+    <table><tr><th colspan="2">Computation${r.useActual?" · full pay on actual attendance ("+Number(r.effDays).toFixed(2)+" days/mo)":" · full pay on contractual "+r.effDays+" days/mo"}</th></tr>
+      <tr><td>Daily salary rate × ${r.useActual?Number(r.effDays).toFixed(2):r.effDays} ÷ 30 = full-pay-daily</td><td class="n">${P(r.fullPayDaily)}</td></tr>
       <tr class="tot"><td>Full-Pay Maternity Benefit (× ${r.days} days)</td><td class="n">${P(r.fpmb)}</td></tr>
       <tr><td>6 highest MSC total</td><td class="n">${P(r.sum6)}</td></tr>
       <tr><td>ADSC (÷ 180)</td><td class="n">${P(r.adsc)}</td></tr>

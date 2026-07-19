@@ -1599,8 +1599,38 @@ function nteCard(s){ const d=s.details||{};
         <div style="background:#f7f9fb;border:1px solid #E3E8EF;border-radius:10px;padding:12px 14px;margin-top:8px;white-space:pre-wrap;font-size:12.5px;line-height:1.55;max-height:30vh;overflow-y:auto;">${esc(s.body||"")}</div>
       </details>
     </div>`; }
+// ---- Saved signature (per user, on this device) + shared sign logic ----
+function mySigKey(){ return "rcc_sig_"+(((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()); }
+function getSavedSig(){ try{ return localStorage.getItem(mySigKey())||""; }catch(_){ return ""; } }
+function saveSavedSig(dataUrl){ try{ localStorage.setItem(mySigKey(), dataUrl); }catch(_){} }
+// Apply a signature image to a pending request and run its doc-type side effects. Returns an error or null.
+async function applySignature(s, dataUrl){
+  const signer=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"Signed-in user";
+  const { error } = await sb.from("signature_requests").update({ status:"signed", signed_at:new Date().toISOString(), signer_name:signer, signature_data:dataUrl, updated_at:new Date().toISOString() }).eq("id",s.id);
+  if(error) return error;
+  if(s.doc_type==="claim"){
+    await sb.from("exit_clearance").update({ quitclaim_status:"Approved", quitclaim_signed:true, quitclaim_date:new Date().toISOString().slice(0,10), updated_at:new Date().toISOString() }).eq("quitclaim_signature_id",s.id);
+    try{ await logChange("exit",null,s.subject_name||"","Final pay approved (e-signed)","Net "+(s.amount!=null?peso(s.amount):"—")); }catch(_){}
+  }
+  if(s.doc_type==="nte"){
+    try{ await sb.from("memos").update({ status:"Signed", updated_at:new Date().toISOString() }).eq("signature_request_id",s.id); }catch(_){}
+    try{ await logChange("memo",null,s.subject_name||"","NTE approved (e-signed)",(s.details?("combined "+s.details.combined+" · "+(s.details.month||"")):"")); }catch(_){}
+  }
+  return null;
+}
+// Batch: approve & e-sign every pending NTE awaiting you, using your saved signature.
+async function approveAllPendingNtes(){
+  const saved=getSavedSig(); if(!saved){ alert("Save your signature first — open any pending item, sign once, and tick “Remember my signature.”"); return; }
+  const pend=(SIGNATURES||[]).filter(s=>s.doc_type==="nte"&&s.awaiting==="you"&&s.status==="pending");
+  if(!pend.length){ alert("No NTEs are waiting for your sign-off."); return; }
+  if(!confirm("Approve & e-sign all "+pend.length+" pending NTE(s) with your saved signature?\n\nBy doing so you confirm the attendance records were reviewed and the absences are unauthorized.")) return;
+  for(const s of pend){ const e=await applySignature(s, saved); if(e){ alert("Stopped — "+e.message); break; } }
+  await loadEmployees(); window.go("signatures");
+}
+window.approveAllPendingNtes=approveAllPendingNtes;
 function openSignDoc(id){
   const s=SIGNATURES.find(x=>String(x.id)===String(id)); if(!s) return;
+  const savedSig=getSavedSig();
   let m=document.getElementById("sigModal"); if(!m){ m=document.createElement("div"); m.id="sigModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">

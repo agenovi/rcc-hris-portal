@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>RCC — Merchandiser Meeting Sign-in</title>
+<style>
+  :root{ --navy:#1E3A5F; --navy2:#274b78; --line:#e4e8ef; --ink:#1b2430; --mut:#6b7683; --red:#c0392b; --green:#1e7d43; --bg:#f4f6fa; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  .wrap{ max-width:520px; margin:0 auto; min-height:100vh; background:#fff; }
+  .top{ background:var(--navy); color:#fff; padding:20px 20px 22px; }
+  .brand{ font-weight:800; letter-spacing:.5px; font-size:14px; opacity:.9; }
+  .top h1{ margin:8px 0 2px; font-size:21px; font-weight:700; }
+  .top .date{ font-size:13px; opacity:.85; }
+  .body{ padding:18px 18px 40px; }
+  .sec{ margin:22px 0 8px; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; color:var(--navy); }
+  .sec:first-child{ margin-top:6px; }
+  label{ display:block; font-size:13px; font-weight:600; margin:14px 0 5px; color:#374151; }
+  .req::after{ content:" *"; color:var(--red); }
+  input,select,textarea{ width:100%; padding:13px 12px; font-size:16px; border:1.5px solid var(--line); border-radius:11px; background:#fff; color:var(--ink); }
+  input:focus,textarea:focus,select:focus{ outline:none; border-color:var(--navy2); }
+  textarea{ min-height:64px; resize:vertical; }
+  .row2{ display:flex; gap:10px; } .row2>div{ flex:1; }
+  .hint{ font-size:12px; color:var(--mut); margin-top:5px; }
+  .file{ display:flex; align-items:center; gap:12px; margin-top:6px; }
+  .filebtn{ display:inline-flex; align-items:center; gap:8px; padding:12px 14px; border:1.5px dashed var(--navy2); border-radius:11px; color:var(--navy); font-weight:700; font-size:14px; background:#f7f9fd; cursor:pointer; }
+  .thumb{ width:52px; height:52px; border-radius:10px; object-fit:cover; border:1px solid var(--line); display:none; }
+  .btn{ width:100%; margin-top:26px; padding:16px; font-size:16px; font-weight:800; color:#fff; background:var(--navy); border:none; border-radius:13px; cursor:pointer; }
+  .btn:disabled{ opacity:.55; }
+  .msg{ margin-top:14px; padding:13px 14px; border-radius:11px; font-size:14px; display:none; }
+  .msg.err{ background:#fdecea; color:var(--red); display:block; }
+  .msg.ok{ background:#e8f6ee; color:var(--green); display:block; }
+  .lock{ font-size:12px; color:var(--mut); margin-top:10px; display:flex; gap:6px; align-items:flex-start; }
+  .done{ text-align:center; padding:44px 24px; display:none; }
+  .done .ok-ic{ width:64px; height:64px; border-radius:50%; background:var(--green); color:#fff; font-size:36px; line-height:64px; margin:0 auto 16px; }
+  .done h2{ margin:0 0 8px; color:var(--navy); }
+  .done p{ color:var(--mut); font-size:14px; line-height:1.5; }
+  .closed{ text-align:center; padding:60px 26px; color:var(--mut); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">ROSHAN COMMERCIAL CORPORATION</div>
+    <h1 id="mtgLabel">Monthly Sales Meeting</h1>
+    <div class="date" id="mtgDate">Loading…</div>
+  </div>
+
+  <div class="body" id="form" style="display:none;">
+    <div class="sec">Who are you</div>
+    <label class="req">Full name</label>
+    <input id="name" placeholder="Juan Dela Cruz" autocomplete="name">
+    <div class="row2">
+      <div><label>Employee No.</label><input id="emp_no" inputmode="numeric" placeholder="e.g. 1248"></div>
+      <div><label>Store / branch</label><input id="store" placeholder="e.g. SM San Pablo"></div>
+    </div>
+
+    <div class="sec">Your reimbursement</div>
+    <div class="row2">
+      <div><label>Transportation (₱)</label><input id="reimb_transport" inputmode="decimal" placeholder="0.00"></div>
+      <div><label>LBC (₱)</label><input id="reimb_lbc" inputmode="decimal" placeholder="0.00"></div>
+    </div>
+    <label>Route / details</label>
+    <input id="route" placeholder="e.g. San Pablo → Head Office, round trip">
+    <label>Ride pass / receipt photo</label>
+    <div class="file">
+      <label class="filebtn">📎 Attach photo<input type="file" id="ride_pass" accept="image/*" capture="environment" hidden></label>
+      <img class="thumb" id="ride_thumb">
+    </div>
+    <div class="hint">Attach your bus/jeep pass, ride receipt, or LBC receipt.</div>
+
+    <div class="sec">Where to send your money</div>
+    <label class="req">Account holder name</label>
+    <input id="account_holder" placeholder="Name on the bank account">
+    <div class="row2">
+      <div><label class="req">Bank</label><input id="bank_name" placeholder="e.g. BDO, GCash"></div>
+      <div><label class="req">Account number</label><input id="bank_account_no" inputmode="numeric" placeholder="Account / GCash no."></div>
+    </div>
+
+    <div id="selfieBlock" style="display:none;">
+      <div class="sec">Quick selfie</div>
+      <div class="file">
+        <label class="filebtn">🤳 Take selfie<input type="file" id="selfie" accept="image/*" capture="user" hidden></label>
+        <img class="thumb" id="selfie_thumb">
+      </div>
+      <div class="hint">Confirms you attended in person.</div>
+    </div>
+
+    <div class="lock" id="lockNote" style="display:none;">
+      <span>🔒</span><span>You must be connected to the meeting venue's Wi-Fi to sign in.</span>
+    </div>
+
+    <button class="btn" id="submit">Sign in &amp; submit reimbursement</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="done" id="done">
+    <div class="ok-ic">✓</div>
+    <h2>You're signed in!</h2>
+    <p id="doneMsg"></p>
+  </div>
+
+  <div class="closed" id="closed" style="display:none;">
+    <p>Sign-in isn't open right now.<br>Please wait for HR to open today's meeting.</p>
+  </div>
+</div>
+
+<script>
+const FN = "https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/meeting-signin";
+const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0ZmtwbXZpZXZldGloaGZkbXFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwODA1MTksImV4cCI6MjA5MTY1NjUxOX0.ozphoaGT7jVKr3NGmqQC1wMj5lp7MvVfdqO2HZWMl6k";
+const H = { "apikey": ANON, "Authorization": "Bearer " + ANON, "Content-Type": "application/json" };
+const $ = id => document.getElementById(id);
+let ridePassData=null, ridePassType=null, selfieData=null, selfieType=null;
+
+function fmtDate(d){ if(!d) return ""; try{ return new Date(d+"T00:00:00").toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"}); }catch(e){ return d; } }
+
+function bindFile(inputId, thumbId, set){
+  $(inputId).addEventListener("change", e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ set(r.result, f.type); const t=$(thumbId); t.src=r.result; t.style.display="block"; };
+    r.readAsDataURL(f);
+  });
+}
+bindFile("ride_pass","ride_thumb",(d,t)=>{ridePassData=d;ridePassType=t;});
+bindFile("selfie","selfie_thumb",(d,t)=>{selfieData=d;selfieType=t;});
+
+async function init(){
+  try{
+    const r=await fetch(FN,{ headers:H });
+    const j=await r.json();
+    if(!j.ok || !j.meeting.open){ $("closed").style.display="block"; if(j.meeting){ $("mtgLabel").textContent=j.meeting.label||"Monthly Sales Meeting"; $("mtgDate").textContent=fmtDate(j.meeting.date); } return; }
+    $("mtgLabel").textContent=j.meeting.label||"Monthly Sales Meeting";
+    $("mtgDate").textContent=fmtDate(j.meeting.date);
+    if(j.require_selfie) $("selfieBlock").style.display="block";
+    if(j.ip_enforced) $("lockNote").style.display="flex";
+    $("form").style.display="block";
+  }catch(e){ $("mtgDate").textContent="Couldn't load — check your connection."; }
+}
+init();
+
+$("submit").addEventListener("click", async ()=>{
+  const msg=$("msg"); msg.className="msg"; msg.style.display="none";
+  const req=(id,l)=>{ const v=$(id).value.trim(); if(!v){ msg.className="msg err"; msg.textContent=l+" is required."; msg.style.display="block"; throw 0; } return v; };
+  let name,holder,bank,acct;
+  try{ name=req("name","Full name"); holder=req("account_holder","Account holder name"); bank=req("bank_name","Bank"); acct=req("bank_account_no","Account number"); }catch(e){ return; }
+  const btn=$("submit"); btn.disabled=true; btn.textContent="Signing in…";
+  const payload={
+    name, emp_no:$("emp_no").value.trim(), store:$("store").value.trim(),
+    reimb_transport:$("reimb_transport").value.trim(), reimb_lbc:$("reimb_lbc").value.trim(), route:$("route").value.trim(),
+    account_holder:holder, bank_name:bank, bank_account_no:acct,
+    ride_pass_b64:ridePassData, ride_pass_type:ridePassType, selfie_b64:selfieData, selfie_type:selfieType
+  };
+  try{
+    const r=await fetch(FN,{ method:"POST", headers:H, body:JSON.stringify(payload) });
+    const j=await r.json();
+    if(!j.ok){ msg.className="msg err"; msg.textContent=j.reason||"Something went wrong. Please try again."; msg.style.display="block"; btn.disabled=false; btn.textContent="Sign in & submit reimbursement"; return; }
+    $("form").style.display="none";
+    $("doneMsg").innerHTML="Your attendance and reimbursement are recorded.<br>Vina will process it with Accounting. You can close this page.";
+    $("done").style.display="block";
+    window.scrollTo(0,0);
+  }catch(e){ msg.className="msg err"; msg.textContent="Network error — please try again."; msg.style.display="block"; btn.disabled=false; btn.textContent="Sign in & submit reimbursement"; }
+});
+</script>
+</body>
+</html>

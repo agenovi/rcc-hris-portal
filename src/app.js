@@ -31,6 +31,10 @@ let CHANGE_LOG=[];
 let CURRENT_USER=null;
 let SC_STATUS={};  // sc_name -> {status:'Active'|'Vacant'|'Pending', note}
 let MATERNITY=[];  // maternity_claims rows
+let MEETINGS=[];   // meeting_attendance rows (merchandiser meeting sign-in + reimbursement)
+let MEETING_CFG={}; // system_settings: meeting_active / meeting_allowed_ips / meeting_require_selfie
+const MEETING_FN="https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/meeting-signin";
+const MEETING_SIGNIN_URL="https://agenovi.github.io/rcc-hris-portal/meeting.html";
 function scStatus(sc){ return (SC_STATUS[sc]&&SC_STATUS[sc].status)||"Active"; }
 function scIsGone(sc){ const s=scStatus(sc); return s==="Vacant"||s==="Pending"; }
 async function setScStatus(sc,status,note){
@@ -60,6 +64,10 @@ function isLimitedUser(){ return userRole()!=="admin"; }
 function canManageStores(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"; }  // Anj + Grazel + Rhel (HR Mgr) — add/edit/close STORES
 // Posting/editing OPENINGS = Recruitment owns it too (anj, 2026-07-17, per Grazel's note). Anyone with the Manning page except HR-Relations.
 function canPostOpenings(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"||r==="recruiter"; }
+// Merchandiser meeting attendance + reimbursement = Anj + Grazel(payroll) + Rhel(manager) + Vina(hr2, builds the bank report)
+function canRunMeetings(){ const r=userRole(); const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return r==="admin"||r==="payroll"||r==="manager"||e===IDS_EDITOR; }
+// Only owners/payroll edit the meeting settings (open/close, venue-IP lock); Vina/Rhel operate + export
+function canConfigMeetings(){ const r=userRole(); return r==="admin"||r==="payroll"; }
 const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding","reports"];
 // HR Relations (Juvy) — employee-relations desk: onboarding→exit lifecycle, discipline/compliance, notices, loans/benefits. NO salary, NO recruiting funnel.
 const RELATIONS_PAGES=["dashboard","onboarding","evaluations","exit","compliance","memos","signatures","loans","timekeeping"];
@@ -75,7 +83,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='maternity') return canSeePay(); const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
 function applyRoleUI(){
   const allow=allowedPages(), limited=isLimitedUser();
@@ -83,6 +91,7 @@ function applyRoleUI(){
     const pg=n.getAttribute('data-page');
     if(pg==='activity'){ n.style.display=isAdminUser()?'':'none'; return; }  // Access & Activity = owners only
     if(pg==='maternity'){ n.style.display=canSeePay()?'':'none'; return; }   // Maternity = salary viewers (Anj/Sanjay/Grazel)
+    if(pg==='meetings'){ n.style.display=canRunMeetings()?'':'none'; return; } // Meetings = Anj/Grazel/Rhel/Vina
     n.style.display=(allow&&allow.indexOf(pg)===-1)?'none':'';
   });
   document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display=limited?'none':''; });
@@ -165,7 +174,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -184,7 +193,9 @@ async function loadEmployees(){
     sb.from("evaluations").select("*").order("eval_date", {ascending:false}),
     sb.from("change_log").select("*").order("created_at", {ascending:false}).limit(500),
     sb.from("sc_status").select("*"),
-    sb.from("maternity_claims").select("*").order("created_at", {ascending:false})
+    sb.from("maternity_claims").select("*").order("created_at", {ascending:false}),
+    sb.from("meeting_attendance").select("*").order("signed_in_at", {ascending:false}),
+    sb.from("system_settings").select("*")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -206,6 +217,8 @@ async function loadEmployees(){
   CHANGE_LOG=(clg&&clg.data)||[];
   SC_STATUS={}; ((scs&&scs.data)||[]).forEach(r=>{ SC_STATUS[r.sc_name]=r; });
   MATERNITY=(mcl&&mcl.data)||[];
+  MEETINGS=(mtg&&mtg.data)||[];
+  MEETING_CFG={}; ((sysset&&sysset.data)||[]).forEach(r=>{ MEETING_CFG[r.key]=r.value; });
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -223,6 +236,7 @@ async function loadEmployees(){
   renderReports();
   renderActivity();
   renderMaternity();
+  renderMeetings();
   renderTimekeeping();
   tagPreviewPages();
   wireGlobalSearch();
@@ -1170,7 +1184,7 @@ function tkParse(wb, monthArg){
   return {MON,mi,draft,held,total:people.length};
 }
 
-function tkPrintNTE(p, MON){
+function tkPrintNTE(p, MON, approval){
   const today=new Date();
   const dateStr=today.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
   const bits=[]; if(p.unauth>0) bits.push(p.unauth+" unauthorized absence"+(p.unauth===1?"":"s")); if(p.late>0) bits.push(tkLatePhrase(p.late));
@@ -1203,7 +1217,7 @@ function tkPrintNTE(p, MON){
     <p>We trust you will give this matter your immediate attention.</p>
     <div class="sig">
       <div class="sigrole">Prepared by:</div><div class="line"></div>Juvelyn Belvistre<br><span style="color:#667;">Human Resources Department</span>
-      <div class="sigrole">Noted by:</div><div class="line"></div>${esc(tkNoted(p.pos))}<br><span style="color:#667;">Management</span>
+      <div class="sigrole">Noted by:</div>${(approval&&approval.img)?`<div style="margin:2px 0;"><img src="${approval.img}" style="height:44px;display:block;">${esc(approval.signer||tkNoted(p.pos))}<br><span style="color:#667;">Management · e-signed via RCC Portal${approval.date?" on "+new Date(approval.date).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}):""}</span></div>`:`<div class="line"></div>${esc(tkNoted(p.pos))}<br><span style="color:#667;">Management</span>`}
       <div class="sigrole">Received by:</div><div class="line"></div>${esc(p.name)}<br><span style="color:#667;">Signature over printed name / Date</span>
       <div class="ack">By signing, I acknowledge receipt of this notice. My signature does not mean I admit the contents.</div>
     </div>
@@ -1211,35 +1225,70 @@ function tkPrintNTE(p, MON){
   w.document.close();
 }
 
-async function tkDoGenerate(p, MON, btn){
-  tkPrintNTE(p, MON);
+// Plain-text NTE body — travels WITH the signature so the approver reads exactly what gets served.
+function tkNteText(p, MON){
+  const bits=[]; if(p.unauth>0) bits.push(p.unauth+" unauthorized absence"+(p.unauth===1?"":"s")); if(p.late>0) bits.push(tkLatePhrase(p.late));
+  return `NOTICE TO EXPLAIN — ATTENDANCE (UNAUTHORIZED ABSENCE / TARDINESS)\n\n`
+    +`To: ${p.name} · ${p.pos||"—"}\n\n`
+    +`This notice concerns your attendance record for the ${TK_MONTH_FULL[MON]} ${TK_YEAR} payroll cutoff (${TK_CUTOFF[MON]}). Based on the timekeeping records, you incurred ${bits.join(", and ")}. The detailed daily record is in your DTR.\n\n`
+    +`Absences without prior authorization and repeated tardiness/undertime, when habitual, may constitute a violation of Company policy and a ground for disciplinary action under the Labor Code.\n\n`
+    +`You are directed to submit a WRITTEN EXPLANATION within ${TK_EXPLAIN_DAYS} calendar days of receipt as to why no disciplinary action should be taken. If any of these were authorized or had a valid reason (approved leave, medical, emergency), state so with proof — it will be considered. You may request a conference and be assisted by a representative.\n\n`
+    +`This is the first of the twin notices required by due process. No decision has been made at this stage.\n\n`
+    +`Prepared by: Juvelyn Belvistre — Human Resources Department\nNoted by: ${tkNoted(p.pos)} — Management`;
+}
+// State of a flagged person's NTE this cutoff: none / pending sign-off / signed / declined.
+function tkSignState(p){
+  const MON=TK_RESULT&&TK_RESULT.MON;
+  const sig=(SIGNATURES||[]).find(s=>s.doc_type==="nte" && s.details && s.details.month===MON && (s.subject_name||"")===p.name);
+  if(!sig) return {state:"none"};
+  if(sig.status==="signed") return {state:"signed",sig};
+  if(sig.status==="declined") return {state:"declined",sig};
+  return {state:"pending",sig};
+}
+// Send an NTE to the Signatures inbox for the "Noted by" authority to approve & sign.
+async function tkSendSignoffDo(p, MON, btn){
+  if(btn){ btn.disabled=true; btn.textContent="Sending…"; }
+  const body=tkNteText(p, MON);
+  const details={ month:MON, cutoff:TK_CUTOFF[MON], employee:p.name, employee_id:p.id||null, position:p.pos||null,
+    unauth:p.unauth, late:Number(p.late.toFixed(1)), combined:Number(p.combined.toFixed(1)), noted_by:tkNoted(p.pos) };
+  const { data:sig, error } = await sb.from("signature_requests").insert({ doc_type:"nte", doc_title:"Notice to Explain — Attendance",
+    subject_name:p.name, body, from_name:(CURRENT_USER&&CURRENT_USER.email)||"HR", awaiting:"you",
+    with_whom:tkNoted(p.pos)+" (Noted by)", status:"pending", meta:"Attendance · "+TK_MONTH_FULL[MON]+" "+TK_YEAR, details }).select().single();
+  if(error){ if(btn){ btn.disabled=false; btn.textContent="Send for sign-off"; } alert("Couldn't send: "+error.message); return; }
   const ref="NTE-"+new Date().toISOString().slice(0,10).replace(/-/g,"")+"-"+String(p.id||"").slice(-4);
   try{ await sb.from("memos").insert({ ref_no:ref, memo_type:"Notice to Explain", subject_name:p.name, title:"NTE — Attendance ("+TK_MONTH_FULL[MON]+" "+TK_YEAR+")",
-    body:"NTE — attendance, "+TK_MONTH_FULL[MON]+" "+TK_YEAR+" cutoff: "+p.unauth+" unauthorized absence(s) + "+p.late.toFixed(1)+"d late (combined "+p.combined.toFixed(1)+"). "+TK_EXPLAIN_DAYS+" days to explain.",
-    relevant_date:new Date().toISOString().slice(0,10), status:"Issued", created_by:(CURRENT_USER&&CURRENT_USER.email)||"HR" }); }catch(_){}
-  if(btn){ btn.textContent="NTE generated ✓"; btn.disabled=true; btn.style.opacity=.6; }
-  try{ const me=await sb.from("memos").select("*").order("id",{ascending:false}).limit(400); MEMOS=(me&&me.data)||MEMOS; renderMemos(); }catch(_){}
+    body:"NTE — attendance, "+TK_MONTH_FULL[MON]+" "+TK_YEAR+" cutoff: "+p.unauth+" unauthorized absence(s) + "+p.late.toFixed(1)+"d late (combined "+p.combined.toFixed(1)+"). Sent to "+tkNoted(p.pos)+" for sign-off.",
+    relevant_date:new Date().toISOString().slice(0,10), status:"Issued", signature_request_id:sig.id, created_by:(CURRENT_USER&&CURRENT_USER.email)||"HR" }); }catch(_){}
+  try{ const sg=await sb.from("signature_requests").select("*").order("created_at",{ascending:false}); SIGNATURES=(sg&&sg.data)||SIGNATURES;
+       const me=await sb.from("memos").select("*").order("id",{ascending:false}).limit(400); MEMOS=(me&&me.data)||MEMOS;
+       renderSignatures(); renderMemos(); }catch(_){}
+  tkRenderResults();
 }
-window.tkGenerate=(i,btn)=>{ if(TK_RESULT&&TK_RESULT.draft[i]) tkDoGenerate(TK_RESULT.draft[i], TK_RESULT.MON, btn); };
-window.tkGenerateAll=async()=>{ if(!TK_RESULT) return; for(let i=0;i<TK_RESULT.draft.length;i++){ await tkDoGenerate(TK_RESULT.draft[i], TK_RESULT.MON, document.getElementById("tkGen"+i)); } };
-
-function tkNteAlready(name, MON){
-  return (MEMOS||[]).some(m=>m.memo_type==="Notice to Explain" && (m.subject_name||"")===name && (m.title||"").includes(TK_MONTH_FULL[MON]));
-}
+window.tkSendSignoff=(i,btn)=>{ if(TK_RESULT&&TK_RESULT.draft[i]) tkSendSignoffDo(TK_RESULT.draft[i], TK_RESULT.MON, btn); };
+window.tkSignoffAll=async()=>{ if(!TK_RESULT) return; for(let i=0;i<TK_RESULT.draft.length;i++){ if(tkSignState(TK_RESULT.draft[i]).state==="none") await tkSendSignoffDo(TK_RESULT.draft[i], TK_RESULT.MON, document.getElementById("tkGen"+i)); } };
+window.tkDraftPrint=(i)=>{ if(TK_RESULT&&TK_RESULT.draft[i]) tkPrintNTE(TK_RESULT.draft[i], TK_RESULT.MON); };
+// Print the APPROVED NTE — the e-signature is stamped on the "Noted by" line.
+window.tkPrintSigned=(sigId)=>{
+  const s=(SIGNATURES||[]).find(x=>String(x.id)===String(sigId)); if(!s||!s.details) return;
+  const d=s.details, p={ name:d.employee, pos:d.position, id:d.employee_id, unauth:d.unauth, late:Number(d.late)||0, combined:Number(d.combined)||0 };
+  tkPrintNTE(p, d.month, { signer:s.signer_name, date:s.signed_at, img:s.signature_data });
+};
 
 function tkRenderResults(){
   const box=document.getElementById("tkResults"); if(!box||!TK_RESULT) return;
   const {MON,draft,held,total}=TK_RESULT;
-  const row=(p,i)=>{ const already=tkNteAlready(p.name,MON);
+  const row=(p,i)=>{ const st=tkSignState(p); let action;
+    if(st.state==="signed") action='<span class="pill active">Approved · signed ✓</span> <button class="btn ghost" onclick="tkPrintSigned(\''+st.sig.id+'\')">Print signed NTE</button>';
+    else if(st.state==="pending") action='<span class="pill awol">Awaiting sign-off</span> <button class="btn ghost" onclick="tkDraftPrint('+i+')">Preview</button>';
+    else if(st.state==="declined") action='<span class="pill" style="color:#c0392b;">Declined</span> <button class="btn" id="tkGen'+i+'" onclick="tkSendSignoff('+i+',this)">Re-send</button>';
+    else action='<button class="btn" id="tkGen'+i+'" onclick="tkSendSignoff('+i+',this)">Send for sign-off</button> <button class="btn ghost" onclick="tkDraftPrint('+i+')">Preview</button>';
     return `<tr>
       <td>${i+1}</td>
       <td><b>${esc(p.name)}</b><div style="font-size:11.5px;color:#667;">${esc(p.pos||"—")}</div></td>
       <td style="text-align:center;">${p.unauth}</td>
       <td style="text-align:center;">${p.late.toFixed(1)}</td>
       <td style="text-align:center;font-weight:700;">${p.combined.toFixed(1)}</td>
-      <td style="text-align:right;">${already
-        ? '<span class="pill active">NTE logged ✓</span> <button class="btn ghost" id="tkGen'+i+'" onclick="tkGenerate('+i+',this)">Reprint</button>'
-        : '<button class="btn" id="tkGen'+i+'" onclick="tkGenerate('+i+',this)">Generate NTE</button>'}</td></tr>`; };
+      <td style="text-align:right;white-space:nowrap;">${action}</td></tr>`; };
   const heldRow=(p)=>`<tr style="background:#fdf6e3;">
       <td>—</td><td><b>${esc(p.name)}</b><div style="font-size:11.5px;color:#8a6a14;">${esc(p.pos||"—")}</div></td>
       <td style="text-align:center;">${p.absent}</td><td colspan="2" style="color:#8a6a14;font-size:12px;">${p.absent} absences this cutoff</td>
@@ -1248,9 +1297,9 @@ function tkRenderResults(){
     <div class="panel">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <h2 style="margin:0;">${TK_MONTH_FULL[MON]} ${TK_YEAR} — ${draft.length} to notify</h2>
-        ${draft.length?'<button class="btn" onclick="tkGenerateAll()">Generate all '+draft.length+' NTEs</button>':''}
+        ${draft.filter(p=>tkSignState(p).state==="none").length?'<button class="btn" onclick="tkSignoffAll()">Send all '+draft.filter(p=>tkSignState(p).state==="none").length+' for sign-off</button>':''}
       </div>
-      <div class="psub">Cutoff ${TK_CUTOFF[MON]} · rule: unauthorized absences + late-days ≥ ${TK_COMBINED_THRESHOLD} · ${total} staff scanned.</div>
+      <div class="psub">Cutoff ${TK_CUTOFF[MON]} · rule: unauthorized absences + late-days ≥ ${TK_COMBINED_THRESHOLD} · ${total} staff scanned. Each NTE goes to the <b>“Noted by” approver</b> (HO → Anj, Warehouse → Pervin) for sign-off before it's served.</div>
       <table style="width:100%;border-collapse:collapse;margin-top:8px;">
         <thead><tr style="text-align:left;border-bottom:2px solid #e2e7e4;font-size:11.5px;color:#667;text-transform:uppercase;">
           <th style="padding:6px 4px;">#</th><th>Employee</th><th style="text-align:center;">Unauth. abs</th><th style="text-align:center;">Late (days)</th><th style="text-align:center;">Combined</th><th></th></tr></thead>
@@ -1293,6 +1342,7 @@ function renderTimekeeping(){
     <div id="tkResults"></div>`;
   const fi=pg.querySelector("#tkFile");
   if(fi) fi.addEventListener("change",e=>{ const f=e.target.files&&e.target.files[0]; if(f) tkHandleFile(f); });
+  if(TK_RESULT){ const st=document.getElementById("tkStatus"); if(st) st.textContent="✓ "+TK_MONTH_FULL[TK_RESULT.MON]+" "+TK_YEAR+" (loaded)"; tkRenderResults(); }
 }
 window.renderTimekeeping=renderTimekeeping;
 
@@ -1525,12 +1575,36 @@ function claimCard(s){ const d=s.details||{}; const P=n=>"₱"+Number(n||0).toLo
         <div style="background:#f7f9fb;border:1px solid #E3E8EF;border-radius:10px;padding:12px 14px;margin-top:8px;white-space:pre-wrap;font-size:12.5px;line-height:1.55;max-height:30vh;overflow-y:auto;">${esc(s.body||"")}</div>
       </details>
     </div>`; }
+// Branded approval card for attendance NTEs — the record the approver is signing off on.
+function nteCard(s){ const d=s.details||{};
+  const rw=(k,v)=>`<tr><td style="padding:9px 14px;color:#6B7785;font-size:12.5px;border-bottom:1px solid #eef1f4;white-space:nowrap;vertical-align:top;">${k}</td><td style="padding:9px 14px;font-weight:700;font-size:13px;border-bottom:1px solid #eef1f4;">${v}</td></tr>`;
+  return `<div style="background:linear-gradient(135deg,#12352a,#1c4b39);margin:-22px -22px 0;padding:15px 20px;border-radius:14px 14px 0 0;color:#fff;">
+      <div style="font-weight:800;font-size:15px;letter-spacing:.2px;">RCC Portal <span style="opacity:.72;font-weight:500;font-size:12.5px;">Roshan Commercial Corporation</span></div>
+    </div>
+    <div style="padding:16px 2px 0;">
+      <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#6B7785;">NOTICE TO EXPLAIN · ATTENDANCE</div>
+      <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 3px;">NTE needs your sign-off</div>
+      <div class="psub" style="margin-bottom:11px;">Submitted by ${esc(s.from_name||"HR")}${s.created_at?" · "+fmtAgo(s.created_at):""}. Review the record, then approve &amp; e-sign as “Noted by”.</div>
+      <table style="width:100%;border:1px solid #e6eaee;border-radius:10px;border-collapse:separate;border-spacing:0;overflow:hidden;">
+        ${rw("Employee",esc(d.employee||s.subject_name||"—"))}
+        ${(d.employee_id||d.position)?rw("ID / Position",esc([d.employee_id,d.position].filter(Boolean).join(" · ")||"—")):""}
+        ${d.cutoff?rw("Cutoff",esc((d.month?TK_MONTH_FULL[d.month]+" "+TK_YEAR+" · ":"")+d.cutoff)):""}
+        ${rw("Unauthorized absences",d.unauth)}
+        ${rw("Late / undertime",Number(d.late||0).toFixed(1)+" day(s)")}
+        <tr><td style="padding:12px 14px;background:#eaf4ec;font-size:12.5px;font-weight:800;color:#12352a;">COMBINED SCORE</td><td style="padding:12px 14px;background:#eaf4ec;font-weight:800;font-size:15.5px;color:#12352a;">${Number(d.combined||0).toFixed(1)}</td></tr>
+        ${d.noted_by?rw("Noted by",esc(d.noted_by)):""}
+      </table>
+      <div class="note" style="margin-top:10px;">Confirm the absences were truly <b>unauthorized</b> (not approved leave) and that the DTR is attached before serving.</div>
+      <details style="margin:11px 0 2px;"><summary style="cursor:pointer;font-size:12.5px;color:#1E3A5F;font-weight:600;">Read the full notice text</summary>
+        <div style="background:#f7f9fb;border:1px solid #E3E8EF;border-radius:10px;padding:12px 14px;margin-top:8px;white-space:pre-wrap;font-size:12.5px;line-height:1.55;max-height:30vh;overflow-y:auto;">${esc(s.body||"")}</div>
+      </details>
+    </div>`; }
 function openSignDoc(id){
   const s=SIGNATURES.find(x=>String(x.id)===String(id)); if(!s) return;
   let m=document.getElementById("sigModal"); if(!m){ m=document.createElement("div"); m.id="sigModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
-    ${(s.doc_type==="claim"&&s.details)?claimCard(s):defaultSignTop(s)}
+    ${(s.doc_type==="claim"&&s.details)?claimCard(s):(s.doc_type==="nte"&&s.details)?nteCard(s):defaultSignTop(s)}
     <div style="font-size:12px;color:#6B7785;margin-bottom:6px;">Sign below — drawn with your finger or mouse. RA 8792 e-signature · timestamped + recorded against your account.</div>
     <canvas id="sigPad" width="500" height="150" style="width:100%;height:150px;border:1px dashed #b9c4cf;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
     <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
@@ -1540,7 +1614,7 @@ function openSignDoc(id){
     <div style="display:flex;gap:10px;margin-top:14px;">
       <button class="btn ghost" id="sigDecline" style="color:#c0392b;border-color:#f1c9c5;">Decline</button>
       <button class="btn ghost" id="sigCancel" style="margin-left:auto;">Cancel</button>
-      <button class="btn" id="sigDo">${s.doc_type==="claim"?"Approve &amp; Sign":"Sign document"}</button>
+      <button class="btn" id="sigDo">${(s.doc_type==="claim"||s.doc_type==="nte")?"Approve &amp; Sign":"Sign document"}</button>
     </div></div>`;
   m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
   document.getElementById("sigCancel").onclick=()=>m.remove();
@@ -1563,6 +1637,10 @@ function openSignDoc(id){
     if(s.doc_type==="claim"){
       await sb.from("exit_clearance").update({ quitclaim_status:"Approved", quitclaim_signed:true, quitclaim_date:new Date().toISOString().slice(0,10), updated_at:new Date().toISOString() }).eq("quitclaim_signature_id",s.id);
       try{ await logChange("exit",null,s.subject_name||"",  "Final pay approved (e-signed)","Net "+(s.amount!=null?peso(s.amount):"—")); }catch(_){}
+    }
+    if(s.doc_type==="nte"){
+      try{ await sb.from("memos").update({ status:"Signed", updated_at:new Date().toISOString() }).eq("signature_request_id",s.id); }catch(_){}
+      try{ await logChange("memo",null,s.subject_name||"","NTE approved (e-signed)",(s.details?("combined "+s.details.combined+" · "+(s.details.month||"")):"")); }catch(_){}
     }
     m.remove(); await loadEmployees(); window.go("signatures");
   };
@@ -2177,6 +2255,163 @@ function computeMaternity(c){
   const net=sssBenefit+employerNet;                 // total the employee receives
   return { dpm,dr,days,months,monthly,fpmb,fullPayDaily:monthly/30,msc,sum6,adsc,sssBenefit,contributions,otherDeduct,rawDiff,salaryDifferential,tax,employerNet,net,override:ov!=null };
 }
+/* ===================== MERCHANDISER MEETING — ATTENDANCE + REIMBURSEMENT ===================== */
+function meetingActive(){ return (MEETING_CFG&&MEETING_CFG.meeting_active)||{}; }
+function meetingAllowedIPs(){ const v=MEETING_CFG&&MEETING_CFG.meeting_allowed_ips; return Array.isArray(v)?v:[]; }
+function meetingRequireSelfie(){ return (MEETING_CFG&&MEETING_CFG.meeting_require_selfie)===true; }
+function mPeso(n){ return "₱"+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+const SBTN="padding:8px 13px;font-size:13px;";
+const MSEL="padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:13px;background:#fff;";
+async function meetingSaveCfg(key,value){ MEETING_CFG[key]=value; await sb.from("system_settings").upsert({ key, value, updated_at:new Date().toISOString() }, { onConflict:"key" }); }
+async function reloadMeetings(){
+  const [mtg,sysset]=await Promise.all([
+    sb.from("meeting_attendance").select("*").order("signed_in_at",{ascending:false}),
+    sb.from("system_settings").select("*")
+  ]);
+  MEETINGS=(mtg&&mtg.data)||[];
+  MEETING_CFG={}; ((sysset&&sysset.data)||[]).forEach(r=>{ MEETING_CFG[r.key]=r.value; });
+  renderMeetings();
+}
+let MEETING_VIEW=null; // selected meeting_date to view; null = active/latest
+
+function renderMeetings(){
+  const pg=$("#page-meetings"); if(!pg||!canRunMeetings()) return;
+  const active=meetingActive(), ips=meetingAllowedIPs(), cfgAllowed=canConfigMeetings();
+  const metaByDate={};
+  MEETINGS.forEach(r=>{ const k=r.meeting_date||"—"; if(!metaByDate[k]) metaByDate[k]={date:r.meeting_date,label:r.meeting_label,n:0}; metaByDate[k].n++; });
+  const meetingList=Object.values(metaByDate).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const viewDate = MEETING_VIEW || (active&&active.date) || (meetingList[0]&&meetingList[0].date) || null;
+  const rows=MEETINGS.filter(r=>String(r.meeting_date)===String(viewDate));
+  const totT=rows.reduce((s,r)=>s+Number(r.reimb_transport||0),0);
+  const totL=rows.reduce((s,r)=>s+Number(r.reimb_lbc||0),0);
+  const paid=rows.filter(r=>r.status==="Paid").length, verified=rows.filter(r=>r.status==="Verified").length;
+
+  pg.innerHTML=`
+  <div class="panel" style="margin-top:0;">
+    <h2>Merchandiser Meeting — Attendance &amp; Reimbursement</h2>
+    <div class="psub">QR sign-in on meeting day, IP-locked to the venue Wi-Fi so attendance can't be faked. Each merchandiser fills their transport / LBC reimbursement + bank details on their phone. Vina exports the bank report for Accounting.</div>
+    ${cfgAllowed?`
+    <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;">
+      <div style="flex:1;min-width:260px;border:1px solid var(--line);border-radius:12px;padding:14px;">
+        <div class="subhead">Today's meeting</div>
+        <div style="font-size:14px;margin:6px 0;">
+          ${active&&active.open
+            ? `<span class="pill active">OPEN for sign-in</span> <b>${esc(active.label||"Meeting")}</b>${active.date?" · "+fmtDate(active.date):""}`
+            : `<span class="pill awol">Closed</span> ${active&&active.label?"<b>"+esc(active.label)+"</b>":""}${active&&active.date?" · "+fmtDate(active.date):""}`}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+          <button class="btn" style="${SBTN}" id="mtgOpen">${active&&active.open?"Change / re-open":"Open a meeting"}</button>
+          ${active&&active.open?`<button class="btn ghost" style="${SBTN}" id="mtgClose">Close sign-in</button>`:""}
+        </div>
+      </div>
+      <div style="flex:1;min-width:260px;border:1px solid var(--line);border-radius:12px;padding:14px;">
+        <div class="subhead">Anti-scam — venue Wi-Fi lock</div>
+        <div style="font-size:14px;margin:6px 0;">
+          ${ips.length? `🔒 Locked to <b>${ips.map(esc).join(", ")}</b> — only sign-ins from the venue Wi-Fi count.` : `⚠️ <b>Not locked.</b> Sign-ins are recorded from any network. Lock it once you're on the venue Wi-Fi.`}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+          <button class="btn" style="${SBTN}" id="mtgLockIP">Lock to this Wi-Fi</button>
+          ${ips.length?`<button class="btn ghost" style="${SBTN}" id="mtgClearIP">Remove lock</button>`:""}
+          <button class="btn ghost" style="${SBTN}" id="mtgSelfie">Selfie: ${meetingRequireSelfie()?"ON":"OFF"}</button>
+        </div>
+      </div>
+    </div>`:""}
+    <div style="margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:14px;">
+      <div class="subhead">QR code for the meeting</div>
+      <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&margin=6&data=${encodeURIComponent(MEETING_SIGNIN_URL)}" width="150" height="150" style="border:1px solid var(--line);border-radius:12px;background:#fff;" alt="Sign-in QR">
+        <div style="font-size:13px;color:var(--mut);max-width:340px;">
+          Display or print this at the meeting — merchandisers scan it to sign in.<br>
+          <a href="${MEETING_SIGNIN_URL}" target="_blank" style="color:var(--navy);font-weight:600;word-break:break-all;">${MEETING_SIGNIN_URL}</a>
+          <div style="margin-top:6px;"><button class="btn ghost" style="${SBTN}" id="mtgCopyLink">Copy link</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+      <h2 style="margin:0;">Attendance ${viewDate?"· "+fmtDate(viewDate):""}</h2>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        ${meetingList.length>1?`<select id="mtgPick" style="${MSEL}">${meetingList.map(m=>`<option value="${esc(m.date)}"${String(m.date)===String(viewDate)?" selected":""}>${esc(m.label||"Meeting")} · ${esc(m.date)} (${m.n})</option>`).join("")}</select>`:""}
+        <button class="btn" style="${SBTN}" id="mtgExport">Export bank report (CSV)</button>
+      </div>
+    </div>
+    <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-top:12px;">
+      <div class="kpi"><div class="k-l">Attended</div><div class="k-n">${rows.length}</div></div>
+      <div class="kpi"><div class="k-l">Transport total</div><div class="k-n" style="font-size:18px;">${mPeso(totT)}</div></div>
+      <div class="kpi"><div class="k-l">LBC total</div><div class="k-n" style="font-size:18px;">${mPeso(totL)}</div></div>
+      <div class="kpi"><div class="k-l">Verified / Paid</div><div class="k-n" style="font-size:18px;">${verified} / ${paid}</div></div>
+    </div>
+    ${rows.length?`
+    <div style="overflow-x:auto;margin-top:12px;">
+    <table><thead><tr>
+      <th>Name</th><th>Emp&nbsp;No</th><th>Store</th><th>Signed in</th><th>Venue</th>
+      <th>Transport</th><th>LBC</th><th>Ride&nbsp;pass</th><th>Account holder</th><th>Bank</th><th>Account&nbsp;no</th><th>Status</th>
+    </tr></thead><tbody>
+    ${rows.map(r=>`<tr>
+      <td><b>${esc(r.name)}</b></td>
+      <td>${esc(r.emp_no||"—")}</td>
+      <td>${esc(r.store||"—")}</td>
+      <td>${r.signed_in_at?esc(new Date(r.signed_in_at).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})):"—"}</td>
+      <td>${r.ip_ok===true?'<span class="pill active" title="'+esc(r.client_ip||"")+'">on venue ✓</span>':r.ip_ok===false?'<span class="pill awol" title="'+esc(r.client_ip||"")+'">off venue</span>':'<span class="pill probation" title="'+esc(r.client_ip||"")+'">not locked</span>'}</td>
+      <td>${mPeso(r.reimb_transport)}</td>
+      <td>${mPeso(r.reimb_lbc)}</td>
+      <td>${r.ride_pass_url?`<a href="${esc(r.ride_pass_url)}" target="_blank">view</a>`:"—"}</td>
+      <td>${esc(r.account_holder||"—")}</td>
+      <td>${esc(r.bank_name||"—")}</td>
+      <td>${esc(r.bank_account_no||"—")}</td>
+      <td><select class="mtg-status" data-id="${r.id}" style="${MSEL}">${["Submitted","Verified","Paid"].map(s=>`<option${r.status===s?" selected":""}>${s}</option>`).join("")}</select></td>
+    </tr>`).join("")}
+    </tbody></table></div>`
+    : `<div class="placeholder" style="margin-top:12px;"><h2>No sign-ins yet${viewDate?" for "+esc(viewDate):""}</h2><p>Open a meeting, display the QR, and merchandiser sign-ins appear here live.</p></div>`}
+  </div>`;
+
+  const on=(id,ev,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener(ev,fn); };
+  on("mtgCopyLink","click",()=>{ if(navigator.clipboard) navigator.clipboard.writeText(MEETING_SIGNIN_URL); const b=document.getElementById("mtgCopyLink"); if(b){ const t=b.textContent; b.textContent="Copied ✓"; setTimeout(()=>b.textContent=t,1200); } });
+  on("mtgPick","change",e=>{ MEETING_VIEW=e.target.value; renderMeetings(); });
+  on("mtgExport","click",()=>meetingExport(rows,viewDate));
+  on("mtgOpen","click",meetingOpenDialog);
+  on("mtgClose","click",async()=>{ const a=meetingActive(); await meetingSaveCfg("meeting_active",{...a,open:false}); reloadMeetings(); });
+  on("mtgLockIP","click",meetingLockIP);
+  on("mtgClearIP","click",async()=>{ await meetingSaveCfg("meeting_allowed_ips",[]); reloadMeetings(); });
+  on("mtgSelfie","click",async()=>{ await meetingSaveCfg("meeting_require_selfie",!meetingRequireSelfie()); reloadMeetings(); });
+  $$("#page-meetings .mtg-status").forEach(sel=>sel.addEventListener("change",async e=>{
+    const id=e.target.dataset.id, status=e.target.value;
+    await sb.from("meeting_attendance").update({status, verified_by:(CURRENT_USER&&CURRENT_USER.email)||null}).eq("id",id);
+    const row=MEETINGS.find(x=>String(x.id)===String(id)); if(row) row.status=status;
+  }));
+}
+function meetingOpenDialog(){
+  const a=meetingActive();
+  const today=new Date().toISOString().slice(0,10);
+  const date=prompt("Meeting date (YYYY-MM-DD):", a.date||today); if(date===null) return;
+  const label=prompt("Meeting name:", a.label||"Monthly Sales Meeting"); if(label===null) return;
+  meetingSaveCfg("meeting_active",{date:(date||"").trim()||today,label:(label||"").trim()||"Monthly Sales Meeting",open:true}).then(reloadMeetings);
+}
+async function meetingLockIP(){
+  try{
+    const anon=window.RCC_CONFIG.SUPABASE_ANON_KEY;
+    const r=await fetch(MEETING_FN,{headers:{apikey:anon,Authorization:"Bearer "+anon}});
+    const j=await r.json();
+    const ip=j&&j.your_ip;
+    if(!ip){ alert("Couldn't detect this network's IP — please try again."); return; }
+    if(!confirm("Lock sign-in to this Wi-Fi?\n\nDetected venue IP: "+ip+"\n\nOnly people on this exact network will be able to sign in. Do this while you're ON the venue Wi-Fi.")) return;
+    await meetingSaveCfg("meeting_allowed_ips",[ip]);
+    reloadMeetings();
+  }catch(e){ alert("Couldn't reach the sign-in service: "+e.message); }
+}
+function meetingExport(rows,viewDate){
+  const cols=[["Name","name"],["Employee No","emp_no"],["Store","store"],["Account Holder","account_holder"],["Bank","bank_name"],["Account Number","bank_account_no"],["Transport","reimb_transport"],["LBC","reimb_lbc"],["Total","__total"],["Status","status"]];
+  const head=cols.map(c=>c[0]).join(",");
+  const body=(rows||[]).map(r=>cols.map(c=>{
+    let v = c[1]==="__total" ? (Number(r.reimb_transport||0)+Number(r.reimb_lbc||0)) : r[c[1]];
+    return `"${(v==null?"":String(v)).replace(/"/g,'""')}"`;
+  }).join(",")).join("\n");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([head+"\n"+body],{type:"text/csv"}));
+  a.download="bank-report-"+(viewDate||"meeting")+".csv"; a.click();
+}
+
 function renderMaternity(){
   const pg=$("#page-maternity"); if(!pg||!canSeePay()) return;
   const M=MATERNITY||[];

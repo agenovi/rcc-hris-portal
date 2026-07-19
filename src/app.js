@@ -1527,6 +1527,7 @@ function renderSignatures(){
       <div class="panel" style="margin-top:0;" id="pendPanel">
         <h2>Pending your signature <span class="count-tag">${pend.length}</span></h2>
         <div class="psub">Open each, review the document, sign.</div>
+        ${(()=>{ const pn=pend.filter(x=>x.doc_type==="nte"); return pn.length>1?`<div style="margin:2px 0 12px;"><button class="btn" onclick="approveAllPendingNtes()">Approve &amp; sign all ${pn.length} NTEs</button> <span class="psub" style="margin:0;">with your saved signature — review each below if unsure</span></div>`:""; })()}
         ${pend.length?pend.map(row).join(""):'<div class="psub">Nothing waiting on you right now. 🎉</div>'}
       </div>
       <div>
@@ -1635,11 +1636,18 @@ function openSignDoc(id){
   m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
     ${(s.doc_type==="claim"&&s.details)?claimCard(s):(s.doc_type==="nte"&&s.details)?nteCard(s):defaultSignTop(s)}
-    <div style="font-size:12px;color:#6B7785;margin-bottom:6px;">Sign below — drawn with your finger or mouse. RA 8792 e-signature · timestamped + recorded against your account.</div>
+    ${savedSig?`<div style="display:flex;align-items:center;gap:10px;background:#eef6f0;border:1px solid #cfe6d8;border-radius:9px;padding:8px 12px;margin-bottom:10px;">
+      <img src="${savedSig}" style="height:34px;background:#fff;border-radius:4px;padding:2px 4px;border:1px solid #e2e7e4;">
+      <div style="flex:1;font-size:12.5px;color:#12352a;">Your saved signature is on file — one tap to approve.</div>
+      <button class="btn" id="sigSaved">Approve &amp; Sign with this</button>
+    </div>
+    <div style="font-size:12px;color:#6B7785;margin-bottom:6px;">…or draw a new signature below:</div>`
+    :`<div style="font-size:12px;color:#6B7785;margin-bottom:6px;">Sign below — drawn with your finger or mouse. RA 8792 e-signature · timestamped + recorded against your account.</div>`}
     <canvas id="sigPad" width="500" height="150" style="width:100%;height:150px;border:1px dashed #b9c4cf;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
-    <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
       <button class="btn ghost" id="sigClear" style="flex:0 0 auto;">Clear</button>
-      <span id="sigMsg" style="font-size:12.5px;color:#a4322a;flex:1;"></span>
+      <label style="font-size:12px;color:#6B7785;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="sigRemember" ${savedSig?"":"checked"}> Remember my signature on this device</label>
+      <span id="sigMsg" style="font-size:12.5px;color:#a4322a;flex:1 1 100%;"></span>
     </div>
     <div style="display:flex;gap:10px;margin-top:14px;">
       <button class="btn ghost" id="sigDecline" style="color:#c0392b;border-color:#f1c9c5;">Decline</button>
@@ -1657,23 +1665,20 @@ function openSignDoc(id){
   cv.addEventListener("mousedown",start); cv.addEventListener("mousemove",move); window.addEventListener("mouseup",end);
   cv.addEventListener("touchstart",start,{passive:false}); cv.addEventListener("touchmove",move,{passive:false}); cv.addEventListener("touchend",end);
   document.getElementById("sigClear").onclick=()=>{ ctx.clearRect(0,0,cv.width,cv.height); dirty=false; document.getElementById("sigMsg").textContent=""; };
-  document.getElementById("sigDo").onclick=async()=>{
-    if(!dirty){ document.getElementById("sigMsg").textContent="Please draw your signature first."; return; }
-    const btn=document.getElementById("sigDo"); btn.disabled=true; btn.textContent="Signing…";
-    const signer=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"Signed-in user";
-    const { error } = await sb.from("signature_requests").update({ status:"signed", signed_at:new Date().toISOString(), signer_name:signer, signature_data:cv.toDataURL("image/png"), updated_at:new Date().toISOString() }).eq("id",s.id);
-    if(error){ document.getElementById("sigMsg").textContent=error.message; btn.disabled=false; btn.textContent="Sign document"; return; }
-    // Final-pay quitclaim signed → mark the linked exit case Approved (this signature IS the approval, replacing the old email request).
-    if(s.doc_type==="claim"){
-      await sb.from("exit_clearance").update({ quitclaim_status:"Approved", quitclaim_signed:true, quitclaim_date:new Date().toISOString().slice(0,10), updated_at:new Date().toISOString() }).eq("quitclaim_signature_id",s.id);
-      try{ await logChange("exit",null,s.subject_name||"",  "Final pay approved (e-signed)","Net "+(s.amount!=null?peso(s.amount):"—")); }catch(_){}
-    }
-    if(s.doc_type==="nte"){
-      try{ await sb.from("memos").update({ status:"Signed", updated_at:new Date().toISOString() }).eq("signature_request_id",s.id); }catch(_){}
-      try{ await logChange("memo",null,s.subject_name||"","NTE approved (e-signed)",(s.details?("combined "+s.details.combined+" · "+(s.details.month||"")):"")); }catch(_){}
-    }
+  const finishSign=async(dataUrl,btn,label)=>{
+    if(btn){ btn.disabled=true; btn.textContent="Signing…"; }
+    const err=await applySignature(s, dataUrl);
+    if(err){ document.getElementById("sigMsg").textContent=err.message; if(btn){ btn.disabled=false; btn.textContent=label; } return; }
     m.remove(); await loadEmployees(); window.go("signatures");
   };
+  document.getElementById("sigDo").onclick=async()=>{
+    if(!dirty){ document.getElementById("sigMsg").textContent="Please draw your signature first."; return; }
+    const remember=document.getElementById("sigRemember"); const data=cv.toDataURL("image/png");
+    if(remember&&remember.checked) saveSavedSig(data);
+    finishSign(data, document.getElementById("sigDo"), (s.doc_type==="claim"||s.doc_type==="nte")?"Approve & Sign":"Sign document");
+  };
+  const savedBtn=document.getElementById("sigSaved");
+  if(savedBtn) savedBtn.onclick=()=> finishSign(savedSig, savedBtn, "Approve & Sign with this");
   document.getElementById("sigDecline").onclick=async()=>{
     const why=prompt("Reason for declining (optional):",""); if(why===null) return;
     const { error } = await sb.from("signature_requests").update({ status:"declined", decline_reason:why||null, updated_at:new Date().toISOString() }).eq("id",s.id);

@@ -1027,30 +1027,7 @@
       </section>
 
       <!-- TIMEKEEPING -->
-      <section class="page" id="page-timekeeping">
-        <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-          <div class="kpi"><div class="k-l">Present Today</div><div class="k-n">331</div><div class="k-s">of 368</div></div>
-          <div class="kpi warn"><div class="k-l">Absent Today</div><div class="k-n">29</div><div class="k-s">on leave or absent</div></div>
-          <div class="kpi alert"><div class="k-l">AWOL Watch</div><div class="k-n">2</div><div class="k-s">3+ consecutive absences</div></div>
-        </div>
-        <div class="panel">
-          <h2>AWOL detection — live example</h2>
-          <div class="psub">One absence triggers the whole chain automatically. Here is Juan Dela Cruz, today:</div>
-          <ol class="cascade">
-            <li class="hot">Portal pulls attendance and detects <b>3 consecutive absences</b> — Juan Dela Cruz, Spyder SM North EDSA.</li>
-            <li class="hot">HR and the Sales Coordinator are alerted; a <b>Notice to Explain (NTE)</b> is auto-issued.</li>
-            <li>Juan is sent a portal link to <b>submit his reason</b> — HR reviews and decides (twin-notice rule).</li>
-            <li>If confirmed AWOL → status changes to <b>Inactive — AWOL</b>.</li>
-            <li>The branch's Current Head Count <b>drops by one</b>; the deficiency rises.</li>
-            <li>An agency opening can be raised to <b>backfill the slot</b>.</li>
-          </ol>
-          <div style="font-size:12px;color:var(--muted);margin-top:6px;">The portal automates the paperwork and alerts — HR always makes the final decision.</div>
-        </div>
-        <div class="panel">
-          <h2>Note on SM-deployed merchandisers</h2>
-          <div class="psub">SM-branch merchandisers clock in on SM's biometrics, uploaded every 15 days — so their absences appear after the next upload, not in real time. The timekeeping screen shows this clearly so nothing looks "missed."</div>
-        </div>
-      </section>
+      <section class="page" id="page-timekeeping"></section>
 
       <!-- LOANS -->
       <section class="page" id="page-loans">
@@ -2378,15 +2355,15 @@ function canManageStores(){ const r=userRole(); return r==="admin"||r==="payroll
 function canPostOpenings(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"||r==="recruiter"; }
 const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding","reports"];
 // HR Relations (Juvy) — employee-relations desk: onboarding→exit lifecycle, discipline/compliance, notices, loans/benefits. NO salary, NO recruiting funnel.
-const RELATIONS_PAGES=["dashboard","onboarding","evaluations","exit","compliance","memos","signatures","loans"];
+const RELATIONS_PAGES=["dashboard","onboarding","evaluations","exit","compliance","memos","signatures","loans","timekeeping"];
 // HR Manager (Rhel) — oversees the whole department: every page except owner-only Settings.
-const MANAGER_PAGES=["dashboard","employees","branches","prehire","contracts","onboarding","evaluations","loans","exit","manning","compliance","signatures","memos","reports"];
+const MANAGER_PAGES=["dashboard","employees","branches","prehire","contracts","onboarding","evaluations","loans","exit","manning","compliance","signatures","memos","reports","timekeeping"];
 // Per-person extra pages on top of their role. Vina = sole bank/gov encoder → needs the Employees directory to enter/correct those numbers (salary stays masked for her).
 const EXTRA_PAGES_BY_EMAIL={ "hr2@hassarams.com":["employees"] };
 function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   let base;
   if(r==="manager") base = MANAGER_PAGES.slice();
-  else if(r==="payroll") base = RECRUITER_PAGES.concat(["employees"]);
+  else if(r==="payroll") base = RECRUITER_PAGES.concat(["employees","timekeeping"]);
   else if(r==="relations") base = RELATIONS_PAGES.slice();
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
@@ -2539,6 +2516,7 @@ async function loadEmployees(){
   renderReports();
   renderActivity();
   renderMaternity();
+  renderTimekeeping();
   tagPreviewPages();
   wireGlobalSearch();
   if(!landed){ landed=true;
@@ -3429,6 +3407,187 @@ function printNpa(e,d,ref){
   w.document.close();
 }
 window.openNpaForm=openNpaForm;
+
+/* ================= TIMEKEEPING & ATTENDANCE → NTE ==================
+   Upload the monthly "ATTENDANCE SUMMARY REPORT HO & WH.xlsx", flag everyone
+   whose (unauthorized absences + late-days) reaches the threshold, and generate
+   a DOLE twin-notice NTE per person on RCC letterhead. Reads the maintained
+   Excel (not the raw PayPlus feed) on purpose — the Excel carries the
+   authorized/unauthorized coding the API doesn't expose, which is what keeps
+   maternity/approved-leave cases from being wrongly flagged.
+   ------------------------------------------------------------------ */
+const TK_COMBINED_THRESHOLD=5;     // unauthorized absences + late-days >= this -> NTE
+const TK_LEAVE_REVIEW_ABSENCES=10; // absences >= this -> HELD (likely leave), never auto-drafted
+const TK_EXPLAIN_DAYS=5;           // calendar days to explain
+const TK_YEAR=2026;
+const TK_MONTHS=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const TK_MONTH_FULL={JAN:"January",FEB:"February",MAR:"March",APR:"April",MAY:"May",JUN:"June",JUL:"July",AUG:"August",SEP:"September",OCT:"October",NOV:"November",DEC:"December"};
+const TK_CUTOFF={JAN:"December 25, 2025 – January 24, 2026",FEB:"January 25 – February 24, 2026",MAR:"February 25 – March 24, 2026",APR:"March 25 – April 24, 2026",MAY:"April 25 – May 24, 2026",JUN:"May 25 – June 24, 2026",JUL:"June 25 – July 24, 2026",AUG:"July 25 – August 24, 2026",SEP:"August 25 – September 24, 2026",OCT:"September 25 – October 24, 2026",NOV:"October 25 – November 24, 2026",DEC:"November 25 – December 24, 2026"};
+let TK_RESULT=null;
+
+function tkLoadSheetJS(){
+  return new Promise((res,rej)=>{
+    if(window.XLSX) return res(window.XLSX);
+    const s=document.createElement("script");
+    s.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    s.onload=()=>res(window.XLSX); s.onerror=()=>rej(new Error("Could not load the spreadsheet reader."));
+    document.head.appendChild(s);
+  });
+}
+function tkLatePhrase(d){ if(!d) return ""; const mins=Math.round(d*8*60); return d.toFixed(1)+" day-equivalent of tardiness/undertime (approx. "+mins+" minutes accumulated)"; }
+function tkNoted(pos){ return (pos||"").toLowerCase().includes("warehouse")?"Pervin Chatlani":"Anj Genomal"; }
+
+function tkParse(wb, monthArg){
+  const XLSX=window.XLSX;
+  const grab=(name)=>{ const sh=wb.Sheets[name]; if(!sh) throw new Error('Sheet "'+name+'" not found — is this the right attendance file?'); return XLSX.utils.sheet_to_json(sh,{header:1,defval:null}); };
+  const absent=grab("ABSENT"); // data from row index 10; month block every 3 cols from col 4
+  const late=grab("LATE");     // data from row index 6; month cols from col 4
+  let mi;
+  if(monthArg){ mi=TK_MONTHS.indexOf(monthArg); if(mi<0) throw new Error("Unknown month "+monthArg); }
+  else{ mi=-1;
+    for(let m=0;m<12;m++){ const ua=4+m*3+2; let sum=0;
+      for(let r=10;r<absent.length;r++) sum+=Number(absent[r]&&absent[r][ua])||0;
+      const lc=4+m; for(let r=6;r<late.length;r++) sum+=Number(late[r]&&late[r][lc])||0;
+      if(sum>0) mi=m; }
+    if(mi<0) throw new Error("No attendance data found in the file."); }
+  const MON=TK_MONTHS[mi], uaCol=4+mi*3+2, absCol=4+mi*3, lateCol=4+mi;
+  const byId={};
+  for(let r=10;r<absent.length;r++){ const row=absent[r]; if(!row) continue; const id=row[1],name=row[2],pos=row[3]; if(!name) continue;
+    byId[String(id)]={id,name,pos,absent:Number(row[absCol])||0,unauth:Number(row[uaCol])||0,late:0}; }
+  for(let r=6;r<late.length;r++){ const row=late[r]; if(!row) continue; const id=String(row[1]),name=row[2]; if(!name) continue;
+    if(!byId[id]) byId[id]={id:row[1],name,pos:row[3],absent:0,unauth:0,late:0}; byId[id].late=Number(row[lateCol])||0; }
+  const people=Object.values(byId).map(p=>Object.assign({},p,{combined:p.unauth+p.late}));
+  const flagged=people.filter(p=>p.combined>=TK_COMBINED_THRESHOLD).sort((a,b)=>b.combined-a.combined);
+  const held=flagged.filter(p=>p.absent>=TK_LEAVE_REVIEW_ABSENCES);
+  const draft=flagged.filter(p=>p.absent<TK_LEAVE_REVIEW_ABSENCES);
+  return {MON,mi,draft,held,total:people.length};
+}
+
+function tkPrintNTE(p, MON){
+  const today=new Date();
+  const dateStr=today.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  const bits=[]; if(p.unauth>0) bits.push(p.unauth+" unauthorized absence"+(p.unauth===1?"":"s")); if(p.late>0) bits.push(tkLatePhrase(p.late));
+  const record=bits.join(", and ");
+  const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to print the NTE."); return; }
+  w.document.write(`<!DOCTYPE html><html><head><title>NTE — ${esc(p.name)}</title><style>
+    body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#1F2A37;max-width:760px;margin:24px auto;padding:0 24px;font-size:13.5px;line-height:1.6;}
+    .lh{border-bottom:2.5px solid #1B5E20;padding-bottom:8px;margin-bottom:16px;}
+    .lh b{font-size:17px;color:#1B5E20;letter-spacing:.4px;} .lh div{font-size:11px;color:#667;}
+    .mf{margin:2px 0;} .mf b{display:inline-block;width:90px;}
+    .sub{border-top:2px solid #1B5E20;margin:14px 0 16px;padding-top:2px;}
+    p{margin:0 0 11px;} .sig{margin-top:26px;} .sigrole{font-weight:700;margin-top:16px;}
+    .line{border-bottom:1px solid #333;width:280px;height:26px;margin:4px 0 2px;}
+    .ack{font-style:italic;color:#555;font-size:11.5px;margin-top:4px;}
+    @media print{ body{margin:0 auto;} }
+  </style></head><body>
+    <div class="lh"><b>ROSHAN COMMERCIAL CORPORATION</b><div>3rd Floor RCC Center, 104 Shaw Boulevard, Pasig, Manila, 1603 · +632 86386556</div></div>
+    <div class="mf">${dateStr}</div>
+    <div class="sub"></div>
+    <div class="mf"><b>TO</b>: ${esc((p.name||"").toUpperCase())}</div>
+    <div class="mf"><b>FROM</b>: HUMAN RESOURCES DEPARTMENT</div>
+    <div class="mf"><b>SUBJECT</b>: NOTICE TO EXPLAIN — ATTENDANCE (UNAUTHORIZED ABSENCE / TARDINESS)</div>
+    <div class="sub"></div>
+    <p>This notice concerns your attendance record for the ${TK_MONTH_FULL[MON]} ${TK_YEAR} payroll cutoff (${TK_CUTOFF[MON]}).</p>
+    <p>Based on the timekeeping records for that period, you incurred ${record}. The detailed daily record is reflected in your Daily Time Record (DTR), which is available for your reference.</p>
+    <p>Regular attendance and punctuality are essential to your role and to the operations of the Company. Absences without prior authorization and repeated tardiness or undertime, when habitual, may constitute a violation of Company policy and a ground for disciplinary action under the Labor Code.</p>
+    <p>In line with your right to due process, you are directed to submit a <b>WRITTEN EXPLANATION within ${TK_EXPLAIN_DAYS} calendar days</b> from your receipt of this notice, stating why no disciplinary action should be taken against you for the above.</p>
+    <p>If any of the absences or tardiness were in fact authorized, or were due to a valid or justifiable reason (for example approved leave, medical, or emergency), please state this clearly and attach any supporting documents. These will be duly considered.</p>
+    <p>You may request a conference to be heard, and you may be assisted by a representative of your choice. Your explanation will be evaluated fairly before any decision is made. This notice is issued to give you the opportunity to be heard; it is not a finding or a penalty.</p>
+    <p>We trust you will give this matter your immediate attention.</p>
+    <div class="sig">
+      <div class="sigrole">Prepared by:</div><div class="line"></div>Juvelyn Belvistre<br><span style="color:#667;">Human Resources Department</span>
+      <div class="sigrole">Noted by:</div><div class="line"></div>${esc(tkNoted(p.pos))}<br><span style="color:#667;">Management</span>
+      <div class="sigrole">Received by:</div><div class="line"></div>${esc(p.name)}<br><span style="color:#667;">Signature over printed name / Date</span>
+      <div class="ack">By signing, I acknowledge receipt of this notice. My signature does not mean I admit the contents.</div>
+    </div>
+    <script>window.print();</`+`script></body></html>`);
+  w.document.close();
+}
+
+async function tkDoGenerate(p, MON, btn){
+  tkPrintNTE(p, MON);
+  const ref="NTE-"+new Date().toISOString().slice(0,10).replace(/-/g,"")+"-"+String(p.id||"").slice(-4);
+  try{ await sb.from("memos").insert({ ref_no:ref, memo_type:"Notice to Explain", subject_name:p.name, title:"NTE — Attendance ("+TK_MONTH_FULL[MON]+" "+TK_YEAR+")",
+    body:"NTE — attendance, "+TK_MONTH_FULL[MON]+" "+TK_YEAR+" cutoff: "+p.unauth+" unauthorized absence(s) + "+p.late.toFixed(1)+"d late (combined "+p.combined.toFixed(1)+"). "+TK_EXPLAIN_DAYS+" days to explain.",
+    relevant_date:new Date().toISOString().slice(0,10), status:"Issued", created_by:(CURRENT_USER&&CURRENT_USER.email)||"HR" }); }catch(_){}
+  if(btn){ btn.textContent="NTE generated ✓"; btn.disabled=true; btn.style.opacity=.6; }
+  try{ const me=await sb.from("memos").select("*").order("id",{ascending:false}).limit(400); MEMOS=(me&&me.data)||MEMOS; renderMemos(); }catch(_){}
+}
+window.tkGenerate=(i,btn)=>{ if(TK_RESULT&&TK_RESULT.draft[i]) tkDoGenerate(TK_RESULT.draft[i], TK_RESULT.MON, btn); };
+window.tkGenerateAll=async()=>{ if(!TK_RESULT) return; for(let i=0;i<TK_RESULT.draft.length;i++){ await tkDoGenerate(TK_RESULT.draft[i], TK_RESULT.MON, document.getElementById("tkGen"+i)); } };
+
+function tkNteAlready(name, MON){
+  return (MEMOS||[]).some(m=>m.memo_type==="Notice to Explain" && (m.subject_name||"")===name && (m.title||"").includes(TK_MONTH_FULL[MON]));
+}
+
+function tkRenderResults(){
+  const box=document.getElementById("tkResults"); if(!box||!TK_RESULT) return;
+  const {MON,draft,held,total}=TK_RESULT;
+  const row=(p,i)=>{ const already=tkNteAlready(p.name,MON);
+    return `<tr>
+      <td>${i+1}</td>
+      <td><b>${esc(p.name)}</b><div style="font-size:11.5px;color:#667;">${esc(p.pos||"—")}</div></td>
+      <td style="text-align:center;">${p.unauth}</td>
+      <td style="text-align:center;">${p.late.toFixed(1)}</td>
+      <td style="text-align:center;font-weight:700;">${p.combined.toFixed(1)}</td>
+      <td style="text-align:right;">${already
+        ? '<span class="pill active">NTE logged ✓</span> <button class="btn ghost" id="tkGen'+i+'" onclick="tkGenerate('+i+',this)">Reprint</button>'
+        : '<button class="btn" id="tkGen'+i+'" onclick="tkGenerate('+i+',this)">Generate NTE</button>'}</td></tr>`; };
+  const heldRow=(p)=>`<tr style="background:#fdf6e3;">
+      <td>—</td><td><b>${esc(p.name)}</b><div style="font-size:11.5px;color:#8a6a14;">${esc(p.pos||"—")}</div></td>
+      <td style="text-align:center;">${p.absent}</td><td colspan="2" style="color:#8a6a14;font-size:12px;">${p.absent} absences this cutoff</td>
+      <td style="text-align:right;color:#8a6a14;font-weight:600;">HELD — verify leave</td></tr>`;
+  box.innerHTML=`
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <h2 style="margin:0;">${TK_MONTH_FULL[MON]} ${TK_YEAR} — ${draft.length} to notify</h2>
+        ${draft.length?'<button class="btn" onclick="tkGenerateAll()">Generate all '+draft.length+' NTEs</button>':''}
+      </div>
+      <div class="psub">Cutoff ${TK_CUTOFF[MON]} · rule: unauthorized absences + late-days ≥ ${TK_COMBINED_THRESHOLD} · ${total} staff scanned.</div>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+        <thead><tr style="text-align:left;border-bottom:2px solid #e2e7e4;font-size:11.5px;color:#667;text-transform:uppercase;">
+          <th style="padding:6px 4px;">#</th><th>Employee</th><th style="text-align:center;">Unauth. abs</th><th style="text-align:center;">Late (days)</th><th style="text-align:center;">Combined</th><th></th></tr></thead>
+        <tbody>${draft.map(row).join("")||'<tr><td colspan="6" style="padding:10px;color:#667;">No one crossed the threshold this cutoff.</td></tr>'}</tbody>
+      </table>
+      ${held.length?`<div style="margin-top:16px;">
+        <h3 style="font-size:13px;color:#8a6a14;margin:0 0 4px;">⚠ Held for leave review — do NOT issue an NTE without checking (${held.length})</h3>
+        <div class="psub" style="margin-top:0;">${held.length} person(s) with ${TK_LEAVE_REVIEW_ABSENCES}+ absences this cutoff — almost always approved / maternity leave, not AWOL. Confirm with payroll first.</div>
+        <table style="width:100%;border-collapse:collapse;margin-top:6px;"><tbody>${held.map(heldRow).join("")}</tbody></table>
+      </div>`:""}
+      <div class="note" style="margin-top:14px;">Before serving any NTE: (1) confirm the days were truly <b>unauthorized</b> (not approved leave), (2) attach the employee's <b>DTR</b> with the specific dates, (3) confirm the <b>“Noted by”</b> name. Each generated NTE is logged to <b>Memos</b>.</div>
+    </div>`;
+}
+
+async function tkHandleFile(file){
+  const status=document.getElementById("tkStatus"); if(status) status.textContent="Reading "+file.name+"…";
+  try{
+    await tkLoadSheetJS();
+    const buf=await file.arrayBuffer();
+    const wb=window.XLSX.read(new Uint8Array(buf),{type:"array"});
+    TK_RESULT=tkParse(wb, null);
+    if(status) status.textContent="✓ "+file.name+" — "+TK_MONTH_FULL[TK_RESULT.MON]+" "+TK_YEAR;
+    tkRenderResults();
+  }catch(e){ if(status){ status.textContent="⚠ "+(e&&e.message||e); status.style.color="#a4322a"; } }
+}
+
+function renderTimekeeping(){
+  const pg=document.getElementById("page-timekeeping"); if(!pg) return;
+  pg.innerHTML=`
+    <div class="panel">
+      <h2>Attendance → Notice to Explain</h2>
+      <div class="psub">Upload the month's <b>ATTENDANCE SUMMARY REPORT HO &amp; WH.xlsx</b>. The portal flags everyone with <b>unauthorized absences + late-days ≥ ${TK_COMBINED_THRESHOLD}</b> and drafts a DOLE-compliant NTE per person on RCC letterhead. Anyone with ${TK_LEAVE_REVIEW_ABSENCES}+ absences is <b>held</b> (likely leave), never auto-drafted.</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;">
+        <label class="btn" style="cursor:pointer;">Choose attendance file
+          <input type="file" id="tkFile" accept=".xlsx" style="display:none;">
+        </label>
+        <span id="tkStatus" class="psub" style="margin:0;">No file loaded yet.</span>
+      </div>
+    </div>
+    <div id="tkResults"></div>`;
+  const fi=pg.querySelector("#tkFile");
+  if(fi) fi.addEventListener("change",e=>{ const f=e.target.files&&e.target.files[0]; if(f) tkHandleFile(f); });
+}
+window.renderTimekeeping=renderTimekeeping;
 
 /* ---------- WORKSITES (Branches page) — real store list from Branch Directory ---------- */
 const catPill=(c)=> c==="CN"?'<span class="pill cn">Concession</span>':(c==="CO"?'<span class="pill co">Company-Op</span>':'<span class="pill ho">'+esc(c||"—")+'</span>');

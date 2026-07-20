@@ -2330,6 +2330,9 @@ let CURRENT_USER=null;
 let SC_STATUS={};  // sc_name -> {status:'Active'|'Vacant'|'Pending', note}
 let MATERNITY=[];  // maternity_claims rows
 let MEETINGS=[];   // meeting_attendance rows (merchandiser meeting sign-in + reimbursement)
+let AGENCY_PAYROLL=[];  // agency_payroll rows (M&G / Jell-On real pay + contributions from payroll files)
+// Latest agency payroll row for an employee/diser id (handles the "500002.0" float form)
+function agencyPayFor(id){ if(!id) return null; const key=String(id).replace(/\.0$/,""); const rows=AGENCY_PAYROLL.filter(r=>String(r.emp_no).replace(/\.0$/,"")===key); if(!rows.length) return null; return rows.sort((a,b)=>String(b.cutoff||"").localeCompare(String(a.cutoff||"")))[0]; }
 let MEETING_CFG={}; // system_settings: meeting_active / meeting_allowed_ips / meeting_require_selfie
 const MEETING_FN="https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/meeting-signin";
 const MEETING_SIGNIN_URL="https://agenovi.github.io/rcc-hris-portal/meeting.html";
@@ -2472,7 +2475,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2493,7 +2496,8 @@ async function loadEmployees(){
     sb.from("sc_status").select("*"),
     sb.from("maternity_claims").select("*").order("created_at", {ascending:false}),
     sb.from("meeting_attendance").select("*").order("signed_in_at", {ascending:false}),
-    sb.from("system_settings").select("*")
+    sb.from("system_settings").select("*"),
+    sb.from("agency_payroll").select("*").order("cutoff", {ascending:false})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2517,6 +2521,7 @@ async function loadEmployees(){
   MATERNITY=(mcl&&mcl.data)||[];
   MEETINGS=(mtg&&mtg.data)||[];
   MEETING_CFG={}; ((sysset&&sysset.data)||[]).forEach(r=>{ MEETING_CFG[r.key]=r.value; });
+  AGENCY_PAYROLL=(apay&&apay.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -3297,7 +3302,11 @@ function openRecord(e){
           ? f("Daily Rate",e.daily_rate?("₱"+Number(e.daily_rate).toLocaleString()):"",TAGHR)+f("Daily Allowance",e.daily_allowance?("₱"+Number(e.daily_allowance).toLocaleString()):"",TAGHR)
           : `<div class="efield"><div class="el">Pay</div><div class="ev"><span class="note">🔒 Restricted — payroll only</span></div></div>`)
         +f("Hire Date",e.hire_date?fmtDate(e.hire_date):"",TAGHR)+f("Regularization Date",e.regularization_date?fmtDate(e.regularization_date):"",TAGHR)+f("End Date",e.end_date?fmtDate(e.end_date):"",TAGHR)+f("End Reason",e.end_reason,TAGHR))}
-      ${e.notes?sec(8,"Notes",`<div style="font-size:13.5px;white-space:pre-wrap;padding:4px 8px;">${esc(e.notes)}</div>`):""}
+      ${(()=>{ if(!canSeePay()) return ""; const ap=agencyPayFor(e.employee_id); if(!ap) return ""; return sec(8,"Latest Agency Payroll <span class=\"tag-s auto\">"+esc(ap.agency||"")+"</span>",
+        f("Cut-off",ap.cutoff,TAGAUTO)+f("Daily rate (derived)",peso(ap.daily_rate),TAGAUTO)+f("Basic pay",peso(ap.basic),TAGAUTO)+f("Gross pay",peso(ap.gross),TAGAUTO)+f("Net pay",peso(ap.netpay),TAGAUTO)
+        +f("Hours worked",ap.hours,TAGAUTO)+f("SSS (EE)",peso(ap.sss_ee),TAGAUTO)+f("PhilHealth (EE)",peso(ap.phic_ee),TAGAUTO)+f("Pag-IBIG (EE)",peso(ap.hdmf_ee),TAGAUTO)+f("Withholding tax",peso(ap.wtax),TAGAUTO))
+        +`<div class="psub" style="padding:2px 8px;">Source: ${esc(ap.source||"agency payroll file")}. Employee-share contributions (SSS/PhilHealth/Pag-IBIG) feed the maternity differential &amp; loan capacity checks.</div>`; })()}
+      ${e.notes?sec(e.employee_id&&agencyPayFor(e.employee_id)&&canSeePay()?9:8,"Notes",`<div style="font-size:13.5px;white-space:pre-wrap;padding:4px 8px;">${esc(e.notes)}</div>`):""}
     </div>`;
   window.go("employee");
   $("#recBack").addEventListener("click",()=>window.go("employees"));
@@ -4126,7 +4135,7 @@ function renderManning(){
       else if(o.target_fill_date) dl=`${fmtDate(o.target_fill_date)}${overdue?' <span class="pill awol">overdue</span>':''}`;
       else dl=`<span class="note">—</span>`;
       const dtag=o.diser_type==="Roving"?` <span class="pill ag">Roving</span>${o.second_worksite?`<div style="font-size:11px;color:var(--muted);">+ ${esc(o.second_worksite)}</div>`:""}`:` <span class="pill di">Stationary</span>`;
-      return `<tr><td><b>${esc(o.worksite)}</b>${dtag}</td><td>${esc(o.sc||"—")}</td><td>${o.count_needed}</td><td>${opInReview(o.worksite)}</td><td>${o.date_posted?fmtDate(o.date_posted):"—"}</td><td>${dl}</td>
+      return `<tr><td><b>${esc(o.worksite)}</b>${dtag}<div style="font-size:11px;color:var(--muted);margin-top:2px;">${esc(o.position||"Merchandiser")}</div></td><td>${esc(o.sc||"—")}</td><td>${o.count_needed}</td><td>${opInReview(o.worksite)}</td><td>${o.date_posted?fmtDate(o.date_posted):"—"}</td><td>${dl}</td>
         <td style="text-align:right;white-space:nowrap;">${canPostOpenings()?`<button class="btn ghost" data-opedit="${o.id}">Edit</button> <button class="btn ghost" data-opclose="${o.id}" style="color:var(--red);border-color:#f1c9c5;">Close</button>`:'<span class="note">—</span>'}</td></tr>`;
     }).join("");
     $$("#opRows [data-opedit]").forEach(b=>b.addEventListener("click",()=>openingForm(MANPOWER.find(o=>o.id===b.dataset.opedit))));
@@ -4196,6 +4205,7 @@ function openingForm(o){
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:440px;width:100%;padding:22px;">
     <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:8px;">${isNew?"Post an opening":"Edit opening"}</h2>
     ${sel("op_store","Store *",stores,o.worksite)}
+    ${sel("op_position","Position *",["Merchandiser","Store Coordinator","Store Supervisor / Lead"],o.position||"Merchandiser")}
     ${sel("op_dtype","Diser type *",["Stationary","Roving"],o.diser_type||"Stationary")}
     <div id="op_secondWrap" style="display:${(o.diser_type==="Roving")?'block':'none'};">${sel("op_store2","Also covers (2nd branch)",stores,o.second_worksite)}
       <div class="psub" style="margin:-4px 0 8px;">Roving diser — the other store this person will also be assigned to.</div></div>
@@ -4215,6 +4225,7 @@ function openingForm(o){
     const br=BRANCHES.find(b=>b.name===store);
     const dtype=v("op_dtype")||"Stationary";
     const payload={ worksite:store, sc:br?br.sc:null, count_needed:nv("op_count")||1, priority:v("op_priority")||"Normal",
+      position:v("op_position")||"Merchandiser",
       diser_type:dtype, second_worksite:dtype==="Roving"?(v("op_store2")||null):null,
       target_fill_date:v("op_fill")||null, status:"Open", updated_at:new Date().toISOString() };
     let res;

@@ -34,6 +34,7 @@ console.log("build ok");
 [ -f "$APP_DIR/direct-apply.html" ] && cp "$APP_DIR/direct-apply.html" "$SITE_DIR/direct-apply.html"
 [ -f "$APP_DIR/feedback.html" ] && cp "$APP_DIR/feedback.html" "$SITE_DIR/feedback.html"
 [ -f "$APP_DIR/meeting.html" ] && cp "$APP_DIR/meeting.html" "$SITE_DIR/meeting.html"
+[ -f "$APP_DIR/reminders.html" ] && cp "$APP_DIR/reminders.html" "$SITE_DIR/reminders.html"
 rm -f "$SITE_DIR/candidate-feedback.html"  # old name retired → feedback.html
 
 # 1b. Also refresh the local double-clickable copy in the project folder (for easy viewing)

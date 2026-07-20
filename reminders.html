@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>RCC Reminders</title>
+<style>
+  :root{
+    --red:#A6192E; --red-d:#7e1222; --ink:#1c2430; --muted:#6b7480;
+    --line:#e7e9ee; --bg:#f4f6f9; --card:#ffffff;
+    --amber:#b7791f; --amber-bg:#fdf3e2; --over:#b3261e; --over-bg:#fdeceb;
+    --ok:#1f7a44; --ok-bg:#eaf6ef;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); -webkit-text-size-adjust:100%;}
+  .wrap{max-width:640px; margin:0 auto; padding:0 14px 60px;}
+  /* sticky header with the submit button pinned at the top */
+  header.bar{position:sticky; top:0; z-index:10; background:var(--card); border-bottom:1px solid var(--line);
+    margin:0 -14px; padding:12px 14px calc(12px + env(safe-area-inset-bottom,0));}
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand .logo{width:30px;height:30px;border-radius:7px;background:var(--red);color:#fff;font-weight:800;
+    display:flex;align-items:center;justify-content:center;font-size:13px;letter-spacing:.5px;}
+  .brand h1{font-size:16px; margin:0; font-weight:700;}
+  .brand .who{font-size:12.5px; color:var(--muted); margin-top:1px;}
+  .sub{display:flex; align-items:center; gap:8px; margin-top:10px;}
+  .count{font-size:13px; color:var(--muted); flex:1;}
+  .count b{color:var(--ink);}
+  .btn{appearance:none; border:0; border-radius:9px; font-weight:700; font-size:14px; padding:11px 15px;
+    cursor:pointer; color:#fff; background:var(--red); box-shadow:0 1px 0 rgba(0,0,0,.04);}
+  .btn:disabled{background:#c9ccd3; cursor:default;}
+  .btn.sm{padding:8px 12px; font-size:13px;}
+  .btn.ghost{background:#fff;color:var(--red);border:1px solid #e3c3c8;}
+  main{padding-top:14px;}
+  .item{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 13px;
+    display:flex; gap:11px; align-items:flex-start; margin-bottom:9px;}
+  .item.sel{border-color:var(--red); box-shadow:0 0 0 2px rgba(166,25,46,.10);}
+  .cbx{flex:0 0 auto; margin-top:1px;}
+  .cbx input{width:22px;height:22px; accent-color:var(--red);}
+  .body{flex:1; min-width:0;}
+  .ttl{font-size:14.5px; font-weight:650; line-height:1.3;}
+  .meta{margin-top:5px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;}
+  .chip{font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:999px; white-space:nowrap;}
+  .chip.grey{background:#eef1f5;color:#59616c;}
+  .chip.amber{background:var(--amber-bg);color:var(--amber);}
+  .chip.over{background:var(--over-bg);color:var(--over);}
+  .chip.who{background:#eef3fb;color:#345;}
+  .det{margin-top:7px; font-size:12.5px; color:var(--muted); line-height:1.4; white-space:pre-wrap;}
+  .sechead{font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted);
+    margin:20px 2px 9px; font-weight:700;}
+  .done .ttl{color:var(--muted); text-decoration:line-through;}
+  .done{opacity:.85;}
+  .empty{text-align:center; color:var(--muted); padding:38px 10px; font-size:14px;}
+  .empty .big{font-size:34px; margin-bottom:6px;}
+  .toast{position:fixed; left:50%; bottom:22px; transform:translateX(-50%); background:#12331f; color:#fff;
+    padding:11px 16px; border-radius:10px; font-size:13.5px; font-weight:600; opacity:0; transition:.25s;
+    box-shadow:0 6px 24px rgba(0,0,0,.25); z-index:30; max-width:90%;}
+  .toast.show{opacity:1;}
+  .addbox{background:var(--card); border:1px dashed #cfd4dc; border-radius:12px; padding:12px; margin-bottom:10px;}
+  .addbox input,.addbox select,.addbox textarea{width:100%; padding:9px 10px; border:1px solid var(--line);
+    border-radius:8px; font-size:14px; margin-top:7px; font-family:inherit;}
+  .addbox label{font-size:12px; color:var(--muted); font-weight:600;}
+  .row2{display:flex; gap:8px;} .row2>div{flex:1;}
+  a.link{color:var(--red); font-size:12.5px; text-decoration:none; font-weight:600;}
+  .foot{text-align:center; color:#aab; font-size:11px; margin-top:26px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="bar">
+    <div class="brand">
+      <div class="logo">RCC</div>
+      <div>
+        <h1>Reminders</h1>
+        <div class="who" id="who">Loading…</div>
+      </div>
+    </div>
+    <div class="sub">
+      <div class="count" id="count"></div>
+      <button class="btn" id="submitBtn" disabled onclick="submitDone()">✓ Mark ticked done</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="empty"><div class="big">⏳</div>Loading your list…</div>
+  </main>
+
+  <div class="foot">RCC Reminders · updates instantly · nothing to install</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const FN = "https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/reminders";
+const TOKEN = new URLSearchParams(location.search).get("t") || "";
+let STATE = { person:null, reminders:[], people:[] };
+const sel = new Set();
+
+function api(action, extra){
+  const opts = extra && extra.post
+    ? { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(Object.assign({action, t:TOKEN}, extra.body||{})) }
+    : { method:"GET" };
+  const url = extra && extra.post ? FN : `${FN}?action=${action}&t=${encodeURIComponent(TOKEN)}`;
+  return fetch(url, opts).then(r=>r.json());
+}
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2600); }
+
+function daysUntil(d){ if(!d) return null; const now=new Date(); now.setHours(0,0,0,0); const dl=new Date(d+"T00:00:00"); return Math.round((dl-now)/86400000); }
+function deadlineChip(d){
+  const n = daysUntil(d);
+  if(n===null) return '<span class="chip grey">follow up weekly</span>';
+  if(n<0) return `<span class="chip over">⚠ overdue ${-n} day${-n===1?'':'s'}</span>`;
+  if(n===0) return '<span class="chip over">due today</span>';
+  if(n<=3) return `<span class="chip amber">due in ${n} day${n===1?'':'s'}</span>`;
+  return `<span class="chip grey">due in ${n} days</span>`;
+}
+function esc(s){ return (s||"").replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function load(){
+  if(!TOKEN){ document.getElementById("main").innerHTML='<div class="empty"><div class="big">🔗</div>This link is missing its code.<br>Please open the link from your reminder email.</div>'; return; }
+  api("list").then(d=>{
+    if(d.error){ document.getElementById("main").innerHTML='<div class="empty"><div class="big">🔒</div>'+esc(d.error)+'<br>Ask Anj for a fresh link.</div>'; document.getElementById("who").textContent=""; return; }
+    STATE.person=d.person; STATE.reminders=d.reminders||[];
+    document.getElementById("who").textContent = d.person.is_admin ? d.person.name+" · sees everyone" : d.person.name;
+    if(d.person.is_admin){ api("people").then(p=>{ STATE.people=p.people||[]; render(); }); }
+    render();
+  }).catch(()=>{ document.getElementById("main").innerHTML='<div class="empty"><div class="big">📶</div>Couldn\'t load. Check your connection and refresh.</div>'; });
+}
+
+function render(){
+  const admin = STATE.person && STATE.person.is_admin;
+  const open = STATE.reminders.filter(r=>r.status==="open");
+  const done = STATE.reminders.filter(r=>r.status==="done").sort((a,b)=>(b.done_at||"").localeCompare(a.done_at||"")).slice(0,25);
+  const overdue = open.filter(r=>{const n=daysUntil(r.deadline); return n!==null && n<0;}).length;
+
+  document.getElementById("count").innerHTML = `<b>${open.length}</b> open${overdue?` · <span style="color:var(--over);font-weight:700">${overdue} overdue</span>`:''}`;
+
+  let html = "";
+  if(admin){
+    html += `<div id="addwrap"></div><div style="text-align:right;margin:-2px 2px 12px"><a class="link" onclick="toggleAdd()">＋ Add a reminder</a></div>`;
+  }
+  if(open.length===0){
+    html += `<div class="empty"><div class="big">✅</div>Nothing outstanding. You're all clear.</div>`;
+  } else {
+    open.forEach(r=>{
+      html += `<div class="item ${sel.has(r.id)?'sel':''}" id="it${r.id}">
+        <label class="cbx"><input type="checkbox" ${sel.has(r.id)?'checked':''} onchange="toggle(${r.id},this.checked)"></label>
+        <div class="body">
+          <div class="ttl">${esc(r.title)}</div>
+          <div class="meta">${deadlineChip(r.deadline)}${admin&&r.reminder_people?`<span class="chip who">for ${esc(r.reminder_people.name)}</span>`:''}</div>
+          ${r.details?`<div class="det">${esc(r.details)}</div>`:''}
+        </div></div>`;
+    });
+  }
+  if(done.length){
+    html += `<div class="sechead">Done recently</div>`;
+    done.forEach(r=>{
+      const when = r.done_at ? new Date(r.done_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}) : '';
+      html += `<div class="item done"><div class="cbx" style="font-size:19px;color:var(--ok)">✓</div>
+        <div class="body"><div class="ttl">${esc(r.title)}</div>
+        <div class="meta"><span class="chip grey">done ${when}${r.done_by?' · '+esc(r.done_by):''}</span>
+        ${admin?`<a class="link" onclick="reopen(${r.id})" style="margin-left:6px">reopen</a>`:''}</div></div></div>`;
+    });
+  }
+  document.getElementById("main").innerHTML = html;
+  if(admin && window._addOpen) drawAdd();
+  syncBtn();
+}
+
+function toggle(id, on){ on?sel.add(id):sel.delete(id); document.getElementById("it"+id).classList.toggle("sel",on); syncBtn(); }
+function syncBtn(){ const b=document.getElementById("submitBtn"); b.disabled=sel.size===0; b.textContent = sel.size ? `✓ Mark ${sel.size} done` : "✓ Mark ticked done"; }
+
+function submitDone(){
+  if(!sel.size) return;
+  const ids=[...sel]; const b=document.getElementById("submitBtn"); b.disabled=true; b.textContent="Saving…";
+  api("done",{post:true, body:{ids}}).then(res=>{
+    sel.clear();
+    toast(`${res.updated||ids.length} marked done ✓`);
+    load();
+  }).catch(()=>{ toast("Couldn't save — try again"); syncBtn(); });
+}
+function reopen(id){ api("reopen",{post:true, body:{ids:[id]}}).then(()=>{ toast("Reopened"); load(); }); }
+
+// admin: add reminder
+function toggleAdd(){ window._addOpen=!window._addOpen; render(); }
+function drawAdd(){
+  const opts = STATE.people.filter(p=>!p.is_admin || true).map(p=>`<option value="${p.token}">${esc(p.name)}</option>`).join("");
+  document.getElementById("addwrap").innerHTML = `<div class="addbox">
+    <label>What needs doing</label>
+    <input id="a_title" placeholder="e.g. Chase Robinsons Q2 charges">
+    <div class="row2">
+      <div><label>Who</label><select id="a_who">${opts}</select></div>
+      <div><label>Deadline (optional)</label><input id="a_dl" type="date"></div>
+    </div>
+    <label>Notes (optional)</label>
+    <textarea id="a_det" rows="2" placeholder="Amount, contact person, reference…"></textarea>
+    <div style="margin-top:9px;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn ghost sm" onclick="toggleAdd()">Cancel</button>
+      <button class="btn sm" onclick="addReminder()">Add reminder</button>
+    </div></div>`;
+}
+function addReminder(){
+  const title=document.getElementById("a_title").value.trim();
+  if(!title){ toast("Type what needs doing"); return; }
+  const body={ title, assignee_token:document.getElementById("a_who").value,
+    deadline:document.getElementById("a_dl").value||null, details:document.getElementById("a_det").value.trim()||null };
+  api("add",{post:true, body}).then(res=>{ if(res.error){toast(res.error);return;} window._addOpen=false; toast("Reminder added"); load(); });
+}
+
+load();
+</script>
+</body>
+</html>

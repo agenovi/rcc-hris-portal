@@ -86,13 +86,14 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
 function applyRoleUI(){
   const allow=allowedPages(), limited=isLimitedUser();
   document.querySelectorAll('.nav-item[data-page]').forEach(n=>{
     const pg=n.getAttribute('data-page');
     if(pg==='activity'){ n.style.display=isAdminUser()?'':'none'; return; }  // Access & Activity = owners only
+    if(pg==='demodata'){ n.style.display=isAdminUser()?'':'none'; return; } // Demo Data sandbox = owners only
     if(pg==='maternity'){ n.style.display=canSeePay()?'':'none'; return; }   // Maternity = salary viewers (Anj/Sanjay/Grazel)
     if(pg==='meetings'){ n.style.display=canRunMeetings()?'':'none'; return; } // Meetings = Anj/Grazel/Rhel/Vina
     n.style.display=(allow&&allow.indexOf(pg)===-1)?'none':'';
@@ -242,6 +243,7 @@ async function loadEmployees(){
   renderActivity();
   renderMaternity();
   renderMeetings();
+  renderDemoData();
   renderTimekeeping();
   tagPreviewPages();
   wireGlobalSearch();
@@ -2456,6 +2458,53 @@ function meetingExport(rows,viewDate){
   }).join(",")).join("\n");
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([head+"\n"+body],{type:"text/csv"}));
   a.download="bank-report-"+(viewDate||"meeting")+".csv"; a.click();
+}
+
+/* ===================== DEMO DATA — safe sandbox (delete only DEMO-marked records) ===================== */
+function isDemoText(s){ return /demo/i.test(String(s||"")); }
+function renderDemoData(){
+  const pg=$("#page-demodata"); if(!pg||!isAdminUser()) return;
+  const SRC=[
+    {label:"Employee", table:"employees", rows:EMPLOYEES, name:r=>r.full_name},
+    {label:"Pre-hire applicant", table:"prehire", rows:PREHIRE, name:r=>r.full_name},
+    {label:"Onboarding case", table:"onboarding_cases", rows:ONBOARDING, name:r=>r.employee_name},
+    {label:"Exit clearance", table:"exit_clearance", rows:EXITCASES, name:r=>r.employee_name},
+    {label:"Evaluation", table:"evaluations", rows:EVALUATIONS, name:r=>r.employee_name},
+    {label:"Loan", table:"loans", rows:LOANS, name:r=>r.applicant_name},
+    {label:"Memo", table:"memos", rows:MEMOS, name:r=>[r.subject_name,r.title].filter(Boolean).join(" — ")},
+    {label:"Opening", table:"manpower_requests", rows:MANPOWER, name:r=>r.worksite},
+    {label:"Meeting sign-in", table:"meeting_attendance", rows:MEETINGS, name:r=>r.name},
+    {label:"Store", table:"branches", rows:BRANCHES, name:r=>r.name},
+  ];
+  const found=[];
+  SRC.forEach(s=>(s.rows||[]).forEach(r=>{ const nm=s.name(r)||""; if(isDemoText(nm)) found.push({label:s.label, table:s.table, id:r.id, name:nm}); }));
+  pg.innerHTML=`
+   <div class="panel" style="margin-top:0;">
+     <h2>Demo Data <span class="count-tag">${found.length} demo record${found.length===1?'':'s'}</span></h2>
+     <div class="psub">A safe sandbox for demos &amp; training. Create entries anywhere with <b>DEMO</b> in the name (e.g. an employee named <i>“DEMO Test Person”</i>), show them off, then remove them here. The delete is <b>locked to demo-marked records only</b> — real data can never be deleted from this screen (enforced in the database, not just the button).</div>
+     ${found.length?`
+       <div class="actionbar"><button class="btn" id="demoDelAll" style="background:var(--red);border-color:var(--red);color:#fff;">Delete all ${found.length} demo record${found.length===1?'':'s'}</button></div>
+       <table><thead><tr><th>Type</th><th>Name</th><th></th></tr></thead><tbody>
+       ${found.map(f=>`<tr><td><span class="pill di">${esc(f.label)}</span></td><td><b>${esc(f.name)}</b></td>
+         <td style="text-align:right;"><button class="btn ghost" data-demodel="${esc(f.table)}|${esc(String(f.id))}" style="color:var(--red);border-color:#f1c9c5;">Delete</button></td></tr>`).join("")}
+       </tbody></table>`
+     : `<div class="placeholder" style="margin-top:12px;"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1E3A5F" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></div><h2>No demo data</h2><p>Create entries with “DEMO” in the name and they'll appear here, ready to clean up.</p></div>`}
+   </div>`;
+  $$("#page-demodata [data-demodel]").forEach(b=>b.addEventListener("click",()=>{ const i=b.dataset.demodel.indexOf("|"); demoDelete(b.dataset.demodel.slice(0,i), b.dataset.demodel.slice(i+1)); }));
+  const all=$("#demoDelAll"); if(all) all.addEventListener("click",()=>demoDeleteAll(found));
+}
+async function demoDelete(table,id){
+  if(!confirm("Delete this demo record? This can't be undone.")) return;
+  const {error}=await sb.rpc("delete_demo_record",{p_table:table,p_id:String(id)});
+  if(error){ alert("Could not delete: "+error.message); return; }
+  await loadEmployees();
+}
+async function demoDeleteAll(found){
+  if(!confirm(`Delete all ${found.length} demo records? This can't be undone.`)) return;
+  let fail=0;
+  for(const f of found){ const {error}=await sb.rpc("delete_demo_record",{p_table:f.table,p_id:String(f.id)}); if(error){ fail++; } }
+  if(fail) alert(fail+" record(s) couldn't be deleted (they may have linked data). The rest were removed.");
+  await loadEmployees();
 }
 
 function renderMaternity(){

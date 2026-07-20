@@ -4212,7 +4212,7 @@ function openingForm(o){
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:440px;width:100%;padding:22px;">
     <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:8px;">${isNew?"Post an opening":"Edit opening"}</h2>
     ${sel("op_store","Store *",stores,o.worksite)}
-    ${sel("op_position","Position *",["Merchandiser","Store Coordinator","Store Supervisor / Lead"],o.position||"Merchandiser")}
+    ${sel("op_position","Position *",["Merchandiser","Lead Diser","Store Coordinator","Store Supervisor"],o.position||"Merchandiser")}
     ${sel("op_dtype","Diser type *",["Stationary","Roving"],o.diser_type||"Stationary")}
     <div id="op_secondWrap" style="display:${(o.diser_type==="Roving")?'block':'none'};">${sel("op_store2","Also covers (2nd branch)",stores,o.second_worksite)}
       <div class="psub" style="margin:-4px 0 8px;">Roving diser — the other store this person will also be assigned to.</div></div>

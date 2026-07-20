@@ -1394,6 +1394,7 @@ function storeForm(b){
     <div class="form-grid">${sel("st_cat","Type",["CO","CN"],b.category||"CO")}${sel("st_status","Status",["Open","Closed","No Manning","Pending"],b.status||"Open")}</div>
     <div class="form-grid">${fld("st_ahcs","Approved stationary",b.ahc_stationary??0,"number")}${fld("st_ahcr","Approved reliever",b.ahc_reliever??0,"number")}</div>
     <div class="psub" style="margin:2px 0 6px;">CO = Company Store · CN = Concession. Approved headcount = how many this store should have.</div>
+    ${demoChk("st_isdemo",b.is_demo)}
     <div id="stMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
     <div style="display:flex;gap:10px;"><button class="btn ghost" id="stCancel" style="flex:1;">Cancel</button><button class="btn" id="stSave" style="flex:1;">${isNew?"Add store":"Save"}</button></div>
   </div>`;
@@ -1402,7 +1403,7 @@ function storeForm(b){
   document.getElementById("stSave").addEventListener("click",async()=>{
     const name=v("st_name"); if(!name){ document.getElementById("stMsg").textContent="Store name is required."; return; }
     const payload={ name, city:v("st_city"), area:v("st_area"), sc:v("st_sc"), category:v("st_cat"), status:v("st_status"),
-      ahc_stationary:nv("st_ahcs")||0, ahc_reliever:nv("st_ahcr")||0 };
+      ahc_stationary:nv("st_ahcs")||0, ahc_reliever:nv("st_ahcr")||0, is_demo:demoChecked("st_isdemo") };
     const btn=document.getElementById("stSave"); btn.disabled=true; btn.textContent="Saving…";
     let res, newId=b.id;
     if(isNew){ res=await sb.from("branches").insert(payload).select().single(); newId=res.data&&res.data.id; }
@@ -1917,6 +1918,7 @@ function openingForm(o){
     ${sel("op_priority","Priority",["Normal","Urgent"],o.priority||"Normal")}
     ${fld("op_fill","Fill-by date (optional)",o.target_fill_date,"date")}
     <div class="psub" style="margin:-4px 0 8px;">Leave the date blank and set Priority = Urgent if it's just “needed now”.</div>
+    ${demoChk("op_isdemo",o.is_demo)}
     <div id="opMsg" style="font-size:13px;color:#a4322a;margin:4px 0;"></div>
     <div style="display:flex;gap:10px;"><button class="btn ghost" id="opCancel" style="flex:1;">Cancel</button><button class="btn" id="opSave" style="flex:1;">${isNew?"Post opening":"Save"}</button></div>
   </div>`;
@@ -1931,7 +1933,7 @@ function openingForm(o){
     const payload={ worksite:store, sc:br?br.sc:null, count_needed:nv("op_count")||1, priority:v("op_priority")||"Normal",
       position:v("op_position")||"Merchandiser",
       diser_type:dtype, second_worksite:dtype==="Roving"?(v("op_store2")||null):null,
-      target_fill_date:v("op_fill")||null, status:"Open", updated_at:new Date().toISOString() };
+      target_fill_date:v("op_fill")||null, status:"Open", is_demo:demoChecked("op_isdemo"), updated_at:new Date().toISOString() };
     let res;
     if(isNew){ payload.date_posted=new Date().toISOString().slice(0,10); res=await sb.from("manpower_requests").insert(payload); }
     else res=await sb.from("manpower_requests").update(payload).eq("id",o.id);
@@ -2014,6 +2016,7 @@ function openForm(e){
         ${fld("f_end_date","End date",e.end_date,"date")}${sel("f_end_reason","End reason",END_REASONS,e.end_reason)}
         <div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Notes</label><textarea id="f_notes" rows="3" style="width:100%;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;">${esc(e.notes||"")}</textarea></div>
       </div>
+      ${demoChk("f_isdemo",e.is_demo)}
       <div id="fMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
       <div style="display:flex;gap:10px;">
         <button class="btn ghost" id="fCancel" style="flex:1;">Cancel</button>
@@ -2039,7 +2042,7 @@ async function saveEmployee(id,modal){
     supervisor_name:v("f_supervisor_name"), approver2_name:v("f_approver2_name"),
     contract_type:v("f_contract_type"),
     end_date:v("f_end_date"), end_reason:v("f_end_reason"),
-    notes:v("f_notes"), updated_at:new Date().toISOString() };
+    notes:v("f_notes"), is_demo:demoChecked("f_isdemo"), updated_at:new Date().toISOString() };
   // Roster fields (PayPlus-owned) — only written when ADDING a new person (pre-PayPlus). On existing records these render read-only, so we never touch them here (fixing them = fix in PayPlus, syncs back).
   if(isNew){ Object.assign(p,{ full_name:v("f_full_name"), department:v("f_department"), group_name:v("f_group_name")||deriveGroup((document.getElementById("f_department")||{}).value)||null,
     position:v("f_position"), hire_source:v("f_hire_source"), status:v("f_status")||"Active", employee_id:v("f_employee_id"), agency_name:v("f_agency_name"),
@@ -2462,6 +2465,9 @@ function meetingExport(rows,viewDate){
 
 /* ===================== DEMO DATA — safe sandbox (delete only DEMO-marked records) ===================== */
 function isDemoText(s){ return /demo/i.test(String(s||"")); }
+// "This is demo data" checkbox for create forms — lets entries use realistic names but stay cleanable.
+function demoChk(id,val){ return `<label style="display:flex;align-items:center;gap:8px;margin:12px 0 2px;font-size:13px;color:#6b7683;cursor:pointer;"><input type="checkbox" id="${id}"${val?" checked":""} style="width:auto;margin:0;"> This is demo / test data <span style="color:#9aa4b0;">(safe to delete later from Demo Data)</span></label>`; }
+function demoChecked(id){ const el=document.getElementById(id); return !!(el&&el.checked); }
 function renderDemoData(){
   const pg=$("#page-demodata"); if(!pg||!isAdminUser()) return;
   const SRC=[
@@ -2477,7 +2483,7 @@ function renderDemoData(){
     {label:"Store", table:"branches", rows:BRANCHES, name:r=>r.name},
   ];
   const found=[];
-  SRC.forEach(s=>(s.rows||[]).forEach(r=>{ const nm=s.name(r)||""; if(isDemoText(nm)) found.push({label:s.label, table:s.table, id:r.id, name:nm}); }));
+  SRC.forEach(s=>(s.rows||[]).forEach(r=>{ const nm=s.name(r)||""; if(r.is_demo||isDemoText(nm)) found.push({label:s.label, table:s.table, id:r.id, name:nm||"(unnamed)", flagged:!!r.is_demo}); }));
   pg.innerHTML=`
    <div class="panel" style="margin-top:0;">
      <h2>Demo Data <span class="count-tag">${found.length} demo record${found.length===1?'':'s'}</span></h2>
@@ -3366,6 +3372,7 @@ function newPrehire(){
       ${fld("np_email","Email",e.email,"email")}
       ${fld("np_phone","Phone",e.phone)}
       <div class="psub" style="margin-top:2px;">Contract type, pay basis and rate are set later at the offer stage — not on the application.</div>
+      ${demoChk("np_isdemo",e.is_demo)}
       <div id="npMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
       <div style="display:flex;gap:10px;"><button class="btn ghost" id="npCancel" style="flex:1;">Cancel</button><button class="btn" id="npSave" style="flex:1;">Create</button></div>
     </div></div></div>`;
@@ -3381,7 +3388,7 @@ function newPrehire(){
     const dept=document.getElementById("np_department")?v("np_department"):(["Merchandiser","Store Representative","Store Supervisor"].includes(pos)?"Sales":(pos==="Warehouse Staff"?"Warehouse":null));
     const payload={ prehire_id:"PH-"+stamp+"-"+String(rnd).padStart(3,"0"), phase:"APPLIED", full_name:fullname,
       department:dept, position:pos, hire_source:"Direct", worksite:v("np_worksite"),
-      email:v("np_email"), phone:v("np_phone") };
+      email:v("np_email"), phone:v("np_phone"), is_demo:demoChecked("np_isdemo") };
     const { error } = await sb.from("prehire").insert(payload);
     if(error){ document.getElementById("npMsg").textContent=error.message; return; }
     m.remove(); await loadEmployees(); window.go("prehire");

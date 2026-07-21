@@ -547,6 +547,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16v4a4 4 0 0 0 0 8v-4H4v4a4 4 0 0 0 0-8z"/></svg>
         Government Claims
       </div>
+      <div class="nav-item" data-page="govremit" onclick="go('govremit')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
+        Gov't Remittances
+      </div>
 
       <div class="nav-sec">Merchandiser Ops</div>
       <div class="nav-item" data-page="reports" onclick="go('reports')">
@@ -968,7 +972,7 @@
             <div class="emp-av">SM</div>
             <div style="flex:1;">
               <div class="en">Spyder SM North EDSA</div>
-              <div class="em">Company-operated (CO) · Mall — SM · Quezon City · Area GMA · Tier A</div>
+              <div class="em">Boutique (CO) · Mall — SM · Quezon City · Area GMA · Tier A</div>
             </div>
             <span class="pill open" style="font-size:12px;padding:5px 12px;">Open</span>
           </div>
@@ -1308,7 +1312,8 @@
       </section>
 
       <!-- GOVERNMENT CLAIMS -->
-      <section class="page" id="page-claims">
+      <section class="page" id="page-govremit"></section>
+<section class="page" id="page-claims">
         <div class="panel" style="margin-top:0;">
           <h2>Government Claims</h2>
           <div class="psub">SSS sickness, maternity, paternity, funeral, disability, retirement + PhilHealth reimbursement. Each claim tracked from notification to release. Maternity claims include the 15%-cap Advance Release.</div>
@@ -1875,7 +1880,7 @@
     evaluations:'Evaluations', reports:'Recruitment Reports', activity:'Access & Activity', timekeeping:'Timekeeping & Attendance', exit:'Exit Clearance',
     loans:'Loans', signatures:'Signatures', positions:'Positions & Job Descriptions',
     agencies:'Agencies', onboarding:'Onboarding Tasks', purchases:'Employee Purchases',
-    claims:'Government Claims', manning:'Manning / Headcount', agencysubs:'Agency Submissions',
+    claims:'Government Claims', govremit:"Gov't Remittances", manning:'Manning / Headcount', agencysubs:'Agency Submissions',
     exitinterview:'Exit Interview', compliance:'Compliance', audit:'Audit Log',
     settings:'Settings', parking:'Parking Lot', hractivity:'HR Activity & Expense',
     hmo:'HMO Coverage', insurance:'Personal Insurance', maternity:'Maternity Benefits'
@@ -2334,6 +2339,7 @@ let CHANGE_LOG=[];
 let CURRENT_USER=null;
 let SC_STATUS={};  // sc_name -> {status:'Active'|'Vacant'|'Pending', note}
 let MATERNITY=[];  // maternity_claims rows
+let NPAS=[];       // personnel_actions rows (Movements / NPA module)
 let MEETINGS=[];   // meeting_attendance rows (merchandiser meeting sign-in + reimbursement)
 let AGENCY_PAYROLL=[];  // agency_payroll rows (M&G / Jell-On real pay + contributions from payroll files)
 // Latest agency payroll row for an employee/diser id (handles the "500002.0" float form)
@@ -2374,6 +2380,8 @@ function canPostOpenings(){ const r=userRole(); return r==="admin"||r==="payroll
 function canRunMeetings(){ const r=userRole(); const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return r==="admin"||r==="payroll"||r==="manager"||e===IDS_EDITOR; }
 // Only owners/payroll edit the meeting settings (open/close, venue-IP lock); Vina/Rhel operate + export
 function canConfigMeetings(){ const r=userRole(); return r==="admin"||r==="payroll"; }
+// Personnel Movement / NPA module = Anj + Grazel(payroll) + Rhel(manager) — the people who prepare/route/approve movements.
+function canSeeMovements(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"; }
 const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding","reports"];
 // HR Relations (Juvy) — employee-relations desk: onboarding→exit lifecycle, discipline/compliance, notices, loans/benefits. NO salary, NO recruiting funnel.
 const RELATIONS_PAGES=["dashboard","onboarding","evaluations","exit","compliance","memos","signatures","loans","timekeeping"];
@@ -2389,7 +2397,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
 function applyRoleUI(){
   const allow=allowedPages(), limited=isLimitedUser();
@@ -2399,6 +2407,8 @@ function applyRoleUI(){
     if(pg==='demodata'){ n.style.display=isAdminUser()?'':'none'; return; } // Demo Data sandbox = owners only
     if(pg==='maternity'){ n.style.display=canSeePay()?'':'none'; return; }   // Maternity = salary viewers (Anj/Sanjay/Grazel)
     if(pg==='meetings'){ n.style.display=canRunMeetings()?'':'none'; return; } // Meetings = Anj/Grazel/Rhel/Vina
+    if(pg==='movements'){ n.style.display=canSeeMovements()?'':'none'; return; } // Movements/NPA = Anj/Grazel/Rhel
+    if(pg==='govremit'){ n.style.display=canEditIds()?'':'none'; return; } // Gov't Remittances = gov-ID owners (Anj/Vina/Grazel)
     n.style.display=(allow&&allow.indexOf(pg)===-1)?'none':'';
   });
   document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display=limited?'none':''; });
@@ -2481,7 +2491,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2503,7 +2513,8 @@ async function loadEmployees(){
     sb.from("maternity_claims").select("*").order("created_at", {ascending:false}),
     sb.from("meeting_attendance").select("*").order("signed_in_at", {ascending:false}),
     sb.from("system_settings").select("*"),
-    sb.from("agency_payroll").select("*").order("cutoff", {ascending:false})
+    sb.from("agency_payroll").select("*").order("cutoff", {ascending:false}),
+    sb.from("personnel_actions").select("*").order("created_at", {ascending:false})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2528,6 +2539,7 @@ async function loadEmployees(){
   MEETINGS=(mtg&&mtg.data)||[];
   MEETING_CFG={}; ((sysset&&sysset.data)||[]).forEach(r=>{ MEETING_CFG[r.key]=r.value; });
   AGENCY_PAYROLL=(apay&&apay.data)||[];
+  NPAS=(npa&&npa.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -2545,9 +2557,11 @@ async function loadEmployees(){
   renderReports();
   renderActivity();
   renderMaternity();
+  renderMovements();
   renderMeetings();
   renderDemoData();
   renderTimekeeping();
+  renderGovRemit();
   tagPreviewPages();
   wireGlobalSearch();
   if(!landed){ landed=true;
@@ -2581,7 +2595,7 @@ async function ppSyncFetch(params){
 
 // Honesty pass: every screen NOT backed by live data gets a visible "Preview" ribbon,
 // so HR never mistakes an illustrative mock-up for real data. Real pages are listed here.
-const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity","maternity"]);
+const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity","maternity","timekeeping","meetings","govremit","movements","policies","processes","orgchart"]);
 function tagPreviewPages(){
   document.querySelectorAll('section.page').forEach(sec=>{
     const id=(sec.id||"").replace("page-","");
@@ -3102,6 +3116,7 @@ function renderDashboard(){
         <h2>Your pending tasks <span class="count-tag">live · click to act</span></h2>
         <div class="psub">Computed from your data — most actionable first</div>
         ${(()=>{ if(!canSeePay()) return ''; const fpAwait=(SIGNATURES||[]).filter(s=>s.doc_type==="claim"&&s.awaiting==="you"&&s.status==="pending"); return fpAwait.length?`<div class="task" style="cursor:pointer;" onclick="go('signatures')"><div class="dot r"></div><div><div class="tt">${fpAwait.length} final-pay quitclaim(s) awaiting your sign-off</div><div class="td">Full figures are on the sign screen — review &amp; e-sign in one place${fpAwait[0]?` · e.g. ${esc(fpAwait[0].subject_name||"")} ${fpAwait[0].amount!=null?"("+peso(fpAwait[0].amount)+")":""}`:""}</div></div><div class="due r">sign-off</div></div>`:''; })()}
+        ${(()=>{ if(!canSeeMovements()) return ''; const mine=(NPAS||[]).filter(r=>{ const st=mvCanSignNow(r); return st!=null; }); return mine.length?`<div class="task" style="cursor:pointer;" onclick="go('movements')"><div class="dot r"></div><div><div class="tt">${mine.length} personnel movement(s) awaiting your sign-off</div><div class="td">Notice of Personnel Action — review the figures &amp; e-sign${mine[0]?" · e.g. "+esc(mine[0].employee_name||""):""}</div></div><div class="due r">sign-off</div></div>`:''; })()}
         ${phReady?`<div class="task" style="cursor:pointer;" onclick="go('prehire')"><div class="dot r"></div><div><div class="tt">${phReady} candidate(s) ready for contract / onboarding</div><div class="td">Move them into an onboarding case</div></div><div class="due r">hiring</div></div>`:''}
         ${onbTasksOpen?`<div class="task" style="cursor:pointer;" onclick="go('onboarding')"><div class="dot a"></div><div><div class="tt">${onbTasksOpen} open onboarding task(s)</div><div class="td">${onbOpen} case(s) in progress — bank, uniform, gov forms, Employee ID</div></div><div class="due a">onboarding</div></div>`:''}
         ${exitOpen?`<div class="task" style="cursor:pointer;" onclick="go('exit')"><div class="dot a"></div><div><div class="tt">${exitOpen} exit clearance(s) in progress</div><div class="td">Department sign-offs &amp; final-pay computation</div></div><div class="due a">offboarding</div></div>`:''}
@@ -3443,6 +3458,411 @@ function printNpa(e,d,ref){
 }
 window.openNpaForm=openNpaForm;
 
+/* ======================= MOVEMENTS · PERSONNEL MOVEMENT (NPA) =======================
+   Implements the RCC Personnel Movement Guideline over the personnel_actions table.
+   Every movement carries a BASIS that decides its lane:
+     · Operational   → a MEMO (no NPA, no approval chain) — documented by the Dept Head.
+     · Statutory     → an NPA processed by HR with NO approval gate (min-wage / mandated COLA).
+                       An optional single "HR authorized" stamp (sig1) is available.
+     · Discretionary → an NPA on the full 4-step sign chain
+                       Grazel (Prepared) → Pervin (Noted) → Sanjay (Reviewed) → Anj (Approved).
+   Uses ONLY existing columns; sig1..sig4 hold the ordered e-signatures.
+   ----------------------------------------------------------------------------------- */
+// Movement type → action_type enum bucket + which extra fields the form should show.
+const MV_TYPES=[
+  {label:"Promotion",                    action:"PROMOTION",         pay:true, pos:true},
+  {label:"Salary Increase",              action:"SALARY_ADJUSTMENT", pay:true},
+  {label:"Salary Adjustment",            action:"SALARY_ADJUSTMENT", pay:true},
+  {label:"Allowance Adjustment",         action:"SALARY_ADJUSTMENT", pay:true},
+  {label:"Transfer of Department",       action:"TRANSFER",          dept:true},
+  {label:"Transfer of Branch / Location",action:"TRANSFER",          loc:true},
+  {label:"Change of Position",           action:"RECLASSIFICATION",  pos:true},
+  {label:"Change of Reporting Line",     action:"RECLASSIFICATION",  report:true},
+  {label:"Temporary Assignment",         action:"TRANSFER",          loc:true},
+  {label:"Change of Employment Status",  action:"RECLASSIFICATION",  estatus:true},
+  {label:"Regularization",               action:"REGULARIZATION"},
+  {label:"Schedule Change",              action:"SCHEDULE_CHANGE",   sched:true}
+];
+const MV_ACTION_LABEL={DEMOTION:"Demotion",PROMOTION:"Promotion",RECLASSIFICATION:"Reclassification",REGULARIZATION:"Regularization",SALARY_ADJUSTMENT:"Salary Adjustment",SCHEDULE_CHANGE:"Schedule Change",TRANSFER:"Transfer"};
+const MV_BASES=["Operational","Statutory","Discretionary"];
+// The discretionary 4-step chain, mapped to sig1..sig4.
+const MV_CHAIN=[
+  {n:1, email:"hr3@hassarams.com",    name:"Grazel Lyn Agulto", role:"Prepared by"},
+  {n:2, email:"pervin@hassarams.com", name:"Pervin Chatlani",   role:"Noted by"},
+  {n:3, email:"sanjay@hassarams.com", name:"Sanjay Chatlani",   role:"Reviewed by"},
+  {n:4, email:"anj@hassarams.com",    name:"Anj C. Genomal",    role:"Approved by"}
+];
+function mvBasisFor(status){ return status==="memo"?"Operational":(status==="processing"?"Statutory":"Discretionary"); }
+function mvSignedCount(r){ let c=0; for(let n=1;n<=4;n++){ if(r["sig"+n+"_data"]) c++; } return c; }
+// First unsigned step in the chain (or null if all 4 signed).
+function mvNextStep(r){ for(const st of MV_CHAIN){ if(!r["sig"+st.n+"_data"]) return st; } return null; }
+function mvCanSignNow(r){ if(r.status!=="awaiting_signoff") return null; const st=mvNextStep(r); if(!st) return null;
+  const me=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return (me===st.email)?st:null; }
+function mvStatusPill(s){ const map={memo:["closed","Memo — Dept Head"],processing:["co","Processing (HR)"],awaiting_signoff:["cn","Awaiting sign-off"],approved:["active","Approved"],declined:["awol","Declined"]};
+  const m=map[s]||["closed",esc(s||"—")]; return `<span class="pill ${m[0]}">${m[1]}</span>`; }
+function mvPeso(n){ return (n==null||n==="")?"—":"₱"+Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function renderMovements(){
+  const pg=$("#page-movements"); if(!pg||!canSeeMovements()) return;
+  const R=NPAS||[];
+  const now=new Date(), ym=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  const awaiting=R.filter(r=>r.status==="awaiting_signoff").length;
+  const forMemo=R.filter(r=>r.status==="memo").length;
+  const apprMonth=R.filter(r=>r.status==="approved" && (r.approval_date||"").slice(0,7)===ym).length;
+  const nb=document.querySelector('.nav-item[data-page="movements"] .nav-badge'); if(nb) nb.textContent=awaiting||"";
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Personnel Movement <span class="count-tag">Notice of Personnel Action</span></h2>
+      <div class="psub">Every movement is filed by its <b>basis</b>. <b>Operational</b> (no change in terms) is a memo — no NPA.
+        <b>Statutory</b> (min-wage / mandated COLA) is processed by HR with no approval gate.
+        <b>Discretionary</b> (merit · promotion · market) runs the 4-step chain:
+        Grazel → Pervin → Sanjay → Anj. Meal allowance is carried on every pay movement.</div>
+      <div class="actionbar">
+        <button class="btn" id="mvNew">＋ New Movement</button>
+        ${canSeePay()?`<button class="btn ghost" id="mvBatch">Batch statutory increase</button>`:""}
+      </div>
+      <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
+        <div class="kpi warn"><div class="k-l">Awaiting sign-off</div><div class="k-n">${awaiting}</div><div class="k-s">discretionary NPAs</div></div>
+        <div class="kpi"><div class="k-l">Approved this month</div><div class="k-n">${apprMonth}</div></div>
+        <div class="kpi"><div class="k-l">For memo</div><div class="k-n">${forMemo}</div><div class="k-s">operational</div></div>
+      </div>
+      ${R.length?`<table><thead><tr><th>Employee</th><th>Movement</th><th>Effective</th><th>Status</th><th>Sign chain</th></tr></thead><tbody>
+        ${R.map(r=>{ const disc=r.status==="awaiting_signoff"||r.status==="approved"; const sc=mvSignedCount(r);
+          return `<tr class="clickable" data-nid="${esc(String(r.id))}"><td><b>${esc(r.employee_name||"—")}</b><div class="esub">${esc(r.current_position||"")}${r.employee_number?" · "+esc(r.employee_number):""}</div></td>
+          <td>${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"—")}<div class="esub">${esc(mvBasisFor(r.status))}</div></td>
+          <td>${r.effective_date?fmtDate(r.effective_date):"—"}</td>
+          <td>${mvStatusPill(r.status)}</td>
+          <td>${disc?`<span class="pill ${sc>=4?"active":(sc>0?"cn":"closed")}">${sc}/4 signed</span>`:'<span class="note" style="display:inline;padding:1px 6px;">—</span>'}</td></tr>`; }).join("")}
+      </tbody></table>`:`<div class="psub" style="margin-top:6px;">No movements filed yet — click “＋ New Movement”.</div>`}
+    </div>`;
+  const bN=$("#mvNew"); if(bN) bN.addEventListener("click",mvPickEmployee);
+  const bB=$("#mvBatch"); if(bB) bB.addEventListener("click",mvBatchStatutory);
+  $$("#page-movements tr.clickable[data-nid]").forEach(tr=>tr.addEventListener("click",()=>openMovementDrawer(NPAS.find(r=>String(r.id)===tr.dataset.nid))));
+}
+window.renderMovements=renderMovements;
+
+function mvPickEmployee(){
+  let m=document.getElementById("mvPick"); if(!m){ m=document.createElement("div"); m.id="mvPick"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;padding:22px;max-height:82vh;display:flex;flex-direction:column;">
+    <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:2px;">New personnel movement</h2>
+    <div class="psub">Search the employee — their record fills the movement automatically.</div>
+    <input id="mvQ" placeholder="Type a name or ID…" autocomplete="off" style="width:100%;padding:10px 12px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;margin:4px 0 8px;">
+    <div id="mvHits" style="overflow-y:auto;flex:1;"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:10px;"><button class="btn ghost" id="mvPickClose">Cancel</button></div>
+  </div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("mvPickClose").onclick=()=>m.remove();
+  const q=document.getElementById("mvQ"), hits=document.getElementById("mvHits");
+  const paint=()=>{ const s=(q.value||"").trim().toLowerCase();
+    let list=(EMPLOYEES||[]).slice().sort((a,b)=>(a.full_name||"").localeCompare(b.full_name||""));
+    if(s) list=list.filter(e=>(e.full_name||"").toLowerCase().includes(s)||String(e.employee_id||"").includes(s));
+    list=list.slice(0,20);
+    hits.innerHTML=list.length?list.map(e=>`<div class="task clickable" data-eid="${esc(String(e.id))}" style="cursor:pointer;"><div class="dot ${(e.status||'Active')==='Active'?'g':'r'}"></div><div><div class="tt">${esc(e.full_name)}</div><div class="td">${esc(e.position||"—")} · ${esc(e.worksite||e.department||"—")}${e.employee_id?" · "+esc(e.employee_id):""}</div></div></div>`).join(""):`<div class="psub" style="padding:8px 2px;">${s?"No match.":"Start typing…"}</div>`;
+    hits.querySelectorAll("[data-eid]").forEach(el=>el.addEventListener("click",()=>{ const e=EMPLOYEES.find(x=>String(x.id)===el.dataset.eid); m.remove(); if(e) openMovementForm(e); }));
+  };
+  q.addEventListener("input",paint); paint(); q.focus();
+}
+
+function openMovementForm(e){
+  let m=document.getElementById("mvModal"); if(!m){ m=document.createElement("div"); m.id="mvModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:540px;width:100%;padding:22px;max-height:92vh;overflow-y:auto;">
+    <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:2px;">Personnel Movement</h2>
+    <div class="psub" style="margin-bottom:10px;">${esc(e.full_name)} · ${esc(e.position||"—")} · ${esc(e.worksite||e.department||"—")} — current details fill in automatically.</div>
+    ${sel("mv_type","Movement type *",MV_TYPES.map(t=>t.label),"")}
+    ${sel("mv_basis","Basis *",MV_BASES,"")}
+    <div id="mv_basisNote" class="psub" style="margin:-4px 0 8px;"></div>
+    <div id="mv_extra"></div>
+    ${fld("mv_eff","Effective date *","","date")}
+    <div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Remarks / justification</label><textarea id="mv_remarks" rows="2" style="width:100%;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:13.5px;"></textarea></div>
+    <div id="mvMsg" style="font-size:13px;color:#a4322a;margin:4px 0;"></div>
+    <div style="display:flex;gap:10px;"><button class="btn ghost" id="mvCancel" style="flex:1;">Cancel</button><button class="btn" id="mvGo" style="flex:1;">File movement</button></div>
+  </div>`;
+  const mf=(id,l,val)=>fld(id,l,val,"number");
+  const paintExtra=()=>{
+    const t=MV_TYPES.find(x=>x.label===document.getElementById("mv_type").value)||{}; const x=document.getElementById("mv_extra");
+    let h="";
+    if(t.pay){ h += canSeePay()
+      ? `<div class="form-grid">${mf("mv_dr_c","Current daily rate (₱)",e.daily_rate)}${mf("mv_dr_n","New daily rate (₱)","")}</div>
+         <div class="form-grid">${mf("mv_al_c","Current allowance (₱)",e.daily_allowance)}${mf("mv_al_n","New allowance (₱)","")}</div>
+         <div class="form-grid">${mf("mv_ml_c","Current meal allowance (₱)","")}${mf("mv_ml_n","New meal allowance (₱)","")}</div>
+         <div class="psub" style="margin:-2px 0 6px;">Total compensation (basic + allowance + meal) computes on the NPA form. Salary data is confidential.</div>`
+      : `<div class="note" style="margin-bottom:10px;">🔒 Pay movements can only be prepared by authorised payroll.</div>`; }
+    if(t.dept){ h += `<div class="form-grid">${fld("mv_dep_c","From department",e.department)}${fld("mv_dep_n","To department","")}</div>`; }
+    if(t.loc){ h += `<div class="form-grid">${fld("mv_loc_c","From branch / location",e.worksite||e.department)}${fld("mv_loc_n","To branch / location","")}</div>`; }
+    if(t.pos){ h += `<div class="form-grid">${fld("mv_pos_c","Current position",e.position)}${fld("mv_pos_n","New position","")}</div>`; }
+    if(t.report){ h += `<div class="form-grid">${fld("mv_rep_c","Current reporting line",e.supervisor_name)}${fld("mv_rep_n","New reporting line / supervisor","")}</div>`; }
+    if(t.estatus){ h += `<div class="form-grid">${fld("mv_est_c","Current status",e.contract_type||e.status)}${sel("mv_est_n","New employment status",["Regular","Probationary","Contractual","Project-based","Seasonal"],"")}</div>`; }
+    if(t.sched){ h += fld("mv_sch_n","New schedule",e.work_schedule||""); }
+    x.innerHTML=h;
+  };
+  const paintBasis=()=>{ const b=document.getElementById("mv_basis").value; const n=document.getElementById("mv_basisNote");
+    n.innerHTML = b==="Operational"? "📄 <b>Memo lane</b> — no NPA, no approval chain. Recorded as documented by the Dept Head."
+      : b==="Statutory"? "⚖ <b>Processing lane</b> — HR processes it, implemented on the effective date. No approval gate."
+      : b==="Discretionary"? "✍ <b>Approval lane</b> — routes the 4-step sign chain (Grazel → Pervin → Sanjay → Anj)."
+      : ""; };
+  document.getElementById("mv_type").addEventListener("change",paintExtra);
+  document.getElementById("mv_basis").addEventListener("change",paintBasis);
+  document.getElementById("mvCancel").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("mvGo").addEventListener("click",async()=>{
+    const msg=document.getElementById("mvMsg");
+    const tLabel=v("mv_type"), basis=v("mv_basis"), eff=v("mv_eff");
+    const t=MV_TYPES.find(x=>x.label===tLabel);
+    if(!t){ msg.textContent="Pick the movement type."; return; }
+    if(!basis){ msg.textContent="Pick the basis (Operational / Statutory / Discretionary)."; return; }
+    if(!eff){ msg.textContent="Set the effective date."; return; }
+    if(t.pay && !canSeePay()){ msg.textContent="Pay movements are payroll-only."; return; }
+    const status = basis==="Operational"?"memo":(basis==="Statutory"?"processing":"awaiting_signoff");
+    // Fold fields without a dedicated column (reporting line, employment status) into remarks so nothing is lost.
+    const remarkParts=[]; if(v("mv_remarks")) remarkParts.push(v("mv_remarks"));
+    if(t.report && (v("mv_rep_c")||v("mv_rep_n"))) remarkParts.push("Reporting line: "+(v("mv_rep_c")||"—")+" → "+(v("mv_rep_n")||"—"));
+    if(t.estatus && (v("mv_est_c")||v("mv_est_n"))) remarkParts.push("Employment status: "+(v("mv_est_c")||"—")+" → "+(v("mv_est_n")||"—"));
+    remarkParts.unshift("["+tLabel+" · "+basis+"]");
+    const npa_id="NPA-"+new Date().toISOString().slice(0,10).replace(/-/g,"")+"-"+Math.random().toString(36).slice(2,6).toUpperCase();
+    const payload={ npa_id, action_type:t.action, employee_id:e.id||null, employee_name:e.full_name, employee_number:e.employee_id||null,
+      department:e.department||null, current_position:e.position||null,
+      new_position:v("mv_pos_n")||null, new_department:v("mv_dep_n")||null, new_location:v("mv_loc_n")||null,
+      current_daily_rate:nv("mv_dr_c"), new_daily_rate:nv("mv_dr_n"), current_allowance:nv("mv_al_c"), new_allowance:nv("mv_al_n"),
+      meal_allowance:nv("mv_ml_c"), new_meal_allowance:nv("mv_ml_n"), new_schedule:v("mv_sch_n")||null,
+      effective_date:eff, remarks:remarkParts.join(" · "), status,
+      prepared_by:(CURRENT_USER&&CURRENT_USER.email)||"HR", created_by:(CURRENT_USER&&CURRENT_USER.id)||null };
+    const btn=document.getElementById("mvGo"); btn.disabled=true; btn.textContent="Filing…";
+    const { error }=await sb.from("personnel_actions").insert(payload);
+    if(error){ msg.textContent=error.message; btn.disabled=false; btn.textContent="File movement"; return; }
+    await logChange("movement",null,e.full_name,"Movement filed — "+tLabel,basis+" · "+npa_id+" · eff "+eff);
+    m.remove(); await loadEmployees(); window.go("movements");
+  });
+  paintExtra(); paintBasis();
+}
+window.openMovementForm=openMovementForm;
+
+function openMovementDrawer(r){
+  if(!r) return;
+  const disc=r.status==="awaiting_signoff"||r.status==="approved";
+  const stat=r.status==="processing";
+  const signable=mvCanSignNow(r);
+  const P=mvPeso;
+  const payRows=(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null||r.meal_allowance!=null||r.new_meal_allowance!=null);
+  const tot=(dr,al,ml)=>{ if(dr==null&&al==null&&ml==null) return null; return (Number(dr)||0)+(Number(al)||0)+(Number(ml)||0); };
+  const kv=(k,val)=>`<div class="efield"><div class="el">${esc(k)}</div><div class="ev">${val}</div></div>`;
+  let m=document.getElementById("mvDrawer"); if(!m){ m=document.createElement("div"); m.id="mvDrawer"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  const chainHtml=disc?MV_CHAIN.map(st=>{ const done=!!r["sig"+st.n+"_data"]; const by=r["sig"+st.n+"_by"]; const at=r["sig"+st.n+"_at"];
+    const isNext=signable&&signable.n===st.n;
+    return `<div class="task" style="align-items:flex-start;${isNext?'background:#fff8e6;border-radius:8px;':''}">
+      <div class="dot ${done?'g':(isNext?'a':'')}" style="${done?'':'background:#d6ddd8;'}"></div>
+      <div style="flex:1;"><div class="tt">Step ${st.n} · ${esc(st.role)} — ${esc(st.name)}</div>
+        <div class="td">${done?("Signed"+(by?" by "+esc(by):"")+(at?" · "+fmtDate(at):"")):(isNext?"Waiting on you now":"Pending")}</div>
+        ${done&&r["sig"+st.n+"_data"]?`<img src="${r["sig"+st.n+"_data"]}" style="height:32px;margin-top:5px;background:#fff;border:1px solid #e2e7e4;border-radius:4px;padding:2px 4px;">`:""}
+      </div></div>`; }).join(""):"";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;z-index:2;">
+      <div style="font-size:20px;font-weight:800;">${esc(r.employee_name||"Movement")}</div>
+      <div style="font-size:12.5px;opacity:.9;">${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"")} · ${esc(mvBasisFor(r.status))} · ${esc(r.npa_id||"")}</div>
+    </div>
+    <div style="padding:16px 20px 70px;">
+      <div class="panel" style="margin-top:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h2 style="margin:0;">Movement</h2>${mvStatusPill(r.status)}</div>
+        <div class="egrid" style="margin-top:8px;">
+          ${kv("Employee",esc(r.employee_name||"—")+(r.employee_number?' <span class="note" style="display:inline;padding:0 4px;">'+esc(r.employee_number)+'</span>':""))}
+          ${kv("Current position",esc(r.current_position||"—"))}
+          ${kv("Department",esc(r.department||"—"))}
+          ${kv("Effective date",r.effective_date?fmtDate(r.effective_date):"—")}
+          ${r.new_position?kv("New position",esc(r.new_position)):""}
+          ${r.new_department?kv("To department",esc(r.new_department)):""}
+          ${r.new_location?kv("To location",esc(r.new_location)):""}
+          ${r.new_schedule?kv("New schedule",esc(r.new_schedule)):""}
+        </div>
+        ${r.remarks?`<div class="psub" style="margin-top:8px;"><b>Remarks:</b> ${esc(r.remarks)}</div>`:""}
+      </div>
+      ${payRows&&canSeePay()?`<div class="panel"><div class="subhead">Financial details <span class="sh-note">confidential</span></div>
+        <table><thead><tr><th></th><th style="text-align:right;">Current</th><th style="text-align:right;">New</th></tr></thead><tbody>
+          <tr><td><b>Basic pay</b></td><td style="text-align:right;">${P(r.current_daily_rate)}</td><td style="text-align:right;">${P(r.new_daily_rate)}</td></tr>
+          <tr><td><b>Allowance</b></td><td style="text-align:right;">${P(r.current_allowance)}</td><td style="text-align:right;">${P(r.new_allowance)}</td></tr>
+          <tr><td><b>Meal allowance</b></td><td style="text-align:right;">${P(r.meal_allowance)}</td><td style="text-align:right;">${P(r.new_meal_allowance)}</td></tr>
+          <tr><td><b>Total compensation</b></td><td style="text-align:right;">${P(tot(r.current_daily_rate,r.current_allowance,r.meal_allowance))}</td><td style="text-align:right;">${P(tot(r.new_daily_rate,r.new_allowance,r.new_meal_allowance))}</td></tr>
+        </tbody></table></div>`:""}
+      ${disc?`<div class="panel"><div class="subhead">Approval chain <span class="sh-note">${mvSignedCount(r)}/4 signed</span></div>${chainHtml}
+        ${r.status==="approved"?`<div class="note" style="margin-top:8px;background:#eef6f0;border-color:#cfe6d8;color:#12352a;">✓ Fully approved${r.approval_date?" on "+fmtDate(r.approval_date):""}.</div>`:""}
+      </div>`:stat?`<div class="panel"><div class="subhead">Statutory processing</div>
+        <div class="psub">No approval chain — HR processes this and it takes effect on the effective date.${r.sig1_by?" <b>HR authorized</b> by "+esc(r.sig1_by)+(r.sig1_at?" · "+fmtDate(r.sig1_at):"")+".":""}</div>
+        ${canSeePay()&&!r.sig1_by?`<button class="btn" id="mvAuth" style="margin-top:8px;">Stamp HR authorization</button>`:""}
+      </div>`:`<div class="panel"><div class="subhead">Operational memo</div>
+        <div class="psub">No change in terms — documented by memo (Dept Head). No NPA approval chain required.</div></div>`}
+      <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
+        <button class="btn ghost" id="mvPrint">View / Print NPA</button>
+        ${signable?`<button class="btn" id="mvSign">Sign this step (${esc(signable.role)})</button>`:""}
+        <button class="btn ghost" id="mvDrawerClose" style="margin-left:auto;">Close</button>
+      </div>
+    </div></div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("mvDrawerClose").onclick=()=>m.remove();
+  document.getElementById("mvPrint").onclick=()=>printMovementNpa(r);
+  const sg=document.getElementById("mvSign"); if(sg) sg.onclick=()=>mvSignStep(r,signable);
+  const au=document.getElementById("mvAuth"); if(au) au.onclick=async()=>{
+    au.disabled=true; au.textContent="Stamping…";
+    const em=(CURRENT_USER&&CURRENT_USER.email)||"HR";
+    const { error }=await sb.from("personnel_actions").update({ sig1_by:em, sig1_at:new Date().toISOString(), noted_by:em, updated_at:new Date().toISOString() }).eq("id",r.id);
+    if(error){ alert(error.message); au.disabled=false; au.textContent="Stamp HR authorization"; return; }
+    await logChange("movement",null,r.employee_name,"Statutory movement HR-authorized",r.npa_id||"");
+    m.remove(); await loadEmployees(); window.go("movements");
+  };
+}
+window.openMovementDrawer=openMovementDrawer;
+
+// Sign one step of a discretionary NPA — reuses the canvas draw widget.
+function mvSignStep(r,step){
+  if(!step) return;
+  let m=document.getElementById("mvSignModal"); if(!m){ m=document.createElement("div"); m.id="mvSignModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
+    <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#6B7785;">NOTICE OF PERSONNEL ACTION · ${esc(r.npa_id||"")}</div>
+    <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 3px;">${esc(step.role)} — sign to advance</div>
+    <div class="psub" style="margin-bottom:8px;">${esc(r.employee_name||"")} · ${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"")} · effective ${r.effective_date?fmtDate(r.effective_date):"—"}. Step ${step.n} of 4.</div>
+    <div style="font-size:12px;color:#6B7785;margin-bottom:6px;">Sign below — drawn with your finger or mouse. RA 8792 e-signature · timestamped + recorded against your account.</div>
+    <canvas id="mvPad" width="480" height="150" style="width:100%;height:150px;border:1px dashed #b9c4cf;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+      <button class="btn ghost" id="mvSigClear" style="flex:0 0 auto;">Clear</button>
+      <span id="mvSigMsg" style="font-size:12.5px;color:#a4322a;flex:1;"></span>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px;">
+      <button class="btn ghost" id="mvSigCancel" style="margin-left:auto;">Cancel</button>
+      <button class="btn" id="mvSigDo">Approve &amp; Sign</button>
+    </div></div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("mvSigCancel").onclick=()=>m.remove();
+  const cv=document.getElementById("mvPad"), ctx=cv.getContext("2d"); let drawing=false, dirty=false;
+  ctx.lineWidth=2.2; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.strokeStyle="#13243b";
+  const pos=e=>{ const rc=cv.getBoundingClientRect(), t=e.touches&&e.touches[0]?e.touches[0]:e; return {x:(t.clientX-rc.left)*(cv.width/rc.width), y:(t.clientY-rc.top)*(cv.height/rc.height)}; };
+  const start=e=>{ drawing=true; dirty=true; const p=pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); e.preventDefault(); };
+  const move=e=>{ if(!drawing) return; const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); e.preventDefault(); };
+  const end=()=>{ drawing=false; };
+  cv.addEventListener("mousedown",start); cv.addEventListener("mousemove",move); window.addEventListener("mouseup",end);
+  cv.addEventListener("touchstart",start,{passive:false}); cv.addEventListener("touchmove",move,{passive:false}); cv.addEventListener("touchend",end);
+  document.getElementById("mvSigClear").onclick=()=>{ ctx.clearRect(0,0,cv.width,cv.height); dirty=false; };
+  document.getElementById("mvSigDo").onclick=async()=>{
+    const msg=document.getElementById("mvSigMsg");
+    if(!dirty){ msg.textContent="Please draw your signature first."; return; }
+    const btn=document.getElementById("mvSigDo"); btn.disabled=true; btn.textContent="Signing…";
+    const now=new Date().toISOString(); const signer=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"Signed-in user";
+    const upd={ updated_at:now };
+    upd["sig"+step.n+"_by"]=signer; upd["sig"+step.n+"_at"]=now; upd["sig"+step.n+"_data"]=cv.toDataURL("image/png");
+    if(step.n===2) upd.noted_by=signer;
+    if(step.n===4){ upd.status="approved"; upd.approval_date=now.slice(0,10); upd.approved_by=signer; }
+    const { error }=await sb.from("personnel_actions").update(upd).eq("id",r.id);
+    if(error){ msg.textContent=error.message; btn.disabled=false; btn.textContent="Approve & Sign"; return; }
+    await logChange("movement",null,r.employee_name,"NPA "+step.role.toLowerCase()+" (e-signed)",r.npa_id+(step.n===4?" · fully approved":""));
+    m.remove(); const dw=document.getElementById("mvDrawer"); if(dw) dw.remove(); await loadEmployees(); window.go("movements");
+  };
+}
+
+// Read-only NPA form + print, signatures stamped where signed (reuses the printNpa layout, incl. the meal row).
+function printMovementNpa(r){
+  const P=n=>(n==null||n==="")?"":"₱"+Number(n).toLocaleString(undefined,{minimumFractionDigits:2});
+  const tot=(dr,al,ml)=>{ if(dr==null&&al==null&&ml==null) return ""; return P((Number(dr)||0)+(Number(al)||0)+(Number(ml)||0)); };
+  const payRows=(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null||r.meal_allowance!=null||r.new_meal_allowance!=null);
+  const fin=payRows?`
+    <h3>III. FINANCIAL DETAILS</h3>
+    <table><tr><th></th><th>CURRENT</th><th>NEW</th></tr>
+    <tr><td><b>BASIC PAY</b></td><td>${P(r.current_daily_rate)}</td><td>${P(r.new_daily_rate)}</td></tr>
+    <tr><td><b>ALLOWANCE</b></td><td>${P(r.current_allowance)}</td><td>${P(r.new_allowance)}</td></tr>
+    <tr><td><b>MEAL ALLOWANCE</b></td><td>${P(r.meal_allowance)}</td><td>${P(r.new_meal_allowance)}</td></tr>
+    <tr><td><b>TOTAL COMPENSATION</b></td><td>${tot(r.current_daily_rate,r.current_allowance,r.meal_allowance)}</td><td>${tot(r.new_daily_rate,r.new_allowance,r.new_meal_allowance)}</td></tr></table>
+    <div class="conf">SALARY data in this form is strictly CONFIDENTIAL.</div>`:"";
+  const changeLines=[];
+  if(r.new_position) changeLines.push("New position: "+esc(r.new_position));
+  if(r.new_department) changeLines.push("To department: "+esc(r.new_department));
+  if(r.new_location) changeLines.push("To location: "+esc(r.new_location));
+  if(r.new_schedule) changeLines.push("New schedule: "+esc(r.new_schedule));
+  const basis=mvBasisFor(r.status);
+  // Signature blocks: discretionary shows the 4-step chain (stamped where signed); others show the standard 3.
+  const disc=r.status==="awaiting_signoff"||r.status==="approved";
+  const sigCells=(disc?MV_CHAIN:[{name:"Grazel Lyn Agulto",role:"PREPARED BY",n:1},{name:"Pervin Chatlani",role:"NOTED BY",n:2},{name:"Anj C. Genomal",role:"APPROVED BY",n:4}]).map(st=>{
+    const data=r["sig"+st.n+"_data"], at=r["sig"+st.n+"_at"];
+    const line=data?`<img src="${data}" style="height:38px;">`:"&nbsp;";
+    return `<td style="width:${disc?25:33}%"><div class="sr">${(st.role||"").toUpperCase()}</div><div class="sl">${line}</div><b>${esc(st.name)}</b><br><span class="mut">Date: ${at?fmtDate(at):"____________"}</span></td>`; }).join("");
+  const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to view/print the form."); return; }
+  w.document.write(`<!DOCTYPE html><html><head><title>${esc(r.npa_id||"NPA")} — Notice of Personnel Action</title><style>
+    body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#1F2A37;max-width:760px;margin:24px auto;padding:0 24px;font-size:13.5px;line-height:1.5;}
+    .lh{text-align:center;border-bottom:2.5px solid #1E3A5F;padding-bottom:8px;margin-bottom:14px;}
+    .lh b{font-size:17px;color:#1E3A5F;letter-spacing:.5px;} .lh div{font-size:11px;color:#667;}
+    h2{text-align:center;font-size:15px;margin:10px 0 14px;} h3{font-size:12.5px;color:#1E3A5F;border-bottom:1px solid #ccd;padding-bottom:2px;margin:16px 0 8px;}
+    table{width:100%;border-collapse:collapse;margin:6px 0;} td,th{border:1px solid #bbc;padding:6px 8px;text-align:left;font-size:12.5px;}
+    .sr{font-size:10.5px;color:#667;font-weight:700;} .sl{border-bottom:1px solid #333;min-height:40px;margin-bottom:4px;display:flex;align-items:flex-end;} .mut{color:#667;font-size:11.5px;}
+    .conf{background:#fdf6e3;border:1px solid #ecdca6;padding:6px 10px;font-size:11.5px;font-weight:600;color:#8a6a14;margin-top:6px;}
+    @media print{ body{margin:0 auto;} }
+  </style></head><body>
+    <div class="lh"><b>ROSHAN COMMERCIAL CORPORATION</b><div>104 Shaw Boulevard, Pasig City</div></div>
+    <h2>NOTICE OF PERSONNEL ACTION &nbsp;·&nbsp; ${esc(r.npa_id||"")}</h2>
+    <h3>I. EMPLOYEE INFORMATION</h3>
+    <table>
+      <tr><td><b>Employee Name</b></td><td>${esc(r.employee_name||"—")}</td><td><b>Date Issued</b></td><td>${r.created_at?new Date(r.created_at).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}):new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}</td></tr>
+      <tr><td><b>Employee ID</b></td><td>${esc(r.employee_number||"—")}</td><td><b>Position</b></td><td>${esc(r.current_position||"—")}</td></tr>
+      <tr><td><b>Department</b></td><td>${esc(r.department||"—")}</td><td><b>Effective Date</b></td><td>${r.effective_date?fmtDate(r.effective_date):"—"}</td></tr>
+    </table>
+    <h3>II. REASON FOR PERSONNEL ACTION</h3>
+    <div style="margin:3px 0"><b>${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"")}</b> &nbsp;·&nbsp; Basis: ${esc(basis)}</div>
+    ${changeLines.length?`<div style="margin-left:6px;">${changeLines.join("<br>")}</div>`:""}
+    ${fin}
+    ${r.remarks?`<div style="margin-top:8px"><b>Remarks:</b> ${esc(r.remarks)}</div>`:""}
+    <h3>IV. SIGNATURES AND APPROVALS</h3>
+    ${basis==="Operational"?`<div class="conf" style="background:#eef2f7;border-color:#c9d6e6;color:#1E3A5F;">Operational movement — documented by memo (Dept Head). No NPA approval chain required.</div>`:""}
+    ${basis==="Statutory"?`<div class="conf" style="background:#eef2f7;border-color:#c9d6e6;color:#1E3A5F;">Statutory movement — processed by HR; implemented on the effective date. No approval gate.${r.sig1_by?" HR authorized by "+esc(r.sig1_by)+".":""}</div>`:`<table><tr>${sigCells}</tr></table>`}
+    <h3>V. ACKNOWLEDGEMENT</h3>
+    <div><b>EMPLOYEE CONFORME</b> &nbsp;·&nbsp; Signature: ______________________ &nbsp;·&nbsp; Date Received: ______________</div>
+    <div class="mut" style="margin-top:8px;">Distribution: Original — HR 201 File · Duplicate — Employee Copy · Triplicate — Payroll</div>
+    <script>window.print();</` + `script></body></html>`);
+  w.document.close();
+}
+
+// Batch statutory increase — ONE HR authorization covers a filtered set; one personnel_actions row each, status "processing".
+function mvBatchStatutory(){
+  if(!canSeePay()){ alert("Statutory batch is payroll-only."); return; }
+  const sites=[...new Set((EMPLOYEES||[]).map(e=>e.worksite).filter(Boolean))].sort();
+  let m=document.getElementById("mvBatchModal"); if(!m){ m=document.createElement("div"); m.id="mvBatchModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:22px;max-height:92vh;overflow-y:auto;">
+    <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:2px;">Batch statutory increase</h2>
+    <div class="psub" style="margin-bottom:10px;">For a mandated increase (min-wage order / COLA). One HR authorization covers everyone in scope — no per-person approval chain. Creates one NPA per employee, status <b>Processing</b>, under a shared batch label.</div>
+    ${fld("mvb_label","Batch label * (e.g. NCR Wage Order 2026)","")}
+    ${fld("mvb_eff","Effective date *","","date")}
+    <div class="form-grid">${sel("mvb_scope","Scope",["All active employees"].concat(sites),"All active employees")}${fld("mvb_amt","Daily increase (₱, optional)","","number")}</div>
+    <div id="mvbCount" class="psub" style="margin:2px 0 6px;"></div>
+    <div id="mvbMsg" style="font-size:13px;color:#a4322a;margin:4px 0;"></div>
+    <div style="display:flex;gap:10px;"><button class="btn ghost" id="mvbCancel" style="flex:1;">Cancel</button><button class="btn" id="mvbGo" style="flex:1;">File batch</button></div>
+  </div>`;
+  const scopeList=()=>{ const sc=v("mvb_scope"); return (EMPLOYEES||[]).filter(e=>(e.status||"Active")==="Active" && (sc==="All active employees"||e.worksite===sc)); };
+  const refresh=()=>{ const el=document.getElementById("mvbCount"); if(el) el.textContent=scopeList().length+" active employee(s) in scope."; };
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("mvbCancel").onclick=()=>m.remove();
+  document.getElementById("mvb_scope").addEventListener("change",refresh);
+  document.getElementById("mvbGo").onclick=async()=>{
+    const msg=document.getElementById("mvbMsg");
+    const label=v("mvb_label"), eff=v("mvb_eff"), amt=nv("mvb_amt");
+    if(!label){ msg.textContent="Give the batch a label."; return; }
+    if(!eff){ msg.textContent="Set the effective date."; return; }
+    const list=scopeList();
+    if(!list.length){ msg.textContent="No active employees in that scope."; return; }
+    if(!confirm("File a statutory movement for "+list.length+" employee(s) under \""+label+"\"?\nThis is ONE HR authorization — no per-person approval chain.")) return;
+    const btn=document.getElementById("mvbGo"); btn.disabled=true; btn.textContent="Filing "+list.length+"…";
+    const em=(CURRENT_USER&&CURRENT_USER.email)||"HR"; const now=new Date().toISOString();
+    const stamp="NPA-"+now.slice(0,10).replace(/-/g,"");
+    const rows=list.map((e,i)=>({ npa_id:stamp+"-B"+String(i+1).padStart(3,"0"), action_type:"SALARY_ADJUSTMENT",
+      employee_id:e.id||null, employee_name:e.full_name, employee_number:e.employee_id||null, department:e.department||null, current_position:e.position||null,
+      current_daily_rate:(canSeePay()?e.daily_rate:null)??null, new_daily_rate:(amt!=null&&e.daily_rate!=null)?(Number(e.daily_rate)+amt):null,
+      effective_date:eff, remarks:"[Statutory batch: "+label+"]"+(amt!=null?" · +₱"+amt+"/day":""), status:"processing",
+      prepared_by:em, noted_by:em, sig1_by:em, sig1_at:now, created_by:(CURRENT_USER&&CURRENT_USER.id)||null }));
+    const { error }=await sb.from("personnel_actions").insert(rows);
+    if(error){ msg.textContent=error.message; btn.disabled=false; btn.textContent="File batch"; return; }
+    await logChange("movement",null,label,"Statutory batch filed",list.length+" employee(s) · eff "+eff+(amt!=null?" · +₱"+amt+"/day":""));
+    m.remove(); await loadEmployees(); window.go("movements");
+  };
+  refresh();
+}
+window.mvBatchStatutory=mvBatchStatutory;
+
 /* ================= TIMEKEEPING & ATTENDANCE → NTE ==================
    Upload the monthly "ATTENDANCE SUMMARY REPORT HO & WH.xlsx", flag everyone
    whose (unauthorized absences + late-days) reaches the threshold, and generate
@@ -3453,6 +3873,7 @@ window.openNpaForm=openNpaForm;
    ------------------------------------------------------------------ */
 const TK_COMBINED_THRESHOLD=5;     // unauthorized absences + late-days >= this -> NTE
 const TK_LEAVE_REVIEW_ABSENCES=10; // absences >= this -> HELD (likely leave), never auto-drafted
+const TK_REPEAT_WINDOW=3;          // rolling months (incl. current) used to flag repeat offenders
 const TK_EXPLAIN_DAYS=5;           // calendar days to explain
 const TK_YEAR=2026;
 const TK_MONTHS=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
@@ -3485,17 +3906,26 @@ function tkParse(wb, monthArg){
       const lc=4+m; for(let r=6;r<late.length;r++) sum+=Number(late[r]&&late[r][lc])||0;
       if(sum>0) mi=m; }
     if(mi<0) throw new Error("No attendance data found in the file."); }
-  const MON=TK_MONTHS[mi], uaCol=4+mi*3+2, absCol=4+mi*3, lateCol=4+mi;
+  const MON=TK_MONTHS[mi];
+  // Build per-person 12-month arrays so we can look back for repeat offenders.
   const byId={};
-  for(let r=10;r<absent.length;r++){ const row=absent[r]; if(!row) continue; const id=row[1],name=row[2],pos=row[3]; if(!name) continue;
-    byId[String(id)]={id,name,pos,absent:Number(row[absCol])||0,unauth:Number(row[uaCol])||0,late:0}; }
-  for(let r=6;r<late.length;r++){ const row=late[r]; if(!row) continue; const id=String(row[1]),name=row[2]; if(!name) continue;
-    if(!byId[id]) byId[id]={id:row[1],name,pos:row[3],absent:0,unauth:0,late:0}; byId[id].late=Number(row[lateCol])||0; }
-  const people=Object.values(byId).map(p=>Object.assign({},p,{combined:p.unauth+p.late}));
-  const flagged=people.filter(p=>p.combined>=TK_COMBINED_THRESHOLD).sort((a,b)=>b.combined-a.combined);
+  const ensure=(id,name,pos)=>{ if(!byId[id]) byId[id]={id,name,pos,mU:new Array(12).fill(0),mA:new Array(12).fill(0),mL:new Array(12).fill(0)}; return byId[id]; };
+  for(let r=10;r<absent.length;r++){ const row=absent[r]; if(!row) continue; const name=row[2]; if(!name) continue; const rec=ensure(String(row[1]),name,row[3]);
+    for(let m=0;m<12;m++){ rec.mA[m]=Number(row[4+m*3])||0; rec.mU[m]=Number(row[4+m*3+2])||0; } }
+  for(let r=6;r<late.length;r++){ const row=late[r]; if(!row) continue; const name=row[2]; if(!name) continue; const rec=ensure(String(row[1]),name,row[3]);
+    for(let m=0;m<12;m++){ rec.mL[m]=Number(row[4+m])||0; } }
+  // Repeat window = current cutoff + up to (TK_REPEAT_WINDOW-1) prior months.
+  const win=[]; for(let k=Math.max(0,mi-(TK_REPEAT_WINDOW-1));k<=mi;k++) win.push(k);
+  const monthFlagged=(rec,k)=>{ const c=rec.mU[k]+rec.mL[k]; return c>=TK_COMBINED_THRESHOLD && rec.mA[k]<TK_LEAVE_REVIEW_ABSENCES; };
+  const people=Object.values(byId).map(p=>{
+    const hist=win.map(k=>({ mon:TK_MONTHS[k], combined:Number((p.mU[k]+p.mL[k]).toFixed(1)), held:p.mA[k]>=TK_LEAVE_REVIEW_ABSENCES, flagged:monthFlagged(p,k) }));
+    const repeat=hist.filter(h=>h.flagged).length;
+    return { id:p.id, name:p.name, pos:p.pos, absent:p.mA[mi], unauth:p.mU[mi], late:p.mL[mi], combined:p.mU[mi]+p.mL[mi], repeat, hist };
+  });
+  const flagged=people.filter(p=>p.combined>=TK_COMBINED_THRESHOLD).sort((a,b)=> b.repeat-a.repeat || b.combined-a.combined);
   const held=flagged.filter(p=>p.absent>=TK_LEAVE_REVIEW_ABSENCES);
   const draft=flagged.filter(p=>p.absent<TK_LEAVE_REVIEW_ABSENCES);
-  return {MON,mi,draft,held,total:people.length};
+  return {MON,mi,draft,held,total:people.length,window:win.map(k=>TK_MONTHS[k])};
 }
 
 function tkPrintNTE(p, MON, approval){
@@ -3564,7 +3994,8 @@ async function tkSendSignoffDo(p, MON, btn){
   if(btn){ btn.disabled=true; btn.textContent="Sending…"; }
   const body=tkNteText(p, MON);
   const details={ month:MON, cutoff:TK_CUTOFF[MON], employee:p.name, employee_id:p.id||null, position:p.pos||null,
-    unauth:p.unauth, late:Number(p.late.toFixed(1)), combined:Number(p.combined.toFixed(1)), noted_by:tkNoted(p.pos) };
+    unauth:p.unauth, late:Number(p.late.toFixed(1)), combined:Number(p.combined.toFixed(1)), noted_by:tkNoted(p.pos),
+    repeat:p.repeat||1, hist:(p.hist||[]).map(h=>({mon:h.mon,combined:h.combined,held:h.held,flagged:h.flagged})) };
   const { data:sig, error } = await sb.from("signature_requests").insert({ doc_type:"nte", doc_title:"Notice to Explain — Attendance",
     subject_name:p.name, body, from_name:(CURRENT_USER&&CURRENT_USER.email)||"HR", awaiting:"you",
     with_whom:tkNoted(p.pos)+" (Noted by)", status:"pending", meta:"Attendance · "+TK_MONTH_FULL[MON]+" "+TK_YEAR, details }).select().single();
@@ -3588,6 +4019,18 @@ window.tkPrintSigned=(sigId)=>{
   tkPrintNTE(p, d.month, { signer:s.signer_name, date:s.signed_at, img:s.signature_data });
 };
 
+function tkRepeatBadge(p){
+  if(p.repeat>=3) return ' <span class="pill" style="background:#fdeaea;color:#a4322a;font-weight:700;">'+p.repeat+'× this quarter</span>';
+  if(p.repeat===2) return ' <span class="pill" style="background:#fdf0d9;color:#9a6a00;font-weight:700;">2× repeat</span>';
+  return '';
+}
+function tkHistLine(p){
+  if(!p.hist||!p.hist.length) return '';
+  const parts=p.hist.map(h=>{ const lbl=(TK_MONTH_FULL[h.mon]||h.mon).slice(0,3); const val=h.held?'leave':h.combined.toFixed(1);
+    const col=h.held?'#8a8f96':(h.flagged?'#a4322a':'#8a9a90'); const w=h.flagged?'700':'400';
+    return '<span style="color:'+col+';font-weight:'+w+';">'+lbl+' '+val+'</span>'; }).join(' · ');
+  return '<div style="font-size:11px;margin-top:3px;">'+parts+'</div>';
+}
 function tkRenderResults(){
   const box=document.getElementById("tkResults"); if(!box||!TK_RESULT) return;
   const {MON,draft,held,total}=TK_RESULT;
@@ -3598,7 +4041,7 @@ function tkRenderResults(){
     else action='<button class="btn" id="tkGen'+i+'" onclick="tkSendSignoff('+i+',this)">Send for sign-off</button> <button class="btn ghost" onclick="tkDraftPrint('+i+')">Preview</button>';
     return `<tr>
       <td>${i+1}</td>
-      <td><b>${esc(p.name)}</b><div style="font-size:11.5px;color:#667;">${esc(p.pos||"—")}</div></td>
+      <td><b>${esc(p.name)}</b>${tkRepeatBadge(p)}<div style="font-size:11.5px;color:#667;">${esc(p.pos||"—")}</div>${tkHistLine(p)}</td>
       <td style="text-align:center;">${p.unauth}</td>
       <td style="text-align:center;">${p.late.toFixed(1)}</td>
       <td style="text-align:center;font-weight:700;">${p.combined.toFixed(1)}</td>
@@ -3660,8 +4103,157 @@ function renderTimekeeping(){
 }
 window.renderTimekeeping=renderTimekeeping;
 
+/* ---------- GOVERNMENT REMITTANCES — Pag-IBIG (.MCL) converter ----------
+   Vina drops the monthly PayPlus "PAGIBIG CONTRIBUTIONS.xlsx" → this builds the
+   exact Pag-IBIG electronic upload file (.MCL) that the HDMF uploader accepts.
+   Proven byte-for-byte identical to the CBC-converter output on the May 2026 file.
+   Pure in-browser conversion — no data is stored. Salary/computation stays in
+   PayPlus; Pag-IBIG is a flat ₱200/₱200 so only the ID + name + DOB travel here. */
+// Header line is a constant RCC template (employer 200743180003, company, address);
+// only the 6-char period [4:10] = YYYYMM changes each month.
+const HDMF_HEADER_TMPL="EH09202605200743180003   PMCROSHAN COMMERCIAL CORPORATION                                                                       3F RCC CENTER SHAW BLVD PASIG CITY                                                                                        ";
+const HDMF_EMPLOYER=HDMF_HEADER_TMPL.slice(10,22); // 200743180003
+let GR_RESULT=null;
+
+function grPad(s,width,right){ s=(s==null?"":String(s)); if(s.length>width) s=s.slice(0,width);
+  return right ? s.padStart(width," ") : s.padEnd(width," "); }
+function grNormTin(t){ t=(t==null?"":String(t)).replace(/\D/g,"").replace(/^0+/,""); return t||"0"; }
+function grDob(v){ // → YYYYMMDD
+  if(v instanceof Date && !isNaN(v)) return v.getUTCFullYear()+String(v.getUTCMonth()+1).padStart(2,"0")+String(v.getUTCDate()).padStart(2,"0");
+  const s=String(v==null?"":v); const d=s.replace(/\D/g,"");
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10).replace(/-/g,"");
+  return d.slice(0,8);
+}
+function grAmt(v){ const n=Number(v||0); return n.toFixed(2); }
+function grMclRow(r){ // r = {hdmf,last,first,middle,ee,er,tin,dob}
+  const line=new Array(168).fill(" ");
+  const put=(s,start,width,right)=>{ s=grPad(s,width,right); for(let i=0;i<width;i++) line[start+i]=s[i]; };
+  put("DT",0,2);
+  put(String(r.hdmf||"").replace(/\D/g,""),2,12);
+  put(String(r.last||"").replace(/\s/g,""),29,30);
+  put(String(r.first||"").replace(/\s/g,""),59,30);
+  put((String(r.middle||"").replace(/\s/g,""))||"A",89,30);
+  put(grAmt(r.ee),119,13,true);
+  put(grAmt(r.er),132,13,true);
+  put(grNormTin(r.tin),145,12);
+  put(grDob(r.dob),160,8);
+  return line.join("");
+}
+// Locate the header row (contains "HDMF") and map columns by name — works for the
+// combined sheet (has a "No." column) and the per-division ho/diser sheets alike.
+function grParseSheet(rows){
+  let hi=-1;
+  for(let i=0;i<Math.min(rows.length,15);i++){
+    const cells=(rows[i]||[]).map(c=>String(c==null?"":c).trim().toLowerCase());
+    if(cells.indexOf("hdmf")!==-1 && cells.some(c=>c.indexOf("last")!==-1)){ hi=i; break; }
+  }
+  if(hi<0) return null;
+  const hdr=(rows[hi]||[]).map(c=>String(c==null?"":c).trim().toLowerCase());
+  const col=(want)=>hdr.findIndex(h=>h===want);
+  const colLike=(want)=>hdr.findIndex(h=>h.indexOf(want)!==-1);
+  const idx={ hdmf:col("hdmf"), tin:col("tin"), last:colLike("last"), first:colLike("first"),
+    middle:colLike("middle"), dob:colLike("birth"), ee:col("employee"), er:col("employer"), period:col("period") };
+  const out=[];
+  for(let i=hi+1;i<rows.length;i++){
+    const row=rows[i]||[]; const hd=String(row[idx.hdmf]==null?"":row[idx.hdmf]).replace(/\D/g,"");
+    if(!hd) continue; // skip blanks / subtotal rows
+    out.push({ hdmf:hd, tin:row[idx.tin], last:row[idx.last], first:row[idx.first], middle:row[idx.middle],
+      dob:row[idx.dob], ee:row[idx.ee], er:row[idx.er], period:row[idx.period] });
+  }
+  return out;
+}
+function grPeriodYYYYMM(rows){ // from a "5-2026" Period cell → "202605"
+  for(const r of rows){ const p=String(r.period==null?"":r.period).trim();
+    let m=p.match(/^(\d{1,2})[-\/](\d{4})$/); if(m) return m[2]+m[1].padStart(2,"0");
+    m=p.match(/^(\d{4})[-\/](\d{1,2})$/); if(m) return m[1]+m[2].padStart(2,"0"); }
+  return null;
+}
+async function grHandleFile(file){
+  const status=document.getElementById("grStatus"); if(status){ status.style.color=""; status.textContent="Reading "+file.name+"…"; }
+  try{
+    await tkLoadSheetJS();
+    const buf=await file.arrayBuffer();
+    const wb=window.XLSX.read(new Uint8Array(buf),{type:"array",cellDates:true});
+    // Prefer a "combined" sheet; else merge every sheet that parses.
+    const names=wb.SheetNames;
+    const combined=names.find(n=>/combined/i.test(n));
+    let rows=[];
+    const toRows=(sh)=>window.XLSX.utils.sheet_to_json(sh,{header:1,defval:null});
+    if(combined){ rows=grParseSheet(toRows(wb.Sheets[combined]))||[]; }
+    if(!rows.length){ // fall back: concat all division sheets, de-dupe by HDMF
+      const seen={}; for(const n of names){ const p=grParseSheet(toRows(wb.Sheets[n])); if(!p) continue;
+        for(const r of p){ if(!seen[r.hdmf]){ seen[r.hdmf]=1; rows.push(r); } } }
+    }
+    if(!rows.length) throw new Error("Couldn't find a Pag-IBIG contribution sheet (needs an HDMF + name header). Is this the PayPlus PAGIBIG export?");
+    const yyyymm=grPeriodYYYYMM(rows);
+    GR_RESULT={ rows, yyyymm, fname:file.name, ee:rows.reduce((a,r)=>a+Number(r.ee||0),0), er:rows.reduce((a,r)=>a+Number(r.er||0),0) };
+    if(status) status.textContent="✓ "+file.name+" — "+rows.length+" members"+(yyyymm?(" · period "+yyyymm):"");
+    grRenderResults();
+  }catch(e){ if(status){ status.textContent="⚠ "+((e&&e.message)||e); status.style.color="#a4322a"; } GR_RESULT=null; grRenderResults(); }
+}
+function grBuildMCL(){
+  if(!GR_RESULT) return "";
+  let header=HDMF_HEADER_TMPL;
+  if(GR_RESULT.yyyymm && /^\d{6}$/.test(GR_RESULT.yyyymm)) header=header.slice(0,4)+GR_RESULT.yyyymm+header.slice(10);
+  const lines=[header].concat(GR_RESULT.rows.map(grMclRow));
+  return lines.join("\r\n"); // no trailing newline — matches HDMF format
+}
+function grDownloadMCL(){
+  const text=grBuildMCL(); if(!text) return;
+  const fname="MC"+HDMF_EMPLOYER+".MCL";
+  const blob=new Blob([text],{type:"text/plain"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=fname;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },100);
+}
+window.grDownloadMCL=grDownloadMCL;
+const GR_MONTHS=["","January","February","March","April","May","June","July","August","September","October","November","December"];
+function grRenderResults(){
+  const box=document.getElementById("grResults"); if(!box) return;
+  if(!GR_RESULT){ box.innerHTML=""; return; }
+  const {rows,yyyymm,ee,er}=GR_RESULT;
+  const per = yyyymm ? (GR_MONTHS[+yyyymm.slice(4)]+" "+yyyymm.slice(0,4)) : "—";
+  const noPagibig=rows.filter(r=>!String(r.hdmf||"").replace(/\D/g,"")).length; // (parser already drops these, kept for safety)
+  const preview=rows.slice(0,8).map((r,i)=>`<tr><td>${i+1}</td><td><b>${esc(r.last||"")}</b>, ${esc(r.first||"")} ${esc(r.middle||"")}</td>
+    <td>${esc(String(r.hdmf||""))}</td><td>${esc(grNormTin(r.tin))}</td><td>${esc(grDob(r.dob))}</td>
+    <td style="text-align:right;">${grAmt(r.ee)}</td><td style="text-align:right;">${grAmt(r.er)}</td></tr>`).join("");
+  box.innerHTML=`
+    <div class="panel" style="margin-top:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div><h2 style="margin:0;">Ready — Pag-IBIG upload file</h2>
+          <div class="psub" style="margin:4px 0 0;">Period <b>${per}</b> · <b>${rows.length}</b> members · Employee ₱${ee.toLocaleString()} + Employer ₱${er.toLocaleString()} = <b>₱${(ee+er).toLocaleString()}</b></div></div>
+        <button class="btn" onclick="grDownloadMCL()">⬇ Download MC${HDMF_EMPLOYER}.MCL</button>
+      </div>
+      <div class="psub" style="margin-top:10px;">This is the electronic file the HDMF employer uploader accepts — hand it to Accounting to upload. Below is a preview of the first rows so you can eyeball it before sending.</div>
+      <div style="overflow:auto;margin-top:10px;"><table><thead><tr><th>#</th><th>Name</th><th>Pag-IBIG MID</th><th>TIN</th><th>Birthdate</th><th style="text-align:right;">EE</th><th style="text-align:right;">ER</th></tr></thead>
+        <tbody>${preview}</tbody></table></div>
+      ${rows.length>8?`<div class="psub" style="margin-top:6px;">…and ${rows.length-8} more. The download contains all ${rows.length}.</div>`:""}
+    </div>`;
+}
+function renderGovRemit(){
+  const pg=document.getElementById("page-govremit"); if(!pg) return;
+  pg.innerHTML=`
+    <div class="panel">
+      <h2>Government Remittances — Pag-IBIG</h2>
+      <div class="psub">Drop the month's PayPlus <b>Pag-IBIG Contributions</b> export (the <code>MAY 2026 - PAGIBIG CONTRIBUTIONS.xlsx</code>-style file). This builds the exact <b>.MCL upload file</b> the HDMF employer portal accepts — replacing the old "CBC converter" step. Nothing is stored; the file is built in your browser.</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;">
+        <label class="btn" style="cursor:pointer;">Choose Pag-IBIG file
+          <input type="file" id="grFile" accept=".xlsx,.xls" style="display:none;">
+        </label>
+        <span id="grStatus" class="psub" style="margin:0;">No file loaded yet.</span>
+      </div>
+      <div class="psub" style="margin-top:12px;padding:10px 12px;background:#f4f8f5;border-radius:8px;">
+        <b>SSS is coming next</b> — once we have the SSS upload file format, this page gets an SSS button too. SSS amounts come from each person's salary (from PayPlus), unlike Pag-IBIG's flat ₱200/₱200.
+      </div>
+    </div>
+    <div id="grResults"></div>`;
+  const fi=pg.querySelector("#grFile");
+  if(fi) fi.addEventListener("change",e=>{ const f=e.target.files&&e.target.files[0]; if(f) grHandleFile(f); });
+  if(GR_RESULT) grRenderResults();
+}
+window.renderGovRemit=renderGovRemit;
+
 /* ---------- WORKSITES (Branches page) — real store list from Branch Directory ---------- */
-const catPill=(c)=> c==="CN"?'<span class="pill cn">Concession</span>':(c==="CO"?'<span class="pill co">Company-Op</span>':'<span class="pill ho">'+esc(c||"—")+'</span>');
+const catPill=(c)=> c==="CN"?'<span class="pill cn">Concession</span>':(c==="CO"?'<span class="pill co">Boutique</span>':'<span class="pill ho">'+esc(c||"—")+'</span>');
 const statusBranchPill=(s)=> s==="Open"?'<span class="pill open">Open</span>':'<span class="pill closed">Closed</span>';
 const disersAt=(store)=> DISERS.filter(d=>d.store===store && (d.status||"").toLowerCase().startsWith("active"));
 // Normalize PayPlus worksite labels that don't exactly match our store names (spelling/format only — same store).
@@ -3696,7 +4288,7 @@ function storeForm(b){
     ${fld("st_sc","Sales Coordinator",b.sc)}
     <div class="form-grid">${sel("st_cat","Type",["CO","CN"],b.category||"CO")}${sel("st_status","Status",["Open","Closed","No Manning","Pending"],b.status||"Open")}</div>
     <div class="form-grid">${fld("st_ahcs","Approved stationary",b.ahc_stationary??0,"number")}${fld("st_ahcr","Approved reliever",b.ahc_reliever??0,"number")}</div>
-    <div class="psub" style="margin:2px 0 6px;">CO = Company Store · CN = Concession. Approved headcount = how many this store should have.</div>
+    <div class="psub" style="margin:2px 0 6px;">CO = Boutique · CN = Concession. Approved headcount = how many this store should have.</div>
     ${demoChk("st_isdemo",b.is_demo)}
     <div id="stMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
     <div style="display:flex;gap:10px;"><button class="btn ghost" id="stCancel" style="flex:1;">Cancel</button><button class="btn" id="stSave" style="flex:1;">${isNew?"Add store":"Save"}</button></div>
@@ -3731,7 +4323,7 @@ function openStore(b){
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
     <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;">
       <div style="font-size:21px;font-weight:800;">${esc(b.name)}</div>
-      <div style="font-size:12.5px;opacity:.9;margin-top:3px;">${esc(b.city||"")}${b.area?" · "+esc(b.area):""} · SC: ${esc(b.sc||"—")} · ${b.category==="CN"?"Concession":"Company-Operated"} · ${esc(b.status||"")}</div>
+      <div style="font-size:12.5px;opacity:.9;margin-top:3px;">${esc(b.city||"")}${b.area?" · "+esc(b.area):""} · SC: ${esc(b.sc||"—")} · ${b.category==="CN"?"Concession":"Boutique"} · ${esc(b.status||"")}</div>
     </div>
     <div style="padding:18px 22px 60px;">
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
@@ -3780,7 +4372,7 @@ function renderBranchesPage(){
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
         <div class="kpi"><div class="k-l">Open Stores</div><div class="k-n">${open.length}</div></div>
         <div class="kpi"><div class="k-l">Concession</div><div class="k-n">${open.filter(b=>b.category==="CN").length}</div></div>
-        <div class="kpi"><div class="k-l">Company-Operated</div><div class="k-n">${open.filter(b=>b.category==="CO").length}</div></div>
+        <div class="kpi"><div class="k-l">Boutique</div><div class="k-n">${open.filter(b=>b.category==="CO").length}</div></div>
         <div class="kpi"><div class="k-l">Sales Coordinators</div><div class="k-n">${new Set(open.map(b=>b.sc).filter(x=>x&&x!=='Unassigned')).size}</div></div>
       </div>
       <input id="wsSearch" class="search" style="width:100%;margin:10px 0;" placeholder="Search store, city, SC…">
@@ -3908,8 +4500,10 @@ function nteCard(s){ const d=s.details||{};
         ${rw("Unauthorized absences",d.unauth)}
         ${rw("Late / undertime",Number(d.late||0).toFixed(1)+" day(s)")}
         <tr><td style="padding:12px 14px;background:#eaf4ec;font-size:12.5px;font-weight:800;color:#12352a;">COMBINED SCORE</td><td style="padding:12px 14px;background:#eaf4ec;font-weight:800;font-size:15.5px;color:#12352a;">${Number(d.combined||0).toFixed(1)}</td></tr>
+        ${(d.hist&&d.hist.length)?rw("This quarter", d.hist.map(h=>{ const lbl=(TK_MONTH_FULL[h.mon]||h.mon).slice(0,3); const v=h.held?"leave":Number(h.combined).toFixed(1); const c=h.held?"#8a8f96":(h.flagged?"#a4322a":"#5a6b60"); const w=h.flagged?"800":"500"; return '<span style="color:'+c+';font-weight:'+w+';">'+lbl+' '+v+'</span>'; }).join(" · ")+(Number(d.repeat)>=2?' &nbsp;<span style="color:#a4322a;font-weight:800;">('+d.repeat+'× flagged)</span>':"")):""}
         ${d.noted_by?rw("Noted by",esc(d.noted_by)):""}
       </table>
+      ${Number(d.repeat)>=2?`<div class="note" style="margin-top:10px;background:#fdeaea;border-color:#f0c9c5;color:#8a2e26;">⚠ Repeat offender — flagged in ${d.repeat} of the last ${TK_REPEAT_WINDOW} months. If prior NTEs were already served, consider escalating (Notice of Decision) rather than another first notice.</div>`:""}
       <div class="note" style="margin-top:10px;">Confirm the absences were truly <b>unauthorized</b> (not approved leave) and that the DTR is attached before serving.</div>
       <details style="margin:11px 0 2px;"><summary style="cursor:pointer;font-size:12.5px;color:#1E3A5F;font-weight:600;">Read the full notice text</summary>
         <div style="background:#f7f9fb;border:1px solid #E3E8EF;border-radius:10px;padding:12px 14px;margin-top:8px;white-space:pre-wrap;font-size:12.5px;line-height:1.55;max-height:30vh;overflow-y:auto;">${esc(s.body||"")}</div>

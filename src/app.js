@@ -1201,7 +1201,7 @@ function renderMovements(){
   const awaiting=R.filter(r=>r.status==="awaiting_signoff").length;
   const forMemo=R.filter(r=>r.status==="memo").length;
   const apprMonth=R.filter(r=>r.status==="approved" && (r.approval_date||"").slice(0,7)===ym).length;
-  const nb=document.querySelector('.nav-item[data-page="movements"] .nav-badge'); if(nb) nb.textContent=awaiting||"";
+  const nb=document.querySelector('.nav-item[data-page="movements"] .nav-badge'); if(nb){ nb.textContent=awaiting||""; nb.style.display=awaiting?"":"none"; }
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
       <h2>Personnel Movement <span class="count-tag">Notice of Personnel Action</span></h2>
@@ -1500,8 +1500,7 @@ function printMovementNpa(r){
     ${fin}
     ${r.remarks?`<div style="margin-top:8px"><b>Remarks:</b> ${esc(r.remarks)}</div>`:""}
     <h3>IV. SIGNATURES AND APPROVALS</h3>
-    ${basis==="Operational"?`<div class="conf" style="background:#eef2f7;border-color:#c9d6e6;color:#1E3A5F;">Operational movement — documented by memo (Dept Head). No NPA approval chain required.</div>`:""}
-    ${basis==="Statutory"?`<div class="conf" style="background:#eef2f7;border-color:#c9d6e6;color:#1E3A5F;">Statutory movement — processed by HR; implemented on the effective date. No approval gate.${r.sig1_by?" HR authorized by "+esc(r.sig1_by)+".":""}</div>`:`<table><tr>${sigCells}</tr></table>`}
+    ${basis==="Discretionary"?`<table><tr>${sigCells}</tr></table>`:`<div class="conf" style="background:#eef2f7;border-color:#c9d6e6;color:#1E3A5F;">${basis==="Statutory"?("Statutory movement — processed by HR; implemented on the effective date. No approval gate."+(r.sig1_by?" HR authorized by "+esc(r.sig1_by)+".":"")):"Operational movement — documented by memo (Dept Head). No NPA approval chain required."}</div>`}
     <h3>V. ACKNOWLEDGEMENT</h3>
     <div><b>EMPLOYEE CONFORME</b> &nbsp;·&nbsp; Signature: ______________________ &nbsp;·&nbsp; Date Received: ______________</div>
     <div class="mut" style="margin-top:8px;">Distribution: Original — HR 201 File · Duplicate — Employee Copy · Triplicate — Payroll</div>
@@ -2749,7 +2748,7 @@ function openEvalForm(empId,type,due){
     const ov=document.getElementById("ev_overall").value;
     const row={ employee_ref:e.id, employee_name:e.full_name, position:e.position||e.department||null, eval_type:type, period_due:due,
       overall_rating: ov?Number(ov):null, ratings, recommendation:document.getElementById("ev_rec").value,
-      strengths:evVal("ev_str"), improvements:evVal("ev_imp"), evaluator:evVal("ev_by"), eval_date:evIso(new Date()) };
+      strengths:evVal("ev_str"), improvements:evVal("ev_imp"), evaluator:evVal("ev_by"), eval_date:evIso(new Date()), is_demo:!!e.is_demo };
     await logChange("evaluation",e.id,e.full_name,"Recorded",EVAL_LABEL[type]+" · "+(row.recommendation||"")+(row.overall_rating?" · "+row.overall_rating+"/5":""));
     const {error}=await sb.from("evaluations").insert(row);
     if(error){ document.getElementById("evMsg").textContent=error.message; btn.disabled=false; btn.textContent="Save evaluation"; return; }
@@ -4080,7 +4079,7 @@ async function createOnboardingCase(pre){
   if(!pre) return;
   const grp=deriveGroup(pre.department);
   const c={ prehire_id:pre.id, employee_name:pre.full_name, group_name:grp||null, hire_source:pre.hire_source||null,
-    worksite:pre.worksite||null, position:pre.position||null, deployment_date:pre.start_date||null, pay_method:"GCash", status:"In Progress" };
+    worksite:pre.worksite||null, position:pre.position||null, deployment_date:pre.start_date||null, pay_method:"GCash", status:"In Progress", is_demo:!!pre.is_demo };
   const { data, error } = await sb.from("onboarding_cases").insert(c).select().single();
   if(error){ alert(error.message); return; }
   const tasks=defaultOnbTasks(data).map(t=>Object.assign({case_id:data.id},t));

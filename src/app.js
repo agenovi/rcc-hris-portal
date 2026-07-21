@@ -32,6 +32,9 @@ let CURRENT_USER=null;
 let SC_STATUS={};  // sc_name -> {status:'Active'|'Vacant'|'Pending', note}
 let MATERNITY=[];  // maternity_claims rows
 let NPAS=[];       // personnel_actions rows (Movements / NPA module)
+let POLICIES=[];      // policies rows (Policies & Processes group)
+let POLICY_ACKS=[];   // policy_acknowledgments rows (read-and-sign roster)
+let PROCESSES=[];     // processes rows (SOPs)
 let MEETINGS=[];   // meeting_attendance rows (merchandiser meeting sign-in + reimbursement)
 let AGENCY_PAYROLL=[];  // agency_payroll rows (M&G / Jell-On real pay + contributions from payroll files)
 // Latest agency payroll row for an employee/diser id (handles the "500002.0" float form)
@@ -89,7 +92,9 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+// Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
+function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
 function applyRoleUI(){
   const allow=allowedPages(), limited=isLimitedUser();
@@ -101,6 +106,7 @@ function applyRoleUI(){
     if(pg==='meetings'){ n.style.display=canRunMeetings()?'':'none'; return; } // Meetings = Anj/Grazel/Rhel/Vina
     if(pg==='movements'){ n.style.display=canSeeMovements()?'':'none'; return; } // Movements/NPA = Anj/Grazel/Rhel
     if(pg==='govremit'){ n.style.display=canEditIds()?'':'none'; return; } // Gov't Remittances = gov-ID owners (Anj/Vina/Grazel)
+    if(pg==='policies'||pg==='processes'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies & Processes = every logged-in HR
     n.style.display=(allow&&allow.indexOf(pg)===-1)?'none':'';
   });
   document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display=limited?'none':''; });
@@ -183,7 +189,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -206,7 +212,10 @@ async function loadEmployees(){
     sb.from("meeting_attendance").select("*").order("signed_in_at", {ascending:false}),
     sb.from("system_settings").select("*"),
     sb.from("agency_payroll").select("*").order("cutoff", {ascending:false}),
-    sb.from("personnel_actions").select("*").order("created_at", {ascending:false})
+    sb.from("personnel_actions").select("*").order("created_at", {ascending:false}),
+    sb.from("policies").select("*").order("title"),
+    sb.from("policy_acknowledgments").select("*").order("acknowledged_at", {ascending:false}),
+    sb.from("processes").select("*").order("title")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -232,6 +241,9 @@ async function loadEmployees(){
   MEETING_CFG={}; ((sysset&&sysset.data)||[]).forEach(r=>{ MEETING_CFG[r.key]=r.value; });
   AGENCY_PAYROLL=(apay&&apay.data)||[];
   NPAS=(npa&&npa.data)||[];
+  POLICIES=(pol&&pol.data)||[];
+  POLICY_ACKS=(pack&&pack.data)||[];
+  PROCESSES=(proc&&proc.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -250,6 +262,8 @@ async function loadEmployees(){
   renderActivity();
   renderMaternity();
   renderMovements();
+  renderPolicies();
+  renderProcesses();
   renderMeetings();
   renderDemoData();
   renderTimekeeping();
@@ -1554,6 +1568,290 @@ function mvBatchStatutory(){
 }
 window.mvBatchStatutory=mvBatchStatutory;
 
+/* ================= POLICIES & PROCESSES ==================
+   Reference library. Everyone logged-in can READ; only admin/manager
+   (canEditPolicies) create/edit. Policies flagged requires_ack ask each
+   employee to read + e-sign (canvas widget, same as the NPA sign step) →
+   a row in policy_acknowledgments. Processes carry a steps[] SOP list.
+   Uses ONLY the policies / policy_acknowledgments / processes columns.
+   --------------------------------------------------------- */
+// Resolve the signed-in user to an employee record (by email) — used for the ack roster.
+function currentEmployee(){ const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); if(!e) return null; return (EMPLOYEES||[]).find(x=>(x.email||"").toLowerCase()===e)||null; }
+function polStatusPill(s){ const map={active:["active","Active"],draft:["cn","Draft"],superseded:["closed","Superseded"]}; const m=map[s]||["closed",esc(s||"—")]; return `<span class="pill ${m[0]}">${m[1]}</span>`; }
+function procStatusPill(s){ const map={active:["active","Active"],draft:["cn","Draft"],archived:["closed","Archived"]}; const m=map[s]||["closed",esc(s||"—")]; return `<span class="pill ${m[0]}">${m[1]}</span>`; }
+// Acks matching this policy at its current version.
+function polAcksFor(p){ return (POLICY_ACKS||[]).filter(a=>String(a.policy_id)===String(p.id) && String(a.policy_version||"")===String(p.version||"")); }
+// Identity of the signed-in user for the ack roster. employee_id is a UUID FK to employees.id
+// (null for HR-only logins with no employee record); we match those by name instead.
+function polMyIdentity(){ const me=currentEmployee(); return { name:(me&&me.full_name)||(CURRENT_USER&&CURRENT_USER.email)||"User", empId:(me&&me.id)||null, empNo:(me&&me.employee_id)||null, emp:me }; }
+function polMatchesMe(a){ const id=polMyIdentity(); if(id.empId) return String(a.employee_id||"")===String(id.empId); return (a.employee_name||"")===id.name; }
+function polIAcked(p){ return polAcksFor(p).some(polMatchesMe); }
+
+function renderPolicies(){
+  const pg=$("#page-policies"); if(!pg||!CURRENT_USER) return;
+  const edit=canEditPolicies();
+  const R=(POLICIES||[]).slice().sort((a,b)=>(a.title||"").localeCompare(b.title||""));
+  const active=R.filter(p=>p.status==="active").length;
+  const draft=R.filter(p=>p.status==="draft").length;
+  const pending=R.filter(p=>p.status==="active"&&p.requires_ack&&!polIAcked(p)).length;
+  const nb=document.querySelector('.nav-item[data-page="policies"] .nav-badge'); if(nb){ nb.textContent=pending||""; nb.style.display=pending?"":"none"; }
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Policies <span class="count-tag">Company handbook</span></h2>
+      <div class="psub">Reference library of RCC policies. Everyone can read them here; ${edit?"you can add and update policies.":"only HR management can add or edit."} Policies marked <b>Acknowledgment required</b> ask each employee to read and e-sign.</div>
+      ${edit?`<div class="actionbar"><button class="btn" id="polNew">＋ New Policy</button></div>`:""}
+      <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
+        <div class="kpi"><div class="k-l">Active policies</div><div class="k-n">${active}</div></div>
+        <div class="kpi"><div class="k-l">Draft</div><div class="k-n">${draft}</div></div>
+        <div class="kpi ${pending?"warn":""}"><div class="k-l">Pending acknowledgments</div><div class="k-n">${pending}</div><div class="k-s">you haven't signed</div></div>
+      </div>
+      ${R.length?`<table><thead><tr><th>Policy</th><th>Category</th><th>Version</th><th>Status</th><th>Effective</th><th>Acknowledgment</th></tr></thead><tbody>
+        ${R.map(p=>{ const n=polAcksFor(p).length;
+          return `<tr class="clickable" data-pid="${esc(String(p.id))}"><td><b>${esc(p.title||"—")}</b>${p.policy_no?`<div class="esub">${esc(p.policy_no)}</div>`:""}</td>
+          <td>${esc(p.category||"—")}</td>
+          <td>${esc(p.version||"—")}</td>
+          <td>${polStatusPill(p.status)}</td>
+          <td>${p.effective_date?fmtDate(p.effective_date):"—"}</td>
+          <td>${p.requires_ack?`<span class="pill ${polIAcked(p)?"active":"cn"}">${n} acknowledged</span>`:'<span class="note" style="display:inline;padding:1px 6px;">—</span>'}</td></tr>`; }).join("")}
+      </tbody></table>`:`<div class="psub" style="margin-top:6px;">No policies yet${edit?" — click “＋ New Policy”.":"."}</div>`}
+    </div>`;
+  const bN=$("#polNew"); if(bN) bN.addEventListener("click",()=>openPolicyForm(null));
+  $$("#page-policies tr.clickable[data-pid]").forEach(tr=>tr.addEventListener("click",()=>openPolicyDrawer(POLICIES.find(p=>String(p.id)===tr.dataset.pid))));
+}
+window.renderPolicies=renderPolicies;
+
+function openPolicyDrawer(p){
+  if(!p) return;
+  const edit=canEditPolicies();
+  const acks=polAcksFor(p).slice().sort((a,b)=>String(b.acknowledged_at||"").localeCompare(String(a.acknowledged_at||"")));
+  const mine=acks.find(polMatchesMe);
+  const kv=(k,val)=>`<div class="efield"><div class="el">${esc(k)}</div><div class="ev">${val}</div></div>`;
+  let m=document.getElementById("polDrawer"); if(!m){ m=document.createElement("div"); m.id="polDrawer"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;z-index:2;">
+      <div style="font-size:20px;font-weight:800;">${esc(p.title||"Policy")}</div>
+      <div style="font-size:12.5px;opacity:.9;">${esc(p.category||"Uncategorised")}${p.policy_no?" · "+esc(p.policy_no):""} · v${esc(p.version||"1")}</div>
+    </div>
+    <div style="padding:16px 20px 70px;">
+      <div class="panel" style="margin-top:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h2 style="margin:0;">Policy</h2>${polStatusPill(p.status)}</div>
+        <div class="egrid" style="margin-top:8px;">
+          ${kv("Category",esc(p.category||"—"))}
+          ${kv("Version",esc(p.version||"—"))}
+          ${kv("Effective date",p.effective_date?fmtDate(p.effective_date):"—")}
+          ${kv("Acknowledgment",p.requires_ack?"Required":"Not required")}
+        </div>
+        ${p.summary?`<div class="psub" style="margin-top:8px;"><b>Summary:</b> ${esc(p.summary)}</div>`:""}
+        ${p.doc_url?`<div style="margin-top:8px;"><a class="btn ghost" href="${esc(p.doc_url)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block;">View document ↗</a></div>`:""}
+        <div class="psub" style="margin-top:8px;">Version ${esc(p.version||"1")} · ${p.updated_at?"updated "+fmtDate(p.updated_at):(p.created_at?"created "+fmtDate(p.created_at):"—")}</div>
+      </div>
+      ${p.body?`<div class="panel"><div class="subhead">Policy text</div><div style="white-space:pre-wrap;font-size:13.5px;line-height:1.55;color:#22302a;">${esc(p.body)}</div></div>`:""}
+      ${p.requires_ack?`<div class="panel"><div class="subhead">Acknowledgment <span class="sh-note">${acks.length} signed</span></div>
+        ${mine?`<div class="note" style="background:#eef6f0;border-color:#cfe6d8;color:#12352a;">✓ You acknowledged this version${mine.acknowledged_at?" on "+fmtDate(mine.acknowledged_at):""}.</div>`:`<div class="psub">Read the policy above, then acknowledge &amp; sign.</div><button class="btn" id="polAck" style="margin-top:8px;">Acknowledge &amp; sign</button>`}
+        ${acks.length?`<div style="margin-top:10px;">${acks.map(a=>`<div class="task" style="align-items:flex-start;"><div class="dot g"></div><div style="flex:1;"><div class="tt">${esc(a.employee_name||"—")}${a.employee_number?' <span class="note" style="display:inline;padding:0 4px;">'+esc(a.employee_number)+'</span>':""}</div><div class="td">Acknowledged${a.acknowledged_at?" · "+fmtDate(a.acknowledged_at):""}</div>${a.signature_data?`<img src="${a.signature_data}" style="height:30px;margin-top:4px;background:#fff;border:1px solid #e2e7e4;border-radius:4px;padding:2px 4px;">`:""}</div></div>`).join("")}</div>`:`<div class="psub" style="margin-top:6px;">No acknowledgments yet.</div>`}
+      </div>`:""}
+      <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
+        ${edit?`<button class="btn ghost" id="polEdit">Edit</button>`:""}
+        <button class="btn ghost" id="polClose" style="margin-left:auto;">Close</button>
+      </div>
+    </div></div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("polClose").onclick=()=>m.remove();
+  const be=document.getElementById("polEdit"); if(be) be.onclick=()=>{ m.remove(); openPolicyForm(p); };
+  const ba=document.getElementById("polAck"); if(ba) ba.onclick=()=>polAckSign(p);
+}
+window.openPolicyDrawer=openPolicyDrawer;
+
+// Read-and-sign: canvas draw widget (same approach as mvSignStep) → policy_acknowledgments row.
+function polAckSign(p){
+  const id=polMyIdentity();
+  let m=document.getElementById("polSignModal"); if(!m){ m=document.createElement("div"); m.id="polSignModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
+    <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#6B7785;">POLICY ACKNOWLEDGMENT${p.policy_no?" · "+esc(p.policy_no):""}</div>
+    <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 3px;">${esc(p.title||"Policy")}</div>
+    <div class="psub" style="margin-bottom:8px;">Version ${esc(p.version||"1")}. By signing, <b>${esc(id.name)}</b> confirms having read and understood this policy.</div>
+    <div style="font-size:12px;color:#6B7785;margin-bottom:6px;">Sign below — drawn with your finger or mouse. RA 8792 e-signature · timestamped + recorded against your account.</div>
+    <canvas id="polPad" width="480" height="150" style="width:100%;height:150px;border:1px dashed #b9c4cf;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+      <button class="btn ghost" id="polSigClear" style="flex:0 0 auto;">Clear</button>
+      <span id="polSigMsg" style="font-size:12.5px;color:#a4322a;flex:1;"></span>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px;">
+      <button class="btn ghost" id="polSigCancel" style="margin-left:auto;">Cancel</button>
+      <button class="btn" id="polSigDo">Acknowledge &amp; Sign</button>
+    </div></div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("polSigCancel").onclick=()=>m.remove();
+  const cv=document.getElementById("polPad"), ctx=cv.getContext("2d"); let drawing=false, dirty=false;
+  ctx.lineWidth=2.2; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.strokeStyle="#13243b";
+  const pos=e=>{ const rc=cv.getBoundingClientRect(), t=e.touches&&e.touches[0]?e.touches[0]:e; return {x:(t.clientX-rc.left)*(cv.width/rc.width), y:(t.clientY-rc.top)*(cv.height/rc.height)}; };
+  const start=e=>{ drawing=true; dirty=true; const pt=pos(e); ctx.beginPath(); ctx.moveTo(pt.x,pt.y); e.preventDefault(); };
+  const move=e=>{ if(!drawing) return; const pt=pos(e); ctx.lineTo(pt.x,pt.y); ctx.stroke(); e.preventDefault(); };
+  const end=()=>{ drawing=false; };
+  cv.addEventListener("mousedown",start); cv.addEventListener("mousemove",move); window.addEventListener("mouseup",end);
+  cv.addEventListener("touchstart",start,{passive:false}); cv.addEventListener("touchmove",move,{passive:false}); cv.addEventListener("touchend",end);
+  document.getElementById("polSigClear").onclick=()=>{ ctx.clearRect(0,0,cv.width,cv.height); dirty=false; };
+  document.getElementById("polSigDo").onclick=async()=>{
+    const msg=document.getElementById("polSigMsg");
+    if(!dirty){ msg.textContent="Please draw your signature first."; return; }
+    const btn=document.getElementById("polSigDo"); btn.disabled=true; btn.textContent="Signing…";
+    const payload={ policy_id:p.id, policy_version:p.version||null, employee_id:id.empId, employee_name:id.name, employee_number:id.empNo, acknowledged_at:new Date().toISOString(), signature_data:cv.toDataURL("image/png") };
+    const { error }=await sb.from("policy_acknowledgments").insert(payload);
+    if(error){ msg.textContent=error.message; btn.disabled=false; btn.textContent="Acknowledge & Sign"; return; }
+    await logChange("policy",p.id,p.title,"Policy acknowledged (e-signed)",(p.policy_no||"")+" v"+(p.version||"1"));
+    m.remove(); const dw=document.getElementById("polDrawer"); if(dw) dw.remove(); await loadEmployees(); window.go("policies");
+  };
+}
+
+// Textarea field matching the fld()/sel() look.
+function txtfld(id,label,val,rows){ return `<div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">${label}</label><textarea id="${id}" rows="${rows||3}" style="width:100%;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:13.5px;">${esc(val||"")}</textarea></div>`; }
+
+function openPolicyForm(p){
+  if(!canEditPolicies()){ alert("Only HR management can add or edit policies."); return; }
+  const isNew=!p; p=p||{};
+  let m=document.getElementById("polFormModal"); if(!m){ m=document.createElement("div"); m.id="polFormModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:22px;max-height:92vh;overflow-y:auto;">
+    <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:2px;">${isNew?"New policy":"Edit policy"}</h2>
+    <div class="psub" style="margin-bottom:10px;">Publish a policy to the handbook. Tick <b>Acknowledgment required</b> for policies employees must read and e-sign.</div>
+    <div class="form-grid">${fld("pol_no","Policy no.",p.policy_no)}${fld("pol_ver","Version",p.version||"1")}</div>
+    ${fld("pol_title","Title *",p.title)}
+    ${fld("pol_cat","Category",p.category)}
+    ${txtfld("pol_summary","Summary",p.summary,2)}
+    ${txtfld("pol_body","Policy text (body)",p.body,7)}
+    <div class="form-grid">${fld("pol_eff","Effective date",p.effective_date,"date")}${sel("pol_status","Status",["draft","active","superseded"],p.status||"draft")}</div>
+    ${fld("pol_doc","Document link (optional)",p.doc_url)}
+    <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin:2px 0 12px;"><input type="checkbox" id="pol_ack" ${p.requires_ack?"checked":""}> Acknowledgment required (employees must read &amp; e-sign)</label>
+    <div id="polFormMsg" style="font-size:13px;color:#a4322a;margin:4px 0;"></div>
+    <div style="display:flex;gap:10px;"><button class="btn ghost" id="polFormCancel" style="flex:1;">Cancel</button><button class="btn" id="polFormSave" style="flex:1;">${isNew?"Publish policy":"Save changes"}</button></div>
+  </div>`;
+  document.getElementById("polFormCancel").onclick=()=>m.remove();
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("polFormSave").onclick=async()=>{
+    const msg=document.getElementById("polFormMsg");
+    const title=v("pol_title"); if(!title){ msg.textContent="Enter a title."; return; }
+    const now=new Date().toISOString();
+    const payload={ policy_no:v("pol_no"), title, category:v("pol_cat"), summary:v("pol_summary"), body:v("pol_body"),
+      version:v("pol_ver")||"1", effective_date:v("pol_eff"), status:v("pol_status")||"draft",
+      requires_ack:document.getElementById("pol_ack").checked, doc_url:v("pol_doc"), updated_at:now };
+    const btn=document.getElementById("polFormSave"); btn.disabled=true; btn.textContent="Saving…";
+    let error;
+    if(isNew){ payload.created_by=(CURRENT_USER&&CURRENT_USER.id)||null; payload.created_at=now; ({ error }=await sb.from("policies").insert(payload)); }
+    else { ({ error }=await sb.from("policies").update(payload).eq("id",p.id)); }
+    if(error){ msg.textContent=error.message; btn.disabled=false; btn.textContent=isNew?"Publish policy":"Save changes"; return; }
+    await logChange("policy",p.id||null,title,isNew?"Policy created":"Policy updated",(payload.policy_no||"")+" v"+payload.version+" · "+payload.status);
+    m.remove(); await loadEmployees(); window.go("policies");
+  };
+}
+window.openPolicyForm=openPolicyForm;
+
+/* ---- Processes / SOPs ---- */
+// steps may arrive as a jsonb array (parsed by supabase-js) or a string — normalise to a string[].
+function procSteps(p){ let s=p&&p.steps; if(s==null) return []; if(typeof s==="string"){ try{ s=JSON.parse(s); }catch(_){ return s.split(/\r?\n+/).map(x=>x.trim()).filter(Boolean); } } if(!Array.isArray(s)) return []; return s.map(x=>typeof x==="string"?x:(x&&(x.text||x.step)||"")).filter(Boolean); }
+
+function renderProcesses(){
+  const pg=$("#page-processes"); if(!pg||!CURRENT_USER) return;
+  const edit=canEditPolicies();
+  const R=(PROCESSES||[]).slice().sort((a,b)=>(a.title||"").localeCompare(b.title||""));
+  const active=R.filter(p=>p.status==="active").length;
+  const draft=R.filter(p=>p.status==="draft").length;
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Processes &amp; SOPs <span class="count-tag">How we do it</span></h2>
+      <div class="psub">Standard operating procedures — the step-by-step of how RCC runs each process. ${edit?"You can add and update SOPs.":"Read-only; HR management maintains these."}</div>
+      ${edit?`<div class="actionbar"><button class="btn" id="procNew">＋ New Process</button></div>`:""}
+      <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
+        <div class="kpi"><div class="k-l">Active SOPs</div><div class="k-n">${active}</div></div>
+        <div class="kpi"><div class="k-l">Draft</div><div class="k-n">${draft}</div></div>
+        <div class="kpi"><div class="k-l">Total documented</div><div class="k-n">${R.length}</div></div>
+      </div>
+      ${R.length?`<table><thead><tr><th>Process</th><th>Category</th><th>Owner</th><th>Version</th><th>Status</th></tr></thead><tbody>
+        ${R.map(p=>`<tr class="clickable" data-prid="${esc(String(p.id))}"><td><b>${esc(p.title||"—")}</b>${p.process_no?`<div class="esub">${esc(p.process_no)}</div>`:""}</td>
+          <td>${esc(p.category||"—")}</td><td>${esc(p.owner||"—")}</td><td>${esc(p.version||"—")}</td><td>${procStatusPill(p.status)}</td></tr>`).join("")}
+      </tbody></table>`:`<div class="psub" style="margin-top:6px;">No processes documented yet${edit?" — click “＋ New Process”.":"."}</div>`}
+    </div>`;
+  const bN=$("#procNew"); if(bN) bN.addEventListener("click",()=>openProcessForm(null));
+  $$("#page-processes tr.clickable[data-prid]").forEach(tr=>tr.addEventListener("click",()=>openProcessDrawer(PROCESSES.find(p=>String(p.id)===tr.dataset.prid))));
+}
+window.renderProcesses=renderProcesses;
+
+function openProcessDrawer(p){
+  if(!p) return;
+  const edit=canEditPolicies();
+  const steps=procSteps(p);
+  const kv=(k,val)=>`<div class="efield"><div class="el">${esc(k)}</div><div class="ev">${val}</div></div>`;
+  let m=document.getElementById("procDrawer"); if(!m){ m=document.createElement("div"); m.id="procDrawer"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;z-index:2;">
+      <div style="font-size:20px;font-weight:800;">${esc(p.title||"Process")}</div>
+      <div style="font-size:12.5px;opacity:.9;">${esc(p.category||"Uncategorised")}${p.process_no?" · "+esc(p.process_no):""} · v${esc(p.version||"1")}</div>
+    </div>
+    <div style="padding:16px 20px 70px;">
+      <div class="panel" style="margin-top:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h2 style="margin:0;">SOP</h2>${procStatusPill(p.status)}</div>
+        <div class="egrid" style="margin-top:8px;">
+          ${kv("Category",esc(p.category||"—"))}
+          ${kv("Owner",esc(p.owner||"—"))}
+          ${kv("Version",esc(p.version||"—"))}
+          ${kv("Last updated",p.updated_at?fmtDate(p.updated_at):(p.created_at?fmtDate(p.created_at):"—"))}
+        </div>
+        ${p.summary?`<div class="psub" style="margin-top:8px;"><b>Summary:</b> ${esc(p.summary)}</div>`:""}
+      </div>
+      ${p.body?`<div class="panel"><div class="subhead">Overview</div><div style="white-space:pre-wrap;font-size:13.5px;line-height:1.55;color:#22302a;">${esc(p.body)}</div></div>`:""}
+      ${steps.length?`<div class="panel"><div class="subhead">Procedure <span class="sh-note">${steps.length} step${steps.length>1?"s":""}</span></div>
+        <ol style="margin:4px 0 0;padding-left:20px;font-size:13.5px;line-height:1.55;color:#22302a;">${steps.map(s=>`<li style="margin-bottom:6px;">${esc(s)}</li>`).join("")}</ol></div>`:""}
+      <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
+        ${edit?`<button class="btn ghost" id="procEdit">Edit</button>`:""}
+        <button class="btn ghost" id="procClose" style="margin-left:auto;">Close</button>
+      </div>
+    </div></div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("procClose").onclick=()=>m.remove();
+  const be=document.getElementById("procEdit"); if(be) be.onclick=()=>{ m.remove(); openProcessForm(p); };
+}
+window.openProcessDrawer=openProcessDrawer;
+
+function openProcessForm(p){
+  if(!canEditPolicies()){ alert("Only HR management can add or edit processes."); return; }
+  const isNew=!p; p=p||{};
+  let m=document.getElementById("procFormModal"); if(!m){ m=document.createElement("div"); m.id="procFormModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:22px;max-height:92vh;overflow-y:auto;">
+    <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:2px;">${isNew?"New process":"Edit process"}</h2>
+    <div class="psub" style="margin-bottom:10px;">Document a standard operating procedure. Put each step on its own line — they render as a numbered list.</div>
+    <div class="form-grid">${fld("proc_no","Process no.",p.process_no)}${fld("proc_ver","Version",p.version||"1")}</div>
+    ${fld("proc_title","Title *",p.title)}
+    <div class="form-grid">${fld("proc_cat","Category",p.category)}${fld("proc_owner","Owner",p.owner)}</div>
+    ${txtfld("proc_summary","Summary",p.summary,2)}
+    ${txtfld("proc_body","Overview / notes (body)",p.body,4)}
+    ${txtfld("proc_steps","Steps (one per line)",procSteps(p).join("\n"),7)}
+    ${sel("proc_status","Status",["draft","active","archived"],p.status||"draft")}
+    <div id="procFormMsg" style="font-size:13px;color:#a4322a;margin:4px 0;"></div>
+    <div style="display:flex;gap:10px;"><button class="btn ghost" id="procFormCancel" style="flex:1;">Cancel</button><button class="btn" id="procFormSave" style="flex:1;">${isNew?"Publish process":"Save changes"}</button></div>
+  </div>`;
+  document.getElementById("procFormCancel").onclick=()=>m.remove();
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("procFormSave").onclick=async()=>{
+    const msg=document.getElementById("procFormMsg");
+    const title=v("proc_title"); if(!title){ msg.textContent="Enter a title."; return; }
+    const now=new Date().toISOString();
+    const stepsArr=((document.getElementById("proc_steps").value)||"").split(/\r?\n+/).map(x=>x.trim()).filter(Boolean);
+    const payload={ process_no:v("proc_no"), title, category:v("proc_cat"), owner:v("proc_owner"), summary:v("proc_summary"),
+      body:v("proc_body"), steps:stepsArr, version:v("proc_ver")||"1", status:v("proc_status")||"draft", updated_at:now };
+    const btn=document.getElementById("procFormSave"); btn.disabled=true; btn.textContent="Saving…";
+    let error;
+    if(isNew){ payload.created_by=(CURRENT_USER&&CURRENT_USER.id)||null; payload.created_at=now; ({ error }=await sb.from("processes").insert(payload)); }
+    else { ({ error }=await sb.from("processes").update(payload).eq("id",p.id)); }
+    if(error){ msg.textContent=error.message; btn.disabled=false; btn.textContent=isNew?"Publish process":"Save changes"; return; }
+    await logChange("process",p.id||null,title,isNew?"Process created":"Process updated",(payload.process_no||"")+" v"+payload.version+" · "+payload.status);
+    m.remove(); await loadEmployees(); window.go("processes");
+  };
+}
+window.openProcessForm=openProcessForm;
+
 /* ================= TIMEKEEPING & ATTENDANCE → NTE ==================
    Upload the monthly "ATTENDANCE SUMMARY REPORT HO & WH.xlsx", flag everyone
    whose (unauthorized absences + late-days) reaches the threshold, and generate
@@ -1713,9 +2011,15 @@ window.tkPrintSigned=(sigId)=>{
 };
 
 function tkRepeatBadge(p){
-  if(p.repeat>=3) return ' <span class="pill" style="background:#fdeaea;color:#a4322a;font-weight:700;">'+p.repeat+'× this year</span>';
-  if(p.repeat===2) return ' <span class="pill" style="background:#fdf0d9;color:#9a6a00;font-weight:700;">2× this year</span>';
+  if(p.repeat>=3) return '<span class="pill" style="background:#fdeaea;color:#a4322a;font-weight:700;white-space:nowrap;">'+p.repeat+'× this year</span>';
+  if(p.repeat===2) return '<span class="pill" style="background:#fdf0d9;color:#9a6a00;font-weight:700;white-space:nowrap;">2× this year</span>';
   return '';
+}
+// Count NTEs actually issued to this person (the paper trail) — the gap vs flagged months drives escalate-vs-first-notice.
+function tkNteCountBadge(p){
+  const n=(MEMOS||[]).filter(m=>m.memo_type==="Notice to Explain" && (m.subject_name||"")===p.name).length;
+  if(n>0) return '<span class="pill" style="background:#e9eef5;color:#33465f;font-weight:600;white-space:nowrap;">'+n+' NTE'+(n>1?'s':'')+' issued</span>';
+  return '<span class="pill" style="background:#f1efe8;color:#7a7268;white-space:nowrap;">no NTE yet</span>';
 }
 function tkHistLine(p){
   if(!p.hist||!p.hist.length) return '';
@@ -1734,7 +2038,9 @@ function tkRenderResults(){
     else action='<button class="btn" id="tkGen'+i+'" onclick="tkSendSignoff('+i+',this)">Send for sign-off</button> <button class="btn ghost" onclick="tkDraftPrint('+i+')">Preview</button>';
     return `<tr>
       <td>${i+1}</td>
-      <td><b>${esc(p.name)}</b>${tkRepeatBadge(p)}<div style="font-size:11.5px;color:#667;">${esc(p.pos||"—")}</div>${tkHistLine(p)}</td>
+      <td style="min-width:230px;"><div style="font-weight:700;">${esc(p.name)}</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin:3px 0;">${tkRepeatBadge(p)}${tkNteCountBadge(p)}</div>
+        <div style="font-size:11.5px;color:#667;">${esc(p.pos||"—")}</div>${tkHistLine(p)}</td>
       <td style="text-align:center;">${p.unauth}</td>
       <td style="text-align:center;">${p.late.toFixed(1)}</td>
       <td style="text-align:center;font-weight:700;">${p.combined.toFixed(1)}</td>
@@ -1811,8 +2117,12 @@ let GR_RESULT=null;
 function grPad(s,width,right){ s=(s==null?"":String(s)); if(s.length>width) s=s.slice(0,width);
   return right ? s.padStart(width," ") : s.padEnd(width," "); }
 function grNormTin(t){ t=(t==null?"":String(t)).replace(/\D/g,"").replace(/^0+/,""); return t||"0"; }
-function grDob(v){ // → YYYYMMDD
-  if(v instanceof Date && !isNaN(v)) return v.getUTCFullYear()+String(v.getUTCMonth()+1).padStart(2,"0")+String(v.getUTCDate()).padStart(2,"0");
+function grDob(v){ // → YYYYMMDD (timezone-free; Excel stores dates as serial numbers)
+  if(typeof v==="number" && isFinite(v) && window.XLSX && window.XLSX.SSF){
+    const d=window.XLSX.SSF.parse_date_code(v);
+    if(d && d.y) return d.y+String(d.m).padStart(2,"0")+String(d.d).padStart(2,"0");
+  }
+  if(v instanceof Date && !isNaN(v)) return v.getFullYear()+String(v.getMonth()+1).padStart(2,"0")+String(v.getDate()).padStart(2,"0");
   const s=String(v==null?"":v); const d=s.replace(/\D/g,"");
   if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10).replace(/-/g,"");
   return d.slice(0,8);
@@ -1866,7 +2176,7 @@ async function grHandleFile(file){
   try{
     await tkLoadSheetJS();
     const buf=await file.arrayBuffer();
-    const wb=window.XLSX.read(new Uint8Array(buf),{type:"array",cellDates:true});
+    const wb=window.XLSX.read(new Uint8Array(buf),{type:"array"}); // no cellDates — read dates as serials, convert tz-free in grDob
     // Prefer a "combined" sheet; else merge every sheet that parses.
     const names=wb.SheetNames;
     const combined=names.find(n=>/combined/i.test(n));

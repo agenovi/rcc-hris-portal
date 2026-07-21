@@ -1093,7 +1093,7 @@ function openNpaForm(e){
     const d={ action:a, eff, remarks:v("npa_remarks"), sep:v("npa_sep"), from:v("npa_from"), to:v("npa_to"),
       bp_from:nv("npa_bp_from"), bp_adj:nv("npa_bp_adj"), al_from:nv("npa_al_from"), al_adj:nv("npa_al_adj") };
     const ref="NPA-"+new Date().toISOString().slice(0,10).replace(/-/g,"")+"-"+Math.random().toString(36).slice(2,6).toUpperCase();
-    try{ await sb.from("memos").insert({ ref_no:ref, memo_type:"Personnel Action", subject_name:e.full_name, title:a,
+    try{ await sb.from("memos").insert({ ref_no:ref, memo_type:"Personnel Action", subject_name:e.full_name, title:a, is_demo:!!e.is_demo,
       body:"NPA — "+a+(d.sep?" ("+d.sep+")":"")+(d.to?" → "+d.to:"")+" · effective "+eff+(d.remarks?" · "+d.remarks:""),
       relevant_date:eff, status:"Issued", created_by:(CURRENT_USER&&CURRENT_USER.email)||"HR" }); }catch(_){}
     printNpa(e,d,ref); m.remove(); await loadEmployees();
@@ -1564,7 +1564,6 @@ window.mvBatchStatutory=mvBatchStatutory;
    ------------------------------------------------------------------ */
 const TK_COMBINED_THRESHOLD=5;     // unauthorized absences + late-days >= this -> NTE
 const TK_LEAVE_REVIEW_ABSENCES=10; // absences >= this -> HELD (likely leave), never auto-drafted
-const TK_REPEAT_WINDOW=3;          // rolling months (incl. current) used to flag repeat offenders
 const TK_EXPLAIN_DAYS=5;           // calendar days to explain
 const TK_YEAR=2026;
 const TK_MONTHS=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
@@ -1605,8 +1604,11 @@ function tkParse(wb, monthArg){
     for(let m=0;m<12;m++){ rec.mA[m]=Number(row[4+m*3])||0; rec.mU[m]=Number(row[4+m*3+2])||0; } }
   for(let r=6;r<late.length;r++){ const row=late[r]; if(!row) continue; const name=row[2]; if(!name) continue; const rec=ensure(String(row[1]),name,row[3]);
     for(let m=0;m<12;m++){ rec.mL[m]=Number(row[4+m])||0; } }
-  // Repeat window = current cutoff + up to (TK_REPEAT_WINDOW-1) prior months.
-  const win=[]; for(let k=Math.max(0,mi-(TK_REPEAT_WINDOW-1));k<=mi;k++) win.push(k);
+  // Repeat window = every POPULATED month from January through the current cutoff (year-to-date).
+  const recs=Object.values(byId);
+  const monthHasData=(k)=> recs.some(r=> r.mA[k]||r.mU[k]||r.mL[k]);
+  const win=[]; for(let k=0;k<=mi;k++){ if(monthHasData(k)) win.push(k); }
+  if(!win.length) win.push(mi);
   const monthFlagged=(rec,k)=>{ const c=rec.mU[k]+rec.mL[k]; return c>=TK_COMBINED_THRESHOLD && rec.mA[k]<TK_LEAVE_REVIEW_ABSENCES; };
   const people=Object.values(byId).map(p=>{
     const hist=win.map(k=>({ mon:TK_MONTHS[k], combined:Number((p.mU[k]+p.mL[k]).toFixed(1)), held:p.mA[k]>=TK_LEAVE_REVIEW_ABSENCES, flagged:monthFlagged(p,k) }));
@@ -1711,8 +1713,8 @@ window.tkPrintSigned=(sigId)=>{
 };
 
 function tkRepeatBadge(p){
-  if(p.repeat>=3) return ' <span class="pill" style="background:#fdeaea;color:#a4322a;font-weight:700;">'+p.repeat+'× this quarter</span>';
-  if(p.repeat===2) return ' <span class="pill" style="background:#fdf0d9;color:#9a6a00;font-weight:700;">2× repeat</span>';
+  if(p.repeat>=3) return ' <span class="pill" style="background:#fdeaea;color:#a4322a;font-weight:700;">'+p.repeat+'× this year</span>';
+  if(p.repeat===2) return ' <span class="pill" style="background:#fdf0d9;color:#9a6a00;font-weight:700;">2× this year</span>';
   return '';
 }
 function tkHistLine(p){
@@ -2191,10 +2193,10 @@ function nteCard(s){ const d=s.details||{};
         ${rw("Unauthorized absences",d.unauth)}
         ${rw("Late / undertime",Number(d.late||0).toFixed(1)+" day(s)")}
         <tr><td style="padding:12px 14px;background:#eaf4ec;font-size:12.5px;font-weight:800;color:#12352a;">COMBINED SCORE</td><td style="padding:12px 14px;background:#eaf4ec;font-weight:800;font-size:15.5px;color:#12352a;">${Number(d.combined||0).toFixed(1)}</td></tr>
-        ${(d.hist&&d.hist.length)?rw("This quarter", d.hist.map(h=>{ const lbl=(TK_MONTH_FULL[h.mon]||h.mon).slice(0,3); const v=h.held?"leave":Number(h.combined).toFixed(1); const c=h.held?"#8a8f96":(h.flagged?"#a4322a":"#5a6b60"); const w=h.flagged?"800":"500"; return '<span style="color:'+c+';font-weight:'+w+';">'+lbl+' '+v+'</span>'; }).join(" · ")+(Number(d.repeat)>=2?' &nbsp;<span style="color:#a4322a;font-weight:800;">('+d.repeat+'× flagged)</span>':"")):""}
+        ${(d.hist&&d.hist.length)?rw("This year", d.hist.map(h=>{ const lbl=(TK_MONTH_FULL[h.mon]||h.mon).slice(0,3); const v=h.held?"leave":Number(h.combined).toFixed(1); const c=h.held?"#8a8f96":(h.flagged?"#a4322a":"#5a6b60"); const w=h.flagged?"800":"500"; return '<span style="color:'+c+';font-weight:'+w+';">'+lbl+' '+v+'</span>'; }).join(" · ")+(Number(d.repeat)>=2?' &nbsp;<span style="color:#a4322a;font-weight:800;">('+d.repeat+'× flagged)</span>':"")):""}
         ${d.noted_by?rw("Noted by",esc(d.noted_by)):""}
       </table>
-      ${Number(d.repeat)>=2?`<div class="note" style="margin-top:10px;background:#fdeaea;border-color:#f0c9c5;color:#8a2e26;">⚠ Repeat offender — flagged in ${d.repeat} of the last ${TK_REPEAT_WINDOW} months. If prior NTEs were already served, consider escalating (Notice of Decision) rather than another first notice.</div>`:""}
+      ${Number(d.repeat)>=2?`<div class="note" style="margin-top:10px;background:#fdeaea;border-color:#f0c9c5;color:#8a2e26;">⚠ Repeat offender — flagged in ${d.repeat} months so far this year. If prior NTEs were already served, consider escalating (Notice of Decision) rather than another first notice.</div>`:""}
       <div class="note" style="margin-top:10px;">Confirm the absences were truly <b>unauthorized</b> (not approved leave) and that the DTR is attached before serving.</div>
       <details style="margin:11px 0 2px;"><summary style="cursor:pointer;font-size:12.5px;color:#1E3A5F;font-weight:600;">Read the full notice text</summary>
         <div style="background:#f7f9fb;border:1px solid #E3E8EF;border-radius:10px;padding:12px 14px;margin-top:8px;white-space:pre-wrap;font-size:12.5px;line-height:1.55;max-height:30vh;overflow-y:auto;">${esc(s.body||"")}</div>
@@ -2352,7 +2354,7 @@ function newMemo(){
     let body=document.getElementById("mm_body").value.trim(); if(!body){ gen(); body=document.getElementById("mm_body").value.trim(); }
     const stamp=new Date().toISOString().slice(0,10).replace(/-/g,"");
     const ref="M-"+stamp+"-"+String(Math.abs((v("mm_emp")||type).split("").reduce((a,c)=>a*31+c.charCodeAt(0),7))%1000).padStart(3,"0");
-    const row={ ref_no:ref, memo_type:type, subject_name:v("mm_emp"), title:type, body, relevant_date:v("mm_date"), status:"Draft", created_by:(CURRENT_USER&&CURRENT_USER.email)||"HR" };
+    const row={ ref_no:ref, memo_type:type, subject_name:v("mm_emp"), title:type, body, relevant_date:v("mm_date"), status:"Draft", is_demo:EMPLOYEES.some(x=>x.full_name===v("mm_emp")&&x.is_demo), created_by:(CURRENT_USER&&CURRENT_USER.email)||"HR" };
     const { data, error } = await sb.from("memos").insert(row).select().single();
     if(error){ document.getElementById("mmMsg").textContent=error.message; return; }
     m.remove();
@@ -4452,7 +4454,7 @@ async function createExitCase(emp){
   const c={ clearance_id:"EXIT-"+stamp+"-"+String(Math.abs(emp.full_name.split("").reduce((a,ch)=>a*31+ch.charCodeAt(0),5))%1000).padStart(3,"0"),
     employee_id:emp.id, employee_name:emp.full_name, position:emp.position, department:emp.department,
     hire_date:emp.hire_date||null, last_working_day:today, tenure_months:tenure, separation_type:"Resignation",
-    overall_status:"In Progress" };
+    overall_status:"In Progress", is_demo:!!emp.is_demo };
   EXIT_STAGES.forEach(s=>{ c[s.s]="Pending"; });
   const { data, error } = await sb.from("exit_clearance").insert(c).select().single();
   if(error){ alert(error.message); return; }

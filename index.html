@@ -7305,9 +7305,10 @@ function openExitCase(id){
           <button class="btn ghost" id="ex_interview_btn" style="flex-shrink:0;">${x.exit_interview_done?'View / edit':'Conduct interview'}</button></div>
         <div style="border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;background:#f7faf8;">
           <div style="font-weight:700;font-size:13.5px;">Let the employee fill it themselves</div>
-          <div class="td" style="margin:3px 0 8px;">Send this private link — they open it on their phone (no login), see the items they must return, and complete the exit interview. It comes straight back here.${x.emp_ack_at?` <span style="color:var(--green-dark);">· Employee acknowledged deliverables ${fmtDate(x.emp_ack_at)}</span>`:""}</div>
+          <div class="td" style="margin:3px 0 8px;">This is <b>${esc(x.employee_name||"this employee")}'s own private link</b> (unique to them) — they open it on their phone (no login), see the items they must return, and complete the exit interview. It comes straight back here.${x.emp_ack_at?` <span style="color:var(--green-dark);">· Employee acknowledged deliverables ${fmtDate(x.emp_ack_at)}</span>`:""}</div>
+          <input id="ex_link_field" readonly value="${esc(exitEmpLink(x))}" onclick="this.select()" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:12px;color:#3a463d;background:#fff;margin-bottom:8px;">
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn ghost" id="ex_copy_link" type="button">🔗 Copy employee link</button>
+            <button class="btn ghost" id="ex_copy_link" type="button">🔗 Copy link</button>
             <button class="btn ghost" id="ex_email_link" type="button">✉️ Email link to employee</button>
           </div>
         </div>

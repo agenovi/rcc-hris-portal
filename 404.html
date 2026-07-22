@@ -6787,6 +6787,7 @@ function openOnboardingCase(id){
         <div class="psub">Size drives the send-out list. Mark the "Issue uniform" task done once it's sent.</div>
         ${sel("onb_usize","Uniform size",["","XS","S","M","L","XL","2XL","3XL"],c.uniform_size||"")}
       </div>
+      ${issuedItemsPanel(c)}
       <div class="panel" style="margin-top:14px;"><h2>Onboarding checklist</h2>
         <div class="psub">Grouped by <b>when it's due</b> relative to the start date. Tap a task to mark it done. Bank &amp; ID set by group; iTime shows only for SM department-store hires; government registration stays early (legal deadlines).</div>
         ${ONB_TIMING_GROUPS.map(g=>{
@@ -6807,6 +6808,7 @@ function openOnboardingCase(id){
   $("#onbClose").addEventListener("click",()=>m.remove());
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   const usz=document.getElementById("onb_usize"); if(usz) usz.addEventListener("change",async()=>{ await sb.from("onboarding_cases").update({uniform_size:usz.value||null, updated_at:new Date().toISOString()}).eq("id",c.id); c.uniform_size=usz.value||null; const idx=ONBOARDING.findIndex(x=>x.id===c.id); if(idx>=0) ONBOARDING[idx].uniform_size=usz.value||null; renderOnboarding(); });
+  wireIssuedItems(c);
   const aid=document.getElementById("onbAssignId"); if(aid) aid.addEventListener("click",()=>assignEmployeeId(c));
   const fid=document.getElementById("onbFixId"); if(fid) fid.addEventListener("click",async()=>{
     fid.textContent="looking up…";
@@ -7028,6 +7030,51 @@ const EXIT_STAGES=[
   {key:"hr",label:"Human Resources",s:"hr_status",c:"hr_charges",items:"Company ID · HMO / health card · locker key · uniform · staff handbook · breach / 30-day notice"}
 ];
 const HR_RETURN_ITEMS=[["id","Company ID"],["hmo_card","HMO / Health card"],["locker","Locker / cabinet keys"],["handbook","Staff handbook"],["laptop","Laptop / desktop"],["cellphone","Cellphone + charger"],["camera","Camera / devices"],["broadband","Broadband stick"],["vehicle","Company vehicle + keys"],["cards","Business cards"]];
+// Assets recorded as ISSUED at onboarding (HMO handled by its own provider/member fields).
+const ISSUED_ASSETS=[["id","Company / Mall ID"],["locker","Locker / cabinet keys"],["handbook","Staff handbook"],["laptop","Laptop / desktop"],["cellphone","Cellphone + charger"],["camera","Camera / devices"],["broadband","Broadband stick"],["vehicle","Company vehicle + keys"],["cards","Business cards"]];
+function linkedEmployeeForCase(c){ if(!c||!c.assigned_employee_id) return null; return (EMPLOYEES||[]).find(e=>String(e.employee_id||"")===String(c.assigned_employee_id))||null; }
+function issItemChecked(iss,k){ const v=iss&&iss[k]; return !!(v&&(v===true||v.v)); }
+// The issued items for an exit case = the linked employee's record (+ HMO synthesised as hmo_card).
+function exitIssuedItems(x){ const e=(EMPLOYEES||[]).find(y=>y.id===x.employee_id); const iss=Object.assign({}, (e&&e.issued_items)||{}); if(e&&(e.hmo_member_no||e.hmo_provider)) iss.hmo_card={v:true,note:[e.hmo_provider,e.hmo_member_no].filter(Boolean).join(" · ")}; return iss; }
+function exitEmpLink(x){ return "https://agenovi.github.io/rcc-hris-portal/exit.html?token="+(x.emp_link_token||""); }
+function issItemNote(iss,k){ const v=iss&&iss[k]; return (v&&typeof v==="object"&&v.note)||""; }
+function issuedItemsPanel(c){
+  const emp=linkedEmployeeForCase(c);
+  if(!emp) return `<div class="panel" style="margin-top:14px;"><h2>Issued to this person</h2><div class="psub">Record what's handed out (HMO, ID, devices…) so the <b>exit clearance knows exactly what to collect back</b> — no guessing later. Enter the PayPlus Employee ID above first, then this attaches to their record.</div></div>`;
+  const iss=emp.issued_items||{};
+  const row=([k,l])=>`<label style="display:flex;align-items:center;gap:8px;margin:5px 0;font-size:13px;"><input type="checkbox" data-iss="${k}" ${issItemChecked(iss,k)?"checked":""}><span style="width:150px;flex-shrink:0;">${esc(l)}</span><input data-issnote="${k}" value="${esc(issItemNote(iss,k))}" placeholder="detail (optional)" style="flex:1;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;"></label>`;
+  return `<div class="panel" id="issPanel" data-empid="${emp.id}" style="margin-top:14px;"><h2>Issued to this person</h2>
+    <div class="psub">Tick what was handed out — the exit clearance auto-loads this so HR never guesses what to collect back.</div>
+    <div style="display:flex;gap:10px;margin:6px 0 10px;">
+      <div style="flex:1;"><label style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;">HMO provider</label><input id="iss_hmo_prov" value="${esc(emp.hmo_provider||"")}" placeholder="e.g. Maxicare" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font-size:13px;"></div>
+      <div style="flex:1;"><label style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;">HMO member no.</label><input id="iss_hmo_no" value="${esc(emp.hmo_member_no||"")}" placeholder="card / member #" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font-size:13px;"></div>
+    </div>
+    ${ISSUED_ASSETS.map(row).join("")}
+    <div style="margin-top:10px;"><button class="btn" id="issSave">Save issued items</button><span id="issMsg" style="font-size:12.5px;margin-left:10px;"></span></div>
+  </div>`;
+}
+async function wireIssuedItems(c){
+  const save=document.getElementById("issSave"); if(!save) return;
+  save.addEventListener("click",async()=>{
+    const panel=document.getElementById("issPanel"); const empid=panel&&panel.dataset.empid; if(!empid) return;
+    const items={};
+    document.querySelectorAll('[data-iss]').forEach(cb=>{
+      const k=cb.dataset.iss; if(!cb.checked) return;
+      const note=((document.querySelector('[data-issnote="'+k+'"]')||{}).value||"").trim();
+      items[k]=note?{v:true,note:note}:{v:true};
+    });
+    const patch={ issued_items:items,
+      hmo_provider:(document.getElementById("iss_hmo_prov").value.trim()||null),
+      hmo_member_no:(document.getElementById("iss_hmo_no").value.trim()||null),
+      updated_at:new Date().toISOString() };
+    save.disabled=true; const msg=document.getElementById("issMsg");
+    const {error}=await sb.from("employees").update(patch).eq("id",empid);
+    save.disabled=false;
+    if(error){ msg.style.color="var(--red)"; msg.textContent=error.message; return; }
+    msg.style.color="var(--green-dark)"; msg.textContent="✓ Saved — exit clearance will auto-load this";
+    const e=(EMPLOYEES||[]).find(x=>x.id===empid); if(e){ e.issued_items=items; e.hmo_provider=patch.hmo_provider; e.hmo_member_no=patch.hmo_member_no; }
+  });
+}
 const EXIT_INTERVIEW_Q=[
   "What prompted your decision to leave the company?",
   "What aspects of your job did you find most satisfying / challenging?",
@@ -7214,9 +7261,9 @@ function openExitCase(id){
       </div>
 
       <div class="panel"><h2>Property to return</h2>
-        <div class="psub">Tick only what was <b>actually issued</b> to this employee (issuance varies per person). <b>Uniform is not collected back</b> — its cost is handled by the &lt;6-month rule below. Cash advances / loan balances settle under the Finance sign-offs above.</div>
+        <div class="psub">Items marked <b style="color:var(--green-dark);">· on record</b> were auto-loaded from what was issued to this person at onboarding — no more guessing. Tick any others that apply. <b>Uniform is not collected back</b> — its cost is handled by the &lt;6-month rule below. Cash advances / loan balances settle under the Finance sign-offs above.</div>
         <div style="display:flex;flex-wrap:wrap;gap:10px 18px;">
-          ${HR_RETURN_ITEMS.map(([k,lbl])=>`<label style="font-size:13px;"><input type="checkbox" data-return="${k}" ${(x.hr_returns&&x.hr_returns[k])?"checked":""}> ${esc(lbl)}</label>`).join("")}
+          ${HR_RETURN_ITEMS.map(([k,lbl])=>{const iss=exitIssuedItems(x);const onRec=issItemChecked(iss,k);const note=issItemNote(iss,k);return `<label style="font-size:13px;"><input type="checkbox" data-return="${k}" ${((x.hr_returns&&x.hr_returns[k])||onRec)?"checked":""}> ${esc(lbl)}${onRec?` <span style="color:var(--green-dark);font-size:11px;">· on record${note?" ("+esc(note)+")":""}</span>`:""}</label>`;}).join("")}
         </div>
         <div style="margin-top:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Other issued items / advances (specify)</label><input id="ex_other_return" value="${esc((x.hr_returns&&x.hr_returns.other)||"")}" placeholder="e.g. cellphone model, cash advance ₱___, tools, SIM…" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;"></div>
       </div>
@@ -7254,8 +7301,16 @@ function openExitCase(id){
 
       <div class="panel"><h2>Closeout</h2>
         <div class="task" style="align-items:center;"><div class="dot ${x.exit_interview_done?'g':'a'}"></div>
-          <div style="flex:1;"><div class="tt">Exit interview</div><div class="td">${x.exit_interview_done?'Completed ✓':'6-question RCC exit interview'}</div></div>
+          <div style="flex:1;"><div class="tt">Exit interview</div><div class="td">${x.exit_interview_done?(x.exit_interview_by==='employee'?'Submitted by employee ✓'+(x.exit_interview_at?' · '+fmtDate(x.exit_interview_at):''):'Completed ✓'):'6-question RCC exit interview'}</div></div>
           <button class="btn ghost" id="ex_interview_btn" style="flex-shrink:0;">${x.exit_interview_done?'View / edit':'Conduct interview'}</button></div>
+        <div style="border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;background:#f7faf8;">
+          <div style="font-weight:700;font-size:13.5px;">Let the employee fill it themselves</div>
+          <div class="td" style="margin:3px 0 8px;">Send this private link — they open it on their phone (no login), see the items they must return, and complete the exit interview. It comes straight back here.${x.emp_ack_at?` <span style="color:var(--green-dark);">· Employee acknowledged deliverables ${fmtDate(x.emp_ack_at)}</span>`:""}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn ghost" id="ex_copy_link" type="button">🔗 Copy employee link</button>
+            <button class="btn ghost" id="ex_email_link" type="button">✉️ Email link to employee</button>
+          </div>
+        </div>
         <div style="border:1px solid ${x.hmo_notified_at?'var(--green)':'#f0c14b'};border-radius:9px;padding:11px 13px;margin:8px 0;background:${x.hmo_notified_at?'var(--green-light)':'#fffaf0'};">
           <div style="font-weight:700;font-size:13.5px;">HMO delisting ${x.hmo_notified_at?`<span style="color:var(--green-dark);">✓ notified ${fmtDate(x.hmo_notified_at)}</span>`:`<span style="color:#9a6a00;">— not yet sent</span>`}</div>
           <div class="td" style="margin:3px 0 8px;">Tell ${esc(HMO_NAME)} to remove this employee, or coverage keeps billing.</div>
@@ -7289,6 +7344,20 @@ function openExitCase(id){
   const sendFP=document.getElementById("exSendFP"); if(sendFP) sendFP.addEventListener("click",()=>sendFinalPayForSignoff(x,m));
   const viewFP=document.getElementById("exViewFP"); if(viewFP) viewFP.addEventListener("click",()=>printQuitclaim(x));
   document.getElementById("ex_interview_btn").addEventListener("click",()=>openExitInterview(x));
+  const cpLink=document.getElementById("ex_copy_link");
+  if(cpLink) cpLink.addEventListener("click",async()=>{
+    const url=exitEmpLink(x);
+    try{ await navigator.clipboard.writeText(url); cpLink.textContent="✓ Link copied"; setTimeout(()=>cpLink.textContent="🔗 Copy employee link",1800); }
+    catch(_){ prompt("Copy the employee's exit link:", url); }
+  });
+  const emLink=document.getElementById("ex_email_link");
+  if(emLink) emLink.addEventListener("click",()=>{
+    const url=exitEmpLink(x);
+    const subject="Your RCC exit clearance — "+x.employee_name;
+    const body="Hi "+(x.employee_name||"")+",\n\nAs part of your clearance, please open your private exit link below. You'll see the items to return and a short exit interview to complete:\n\n"+url+"\n\nPlease do this on or before your last working day"+(x.last_working_day?" ("+fmtDate(x.last_working_day)+")":"")+".\n\nThank you,\nRCC HR";
+    const le=(EMPLOYEES||[]).find(y=>y.id===x.employee_id); const to=(le&&le.email)||"";
+    window.location.href="mailto:"+encodeURIComponent(to)+"?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(body);
+  });
   const hmoEmailBtn=document.getElementById("ex_hmo_email");
   if(hmoEmailBtn) hmoEmailBtn.addEventListener("click",()=>{
     const lwd=x.last_working_day?fmtDate(x.last_working_day):"(last working day)";

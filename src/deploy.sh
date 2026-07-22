@@ -35,6 +35,7 @@ console.log("build ok");
 [ -f "$APP_DIR/feedback.html" ] && cp "$APP_DIR/feedback.html" "$SITE_DIR/feedback.html"
 [ -f "$APP_DIR/meeting.html" ] && cp "$APP_DIR/meeting.html" "$SITE_DIR/meeting.html"
 [ -f "$APP_DIR/reminders.html" ] && cp "$APP_DIR/reminders.html" "$SITE_DIR/reminders.html"
+[ -f "$APP_DIR/exit.html" ] && cp "$APP_DIR/exit.html" "$SITE_DIR/exit.html"
 # App icons + PWA manifest (green R home-screen icon, full-screen launch)
 for f in icon-180.png icon-192.png icon-512.png manifest.webmanifest; do
   [ -f "$APP_DIR/$f" ] && cp "$APP_DIR/$f" "$SITE_DIR/$f"

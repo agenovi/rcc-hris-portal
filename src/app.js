@@ -703,6 +703,16 @@ function openLoan(id){
   const rej=document.getElementById("loanRej"); if(rej) rej.addEventListener("click",()=>setLoan({status:"Rejected"}));
 }
 const isActive=(e)=>e.status==="Active";
+// For merchandisers, "Store / Concession" = the retail account, derived (display-only) from the worksite prefix.
+// PayPlus stays the master of the raw department/worksite — this never edits the roster.
+const CONCESSIONS=["SM","Robinsons","Spyder","Metrosun","Metro","Gaisano","Fishermall","Fisher","Puregold","Citistore","GearUp","Wilson"];
+function deriveConcession(e){
+  const w=(e.worksite||"").trim();
+  if(e.group_name==="Head Office"||e.group_name==="Warehouse") return e.department||"—"; // office/WH keep their real department
+  if(!w) return e.department||"—";
+  for(const c of CONCESSIONS){ if(new RegExp("^"+c+"\\b","i").test(w)) return c; }
+  return w; // generic (e.g. "Company Concession") shows as-is until PayPlus is cleaned
+}
 const typePill=(e)=>{
   if(e.hire_source && e.hire_source!=="Direct") return `<span class="pill ag">${esc(e.hire_source)}</span>`;
   if(e.group_name==="Head Office"||e.group_name==="Warehouse") return `<span class="pill ho">${esc(e.group_name)}</span>`;
@@ -960,7 +970,7 @@ function renderEmployeesPage(){
     </div>
     <input id="empSearch" class="search" style="width:100%;margin-bottom:12px;" placeholder="Search name, position, worksite, department…">
     <table>
-      <thead><tr><th>Name</th><th>Job Title</th><th>Department</th><th>Worksite</th><th>Type</th><th>Status</th></tr></thead>
+      <thead><tr><th>Name</th><th>Job Title</th><th>Store / Concession</th><th>Worksite</th><th>Type</th><th>Status</th></tr></thead>
       <tbody id="empRows"></tbody>
     </table>
     <div id="empCount" style="font-size:12px;color:var(--muted);margin-top:10px;"></div>`;
@@ -993,7 +1003,7 @@ function paintEmpRows(){
   const rows=$("#empRows"); if(!rows) return;
   rows.innerHTML=list.slice(0,400).map((e,i)=>`
     <tr class="clickable" data-idx="${EMPLOYEES.indexOf(e)}">
-      <td><b>${esc(e.full_name)}</b></td><td>${esc(e.position||"—")}</td><td>${esc(e.department||"—")}</td>
+      <td><b>${esc(e.full_name)}</b></td><td>${esc(e.position||"—")}</td><td>${esc(deriveConcession(e))}</td>
       <td>${esc(e.worksite||"—")}</td><td>${typePill(e)}</td><td>${statusPill(e.status)}</td></tr>`).join("");
   $("#empCount").textContent=`Showing ${Math.min(list.length,400)} of ${list.length} matching · ${EMPLOYEES.length} total`;
   $$("#empRows tr").forEach(tr=>tr.addEventListener("click",()=>openRecord(EMPLOYEES[+tr.dataset.idx])));

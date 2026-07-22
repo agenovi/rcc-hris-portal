@@ -125,8 +125,23 @@ let landed=false;
 /* ---------- AUTH ---------- */
 async function init(){
   const { data:{session} } = await sb.auth.getSession();
-  if(session) showApp(session.user); else $("#login").style.display="flex";
+  if(session) showResumeGate(session.user); else $("#login").style.display="flex";
   sb.auth.onAuthStateChange((_e,s)=>{ if(_e==='SIGNED_OUT'){ location.reload(); } });
+}
+// When a saved session exists (shared device), confirm identity before entering —
+// prevents landing in / signing documents under the wrong person's account.
+function showResumeGate(user){
+  const email=(user.email||"");
+  const name=email.split("@")[0];
+  $("#login").style.display="flex";
+  const lc=$("#loginCard"), rc=$("#resumeCard");
+  if(!rc){ showApp(user); return; }            // fallback if markup missing
+  if(lc) lc.style.display="none";
+  rc.style.display="block";
+  $("#resumeName").textContent=name;
+  $("#resumeEmail").textContent=email;
+  $("#resumeContinue").onclick=()=>{ rc.style.display="none"; showApp(user); };
+  $("#resumeSwitch").onclick=async ()=>{ await sb.auth.signOut(); };  // SIGNED_OUT → reload → login form
 }
 $("#loginForm").addEventListener("submit", async (e)=>{
   e.preventDefault();

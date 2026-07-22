@@ -434,7 +434,16 @@
 <body>
 
 <div id="login" style="position:fixed;inset:0;z-index:9999;background:linear-gradient(150deg,#0e3219,#1f6b3a);display:flex;align-items:center;justify-content:center;padding:24px;">
-  <div style="background:#fff;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.3);width:100%;max-width:380px;padding:34px 30px;">
+  <div id="resumeCard" style="display:none;background:#fff;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.3);width:100%;max-width:380px;padding:34px 30px;text-align:center;">
+    <div style="width:54px;height:54px;border-radius:13px;background:linear-gradient(150deg,#0e3219,#1f6b3a);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;margin-bottom:14px;">R</div>
+    <div style="font-size:13px;color:#6a766f;margin-bottom:4px;">You're signed in as</div>
+    <div id="resumeName" style="font-size:19px;font-weight:800;color:#144726;margin-bottom:2px;word-break:break-all;">&nbsp;</div>
+    <div id="resumeEmail" style="font-size:12.5px;color:#8a948e;margin-bottom:22px;word-break:break-all;">&nbsp;</div>
+    <button id="resumeContinue" style="width:100%;background:#1f6b3a;color:#fff;border:none;padding:12px;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;">Continue as this person</button>
+    <button id="resumeSwitch" style="width:100%;margin-top:10px;background:#fff;color:#1f6b3a;border:1.5px solid #1f6b3a;padding:11px;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;">Not you? Switch account</button>
+    <div style="font-size:11.5px;color:#a0aaa4;margin-top:16px;line-height:1.5;">Tip: sign legal documents only under your own name.</div>
+  </div>
+  <div id="loginCard" style="background:#fff;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.3);width:100%;max-width:380px;padding:34px 30px;">
     <div style="text-align:center;margin-bottom:22px;">
       <div style="width:54px;height:54px;border-radius:13px;background:linear-gradient(150deg,#0e3219,#1f6b3a);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;margin-bottom:12px;">R</div>
       <h1 style="font-size:20px;color:#144726;margin:0;">RCC HRIS Portal</h1>
@@ -2451,8 +2460,23 @@ let landed=false;
 /* ---------- AUTH ---------- */
 async function init(){
   const { data:{session} } = await sb.auth.getSession();
-  if(session) showApp(session.user); else $("#login").style.display="flex";
+  if(session) showResumeGate(session.user); else $("#login").style.display="flex";
   sb.auth.onAuthStateChange((_e,s)=>{ if(_e==='SIGNED_OUT'){ location.reload(); } });
+}
+// When a saved session exists (shared device), confirm identity before entering —
+// prevents landing in / signing documents under the wrong person's account.
+function showResumeGate(user){
+  const email=(user.email||"");
+  const name=email.split("@")[0];
+  $("#login").style.display="flex";
+  const lc=$("#loginCard"), rc=$("#resumeCard");
+  if(!rc){ showApp(user); return; }            // fallback if markup missing
+  if(lc) lc.style.display="none";
+  rc.style.display="block";
+  $("#resumeName").textContent=name;
+  $("#resumeEmail").textContent=email;
+  $("#resumeContinue").onclick=()=>{ rc.style.display="none"; showApp(user); };
+  $("#resumeSwitch").onclick=async ()=>{ await sb.auth.signOut(); };  // SIGNED_OUT → reload → login form
 }
 $("#loginForm").addEventListener("submit", async (e)=>{
   e.preventDefault();

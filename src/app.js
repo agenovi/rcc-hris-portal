@@ -960,7 +960,7 @@ function renderEmployeesPage(){
     </div>
     <input id="empSearch" class="search" style="width:100%;margin-bottom:12px;" placeholder="Search name, position, worksite, department…">
     <table>
-      <thead><tr><th>Name</th><th>Job Title</th><th>Department</th><th>Worksite</th><th>Source</th><th>Type</th><th>Status</th></tr></thead>
+      <thead><tr><th>Name</th><th>Job Title</th><th>Department</th><th>Worksite</th><th>Type</th><th>Status</th></tr></thead>
       <tbody id="empRows"></tbody>
     </table>
     <div id="empCount" style="font-size:12px;color:var(--muted);margin-top:10px;"></div>`;
@@ -994,7 +994,7 @@ function paintEmpRows(){
   rows.innerHTML=list.slice(0,400).map((e,i)=>`
     <tr class="clickable" data-idx="${EMPLOYEES.indexOf(e)}">
       <td><b>${esc(e.full_name)}</b></td><td>${esc(e.position||"—")}</td><td>${esc(e.department||"—")}</td>
-      <td>${esc(e.worksite||"—")}</td><td>${hireSourceBadge(e)}</td><td>${typePill(e)}</td><td>${statusPill(e.status)}</td></tr>`).join("");
+      <td>${esc(e.worksite||"—")}</td><td>${typePill(e)}</td><td>${statusPill(e.status)}</td></tr>`).join("");
   $("#empCount").textContent=`Showing ${Math.min(list.length,400)} of ${list.length} matching · ${EMPLOYEES.length} total`;
   $$("#empRows tr").forEach(tr=>tr.addEventListener("click",()=>openRecord(EMPLOYEES[+tr.dataset.idx])));
 }
@@ -2992,8 +2992,9 @@ async function saveEmployee(id,modal){
 /* ============================ EVALUATIONS MODULE ============================ */
 const EVAL_CRITERIA=["Quality of work","Attendance & punctuality","Attitude & teamwork","Job knowledge","Initiative & reliability"];
 const EVAL_RECS={ "regularization":["Regularize","Extend probation","Do not regularize"], "3rd-month":["On track","Needs coaching","At risk"], "5th-month":["On track","Needs coaching","At risk"], "annual":["Exceeds expectations","Meets expectations","Below expectations"] };
-const EVAL_LABEL={ "3rd-month":"3rd-month review","5th-month":"5th-month review","regularization":"Regularization","annual":"Annual review" };
+const EVAL_LABEL={ "3rd-month":"2.5-month review","5th-month":"5.5-month review","regularization":"Regularization","annual":"Annual review" };
 function evAddMonths(d,n){ const x=new Date(d); const day=x.getDate(); x.setMonth(x.getMonth()+n); if(x.getDate()<day) x.setDate(0); return x; }
+function evAddDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function evIso(d){ const p=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
 function evVal(id){ const el=document.getElementById(id); return el&&el.value.trim()!==""?el.value.trim():null; }
 function evRecorded(empId,type,due){ return EVALUATIONS.some(e=>String(e.employee_ref)===String(empId)&&e.eval_type===type&&e.period_due&&Math.abs((new Date(e.period_due)-new Date(due))/86400000)<45); }
@@ -3007,8 +3008,10 @@ function evDueList(){
     const hire=new Date(e.hire_date+"T00:00:00"); if(isNaN(hire)) return;
     const tenureMo=(today-hire)/(86400000*30.44);
     const cands=[];
-    if(tenureMo<8){ cands.push(["3rd-month",evAddMonths(hire,3)]); cands.push(["5th-month",evAddMonths(hire,5)]); cands.push(["regularization",evAddMonths(hire,6)]); }
-    if(tenureMo>=11){ let ann=new Date(today.getFullYear(),hire.getMonth(),hire.getDate()); if(ann<backstop) ann=new Date(today.getFullYear()+1,hire.getMonth(),hire.getDate()); cands.push(["annual",ann]); }
+    // Probationary track — only 2026-onward hires (earlier hires are already past probation)
+    if(hire.getFullYear()>=2026 && tenureMo<8){ cands.push(["3rd-month",evAddDays(evAddMonths(hire,2),15)]); cands.push(["5th-month",evAddDays(evAddMonths(hire,5),15)]); cands.push(["regularization",evAddMonths(hire,6)]); }  /* 2.5-mo & 5.5-mo check-ins (half-month buffer); regularization at 6 */
+    // Annual track — starts 2027 (no annual reviews generated in 2026)
+    if(today.getFullYear()>=2027 && tenureMo>=11){ let ann=new Date(today.getFullYear(),hire.getMonth(),hire.getDate()); if(ann<backstop) ann=new Date(today.getFullYear()+1,hire.getMonth(),hire.getDate()); cands.push(["annual",ann]); }
     cands.forEach(([type,due])=>{
       if(due<backstop||due>horizon) return;
       if(evRecorded(e.id,type,due)) return;
@@ -3029,17 +3032,22 @@ function renderEvaluations(){
       <div class="dot ${x.bucket==='overdue'?'r':(x.bucket==='due'?'a':'g')}"></div>
       <div style="flex:1;min-width:0;"><div class="tt">${esc(x.emp.full_name)}</div><div class="td">${EVAL_LABEL[x.type]} · ${esc(x.emp.position||x.emp.department||"")}</div></div>
       <div style="text-align:right;flex-shrink:0;"><div style="font-size:12px;font-weight:700;color:${x.bucket==='overdue'?'#c0392b':'#6a766f'};">${fmtDate(x.due)}</div><button class="btn ghost" style="padding:4px 10px;font-size:12px;margin-top:3px;">Record</button></div></div>`;
-  const section=(title,arr,empty)=>`<div class="panel"><h2>${title} <span class="count-tag">${arr.length}</span></h2>${arr.length?arr.map(itemRow).join(""):`<div class="psub">${empty}</div>`}</div>`;
+  const byType=(t)=>list.filter(x=>x.type===t);
+  const typeSection=(t,title,sub)=>{ const arr=byType(t); return `<div class="panel"><h2>${title} <span class="count-tag">${arr.length}</span></h2>${sub?`<div class="psub" style="margin:2px 0 8px;">${sub}</div>`:""}${arr.length?arr.map(itemRow).join(""):`<div class="psub">Nothing due.</div>`}</div>`; };
   const recent=EVALUATIONS.slice(0,10).map(e=>`<div class="task" style="align-items:center;"><div class="dot g"></div><div style="flex:1;"><div class="tt">${esc(e.employee_name||"")}</div><div class="td">${EVAL_LABEL[e.eval_type]||e.eval_type} · ${esc(e.recommendation||"")}${e.overall_rating?` · ${e.overall_rating}/5`:""}</div></div><div style="font-size:12px;color:#6a766f;flex-shrink:0;">${e.eval_date?fmtDate(e.eval_date):""}${e.evaluator?`<div style="font-size:10.5px;">${esc(e.evaluator)}</div>`:""}</div></div>`).join("");
+  const annualBlock = today.getFullYear()>=2027
+    ? typeSection("annual","Annual reviews","Yearly performance review for regular employees.")
+    : `<div class="panel"><h2>Annual reviews</h2><div class="psub">Annual performance reviews for regular staff <b>start 2027</b> — nothing is scheduled for 2026.</div></div>`;
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
       <h2>Evaluations</h2>
-      <div class="psub">Computed from each employee's <b>hire date</b> — 3rd &amp; 5th-month probationary reviews, the 6-month regularization decision, and annual reviews.${noHire?` <span style="color:#9a6a00;">⚠ ${noHire} active staff have no hire date yet — upload the hires list to include them.</span>`:""}</div>
+      <div class="psub">Auto-computed from each employee's <b>hire date</b>. Probationary reviews (3rd / 5th month + regularization) cover <b>2026 hires only</b> — earlier staff are already past probation. Annual reviews start 2027.${noHire?` <span style="color:#9a6a00;">⚠ ${noHire} active staff have no hire date yet — upload the hires list to include them.</span>`:""}</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px;">${card("Due this month",due.length)}${card("Overdue",overdue.length)}${card("Upcoming 60d",upcoming.length)}${card("Completed",EVALUATIONS.length)}</div>
     </div>
-    ${section("Due this month",due,"Nothing due this month.")}
-    ${overdue.length?section("Overdue — needs attention",overdue,""):""}
-    ${section("Upcoming (next 60 days)",upcoming,"Nothing upcoming.")}
+    ${typeSection("3rd-month","First review · 2.5 months","Early coaching check-in — timed 2 weeks early so a delay still lands by the 3-month mark.")}
+    ${typeSection("5th-month","Second review · 5.5 months","Decision prep — lands 2 weeks before the 6-month regularization deadline, so there's room for delays.")}
+    ${typeSection("regularization","Regularization decision · 6 months","⚠ DOLE: decide &amp; notify <b>before</b> the 6-month probation ends, or the employee becomes regular by law.")}
+    ${annualBlock}
     ${EVALUATIONS.length?`<div class="panel"><h2>Recently completed</h2>${recent}</div>`:""}`;
 }
 function openEvalForm(empId,type,due){

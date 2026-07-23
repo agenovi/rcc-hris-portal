@@ -3570,7 +3570,7 @@ function renderLinks(){
   const scRows=scs.length ? scs.map(sc=>{
     const link=scLinkFor(sc);
     return link
-      ? lkRow(`Store Transfer Request — ${sc}`, `Private. Only ${esc(sc)}'s own staff — they request a store move, the store head confirms.`, SHARE_BASE+"transfer-request.html?sc="+link.token, {tag:"per-SC",tagCls:"di"})
+      ? lkRow(`Store Transfer Request — ${sc}`, `Private. Only ${esc(sc)}'s own staff — they request a store move, the store head confirms.`, SHARE_BASE+"transfer-request.html?who="+encodeURIComponent(sc)+"&sc="+link.token, {tag:"per-SC",tagCls:"di"})
       : lkRow(`Store Transfer Request — ${sc}`, "No link yet — create one to send.", null, {mkSc:sc});
   }).join("") : `<div class="lk-row psub" style="border-top:1px solid var(--line,#e4eae6);padding-top:9px;">No Store Coordinators on file yet.</div>`;
   const openExits=(EXITCASES||[]).filter(x=>x.overall_status!=="Complete"&&x.emp_link_token);
@@ -3982,7 +3982,7 @@ function scLinksBlock(){
   const scs=[...new Set((BRANCHES||[]).map(b=>b.sc).filter(x=>x&&x!=='Unassigned'))].sort();
   const rows=scs.map(sc=>{
     const link=scLinkFor(sc);
-    if(link){ const u=`${SHARE_BASE}transfer-request.html?sc=${link.token}`;
+    if(link){ const u=`${SHARE_BASE}transfer-request.html?who=${encodeURIComponent(sc)}&sc=${link.token}`;
       return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;flex-wrap:wrap;">
         <div style="flex:1;min-width:140px;font-size:13px;font-weight:600;">${esc(sc)} <span style="font-weight:400;color:var(--muted);font-size:11px;">private link — only their own people</span></div>
         <button class="btn ghost" data-copy="${u}" style="flex-shrink:0;padding:5px 10px;font-size:12px;">Copy link</button>

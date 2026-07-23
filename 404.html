@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784822273";
+window.APP_BUILD="1784823011";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784822273" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784823011" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -8644,14 +8644,17 @@ function renderOnboarding(){
     </div>
     ${(()=>{ // Uniform send-out list — every hire's size + whether the uniform's been issued
       const rows=ONBOARDING.map(c=>{ const ut=ONBTASKS.find(t=>t.case_id===c.id&&t.task_key==="uniform"); return {c, sent:ut&&ut.status==="Done"}; });
-      const pend=rows.filter(r=>!r.sent).length, needSize=rows.filter(r=>!r.c.uniform_size).length;
+      const uTop=c=>c.uniform_size_top||c.uniform_size||"";
+      const needSizeFn=c=>!uTop(c)||!c.uniform_size_bottom;
+      const pend=rows.filter(r=>!r.sent).length, needSize=rows.filter(r=>needSizeFn(r.c)).length;
       if(!rows.length) return "";
       return `<div class="panel"><h2>Uniform send-out list <span class="count-tag">${pend} to send</span></h2>
-        <div class="psub">Every hire's size and whether their uniform's gone out. ${needSize?`<b style="color:var(--red);">${needSize} still need a size recorded</b> (open the case → Uniform).`:"All sizes recorded ✓"} Mark "Issue uniform" done in the case once sent.</div>
-        <table><thead><tr><th>Hire</th><th>Worksite</th><th>Position</th><th>Size</th><th>Uniform</th></tr></thead><tbody>
+        <div class="psub">Every hire's top &amp; bottom size and whether their uniform's gone out. ${needSize?`<b style="color:var(--red);">${needSize} still need a size recorded</b> (open the case → Uniform).`:"All sizes recorded ✓"} Mark "Issue uniform" done in the case once sent.</div>
+        <table><thead><tr><th>Hire</th><th>Worksite</th><th>Position</th><th>Top</th><th>Bottom</th><th>Uniform</th></tr></thead><tbody>
         ${rows.sort((a,b)=>(a.sent?1:0)-(b.sent?1:0)).map(r=>`<tr class="clickable" data-uid="${r.c.id}">
           <td><b>${esc(r.c.employee_name)}</b></td><td>${esc(r.c.worksite||"—")}</td><td>${esc(r.c.position||"—")}</td>
-          <td>${r.c.uniform_size?`<span class="pill di">${esc(r.c.uniform_size)}</span>`:'<span class="pill awol">no size</span>'}</td>
+          <td>${uTop(r.c)?`<span class="pill di">${esc(uTop(r.c))}</span>`:'<span class="pill awol">no size</span>'}</td>
+          <td>${r.c.uniform_size_bottom?`<span class="pill di">${esc(r.c.uniform_size_bottom)}</span>`:'<span class="pill awol">no size</span>'}</td>
           <td>${r.sent?'<span class="pill active">Sent ✓</span>':'<span class="pill probation">To send</span>'}</td></tr>`).join("")}
         </tbody></table></div>`;
     })()}`;
@@ -8717,8 +8720,11 @@ function openOnboardingCase(id){
       </div>
       ${!c.assigned_employee_id?`<button class="btn" id="onbAssignId" style="margin-top:12px;">Enter PayPlus Employee ID →</button>`:""}
       <div class="panel" style="margin-top:14px;"><h2>Uniform</h2>
-        <div class="psub">Size drives the send-out list. Mark the "Issue uniform" task done once it's sent.</div>
-        ${sel("onb_usize","Uniform size",["","XS","S","M","L","XL","2XL","3XL"],c.uniform_size||"")}
+        <div class="psub">Top &amp; bottom sizes drive the send-out list. Mark the "Issue uniform" task done once it's sent.</div>
+        <div style="display:flex;gap:12px;">
+          <div style="flex:1;">${sel("onb_usize_top","Top size",["","XS","S","M","L","XL","2XL","3XL"],(c.uniform_size_top||c.uniform_size)||"")}</div>
+          <div style="flex:1;">${sel("onb_usize_bot","Bottom size",["","XS","S","M","L","XL","2XL","3XL","26","28","30","32","34","36","38","40","42","44","46"],c.uniform_size_bottom||"")}</div>
+        </div>
       </div>
       ${issuedItemsPanel(c)}
       <div class="panel" style="margin-top:14px;"><h2>Onboarding checklist</h2>
@@ -8740,7 +8746,14 @@ function openOnboardingCase(id){
     </div></div>`;
   $("#onbClose").addEventListener("click",()=>m.remove());
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
-  const usz=document.getElementById("onb_usize"); if(usz) usz.addEventListener("change",async()=>{ await sb.from("onboarding_cases").update({uniform_size:usz.value||null, updated_at:new Date().toISOString()}).eq("id",c.id); c.uniform_size=usz.value||null; const idx=ONBOARDING.findIndex(x=>x.id===c.id); if(idx>=0) ONBOARDING[idx].uniform_size=usz.value||null; renderOnboarding(); });
+  const uszT=document.getElementById("onb_usize_top"), uszB=document.getElementById("onb_usize_bot");
+  const saveUsz=async()=>{ const t=uszT&&uszT.value||null, b=uszB&&uszB.value||null;
+    await sb.from("onboarding_cases").update({uniform_size_top:t, uniform_size_bottom:b, uniform_size:t, updated_at:new Date().toISOString()}).eq("id",c.id);
+    c.uniform_size_top=t; c.uniform_size_bottom=b; c.uniform_size=t;
+    const idx=ONBOARDING.findIndex(x=>x.id===c.id); if(idx>=0){ ONBOARDING[idx].uniform_size_top=t; ONBOARDING[idx].uniform_size_bottom=b; ONBOARDING[idx].uniform_size=t; }
+    renderOnboarding(); };
+  if(uszT) uszT.addEventListener("change",saveUsz);
+  if(uszB) uszB.addEventListener("change",saveUsz);
   wireIssuedItems(c);
   const aid=document.getElementById("onbAssignId"); if(aid) aid.addEventListener("click",()=>assignEmployeeId(c));
   const fid=document.getElementById("onbFixId"); if(fid) fid.addEventListener("click",async()=>{

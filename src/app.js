@@ -4778,11 +4778,11 @@ function renderDesk(){
     :`<div style="margin-top:12px;"><div class="subhead">Your suggestions</div>${ideasList.length?ideasList.map(i=>`<div class="task"><div class="dot ${i.status==='New'?'a':'g'}"></div><div><div class="tt">${esc(i.title)}</div><div class="td">${esc(i.status)}${i.detail?(' · '+esc(i.detail)):''}</div></div></div>`).join(""):`<div class="psub">You haven’t sent any yet.</div>`}</div>`;
 
   const ideasHtml=`<div class="panel">
-    <h2 style="margin:0 0 2px;">Ideas &amp; suggestions</h2>
-    <div class="psub">Send an idea straight to the Director. ${admin?"You’re the Director — new ideas land in the inbox below.":"Anj sees these; you’ll see the status here."}</div>
+    <h2 style="margin:0 0 2px;">💡 Ideas &amp; suggestions</h2>
+    <div class="psub">Share an idea with anj and the team — anything that could make the work better. ${admin?"New ideas land in your inbox below.":"anj sees these; you’ll see the status here."}</div>
     <input id="ideaTitle" placeholder="Your idea in one line…" style="width:100%;margin-top:8px;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;">
     <textarea id="ideaDetail" rows="2" placeholder="Any detail (optional)" style="width:100%;margin-top:8px;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;font-family:inherit;"></textarea>
-    <div style="margin-top:8px;"><button class="btn" id="ideaSend">Send to Director</button></div>
+    <div style="margin-top:8px;"><button class="btn" id="ideaSend">Share idea</button></div>
     ${ideaInbox}
   </div>`;
 

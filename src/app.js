@@ -1220,19 +1220,41 @@ const MV_TYPES=[
 ];
 const MV_ACTION_LABEL={DEMOTION:"Demotion",PROMOTION:"Promotion",RECLASSIFICATION:"Reclassification",REGULARIZATION:"Regularization",SALARY_ADJUSTMENT:"Salary Adjustment",SCHEDULE_CHANGE:"Schedule Change",TRANSFER:"Transfer"};
 const MV_BASES=["Operational","Statutory","Discretionary"];
-// The discretionary 4-step chain, mapped to sig1..sig4.
-const MV_CHAIN=[
-  {n:1, email:"hr3@hassarams.com",    name:"Grazel Lyn Agulto", role:"Prepared by"},
-  {n:2, email:"pervin@hassarams.com", name:"Pervin Chatlani",   role:"Noted by"},
-  {n:3, email:"sanjay@hassarams.com", name:"Sanjay Chatlani",   role:"Reviewed by"},
-  {n:4, email:"anj@hassarams.com",    name:"Anj C. Genomal",    role:"Approved by"}
+// ── SELECTABLE, per-NPA approval chain (max 5 slots → sig1..sig5). ──────────────
+// Step 1 is ALWAYS Grazel (Prepared / Paymaster) — locked. Grazel may add middle
+// signatories, and the LAST slot must be a Management final approver (enforced).
+const MV_STEP1={role:"Prepared by / Paymaster", name:"Grazel Lyn Agulto", email:"hr3@hassarams.com"};
+// Middle signatories Grazel may append (in order). SC / Dept Head = name typed by
+// Grazel, email optional (may have no login → wet-sign on the printed NPA).
+const MV_SIGNATORY_OPTIONS=[
+  {key:"sc",     role:"Sales Coordinator", name:"", email:"", typed:true},
+  {key:"dh",     role:"Department Head",   name:"", email:"", typed:true},
+  {key:"hrhead", role:"HR Head",           name:"Rhel Vinluan", email:"hr4@hassarams.com", typed:false}
 ];
+// The final approver — the chain CANNOT be saved without exactly one of these, last.
+const MV_MANAGEMENT=[
+  {name:"Anju C. Genomal", email:"anj@hassarams.com"},
+  {name:"Sanjay Chatlani", email:"sanjay@hassarams.com"},
+  {name:"Pervin Chatlani", email:"pervin@hassarams.com"}
+];
+const MV_MGMT_ROLE="Approved by (Management)";
+// Basis of a record: prefer the stored `basis` column, fall back to status inference.
 function mvBasisFor(status){ return status==="memo"?"Operational":((status==="processing"||status==="scheduled")?"Statutory":"Discretionary"); }
-function mvSignedCount(r){ let c=0; for(let n=1;n<=4;n++){ if(r["sig"+n+"_data"]) c++; } return c; }
-// First unsigned step in the chain (or null if all 4 signed).
-function mvNextStep(r){ for(const st of MV_CHAIN){ if(!r["sig"+st.n+"_data"]) return st; } return null; }
-function mvCanSignNow(r){ if(r.status!=="awaiting_signoff") return null; const st=mvNextStep(r); if(!st) return null;
-  const me=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return (me===st.email)?st:null; }
+function mvBasis(r){ if(r&&r.basis){ const b=String(r.basis); return b.charAt(0).toUpperCase()+b.slice(1).toLowerCase(); } return mvBasisFor(r&&r.status); }
+// The ordered chain for a record — from `signers`, or a safe default (Grazel → Anj).
+function mvChain(r){
+  if(r && Array.isArray(r.signers) && r.signers.length) return r.signers.slice().sort((a,b)=>(a.seq||0)-(b.seq||0));
+  return [ {seq:1, role:MV_STEP1.role, name:MV_STEP1.name, email:MV_STEP1.email},
+           {seq:2, role:MV_MGMT_ROLE, name:"Anju C. Genomal", email:"anj@hassarams.com"} ];
+}
+function mvSignedCount(r){ let c=0; for(const st of mvChain(r)){ if(r["sig"+st.seq+"_data"]) c++; } return c; }
+// First unsigned step in the chain (may be a no-email wet-sign step), or null if all signed.
+function mvNextStep(r){ for(const st of mvChain(r)){ if(!r["sig"+st.seq+"_data"]) return st; } return null; }
+// First unsigned step that is e-signable in-portal (has an email). No-email steps are
+// wet-signed on the printed NPA — they don't gate the in-portal e-sign flow.
+function mvActiveStep(r){ for(const st of mvChain(r)){ if(r["sig"+st.seq+"_data"]) continue; if(st.email) return st; } return null; }
+function mvCanSignNow(r){ if(r.status!=="awaiting_signoff") return null; const st=mvActiveStep(r); if(!st) return null;
+  const me=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return (me && me===String(st.email||"").toLowerCase())?st:null; }
 function mvStatusPill(s){ const map={memo:["closed","Memo — Dept Head"],processing:["co","Processing (HR)"],awaiting_signoff:["cn","Awaiting sign-off"],approved:["active","Approved"],declined:["awol","Declined"]};
   const m=map[s]||["closed",esc(s||"—")]; return `<span class="pill ${m[0]}">${m[1]}</span>`; }
 function mvPeso(n){ return (n==null||n==="")?"—":"₱"+Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -1249,9 +1271,9 @@ function renderMovements(){
     <div class="panel" style="margin-top:0;">
       <h2>Personnel Movement <span class="count-tag">Notice of Personnel Action</span></h2>
       <div class="psub">Every movement is filed by its <b>basis</b>. <b>Operational</b> (no change in terms) is a memo — no NPA.
-        <b>Statutory</b> (min-wage / mandated COLA) is processed by HR with no approval gate.
-        <b>Discretionary</b> (merit · promotion · market) runs the 4-step chain:
-        Grazel → Pervin → Sanjay → Anj. Meal allowance is carried on every pay movement.</div>
+        <b>Statutory</b> (min-wage / mandated COLA) and <b>Discretionary</b> (merit · promotion · market) each run a
+        <b>chosen approval chain</b>: HR always prepares (Grazel), optional middle signatories are added per NPA, and a
+        <b>Management</b> approver always signs last. Meal allowance is carried on every pay movement.</div>
       <div class="actionbar">
         <button class="btn" id="mvNew">＋ New Movement</button>
         ${canSeePay()?`<button class="btn ghost" id="mvBatch">Batch statutory increase</button>`:""}
@@ -1262,12 +1284,12 @@ function renderMovements(){
         <div class="kpi"><div class="k-l">For memo</div><div class="k-n">${forMemo}</div><div class="k-s">operational</div></div>
       </div>
       ${R.length?`<table><thead><tr><th>Employee</th><th>Movement</th><th>Effective</th><th>Status</th><th>Sign chain</th></tr></thead><tbody>
-        ${R.map(r=>{ const disc=r.status==="awaiting_signoff"||r.status==="approved"; const sc=mvSignedCount(r);
+        ${R.map(r=>{ const disc=r.status==="awaiting_signoff"||r.status==="approved"; const sc=mvSignedCount(r); const tot=mvChain(r).length;
           return `<tr class="clickable" data-nid="${esc(String(r.id))}"><td><b>${esc(r.employee_name||"—")}</b><div class="esub">${esc(r.current_position||"")}${r.employee_number?" · "+esc(r.employee_number):""}</div></td>
-          <td>${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"—")}<div class="esub">${esc(mvBasisFor(r.status))}</div></td>
+          <td>${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"—")}<div class="esub">${esc(mvBasis(r))}</div></td>
           <td>${r.effective_date?fmtDate(r.effective_date):"—"}</td>
           <td>${mvStatusPill(r.status)}</td>
-          <td>${disc?`<span class="pill ${sc>=4?"active":(sc>0?"cn":"closed")}">${sc}/4 signed</span>`:'<span class="note" style="display:inline;padding:1px 6px;">—</span>'}</td></tr>`; }).join("")}
+          <td>${disc?`<span class="pill ${sc>=tot?"active":(sc>0?"cn":"closed")}">${sc}/${tot} signed</span>`:'<span class="note" style="display:inline;padding:1px 6px;">—</span>'}</td></tr>`; }).join("")}
       </tbody></table>`:`<div class="psub" style="margin-top:6px;">No movements filed yet — click “＋ New Movement”.</div>`}
     </div>`;
   const bN=$("#mvNew"); if(bN) bN.addEventListener("click",mvPickEmployee);
@@ -1310,6 +1332,7 @@ function openMovementForm(e){
     <div id="mv_basisNote" class="psub" style="margin:-4px 0 8px;"></div>
     <div id="mv_extra"></div>
     ${fld("mv_eff","Effective date *","","date")}
+    <div id="mv_chain" style="margin:2px 0 10px;"></div>
     <div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Remarks / justification</label><textarea id="mv_remarks" rows="2" style="width:100%;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:13.5px;"></textarea></div>
     <div id="mvMsg" style="font-size:13px;color:#a4322a;margin:4px 0;"></div>
     <div style="display:flex;gap:10px;"><button class="btn ghost" id="mvCancel" style="flex:1;">Cancel</button><button class="btn" id="mvGo" style="flex:1;">File movement</button></div>
@@ -1334,9 +1357,60 @@ function openMovementForm(e){
   };
   const paintBasis=()=>{ const b=document.getElementById("mv_basis").value; const n=document.getElementById("mv_basisNote");
     n.innerHTML = b==="Operational"? "📄 <b>Memo lane</b> — no NPA, no approval chain. Recorded as documented by the Dept Head."
-      : b==="Statutory"? "⚖ <b>Processing lane</b> — HR processes it, implemented on the effective date. No approval gate."
-      : b==="Discretionary"? "✍ <b>Approval lane</b> — routes the 4-step sign chain (Grazel → Pervin → Sanjay → Anj)."
-      : ""; };
+      : b==="Statutory"? "⚖ <b>Approval lane</b> — HR prepares (Grazel) and a Management approver signs. Add signatories below."
+      : b==="Discretionary"? "✍ <b>Approval lane</b> — build the sign chain below: Grazel → (optional signatories) → Management."
+      : ""; paintChain(); };
+  // ── Selectable approval-chain builder ─────────────────────────────────────────
+  // mvMid = the middle signatories Grazel adds (between step 1 and Management).
+  let mvMid=[]; let mvMgmt="";
+  const syncMid=()=>{ mvMid.forEach((s,i)=>{ const nEl=document.getElementById("mv_mid_name_"+i); if(nEl) s.name=nEl.value; const eEl=document.getElementById("mv_mid_email_"+i); if(eEl) s.email=eEl.value; });
+    const mg=document.getElementById("mv_mgmt"); if(mg) mvMgmt=mg.value; };
+  const paintChain=()=>{
+    const wrap=document.getElementById("mv_chain"); if(!wrap) return;
+    const b=document.getElementById("mv_basis").value;
+    if(b!=="Statutory" && b!=="Discretionary"){ wrap.innerHTML=""; return; }
+    const total=1+mvMid.length+1; // Grazel + middles + Management
+    const canAdd=total<5;
+    const midRows=mvMid.map((s,i)=>{
+      const nameInput=s.typed?`<input id="mv_mid_name_${i}" placeholder="Full name *" value="${esc(s.name||"")}" autocomplete="off" style="width:100%;padding:7px 9px;border:1px solid #e2e7e4;border-radius:7px;font-size:13px;margin-top:4px;">
+        <input id="mv_mid_email_${i}" placeholder="Email (optional — leave blank to wet-sign on print)" value="${esc(s.email||"")}" autocomplete="off" style="width:100%;padding:7px 9px;border:1px solid #e2e7e4;border-radius:7px;font-size:12.5px;margin-top:4px;">`:"";
+      const who=s.typed?"":`<span style="color:#3a4a41;font-weight:600;">${esc(s.name||"")}</span> · ${esc(s.email||"")}`;
+      return `<div style="background:#f7faf8;border:1px solid #e2e7e4;border-radius:8px;padding:8px 10px;margin-bottom:6px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div style="font-size:12.5px;"><b>${i+2}.</b> ${esc(s.role)} ${who}</div>
+          <button type="button" class="btn ghost" data-midrm="${i}" style="padding:2px 9px;font-size:12px;">Remove</button>
+        </div>${nameInput}</div>`;
+    }).join("");
+    const addCtrl=canAdd
+      ? `<div style="display:flex;gap:8px;margin:2px 0 8px;">
+          <select id="mv_addPick" style="flex:1;padding:8px 10px;border:1px solid #e2e7e4;border-radius:8px;font-size:13px;background:#fff;">
+            ${MV_SIGNATORY_OPTIONS.map(o=>`<option value="${o.key}">${esc(o.role)}${o.typed?"":" — "+esc(o.name)}</option>`).join("")}
+          </select>
+          <button type="button" class="btn ghost" id="mv_addSig" style="flex:0 0 auto;">＋ Add signatory</button>
+        </div>`
+      : `<div class="psub" style="margin:2px 0 8px;">Maximum of 5 signatories reached.</div>`;
+    wrap.innerHTML=`<div style="border:1px solid #e2e7e4;border-radius:10px;padding:12px 12px 10px;background:#fff;">
+      <div style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Approval chain (add signatory)</div>
+      <div style="background:#eef4ef;border:1px solid #d6e5db;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:12.5px;">
+        <b>1.</b> ${esc(MV_STEP1.role)} · <span style="font-weight:600;">${esc(MV_STEP1.name)}</span> <span class="note" style="display:inline;padding:0 5px;">locked</span></div>
+      ${midRows}
+      ${addCtrl}
+      <div style="margin-top:4px;">
+        <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Final approver (Management) *</label>
+        <select id="mv_mgmt" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:8px;font-size:13.5px;background:#fff;">
+          <option value=""></option>
+          ${MV_MANAGEMENT.map(mm=>`<option value="${esc(mm.email)}" ${mm.email===mvMgmt?"selected":""}>${esc(mm.name)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="psub" style="margin-top:6px;">Signs in order shown. Signatories without an email wet-sign on the printed NPA. Min 2, max 5.</div>
+    </div>`;
+    const ap=document.getElementById("mv_addSig"); if(ap) ap.onclick=()=>{ syncMid();
+      const k=document.getElementById("mv_addPick").value; const o=MV_SIGNATORY_OPTIONS.find(x=>x.key===k); if(!o) return;
+      if(1+mvMid.length+1>=5) return;
+      mvMid.push({key:o.key, role:o.role, name:o.name||"", email:o.email||"", typed:!!o.typed}); paintChain(); };
+    wrap.querySelectorAll("[data-midrm]").forEach(b2=>b2.onclick=()=>{ syncMid(); mvMid.splice(Number(b2.dataset.midrm),1); paintChain(); });
+    const mg=document.getElementById("mv_mgmt"); if(mg) mg.onchange=()=>{ mvMgmt=mg.value; };
+  };
   document.getElementById("mv_type").addEventListener("change",paintExtra);
   document.getElementById("mv_basis").addEventListener("change",paintBasis);
   document.getElementById("mvCancel").addEventListener("click",()=>m.remove());
@@ -1349,7 +1423,21 @@ function openMovementForm(e){
     if(!basis){ msg.textContent="Pick the basis (Operational / Statutory / Discretionary)."; return; }
     if(!eff){ msg.textContent="Set the effective date."; return; }
     if(t.pay && !canSeePay()){ msg.textContent="Pay movements are payroll-only."; return; }
-    const status = basis==="Operational"?"memo":(basis==="Statutory"?"processing":"awaiting_signoff");
+    // Build the ordered approval chain (Statutory + Discretionary both route it). Operational = memo, no chain.
+    let signers=null;
+    const status = basis==="Operational"?"memo":"awaiting_signoff";
+    if(basis!=="Operational"){
+      syncMid();
+      if(!mvMgmt){ msg.textContent="Pick the final Management approver (Anj / Sanjay / Pervin)."; return; }
+      for(const s of mvMid){ if(s.typed && !String(s.name||"").trim()){ msg.textContent="Enter a name for the "+s.role+" signatory (or remove it)."; return; } }
+      const mm=MV_MANAGEMENT.find(x=>x.email===mvMgmt);
+      const chain=[{role:MV_STEP1.role, name:MV_STEP1.name, email:MV_STEP1.email}]
+        .concat(mvMid.map(s=>({role:s.role, name:String(s.name||"").trim(), email:String(s.email||"").trim()||null})))
+        .concat([{role:MV_MGMT_ROLE, name:mm.name, email:mm.email}]);
+      if(chain.length<2){ msg.textContent="The chain needs at least 2 signatories."; return; }
+      if(chain.length>5){ msg.textContent="The chain can have at most 5 signatories."; return; }
+      signers=chain.map((s,i)=>({seq:i+1, role:s.role, name:s.name, email:s.email||null}));
+    }
     // Fold fields without a dedicated column (reporting line, employment status) into remarks so nothing is lost.
     const remarkParts=[]; if(v("mv_remarks")) remarkParts.push(v("mv_remarks"));
     if(t.report && (v("mv_rep_c")||v("mv_rep_n"))) remarkParts.push("Reporting line: "+(v("mv_rep_c")||"—")+" → "+(v("mv_rep_n")||"—"));
@@ -1361,7 +1449,7 @@ function openMovementForm(e){
       new_position:v("mv_pos_n")||null, new_department:v("mv_dep_n")||null, new_location:v("mv_loc_n")||null,
       current_daily_rate:nv("mv_dr_c"), new_daily_rate:nv("mv_dr_n"), current_allowance:nv("mv_al_c"), new_allowance:nv("mv_al_n"),
       meal_allowance:nv("mv_ml_c"), new_meal_allowance:nv("mv_ml_n"), new_schedule:v("mv_sch_n")||null,
-      effective_date:eff, remarks:remarkParts.join(" · "), status,
+      effective_date:eff, remarks:remarkParts.join(" · "), status, basis:basis.toLowerCase(), signers,
       prepared_by:(CURRENT_USER&&CURRENT_USER.email)||"HR", created_by:(CURRENT_USER&&CURRENT_USER.id)||null };
     const btn=document.getElementById("mvGo"); btn.disabled=true; btn.textContent="Filing…";
     const { error }=await sb.from("personnel_actions").insert(payload);
@@ -1384,18 +1472,24 @@ function openMovementDrawer(r){
   const kv=(k,val)=>`<div class="efield"><div class="el">${esc(k)}</div><div class="ev">${val}</div></div>`;
   let m=document.getElementById("mvDrawer"); if(!m){ m=document.createElement("div"); m.id="mvDrawer"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
-  const chainHtml=disc?MV_CHAIN.map(st=>{ const done=!!r["sig"+st.n+"_data"]; const by=r["sig"+st.n+"_by"]; const at=r["sig"+st.n+"_at"];
-    const isNext=signable&&signable.n===st.n;
+  const chain=disc?mvChain(r):[];
+  const active=disc?mvActiveStep(r):null;
+  const chainHtml=disc?chain.map(st=>{ const done=!!r["sig"+st.seq+"_data"]; const by=r["sig"+st.seq+"_by"]; const at=r["sig"+st.seq+"_at"];
+    const isNext=signable&&signable.seq===st.seq;
+    const wet=!st.email;
+    const state=done?("Signed"+(by?" by "+esc(by):"")+(at?" · "+fmtDate(at):""))
+      :isNext?"Waiting on you now"
+      :(wet?"Wet-sign on the printed NPA":(active&&active.seq===st.seq?("Waiting on "+esc(st.name)):"Pending"));
     return `<div class="task" style="align-items:flex-start;${isNext?'background:#fff8e6;border-radius:8px;':''}">
       <div class="dot ${done?'g':(isNext?'a':'')}" style="${done?'':'background:#d6ddd8;'}"></div>
-      <div style="flex:1;"><div class="tt">Step ${st.n} · ${esc(st.role)} — ${esc(st.name)}</div>
-        <div class="td">${done?("Signed"+(by?" by "+esc(by):"")+(at?" · "+fmtDate(at):"")):(isNext?"Waiting on you now":"Pending")}</div>
-        ${done&&r["sig"+st.n+"_data"]?`<img src="${r["sig"+st.n+"_data"]}" style="height:32px;margin-top:5px;background:#fff;border:1px solid #e2e7e4;border-radius:4px;padding:2px 4px;">`:""}
+      <div style="flex:1;"><div class="tt">Step ${st.seq} · ${esc(st.role)} — ${esc(st.name)}</div>
+        <div class="td">${state}</div>
+        ${done&&r["sig"+st.seq+"_data"]?`<img src="${r["sig"+st.seq+"_data"]}" style="height:32px;margin-top:5px;background:#fff;border:1px solid #e2e7e4;border-radius:4px;padding:2px 4px;">`:""}
       </div></div>`; }).join(""):"";
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
     <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;z-index:2;">
       <div style="font-size:20px;font-weight:800;">${esc(r.employee_name||"Movement")}</div>
-      <div style="font-size:12.5px;opacity:.9;">${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"")} · ${esc(mvBasisFor(r.status))} · ${esc(r.npa_id||"")}</div>
+      <div style="font-size:12.5px;opacity:.9;">${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"")} · ${esc(mvBasis(r))} · ${esc(r.npa_id||"")}</div>
     </div>
     <div style="padding:16px 20px 70px;">
       <div class="panel" style="margin-top:0;">
@@ -1419,7 +1513,7 @@ function openMovementDrawer(r){
           <tr><td><b>Meal allowance</b></td><td style="text-align:right;">${P(r.meal_allowance)}</td><td style="text-align:right;">${P(r.new_meal_allowance)}</td></tr>
           <tr><td><b>Total compensation</b></td><td style="text-align:right;">${P(tot(r.current_daily_rate,r.current_allowance,r.meal_allowance))}</td><td style="text-align:right;">${P(tot(r.new_daily_rate,r.new_allowance,r.new_meal_allowance))}</td></tr>
         </tbody></table></div>`:""}
-      ${disc?`<div class="panel"><div class="subhead">Approval chain <span class="sh-note">${mvSignedCount(r)}/4 signed</span></div>${chainHtml}
+      ${disc?`<div class="panel"><div class="subhead">Approval chain <span class="sh-note">${mvSignedCount(r)}/${chain.length} signed</span></div>${chainHtml}
         ${r.status==="approved"?`<div class="note" style="margin-top:8px;background:#eef6f0;border-color:#cfe6d8;color:#12352a;">✓ Fully approved${r.approval_date?" on "+fmtDate(r.approval_date):""}.</div>`:""}
       </div>`:stat?`<div class="panel"><div class="subhead">Statutory processing</div>
         <div class="psub">No approval chain — HR processes this and it takes effect on the effective date.${r.sig1_by?" <b>HR authorized</b> by "+esc(r.sig1_by)+(r.sig1_at?" · "+fmtDate(r.sig1_at):"")+".":""}</div>
@@ -1455,7 +1549,7 @@ function mvSignStep(r,step){
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
     <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#6B7785;">NOTICE OF PERSONNEL ACTION · ${esc(r.npa_id||"")}</div>
     <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 3px;">${esc(step.role)} — sign to advance</div>
-    <div class="psub" style="margin-bottom:8px;">${esc(r.employee_name||"")} · ${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"")} · effective ${r.effective_date?fmtDate(r.effective_date):"—"}. Step ${step.n} of 4.</div>
+    <div class="psub" style="margin-bottom:8px;">${esc(r.employee_name||"")} · ${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"")} · effective ${r.effective_date?fmtDate(r.effective_date):"—"}. Step ${step.seq} of ${mvChain(r).length}.</div>
     <div style="font-size:12px;color:#6B7785;margin-bottom:6px;">Sign below — drawn with your finger or mouse. RA 8792 e-signature · timestamped + recorded against your account.</div>
     <canvas id="mvPad" width="480" height="150" style="width:100%;height:150px;border:1px dashed #b9c4cf;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
     <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
@@ -1482,13 +1576,13 @@ function mvSignStep(r,step){
     if(!dirty){ msg.textContent="Please draw your signature first."; return; }
     const btn=document.getElementById("mvSigDo"); btn.disabled=true; btn.textContent="Signing…";
     const now=new Date().toISOString(); const signer=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"Signed-in user";
+    const chain=mvChain(r); const isLast=chain.length && step.seq===chain[chain.length-1].seq;
     const upd={ updated_at:now };
-    upd["sig"+step.n+"_by"]=signer; upd["sig"+step.n+"_at"]=now; upd["sig"+step.n+"_data"]=cv.toDataURL("image/png");
-    if(step.n===2) upd.noted_by=signer;
-    if(step.n===4){ upd.status="approved"; upd.approval_date=now.slice(0,10); upd.approved_by=signer; }
+    upd["sig"+step.seq+"_by"]=signer; upd["sig"+step.seq+"_at"]=now; upd["sig"+step.seq+"_data"]=cv.toDataURL("image/png");
+    if(isLast){ upd.status="approved"; upd.approval_date=now.slice(0,10); upd.approved_by=signer; }
     const { error }=await sb.from("personnel_actions").update(upd).eq("id",r.id);
     if(error){ msg.textContent=error.message; btn.disabled=false; btn.textContent="Approve & Sign"; return; }
-    await logChange("movement",null,r.employee_name,"NPA "+step.role.toLowerCase()+" (e-signed)",r.npa_id+(step.n===4?" · fully approved":""));
+    await logChange("movement",null,r.employee_name,"NPA "+step.role.toLowerCase()+" (e-signed)",r.npa_id+(isLast?" · fully approved":""));
     m.remove(); const dw=document.getElementById("mvDrawer"); if(dw) dw.remove(); await loadEmployees(); window.go("movements");
   };
 }
@@ -1511,13 +1605,15 @@ function printMovementNpa(r){
   if(r.new_department) changeLines.push("To department: "+esc(r.new_department));
   if(r.new_location) changeLines.push("To location: "+esc(r.new_location));
   if(r.new_schedule) changeLines.push("New schedule: "+esc(r.new_schedule));
-  const basis=mvBasisFor(r.status);
-  // Signature blocks: discretionary shows the 4-step chain (stamped where signed); others show the standard 3.
+  const basis=mvBasis(r);
+  // Signature blocks: any NPA with a chain (statutory/discretionary) stamps its chosen signatories where signed.
   const disc=r.status==="awaiting_signoff"||r.status==="approved";
-  const sigCells=(disc?MV_CHAIN:[{name:"Grazel Lyn Agulto",role:"PREPARED BY",n:1},{name:"Pervin Chatlani",role:"NOTED BY",n:2},{name:"Anj C. Genomal",role:"APPROVED BY",n:4}]).map(st=>{
-    const data=r["sig"+st.n+"_data"], at=r["sig"+st.n+"_at"];
+  const chain=mvChain(r);
+  const sigW=Math.max(20,Math.floor(100/Math.max(1,chain.length)));
+  const sigCells=chain.map(st=>{
+    const data=r["sig"+st.seq+"_data"], at=r["sig"+st.seq+"_at"];
     const line=data?`<img src="${data}" style="height:38px;">`:"&nbsp;";
-    return `<td style="width:${disc?25:33}%"><div class="sr">${(st.role||"").toUpperCase()}</div><div class="sl">${line}</div><b>${esc(st.name)}</b><br><span class="mut">Date: ${at?fmtDate(at):"____________"}</span></td>`; }).join("");
+    return `<td style="width:${sigW}%"><div class="sr">${esc((st.role||"").toUpperCase())}</div><div class="sl">${line}</div><b>${esc(st.name)}</b><br><span class="mut">Date: ${at?fmtDate(at):"____________"}</span></td>`; }).join("");
   const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to view/print the form."); return; }
   w.document.write(`<!DOCTYPE html><html><head><title>${esc(r.npa_id||"NPA")} — Notice of Personnel Action</title><style>
     body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#1F2A37;max-width:760px;margin:24px auto;padding:0 24px;font-size:13.5px;line-height:1.5;}
@@ -1543,7 +1639,7 @@ function printMovementNpa(r){
     ${fin}
     ${r.remarks?`<div style="margin-top:8px"><b>Remarks:</b> ${esc(r.remarks)}</div>`:""}
     <h3>IV. SIGNATURES AND APPROVALS</h3>
-    ${basis==="Discretionary"?`<table><tr>${sigCells}</tr></table>`:`<div class="conf" style="background:#eef2f7;border-color:#c9d6e6;color:#1E3A5F;">${basis==="Statutory"?("Statutory movement — processed by HR; implemented on the effective date. No approval gate."+(r.sig1_by?" HR authorized by "+esc(r.sig1_by)+".":"")):"Operational movement — documented by memo (Dept Head). No NPA approval chain required."}</div>`}
+    ${disc?`<table><tr>${sigCells}</tr></table>`:(r.status==="processing"?`<div class="conf" style="background:#eef2f7;border-color:#c9d6e6;color:#1E3A5F;">Statutory movement — processed by HR; implemented on the effective date. No approval gate.${r.sig1_by?" HR authorized by "+esc(r.sig1_by)+".":""}</div>`:`<div class="conf" style="background:#eef2f7;border-color:#c9d6e6;color:#1E3A5F;">Operational movement — documented by memo (Dept Head). No NPA approval chain required.</div>`)}
     <h3>V. ACKNOWLEDGEMENT</h3>
     <div><b>EMPLOYEE CONFORME</b> &nbsp;·&nbsp; Signature: ______________________ &nbsp;·&nbsp; Date Received: ______________</div>
     <div class="mut" style="margin-top:8px;">Distribution: Original — HR 201 File · Duplicate — Employee Copy · Triplicate — Payroll</div>
@@ -5274,14 +5370,19 @@ function openExitCase(id){
 
       <div class="panel"><h2>Department sign-offs <span class="count-tag">${exitStagesDone(x)}/8 cleared</span></h2>
         <div class="psub">Each department clears its items (per RCC's Exit Clearance form) and flags any charges.</div>
-        ${EXIT_STAGES.map(s=>`<div class="task" style="align-items:flex-start;">
+        ${EXIT_STAGES.map(s=>{ const by=(x.signoff_by||{})[s.key]||{}; return `<div class="task" style="align-items:flex-start;">
           <div class="dot ${x[s.s]==='Cleared'?'g':(x[s.s]==='With Charges'?'r':'a')}" style="margin-top:6px;"></div>
-          <div style="flex:1;min-width:0;"><div class="tt">${s.label}</div><div class="td">${s.items||''}</div></div>
+          <div style="flex:1;min-width:0;"><div class="tt">${s.label}</div><div class="td">${s.items||''}</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:5px;">
+              <input data-signoffby="${s.key}" value="${esc(by.name||"")}" placeholder="Cleared by (name)" style="width:100%;max-width:230px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;">
+              ${by.at?`<span class="td" style="font-size:11px;color:var(--green-dark);white-space:nowrap;">✓ ${fmtDate(by.at)}</span>`:''}
+            </div>
+          </div>
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
             <select data-stage="${s.s}" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;background:#fff;">${opt(EXIT_STATUSES,x[s.s]||"Pending")}</select>
             ${s.c?`<input data-charge="${s.c}" type="number" step="0.01" placeholder="₱" value="${x[s.c]??""}" style="width:84px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;">`:''}
           </div>
-        </div>`).join("")}
+        </div>`;}).join("")}
       </div>
 
       <div class="panel"><h2>Property to return</h2>
@@ -5449,6 +5550,11 @@ function collectExit(x){
   o.hr_returns=ret;
   m.querySelectorAll("[data-stage]").forEach(el=>{ o[el.dataset.stage]=el.value; });
   m.querySelectorAll("[data-charge]").forEach(el=>{ o[el.dataset.charge]=el.value.trim()!==""?Number(el.value):0; });
+  // per-department "Cleared by" — record the name + auto-stamp the date on first entry
+  const prevBy=x.signoff_by||{}; const by={};
+  m.querySelectorAll("[data-signoffby]").forEach(el=>{ const k=el.dataset.signoffby; const nm=el.value.trim();
+    if(nm){ by[k]={ name:nm, at:(prevBy[k]&&prevBy[k].at)||new Date().toISOString() }; } });
+  o.signoff_by=by;
   if(o.last_working_day) o.tenure_months=monthsBetween(x.hire_date,o.last_working_day);
   o.final_pay=collectFinalPay();   // the quitclaim breakdown is now the source of truth for payables/deductions/net
   return o;

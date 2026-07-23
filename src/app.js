@@ -1227,7 +1227,7 @@ const MV_CHAIN=[
   {n:3, email:"sanjay@hassarams.com", name:"Sanjay Chatlani",   role:"Reviewed by"},
   {n:4, email:"anj@hassarams.com",    name:"Anj C. Genomal",    role:"Approved by"}
 ];
-function mvBasisFor(status){ return status==="memo"?"Operational":(status==="processing"?"Statutory":"Discretionary"); }
+function mvBasisFor(status){ return status==="memo"?"Operational":((status==="processing"||status==="scheduled")?"Statutory":"Discretionary"); }
 function mvSignedCount(r){ let c=0; for(let n=1;n<=4;n++){ if(r["sig"+n+"_data"]) c++; } return c; }
 // First unsigned step in the chain (or null if all 4 signed).
 function mvNextStep(r){ for(const st of MV_CHAIN){ if(!r["sig"+st.n+"_data"]) return st; } return null; }

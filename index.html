@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784826193";
+window.APP_BUILD="1784826563";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784826193" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784826563" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -2492,6 +2492,8 @@ function canRunMeetings(){ const r=userRole(); const e=((CURRENT_USER&&CURRENT_U
 function canConfigMeetings(){ const r=userRole(); return r==="admin"||r==="payroll"; }
 // Personnel Movement / NPA module = Anj + Grazel(payroll) + Rhel(manager) — the people who prepare/route/approve movements.
 function canSeeMovements(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"; }
+// Concerns & Cases (arbitration / legal-labor matters) = Anj/Sanjay (admin) + Juvy (HR Relations, hr@) + Rhel (HR Manager, hr4@) — they handle these. Explicit emails on purpose: Richard (also "manager", IT reviewer) is excluded.
+function canSeeConcerns(){ const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return isAdminUser()||e==="hr@hassarams.com"||e==="hr4@hassarams.com"; }
 // Org Chart editing = admins + Rhel (HR Manager, hr4@). Reporting lines / dept heads are HRIS-owned org structure (NOT the PayPlus roster), so they're safe to edit here. Everyone else = read-only.
 function canEditOrg(){ return isAdminUser() || ((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()==="hr4@hassarams.com"; }
 const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding","reports"];
@@ -2509,7 +2511,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
@@ -2524,7 +2526,7 @@ function applyRoleUI(){
     if(pg==='meetings'){ n.style.display=canRunMeetings()?'':'none'; return; } // Meetings = Anj/Grazel/Rhel/Vina
     if(pg==='movements'){ n.style.display=canSeeMovements()?'':'none'; return; } // Movements/NPA = Anj/Grazel/Rhel
     if(pg==='govremit'){ n.style.display=canEditIds()?'':'none'; return; } // Gov't Remittances = gov-ID owners (Anj/Vina/Grazel)
-    if(pg==='concerns'){ n.style.display=isAdminUser()?'':'none'; return; } // Concerns & Cases = Director/owner only (arbitration/legal)
+    if(pg==='concerns'){ n.style.display=canSeeConcerns()?'':'none'; return; } // Concerns & Cases = Anj + Juvy (hr@) + Rhel (hr4@) — they handle arbitration/legal
     if(pg==='policies'||pg==='processes'||pg==='desk'||pg==='orgchart'||pg==='positions'||pg==='links'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies, Processes, HR Desk, Org Chart, Positions & JD, Links = every logged-in HR
     n.style.display=(allow&&allow.indexOf(pg)===-1)?'none':'';
   });
@@ -3473,7 +3475,7 @@ function renderDashboard(){
         ${(()=>{ if(!canSeePay()) return ''; const fpAwait=(SIGNATURES||[]).filter(s=>s.doc_type==="claim"&&s.awaiting==="you"&&s.status==="pending"); return fpAwait.length?`<div class="task" style="cursor:pointer;" onclick="go('signatures')"><div class="dot r"></div><div><div class="tt">${fpAwait.length} final-pay quitclaim(s) awaiting your sign-off</div><div class="td">Full figures are on the sign screen — review &amp; e-sign in one place${fpAwait[0]?` · e.g. ${esc(fpAwait[0].subject_name||"")} ${fpAwait[0].amount!=null?"("+peso(fpAwait[0].amount)+")":""}`:""}</div></div><div class="due r">sign-off</div></div>`:''; })()}
         ${(()=>{ if(!canSeeMovements()) return ''; const mine=(NPAS||[]).filter(r=>{ const st=mvCanSignNow(r); return st!=null; }); return mine.length?`<div class="task" style="cursor:pointer;" onclick="go('movements')"><div class="dot r"></div><div><div class="tt">${mine.length} personnel movement(s) awaiting your sign-off</div><div class="td">Notice of Personnel Action — review the figures &amp; e-sign${mine[0]?" · e.g. "+esc(mine[0].employee_name||""):""}</div></div><div class="due r">sign-off</div></div>`:''; })()}
         ${(()=>{ if(!isAdminUser()) return ''; const sep=(EXITCASES||[]).filter(e=>e.separation_status==="Submitted"&&e.overall_status!=="Complete"); return sep.length?`<div class="task" style="cursor:pointer;" onclick="go('exit')"><div class="dot r"></div><div><div class="tt">${sep.length} separation(s) awaiting your approval</div><div class="td">HR prepared these — approve to flip the employee to Separated${sep[0]?" · e.g. "+esc(sep[0].employee_name||""):""}</div></div><div class="due r">approve</div></div>`:''; })()}
-        ${(()=>{ if(!isAdminUser()) return ''; const hs=(CONCERNS||[]).filter(c=>{ const n=daysUntil(c.next_hearing); return n!=null&&n<=14&&(c.status==="Open"||c.status==="Ongoing"); }).sort((a,b)=>daysUntil(a.next_hearing)-daysUntil(b.next_hearing)); if(!hs.length) return ''; const c0=hs[0]; const n0=daysUntil(c0.next_hearing); const when=n0<0?`overdue ${-n0}d`:n0===0?"today":`in ${n0}d`; return `<div class="task" style="cursor:pointer;" onclick="go('concerns')"><div class="dot r"></div><div><div class="tt">${hs.length} case hearing${hs.length!==1?"s":""} within 14 days</div><div class="td">${esc(c0.title||"Case")} — ${when}${c0.forum?" · "+esc(c0.forum):""}</div></div><div class="due r">hearing</div></div>`; })()}
+        ${(()=>{ if(!canSeeConcerns()) return ''; const hs=(CONCERNS||[]).filter(c=>{ const n=daysUntil(c.next_hearing); return n!=null&&n<=14&&(c.status==="Open"||c.status==="Ongoing"); }).sort((a,b)=>daysUntil(a.next_hearing)-daysUntil(b.next_hearing)); if(!hs.length) return ''; const c0=hs[0]; const n0=daysUntil(c0.next_hearing); const when=n0<0?`overdue ${-n0}d`:n0===0?"today":`in ${n0}d`; return `<div class="task" style="cursor:pointer;" onclick="go('concerns')"><div class="dot r"></div><div><div class="tt">${hs.length} case hearing${hs.length!==1?"s":""} within 14 days</div><div class="td">${esc(c0.title||"Case")} — ${when}${c0.forum?" · "+esc(c0.forum):""}</div></div><div class="due r">hearing</div></div>`; })()}
         ${phReady?`<div class="task" style="cursor:pointer;" onclick="go('prehire')"><div class="dot r"></div><div><div class="tt">${phReady} candidate(s) ready for contract / onboarding</div><div class="td">Move them into an onboarding case</div></div><div class="due r">hiring</div></div>`:''}
         ${onbTasksOpen?`<div class="task" style="cursor:pointer;" onclick="go('onboarding')"><div class="dot a"></div><div><div class="tt">${onbTasksOpen} open onboarding task(s)</div><div class="td">${onbOpen} case(s) in progress — bank, uniform, gov forms, Employee ID</div></div><div class="due a">onboarding</div></div>`:''}
         ${exitOpen?`<div class="task" style="cursor:pointer;" onclick="go('exit')"><div class="dot a"></div><div><div class="tt">${exitOpen} exit clearance(s) in progress</div><div class="td">Department sign-offs &amp; final-pay computation</div></div><div class="due a">offboarding</div></div>`:''}
@@ -3687,11 +3689,24 @@ function openRecord(e){
         +f("Hours worked",ap.hours,TAGAUTO)+f("SSS (EE)",peso(ap.sss_ee),TAGAUTO)+f("PhilHealth (EE)",peso(ap.phic_ee),TAGAUTO)+f("Pag-IBIG (EE)",peso(ap.hdmf_ee),TAGAUTO)+f("Withholding tax",peso(ap.wtax),TAGAUTO))
         +`<div class="psub" style="padding:2px 8px;">Source: ${esc(ap.source||"agency payroll file")}. Employee-share contributions (SSS/PhilHealth/Pag-IBIG) feed the maternity differential &amp; loan capacity checks.</div>`; })()}
       ${e.notes?sec(e.employee_id&&agencyPayFor(e.employee_id)&&canSeePay()?9:8,"Notes",`<div style="font-size:13.5px;white-space:pre-wrap;padding:4px 8px;">${esc(e.notes)}</div>`):""}
+      ${(()=>{ const base=(e.employee_id&&agencyPayFor(e.employee_id)&&canSeePay())?9:8; const n=e.notes?base+1:base;
+        const list=(NPAS||[]).filter(r=>(r.employee_id!=null&&r.employee_id===e.id)||(r.employee_number!=null&&String(r.employee_number)===String(e.employee_id)))
+          .sort((a,b)=>String(b.effective_date||b.created_at||"").localeCompare(String(a.effective_date||a.created_at||"")));
+        const rows=list.length?list.map(r=>{ const sc=mvSignedCount(r), tot=mvChain(r).length;
+          const cur=r.current_daily_rate, nw=r.new_daily_rate; const inc=(nw!=null&&cur!=null)?(Number(nw)-Number(cur)):null;
+          const reason=String(r.remarks||"").replace(/^\[[^\]]*\]\s*/,"").trim();
+          const payLine=(cur!=null||nw!=null)?`<b>${peso(cur)} → ${peso(nw)}</b>${inc!=null?` <span style="color:#1f6b3a;">(${inc>=0?"+":""}${peso(inc)})</span>`:""}`:"";
+          return `<div class="efield mv-npa-row" data-nid="${esc(String(r.id))}" style="cursor:pointer;">
+            <div class="el">${r.effective_date?fmtDate(r.effective_date):"—"}</div>
+            <div class="ev">${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"—")}${payLine?" · "+payLine:""}${reason?` · <span class="note" style="display:inline;">${esc(reason)}</span>`:""} · ${mvStatusPill(r.status)} <span class="note" style="display:inline;padding:0 5px;">${sc}/${tot} signed</span></div></div>`; }).join("")
+          :`<div class="efield"><div class="ev"><span class="note">No pay or personnel actions on file yet.</span></div></div>`;
+        return sec(n,"Pay &amp; Personnel History (NPA)",rows); })()}
     </div>`;
   window.go("employee");
   $("#recBack").addEventListener("click",()=>window.go("employees"));
   $("#recEdit").addEventListener("click",()=>openForm(e));
   const _npa=$("#recNpa"); if(_npa) _npa.addEventListener("click",()=>openNpaForm(e));
+  $$("#page-employee .mv-npa-row").forEach(el=>el.addEventListener("click",()=>{ const r=(NPAS||[]).find(x=>String(x.id)===el.dataset.nid); if(r) openMovementDrawer(r); }));
 }
 
 // Standalone NPA entry: search who → opens the same NPA form (tick purpose → generate). No need to open the person first.
@@ -3876,8 +3891,15 @@ function mvNextStep(r){ for(const st of mvChain(r)){ if(!r["sig"+st.seq+"_data"]
 // First unsigned step that is e-signable in-portal (has an email). No-email steps are
 // wet-signed on the printed NPA — they don't gate the in-portal e-sign flow.
 function mvActiveStep(r){ for(const st of mvChain(r)){ if(r["sig"+st.seq+"_data"]) continue; if(st.email) return st; } return null; }
-function mvCanSignNow(r){ if(r.status!=="awaiting_signoff") return null; const st=mvActiveStep(r); if(!st) return null;
-  const me=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return (me && me===String(st.email||"").toLowerCase())?st:null; }
+function mvCanSignNow(r){ if(r.status!=="awaiting_signoff") return null;
+  const me=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); if(!me) return null;
+  // Statutory (mandated) NPAs: order is NOT enforced — any signatory may sign their own unsigned step, in any order.
+  if(mvBasis(r).toLowerCase()==="statutory"){
+    for(const st of mvChain(r)){ if(!r["sig"+st.seq+"_data"] && me===String(st.email||"").toLowerCase()) return st; }
+    return null; }
+  // Discretionary: strict sequential order — only the current first-unsigned e-signable step.
+  const st=mvActiveStep(r); if(!st) return null;
+  return (me===String(st.email||"").toLowerCase())?st:null; }
 function mvStatusPill(s){ const map={memo:["closed","Memo — Dept Head"],processing:["co","Processing (HR)"],awaiting_signoff:["cn","Awaiting sign-off"],approved:["active","Approved"],declined:["awol","Declined"]};
   const m=map[s]||["closed",esc(s||"—")]; return `<span class="pill ${m[0]}">${m[1]}</span>`; }
 function mvPeso(n){ return (n==null||n==="")?"—":"₱"+Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -3889,6 +3911,8 @@ function renderMovements(){
   const awaiting=R.filter(r=>r.status==="awaiting_signoff").length;
   const forMemo=R.filter(r=>r.status==="memo").length;
   const apprMonth=R.filter(r=>r.status==="approved" && (r.approval_date||"").slice(0,7)===ym).length;
+  // Statutory NPAs where the current user is still an unsigned signatory — drives the batch-sign button (order not enforced).
+  const mvMineStat=R.filter(r=>mvBasis(r).toLowerCase()==="statutory" && r.status==="awaiting_signoff" && mvCanSignNow(r));
   const nb=document.querySelector('.nav-item[data-page="movements"] .nav-badge'); if(nb){ nb.textContent=awaiting||""; nb.style.display=awaiting?"":"none"; }
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
@@ -3897,8 +3921,10 @@ function renderMovements(){
         <b>Statutory</b> (min-wage / mandated COLA) and <b>Discretionary</b> (merit · promotion · market) each run a
         <b>chosen approval chain</b>: HR always prepares (Grazel), optional middle signatories are added per NPA, and a
         <b>Management</b> approver always signs last. Meal allowance is carried on every pay movement.</div>
+      <div class="note" style="margin:8px 0;background:#fff8e6;border-color:#f0e2b8;color:#6b5a17;">📅 Reminder — NCR-27 2nd tranche: +₱25 → ₱780, effective Jan 20, 2027 (105 staff). Not yet filed; generate nearer the date.</div>
       <div class="actionbar">
         <button class="btn" id="mvNew">＋ New Movement</button>
+        ${mvMineStat.length?`<button class="btn" id="mvSignAll">✍ Sign all (as you) · ${mvMineStat.length}</button>`:""}
         ${canSeePay()?`<button class="btn ghost" id="mvUpload">⬆ Upload batch (Excel)</button>`:""}
         ${canSeePay()?`<button class="btn ghost" id="mvBatch">Batch statutory increase</button>`:""}
       </div>
@@ -3918,6 +3944,7 @@ function renderMovements(){
       </tbody></table>`:`<div class="psub" style="margin-top:6px;">No movements filed yet — click “＋ New Movement”.</div>`}
     </div>`;
   const bN=$("#mvNew"); if(bN) bN.addEventListener("click",mvPickEmployee);
+  const bSA=$("#mvSignAll"); if(bSA) bSA.addEventListener("click",()=>mvBatchSign(mvMineStat));
   const bB=$("#mvBatch"); if(bB) bB.addEventListener("click",mvBatchStatutory);
   const bU=$("#mvUpload"), fU=$("#mvUpFile");
   if(bU&&fU){ bU.addEventListener("click",()=>fU.click());
@@ -4091,6 +4118,8 @@ window.openMovementForm=openMovementForm;
 
 function openMovementDrawer(r){
   if(!r) return;
+  // The real document this record represents: operational basis = a Memorandum; anything else = an NPA.
+  const docType=mvBasis(r).toLowerCase()==="operational"?"Memorandum":"Notice of Personnel Action (NPA)";
   const disc=r.status==="awaiting_signoff"||r.status==="approved";
   const stat=r.status==="processing";
   const signable=mvCanSignNow(r);
@@ -4116,12 +4145,12 @@ function openMovementDrawer(r){
       </div></div>`; }).join(""):"";
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
     <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;z-index:2;">
-      <div style="font-size:20px;font-weight:800;">${esc(r.employee_name||"Movement")}</div>
+      <div style="font-size:20px;font-weight:800;">${esc(r.employee_name||docType)}</div>
       <div style="font-size:12.5px;opacity:.9;">${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"")} · ${esc(mvBasis(r))} · ${esc(r.npa_id||"")}</div>
     </div>
     <div style="padding:16px 20px 70px;">
       <div class="panel" style="margin-top:0;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h2 style="margin:0;">Movement</h2>${mvStatusPill(r.status)}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h2 style="margin:0;">${esc(docType)}</h2>${mvStatusPill(r.status)}</div>
         <div class="egrid" style="margin-top:8px;">
           ${kv("Employee",esc(r.employee_name||"—")+(r.employee_number?' <span class="note" style="display:inline;padding:0 4px;">'+esc(r.employee_number)+'</span>':""))}
           ${kv("Current position",esc(r.current_position||"—"))}
@@ -4204,14 +4233,73 @@ function mvSignStep(r,step){
     if(!dirty){ msg.textContent="Please draw your signature first."; return; }
     const btn=document.getElementById("mvSigDo"); btn.disabled=true; btn.textContent="Signing…";
     const now=new Date().toISOString(); const signer=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"Signed-in user";
-    const chain=mvChain(r); const isLast=chain.length && step.seq===chain[chain.length-1].seq;
+    const chain=mvChain(r);
+    // Fully approved once EVERY step carries a signature — count THIS step as signed. Handles out-of-order statutory signing.
+    const allSigned=chain.every(st=> st.seq===step.seq || !!r["sig"+st.seq+"_data"]);
     const upd={ updated_at:now };
     upd["sig"+step.seq+"_by"]=signer; upd["sig"+step.seq+"_at"]=now; upd["sig"+step.seq+"_data"]=cv.toDataURL("image/png");
-    if(isLast){ upd.status="approved"; upd.approval_date=now.slice(0,10); upd.approved_by=signer; }
+    if(allSigned){ upd.status="approved"; upd.approval_date=now.slice(0,10); upd.approved_by=signer; }
     const { error }=await sb.from("personnel_actions").update(upd).eq("id",r.id);
     if(error){ msg.textContent=error.message; btn.disabled=false; btn.textContent="Approve & Sign"; return; }
-    await logChange("movement",null,r.employee_name,"NPA "+step.role.toLowerCase()+" (e-signed)",r.npa_id+(isLast?" · fully approved":""));
+    await logChange("movement",null,r.employee_name,"NPA "+step.role.toLowerCase()+" (e-signed)",r.npa_id+(allSigned?" · fully approved":""));
     m.remove(); const dw=document.getElementById("mvDrawer"); if(dw) dw.remove(); await loadEmployees(); window.go("movements");
+  };
+}
+
+// Batch e-sign: draw ONCE, then apply the current user's signature to their own unsigned
+// step on every statutory awaiting_signoff NPA where they're a signatory. Order not enforced.
+function mvBatchSign(list){
+  list=(list||[]).filter(r=>mvBasis(r).toLowerCase()==="statutory" && r.status==="awaiting_signoff" && mvCanSignNow(r));
+  if(!list.length) return;
+  let m=document.getElementById("mvBatchModal"); if(!m){ m=document.createElement("div"); m.id="mvBatchModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
+    <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#6B7785;">STATUTORY NPA · BATCH SIGN-OFF</div>
+    <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 3px;">Sign all ${list.length} NPA${list.length>1?"s":""} as you</div>
+    <div class="psub" style="margin-bottom:8px;">Your signature is applied to your own step on ${list.length} mandated (statutory) NPA${list.length>1?"s":""}, in any order. Any that become fully signed are marked Approved.</div>
+    <div style="font-size:12px;color:#6B7785;margin-bottom:6px;">Sign below — drawn with your finger or mouse. RA 8792 e-signature · timestamped + recorded against your account.</div>
+    <canvas id="mvBPad" width="480" height="150" style="width:100%;height:150px;border:1px dashed #b9c4cf;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+      <button class="btn ghost" id="mvBClear" style="flex:0 0 auto;">Clear</button>
+      <span id="mvBMsg" style="font-size:12.5px;color:#a4322a;flex:1;"></span>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px;">
+      <button class="btn ghost" id="mvBCancel" style="margin-left:auto;">Cancel</button>
+      <button class="btn" id="mvBDo">Approve &amp; Sign all</button>
+    </div></div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("mvBCancel").onclick=()=>m.remove();
+  const cv=document.getElementById("mvBPad"), ctx=cv.getContext("2d"); let drawing=false, dirty=false;
+  ctx.lineWidth=2.2; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.strokeStyle="#13243b";
+  const pos=e=>{ const rc=cv.getBoundingClientRect(), t=e.touches&&e.touches[0]?e.touches[0]:e; return {x:(t.clientX-rc.left)*(cv.width/rc.width), y:(t.clientY-rc.top)*(cv.height/rc.height)}; };
+  const start=e=>{ drawing=true; dirty=true; const p=pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); e.preventDefault(); };
+  const move=e=>{ if(!drawing) return; const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); e.preventDefault(); };
+  const end=()=>{ drawing=false; };
+  cv.addEventListener("mousedown",start); cv.addEventListener("mousemove",move); window.addEventListener("mouseup",end);
+  cv.addEventListener("touchstart",start,{passive:false}); cv.addEventListener("touchmove",move,{passive:false}); cv.addEventListener("touchend",end);
+  document.getElementById("mvBClear").onclick=()=>{ ctx.clearRect(0,0,cv.width,cv.height); dirty=false; };
+  document.getElementById("mvBDo").onclick=async()=>{
+    const msg=document.getElementById("mvBMsg");
+    if(!dirty){ msg.textContent="Please draw your signature first."; return; }
+    const signer=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"Signed-in user";
+    if(!confirm("Sign "+list.length+" NPA"+(list.length>1?"s":"")+" as "+signer+"?")) return;
+    const btn=document.getElementById("mvBDo"); btn.disabled=true; btn.textContent="Signing…";
+    const data=cv.toDataURL("image/png"); const now=new Date().toISOString();
+    let signed=0, approved=0, failed=0;
+    for(const r of list){
+      const st=mvCanSignNow(r); if(!st) continue;
+      const chain=mvChain(r);
+      const allSigned=chain.every(s=> s.seq===st.seq || !!r["sig"+s.seq+"_data"]);
+      const upd={ updated_at:now };
+      upd["sig"+st.seq+"_by"]=signer; upd["sig"+st.seq+"_at"]=now; upd["sig"+st.seq+"_data"]=data;
+      if(allSigned){ upd.status="approved"; upd.approval_date=now.slice(0,10); upd.approved_by=signer; }
+      const { error }=await sb.from("personnel_actions").update(upd).eq("id",r.id);
+      if(error){ failed++; continue; }
+      signed++; if(allSigned) approved++;
+    }
+    await logChange("movement",null,null,"Batch e-signed statutory NPAs",signed+" signed"+(approved?" · "+approved+" fully approved":"")+(failed?" · "+failed+" failed":""));
+    if(failed){ msg.textContent=failed+" could not be signed — signed "+signed+"."; }
+    m.remove(); await loadEmployees(); window.go("movements");
   };
 }
 
@@ -5993,7 +6081,7 @@ function hearingBadge(d){
 function activeCases(){ return CONCERNS.filter(c=>c.status==="Open"||c.status==="Ongoing"); }
 function renderConcerns(){
   const pg=$("#page-concerns"); if(!pg) return;
-  if(!isAdminUser()){ pg.innerHTML=`<div class="panel" style="margin-top:0;"><div class="psub">Concerns &amp; Cases is restricted to the Director/owner.</div></div>`; return; }
+  if(!canSeeConcerns()){ pg.innerHTML=`<div class="panel" style="margin-top:0;"><div class="psub">Concerns &amp; Cases is restricted to the Director, HR Relations (Juvy) and the HR Manager (Rhel).</div></div>`; return; }
   const active=activeCases();
   const soon=CONCERNS.filter(c=>{ const n=daysUntil(c.next_hearing); return n!=null && n>=0 && n<=14 && c.status!=="Closed"&&c.status!=="Settled"&&c.status!=="Dismissed"&&c.status!=="Withdrawn"; });
   const exposure=active.reduce((s,c)=>s+(Number(c.exposure)||0),0);

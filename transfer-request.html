@@ -41,7 +41,7 @@
 <div class="wrap">
   <div class="top">
     <div class="brand">ROSHAN COMMERCIAL CORPORATION</div>
-    <h1>Store transfer request</h1>
+    <h1>Store Transfer Request</h1>
     <div class="sub">For Store Coordinators</div>
   </div>
 
@@ -84,11 +84,25 @@
       <input id="empemail" type="email" placeholder="Fills in if we have it">
     </div>
 
+    <div id="nextbox" style="margin-top:18px;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:#eef4ef;">
+      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--green);margin-bottom:6px;">What happens after you submit</div>
+      <div style="font-size:13px;line-height:1.55;color:#22302a;">
+        <div style="margin:3px 0;">✅ <b>HR receives this automatically</b> in the portal — you don't have to email anyone.</div>
+        <div style="margin:3px 0;">🏬 Both stores are looped in: the <b>current store</b> (<span id="pvFrom">—</span>) and the <b>receiving store</b> (<span id="pvTo">—</span>) heads each <b>confirm — before and after</b> the period.</div>
+        <div style="margin:3px 0;">✉️ <b><span id="pvEmp">The employee</span></b> is advised of the move (same rank &amp; pay). Here's exactly what they'll get:</div>
+      </div>
+      <div style="margin-top:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 13px;font-size:12.5px;line-height:1.55;color:#33403a;">
+        <div style="font-size:10.5px;font-weight:800;letter-spacing:.5px;color:var(--mut);text-transform:uppercase;margin-bottom:5px;">Advisory the employee receives — preview</div>
+        <div id="pvBody">Fill in the form above to see the advisory.</div>
+      </div>
+      <div style="font-size:11px;color:var(--mut);margin-top:7px;">Emailed advisories switch on once HR finishes the email set-up — until then, HR still receives every request here in the portal.</div>
+    </div>
+
     <div class="fair">Fairness reminder: a transfer must keep the same rank and pay and be to a reasonable location — it should never be a way to force someone out.</div>
 
     <button class="btn" id="submit">Submit transfer request</button>
     <div class="msg" id="msg"></div>
-    <div class="note-priv"><span>🔒</span><span>This is your personal link — please don't share it. Your request goes straight to HR; the store head still confirms before and after.</span></div>
+    <div class="note-priv"><span>🔒</span><span>This is your personal link — please don't share it. Your request reaches HR automatically; both the current and receiving store heads confirm before and after.</span></div>
   </div>
 
   <div class="done" id="done">
@@ -138,7 +152,48 @@ $("emp").addEventListener("change", ()=>{
     $("from").value = cur;
   }
 });
-$("type").addEventListener("change", ()=>{ $("end").disabled = $("type").value==="Permanent"; if($("type").value==="Permanent") $("end").value=""; });
+$("type").addEventListener("change", ()=>{ $("end").disabled = $("type").value==="Permanent"; if($("type").value==="Permanent") $("end").value=""; updatePreview(); });
+
+function fmtD(d){ if(!d) return ""; try{ return new Date(d+"T00:00:00").toLocaleDateString("en-PH",{year:"numeric",month:"long",day:"numeric"}); }catch(_){ return d; } }
+function updatePreview(){
+  const e = PEOPLE[$("emp").value];
+  const emp = e ? e.name : "";
+  const from = $("from").value || "";
+  const to = $("to").value || "";
+  const type = $("type").value;
+  const start = $("start").value, end = $("end").value;
+  const reason = $("reason").value.trim();
+  const scName = ($("scName").textContent||"").trim();
+  if($("pvFrom")) $("pvFrom").textContent = from||"—";
+  if($("pvTo"))   $("pvTo").textContent = to||"—";
+  if($("pvEmp"))  $("pvEmp").textContent = emp||"The employee";
+  const box=$("pvBody"); if(!box) return;
+  if(!emp || !to){ box.innerHTML = '<span style="color:var(--mut);">Choose the employee and the destination store to see the advisory.</span>'; return; }
+  const word = type==="Permanent" ? "re-assigned" : "temporarily deployed";
+  const effect = type==="Permanent"
+    ? (start ? ("effective <b>"+esc(fmtD(start))+"</b>, on a permanent basis") : "on a permanent basis")
+    : ("effective <b>"+esc(fmtD(start))+"</b>" + (end ? " until <b>"+esc(fmtD(end))+"</b>" : " until further notice"));
+  const today = fmtD(new Date().toISOString().slice(0,10));
+  const reasonLine = reason ? `<p style="margin:0 0 9px;">This is <b>${esc(reason)}</b>.</p>` : "";
+  box.innerHTML =
+    `<div style="border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;">
+       <div style="padding:12px 14px 9px;border-bottom:2px solid var(--green);text-align:center;">
+         <img src="rcc_logo.png" alt="ROSHAN COMMERCIAL CORPORATION" style="height:36px;max-width:80%;object-fit:contain;">
+       </div>
+       <div style="padding:13px 15px;color:#2a352f;">
+         <div style="font-size:11px;color:var(--mut);margin-bottom:9px;">${esc(today)}</div>
+         <p style="margin:0 0 9px;">Dear <b>${esc(emp)}</b>,</p>
+         <p style="margin:0 0 9px;">This is to formally advise you that you will be <b>${word}</b> from <b>${esc(from||"your current store")}</b> to <b>${esc(to)}</b>, ${effect}.</p>
+         ${reasonLine}
+         <p style="margin:0 0 9px;">Please note that this <b>does not change your position, rank, or pay</b>. Kindly confirm that this advisory is clear to you.</p>
+         <p style="margin:0 0 9px;">Should you have any questions or concerns, please coordinate with your Store Coordinator or HR.</p>
+         <p style="margin:11px 0 0;">Thank you.</p>
+         <p style="margin:3px 0 0;"><b>${esc(scName||"Store Coordinator")}</b><br><span style="font-size:11.5px;color:var(--mut);">Store Coordinator · for RCC Human Resources</span></p>
+       </div>
+     </div>`;
+}
+["emp","from","to","start","end"].forEach(id=>{ const el=$(id); if(el) el.addEventListener("change",updatePreview); });
+$("reason").addEventListener("input",updatePreview);
 
 $("submit").addEventListener("click", async ()=>{
   const msg=$("msg"); msg.className="msg"; msg.style.display="none";

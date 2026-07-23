@@ -75,6 +75,15 @@
     <label class="q">Reason</label>
     <textarea id="reason" placeholder="e.g. Cover a maternity leave / store needs help this period"></textarea>
 
+    <div style="margin-top:18px;padding:13px;border:1.5px dashed var(--line);border-radius:12px;background:#fafbfc;">
+      <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--green);">Emails for the advisory <span style="font-weight:600;color:var(--mut);text-transform:none;letter-spacing:0;">(optional)</span></div>
+      <div style="font-size:12px;color:var(--mut);margin:4px 0 6px;line-height:1.45;">Add these if you have them — they let the notice reach the right people while we finish the master list. You can leave them blank.</div>
+      <label class="q" style="margin-top:8px;">Your email (Store Coordinator)</label>
+      <input id="scemail" type="email" placeholder="So you get a copy — saved for next time">
+      <label class="q">Employee's email</label>
+      <input id="empemail" type="email" placeholder="Fills in if we have it">
+    </div>
+
     <div class="fair">Fairness reminder: a transfer must keep the same rank and pay and be to a reasonable location — it should never be a way to force someone out.</div>
 
     <button class="btn" id="submit">Submit transfer request</button>
@@ -106,6 +115,7 @@ async function init(){
     const j = await r.json();
     if(!j.ok){ $("load").textContent = j.reason || "This link is not valid."; return; }
     $("scName").textContent = j.sc_name || "—";
+    if(j.sc_email) $("scemail").value = j.sc_email;
     PEOPLE = j.employees || [];
     $("emp").innerHTML = '<option value="">Select employee…</option>' + PEOPLE.map((e,i)=>`<option value="${i}">${esc(e.name)}</option>`).join("");
     const stores = j.stores || [];
@@ -120,6 +130,7 @@ init();
 $("emp").addEventListener("change", ()=>{
   const e = PEOPLE[$("emp").value]; if(!e) return;
   $("empno").value = e.emp_no || "";
+  $("empemail").value = e.email || "";
   const cur = firstSeg(e.worksite);
   if(cur){
     if(![...$("from").options].some(o=>o.value===cur)) $("from").insertAdjacentHTML("beforeend", `<option value="${esc(cur)}">${esc(cur)}</option>`);
@@ -133,7 +144,8 @@ $("submit").addEventListener("click", async ()=>{
   const e = PEOPLE[$("emp").value];
   const payload = { sc:TOKEN, emp_name:e?e.name:"", emp_no:$("empno").value.trim(),
     from_worksite:$("from").value, to_worksite:$("to").value, request_type:$("type").value,
-    start_date:$("start").value, end_date:$("end").value, reason:$("reason").value.trim() };
+    start_date:$("start").value, end_date:$("end").value, reason:$("reason").value.trim(),
+    sc_email:$("scemail").value.trim(), emp_email:$("empemail").value.trim() };
   if(!payload.emp_name){ msg.className="msg err"; msg.textContent="Please choose the employee."; msg.style.display="block"; return; }
   if(!payload.to_worksite){ msg.className="msg err"; msg.textContent="Please choose the store to transfer to."; msg.style.display="block"; return; }
   if(!payload.start_date){ msg.className="msg err"; msg.textContent="Please set the start date."; msg.style.display="block"; return; }

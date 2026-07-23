@@ -99,6 +99,8 @@ function canRunMeetings(){ const r=userRole(); const e=((CURRENT_USER&&CURRENT_U
 function canConfigMeetings(){ const r=userRole(); return r==="admin"||r==="payroll"; }
 // Personnel Movement / NPA module = Anj + Grazel(payroll) + Rhel(manager) — the people who prepare/route/approve movements.
 function canSeeMovements(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"; }
+// Org Chart editing = admins + Rhel (HR Manager, hr4@). Reporting lines / dept heads are HRIS-owned org structure (NOT the PayPlus roster), so they're safe to edit here. Everyone else = read-only.
+function canEditOrg(){ return isAdminUser() || ((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()==="hr4@hassarams.com"; }
 const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding","reports"];
 // HR Relations (Juvy) — employee-relations desk: onboarding→exit lifecycle, discipline/compliance, notices, loans/benefits. NO salary, NO recruiting funnel.
 const RELATIONS_PAGES=["dashboard","onboarding","evaluations","exit","compliance","memos","signatures","loans","timekeeping"];
@@ -3020,20 +3022,29 @@ function renderStoremap(){
 window.renderStoremap=renderStoremap;
 
 /* ================= ORG CHART — reporting structure from the real roster =================
-   Read-only, data-driven view of the org. Two lenses:
+   Data-driven view of the org. Two lenses:
    (1) By Department — company → department (with head + headcount) → staff grouped under supervisors.
    (2) By Reporting Line — supervisor tree built from supervisor_email → employee.
-   Nothing is edited here; the roster stays PayPlus-owned. Fields (supervisor_*, department_head_*)
-   are partially populated, so gaps are flagged helpfully rather than hidden. */
+   The roster stays PayPlus-owned, BUT reporting lines / dept heads are HRIS-owned org structure
+   (supervisor_* on the employee row; department_heads table), so Rhel/admins (canEditOrg) can assign
+   them inline here — the nightly PayPlus sync never touches those fields. Everyone else = read-only.
+   Assigned dept heads come from DEPT_HEADS first, then fall back to the old department_head_email logic. */
 function renderOrgChart(){
   const pg=$("#page-orgchart"); if(!pg) return;
+  const canEdit=canEditOrg();
   const ACT=EMPLOYEES.filter(e=>(e.status||"").toLowerCase().startsWith("active"));
   // resolve an email to an active employee's name (else show the raw email)
   const emailToEmp={}; ACT.forEach(e=>{ if(e.email) emailToEmp[String(e.email).toLowerCase()]=e; });
   const resolveName=(email)=>{ if(!email) return ""; const m=emailToEmp[String(email).toLowerCase()]; return m?m.full_name:email; };
   // departments (active only)
   const depts=[...new Set(ACT.map(e=>(e.department||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  // Assigned head from the department_heads table (HRIS-owned), matched by department name.
+  const deptHeadRow=(d)=>DEPT_HEADS.find(h=>(h.department||"").trim().toLowerCase()===String(d).trim().toLowerCase());
+  // Fallback: infer a head from any department_head_email set on the roster rows.
   const deptHeadEmail=(d)=>{ const c={}; ACT.filter(e=>(e.department||"").trim()===d).forEach(e=>{ const h=(e.department_head_email||"").trim(); if(h) c[h]=(c[h]||0)+1; }); const k=Object.keys(c); return k.length?k.sort((a,b)=>c[b]-c[a])[0]:""; };
+  // Resolved head name: assigned row wins, else the roster-inferred email.
+  const deptHeadName=(d)=>{ const r=deptHeadRow(d); if(r&&(r.head_name||r.head_email)) return r.head_name||resolveName(r.head_email); const em=deptHeadEmail(d); return em?resolveName(em):""; };
+  const deptHasHead=(d)=>!!(deptHeadRow(d)||deptHeadEmail(d));
   // supervisor tree scaffolding
   const childrenOf={}; ACT.forEach(e=>{ const se=String(e.supervisor_email||"").toLowerCase(); if(se && emailToEmp[se] && emailToEmp[se]!==e){ (childrenOf[se]=childrenOf[se]||[]).push(e); } });
   const hasKids=(e)=> e.email && childrenOf[String(e.email).toLowerCase()];
@@ -3041,11 +3052,14 @@ function renderOrgChart(){
   // KPI figures + data-gap flags
   const supRefs=new Set(); ACT.forEach(e=>{ const lbl=String(e.supervisor_email||e.supervisor_name||"").trim().toLowerCase(); if(lbl) supRefs.add(lbl); });
   const noSup=ACT.filter(e=>!String(e.supervisor_name||"").trim() && !String(e.supervisor_email||"").trim());
-  const deptsNoHead=depts.filter(d=>!deptHeadEmail(d));
+  const deptsNoHead=depts.filter(d=>!deptHasHead(d));
   const initialsOf=(e)=>(e.full_name||"?").split(/[ ,]+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("").toUpperCase();
+  // Unobtrusive ghost button to (re)assign a person's supervisor — only editors see it; stops the row's open-record click.
+  const supBtn=(e)=> canEdit ? `<button class="oc-setsup" data-idx="${EMPLOYEES.indexOf(e)}" title="Set / replace / clear supervisor" style="flex-shrink:0;background:none;border:1px solid #dbe4dd;color:#1F6B52;font-size:11px;padding:2px 8px;border-radius:6px;cursor:pointer;white-space:nowrap;">⇧ supervisor</button>` : "";
   const personRow=(e,extra)=>`<div class="oc-person clickable" data-idx="${EMPLOYEES.indexOf(e)}" style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:7px;cursor:pointer;">
       <span style="width:26px;height:26px;border-radius:50%;background:#e6efe9;color:#1F6B52;font-size:10.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">${esc(initialsOf(e))}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><b style="font-size:13px;color:#12352a;">${esc(e.full_name)}</b> <span style="color:#6b7785;font-size:12px;">· ${esc(e.position||"—")}</span>${extra||""}</span>
+      ${supBtn(e)}
     </div>`;
 
   let lens="dept";                 // "dept" | "tree"
@@ -3054,7 +3068,7 @@ function renderOrgChart(){
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
       <h2>Org Chart</h2>
-      <div class="psub">Reporting structure built live from the roster (active staff). Read-only — the roster stays PayPlus-owned; edit people in their record. Click any person to open their record.</div>
+      <div class="psub">Reporting structure built live from the roster (active staff). The roster stays PayPlus-owned; click any person to open their record.${canEdit?` <b style="color:#1F6B52;">Rhel/admins can assign department heads and supervisors here</b> — this feeds the discretionary NPA approval chain.`:` Reporting lines are read-only for your role.`}</div>
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
         <div class="kpi"><div class="k-l">Departments</div><div class="k-n">${depts.length}</div></div>
         <div class="kpi"><div class="k-l">Supervisors</div><div class="k-n">${supRefs.size}</div></div>
@@ -3084,8 +3098,7 @@ function renderOrgChart(){
         const staff=ACT.filter(e=>(e.department||"").trim()===d && match(e));
         if(q && !staff.length) return "";
         const all=ACT.filter(e=>(e.department||"").trim()===d);
-        const headEmail=deptHeadEmail(d);
-        const headName=headEmail?resolveName(headEmail):"";
+        const headName=deptHeadName(d);
         const expanded=q?true:ocExpanded.has(d);   // always expand when searching
         let inner="";
         if(expanded){
@@ -3104,7 +3117,10 @@ function renderOrgChart(){
         return `<div class="panel" style="margin-top:0;margin-bottom:12px;">
           <div class="oc-dept-h clickable" data-dept="${esc(d)}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;cursor:pointer;">
             <div style="font-size:15px;font-weight:800;color:#12352a;">${q?"":`<span style="color:#6b7785;">${expanded?"▾":"▸"}</span> `}${esc(d)}</div>
-            <div style="font-size:12px;color:var(--muted,#6b7785);">${headName?`Head: <b>${esc(headName)}</b>`:`<span style="color:#a12;">⚠ no head assigned</span>`} · ${all.length} staff${q&&staff.length!==all.length?` · ${staff.length} matching`:""}</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted,#6b7785);">
+              <span>${headName?`Head: <b>${esc(headName)}</b>`:`<span style="color:#a12;">⚠ no head assigned</span>`} · ${all.length} staff${q&&staff.length!==all.length?` · ${staff.length} matching`:""}</span>
+              ${canEdit?`<button class="oc-sethead" data-dept="${esc(d)}" title="Assign the department head" style="background:none;border:1px solid #dbe4dd;color:#1F6B52;font-size:11px;padding:2px 8px;border-radius:6px;cursor:pointer;white-space:nowrap;">${headName?"change":"✎ set head"}</button>`:""}
+            </div>
           </div>${inner}</div>`;
       }).join("");
       body.innerHTML=headBox+(cards || `<div class="psub">No staff match “${esc(q)}”.</div>`);
@@ -3143,6 +3159,9 @@ function renderOrgChart(){
     }
     $$("#ocBody .oc-person").forEach(el=>el.addEventListener("click",()=>openRecord(EMPLOYEES[+el.dataset.idx])));
     $$("#ocBody .oc-dept-h").forEach(el=>el.addEventListener("click",()=>{ const d=el.dataset.dept; if(ocExpanded.has(d)) ocExpanded.delete(d); else ocExpanded.add(d); paint(); }));
+    // Inline org-structure editing (editors only) — stop propagation so we don't toggle the card / open the record.
+    $$("#ocBody .oc-sethead").forEach(el=>el.addEventListener("click",ev=>{ ev.stopPropagation(); ocSetDeptHead(el.dataset.dept); }));
+    $$("#ocBody .oc-setsup").forEach(el=>el.addEventListener("click",ev=>{ ev.stopPropagation(); ocSetSupervisor(EMPLOYEES[+el.dataset.idx]); }));
   };
   const setLens=(v)=>{ lens=v;
     $("#ocByDept").style.background=v==="dept"?"#1F6B52":""; $("#ocByDept").style.color=v==="dept"?"#fff":"";
@@ -3156,6 +3175,63 @@ function renderOrgChart(){
 }
 window.renderOrgChart=renderOrgChart;
 window.openRecord=openRecord;
+
+/* ---- Org Chart inline editing (editors only): pick an employee, then assign a dept head / supervisor ---- */
+// Reusable employee picker modal (mirrors pickEmployeeForExit). onChoose gets the employee, or null when cleared.
+function ocPickEmployee(title, opts, onChoose){
+  opts=opts||{};
+  const list=EMPLOYEES.slice().sort((a,b)=>(a.full_name||"").localeCompare(b.full_name||""));
+  let m=document.getElementById("ocPick"); if(!m){ m=document.createElement("div"); m.id="ocPick"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10002;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;max-height:80vh;overflow-y:auto;padding:22px;">
+    <h2 style="color:#1F6B52;font-size:17px;margin:0 0 2px;">${esc(title)}</h2>
+    <div class="psub">Search and pick a person:</div>
+    <input id="ocPickSearch" class="search" style="width:100%;margin:10px 0;" placeholder="Search name, position…">
+    ${opts.allowClear?`<button class="btn ghost" id="ocPickClear" style="width:100%;margin-bottom:8px;color:#a12;border-color:#e9b9b9;">${esc(opts.clearLabel||"Clear")}</button>`:""}
+    <div id="ocPickList"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button class="btn ghost" id="ocPickClose">Close</button></div>
+  </div>`;
+  const paint=()=>{ const q=(($("#ocPickSearch")||{}).value||"").toLowerCase();
+    $("#ocPickList").innerHTML=list.filter(e=>[e.full_name,e.position,e.department,e.worksite].filter(Boolean).join(" ").toLowerCase().includes(q)).slice(0,50)
+      .map(e=>`<div class="task clickable" data-id="${esc(String(e.id))}"><div class="dot a"></div><div><div class="tt">${esc(e.full_name)}</div><div class="td">${esc(e.position||"—")} · ${esc(e.department||e.worksite||"—")}</div></div></div>`).join("")||`<div class="psub">No one matches.</div>`;
+    $$("#ocPickList .task.clickable").forEach(el=>el.addEventListener("click",()=>{ const emp=EMPLOYEES.find(e=>String(e.id)===el.dataset.id); m.remove(); onChoose(emp); }));
+  };
+  $("#ocPickSearch").addEventListener("input",paint); paint();
+  const cl=$("#ocPickClear"); if(cl) cl.addEventListener("click",()=>{ m.remove(); onChoose(null); });
+  $("#ocPickClose").addEventListener("click",()=>m.remove());
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+}
+// Assign the head of a department → upsert department_heads (HRIS-owned org structure).
+async function ocSetDeptHead(dept){
+  if(!canEditOrg()||!dept) return;
+  ocPickEmployee("Set head of "+dept, {}, async(emp)=>{
+    if(!emp) return;
+    const { error } = await sb.from("department_heads").upsert({
+      department:dept, head_employee_id:emp.id, head_name:emp.full_name, head_email:emp.email||null,
+      updated_by:(CURRENT_USER&&CURRENT_USER.email)||null, updated_at:new Date().toISOString()
+    }, { onConflict:"department" });
+    if(error){ alert("Could not set department head: "+error.message); return; }
+    await logChange("orgchart", null, dept, "Set department head", emp.full_name);
+    await loadEmployees();
+  });
+}
+// Set / replace / clear a person's supervisor → updates the employee row (supervisor_* is HRIS-owned, not synced from PayPlus).
+async function ocSetSupervisor(person){
+  if(!canEditOrg()||!person) return;
+  const hasSup=!!(String(person.supervisor_name||"").trim()||String(person.supervisor_email||"").trim());
+  ocPickEmployee("Supervisor for "+(person.full_name||""),
+    { allowClear:hasSup, clearLabel:"✕ Clear supervisor"+(person.supervisor_name?" (now: "+person.supervisor_name+")":"") },
+    async(emp)=>{
+      if(emp && String(emp.id)===String(person.id)){ alert("A person can't be their own supervisor."); return; }
+      const patch = emp ? { supervisor_name:emp.full_name, supervisor_email:emp.email||null } : { supervisor_name:null, supervisor_email:null };
+      const { error } = await sb.from("employees").update(patch).eq("id", person.id);
+      if(error){ alert("Could not update supervisor: "+error.message); return; }
+      await logChange("orgchart", person.id, person.full_name, emp?"Set supervisor":"Cleared supervisor", emp?emp.full_name:"");
+      await loadEmployees();
+    });
+}
+window.ocSetDeptHead=ocSetDeptHead;
+window.ocSetSupervisor=ocSetSupervisor;
 
 /* ================= CONCERNS & CASES — arbitration + ongoing legal matters (Director/owner only) ================= */
 const CASE_TYPES=["SEnA (DOLE)","NLRC","Voluntary Arbitration","Internal Grievance","Civil","Criminal","Other"];
@@ -3801,6 +3877,8 @@ function transferForm(t){
         <div style="flex:1;">${lbl('End date')}${inp('trf_end',t.end_date,'date')}<div style="font-size:11px;color:var(--muted);margin-top:2px;">Blank if permanent.</div></div>
       </div>
       ${lbl('Reason')}<textarea id="trf_reason" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;">${esc(t.reason||'')}</textarea>
+      <div style="margin-top:6px;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;">Emails for the advisory (optional)</div>
+      ${lbl("SC's email")}${inp('trf_scemail',t.sc_email,'email')}${lbl("Employee's email")}${inp('trf_empemail',t.emp_email,'email')}
       <div style="margin-top:8px;padding:8px 10px;background:#eef4ef;border:1px solid var(--line);border-radius:8px;font-size:11.5px;color:#4a5751;">Fairness check: a transfer must keep the same rank and pay and be to a reasonable location — never a way to force someone out.</div>
       <div id="trfMsg" style="font-size:13px;color:#a4322a;margin:8px 0;"></div>
       <div style="display:flex;gap:10px;"><button class="btn ghost" id="trfCancel" style="flex:1;">Cancel</button><button class="btn" id="trfSave" style="flex:1;">${isNew?'Raise request':'Save'}</button></div>
@@ -3816,6 +3894,7 @@ function transferForm(t){
     const perm=v("trf_type")==='Permanent';
     const payload={ emp_name:name, emp_no:e?e.employee_id:(t.emp_no||null), from_worksite:v("trf_from")||null, to_worksite:v("trf_to")||null,
       sc_requested_by:v("trf_sc")||null, request_type:v("trf_type"), reason:v("trf_reason")||null,
+      sc_email:v("trf_scemail")||null, emp_email:v("trf_empemail")||null,
       start_date:v("trf_start")||null, end_date:perm?null:(v("trf_end")||null), updated_at:new Date().toISOString() };
     let res;
     if(isNew){ payload.status='Requested'; payload.created_by=myEmail()||null; res=await sb.from("employee_transfers").insert(payload); }

@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784820239";
+window.APP_BUILD="1784821397";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784820239" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784821397" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -508,7 +508,35 @@ window.APP_BUILD="1784820239";
         HR Desk<span class="nav-badge" id="deskBadge"></span>
       </div>
 
-      <div class="nav-sec">Master Data</div>
+      <div class="nav-sec">Recruit</div>
+      <div class="nav-item" data-page="prehire" onclick="go('prehire')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="8" r="3.2"/><path d="M4 20c0-3.3 2.7-5.5 6-5.5"/><path d="M18 13v6M15 16h6"/></svg>
+        Pre-hire &amp; Recruiting
+      </div>
+      <div class="nav-item" data-page="manning" onclick="go('manning')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="9" r="2.5"/><circle cx="17" cy="9" r="2.5"/><circle cx="12" cy="9" r="2.5"/><path d="M3 18c0-2.5 1.5-4 4-4M21 18c0-2.5-1.5-4-4-4M8 18c0-2.5 1.5-4 4-4s4 1.5 4 4"/></svg>
+        Manning / Headcount
+      </div>
+      <div class="nav-item" data-page="agencies" onclick="go('agencies')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13"/><path d="M9 21V10h6v11"/><path d="M4 21h16"/></svg>
+        Agencies<span class="nav-badge tbd">TBD</span>
+      </div>
+      <div class="nav-item" data-page="agencysubs" onclick="go('agencysubs')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M16 6l4 4M16 18l4-4"/><path d="M20 4v16"/></svg>
+        Agency Submissions<span class="nav-badge tbd">TBD</span>
+      </div>
+
+      <div class="nav-sec">Onboard</div>
+      <div class="nav-item" data-page="onboarding" onclick="go('onboarding')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l5 5L21 5"/></svg>
+        Onboarding Tasks
+      </div>
+      <div class="nav-item" data-page="contracts" onclick="go('contracts')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 17h7"/></svg>
+        Contracts
+      </div>
+
+      <div class="nav-sec">People &amp; Organization</div>
       <div class="nav-item" data-page="employees" onclick="go('employees')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><path d="M16 5.5a3 3 0 0 1 0 6M17.5 20c0-2.6-1-4.4-2.5-5.4"/></svg>
         Employees
@@ -529,42 +557,18 @@ window.APP_BUILD="1784820239";
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>
         Positions &amp; JD<span class="nav-badge tbd">TBD</span>
       </div>
-      <div class="nav-item" data-page="agencies" onclick="go('agencies')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13"/><path d="M9 21V10h6v11"/><path d="M4 21h16"/></svg>
-        Agencies<span class="nav-badge tbd">TBD</span>
-      </div>
-
-      <div class="nav-sec">Hiring</div>
-      <div class="nav-item" data-page="prehire" onclick="go('prehire')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="8" r="3.2"/><path d="M4 20c0-3.3 2.7-5.5 6-5.5"/><path d="M18 13v6M15 16h6"/></svg>
-        Pre-hire &amp; Recruiting
-      </div>
-      <div class="nav-item" data-page="contracts" onclick="go('contracts')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 17h7"/></svg>
-        Contracts
-      </div>
-      <div class="nav-item" data-page="onboarding" onclick="go('onboarding')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l5 5L21 5"/></svg>
-        Onboarding Tasks
-      </div>
-
-      <div class="nav-sec">Employee Life</div>
-      <div class="nav-item" data-page="timekeeping" onclick="go('timekeeping')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg>
-        Timekeeping
-      </div>
-      <div class="nav-item" data-page="memos" onclick="go('memos')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
-        Notices
-      </div>
-      <div class="nav-item" data-page="movements" onclick="go('movements')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h12M12 4l4 4-4 4"/><path d="M20 16H8M12 12l-4 4 4 4"/></svg>
-        Movements<span class="nav-badge" style="display:none;"></span>
-      </div>
       <div class="nav-item" data-page="evaluations" onclick="go('evaluations')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 17l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg>
         Evaluations
       </div>
+
+      <div class="nav-sec">Movements</div>
+      <div class="nav-item" data-page="movements" onclick="go('movements')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h12M12 4l4 4-4 4"/><path d="M20 16H8M12 12l-4 4 4 4"/></svg>
+        Movements<span class="nav-badge" style="display:none;"></span>
+      </div>
+
+      <div class="nav-sec">Compensation</div>
       <div class="nav-item" data-page="loans" onclick="go('loans')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9 9c0-1.5 1.3-2.5 3-2.5s3 1 3 2.5-1.5 2-3 2.5-3 1-3 2.5 1.3 2.5 3 2.5 3-1 3-2.5"/><path d="M12 5v2M12 17v2"/></svg>
         Loans
@@ -585,31 +589,35 @@ window.APP_BUILD="1784820239";
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7z"/></svg>
         Insurance
       </div>
-      <div class="nav-item" data-page="purchases" onclick="go('purchases')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h2l3.4 11.5a2 2 0 0 0 2 1.5h7.6a2 2 0 0 0 2-1.4L21.5 9H6"/><circle cx="10" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/></svg>
-        Employee Purchases<span class="nav-badge tbd">TBD</span>
-      </div>
       <div class="nav-item" data-page="claims" onclick="go('claims')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16v4a4 4 0 0 0 0 8v-4H4v4a4 4 0 0 0 0-8z"/></svg>
         Government Claims
+      </div>
+      <div class="nav-item" data-page="purchases" onclick="go('purchases')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h2l3.4 11.5a2 2 0 0 0 2 1.5h7.6a2 2 0 0 0 2-1.4L21.5 9H6"/><circle cx="10" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/></svg>
+        Employee Purchases<span class="nav-badge tbd">TBD</span>
       </div>
       <div class="nav-item" data-page="govremit" onclick="go('govremit')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
         Gov't Remittances
       </div>
 
-      <div class="nav-sec">Merchandiser Ops</div>
-      <div class="nav-item" data-page="reports" onclick="go('reports')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg>
-        Reports
+      <div class="nav-sec">Compliance &amp; Relations</div>
+      <div class="nav-item" data-page="timekeeping" onclick="go('timekeeping')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg>
+        Timekeeping
       </div>
-      <div class="nav-item" data-page="manning" onclick="go('manning')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="9" r="2.5"/><circle cx="17" cy="9" r="2.5"/><circle cx="12" cy="9" r="2.5"/><path d="M3 18c0-2.5 1.5-4 4-4M21 18c0-2.5-1.5-4-4-4M8 18c0-2.5 1.5-4 4-4s4 1.5 4 4"/></svg>
-        Manning / Headcount
+      <div class="nav-item" data-page="memos" onclick="go('memos')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+        Notices
       </div>
-      <div class="nav-item" data-page="agencysubs" onclick="go('agencysubs')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M16 6l4 4M16 18l4-4"/><path d="M20 4v16"/></svg>
-        Agency Submissions<span class="nav-badge tbd">TBD</span>
+      <div class="nav-item" data-page="compliance" onclick="go('compliance')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7z"/><path d="M9 12l2 2 4-4"/></svg>
+        Compliance Overview
+      </div>
+      <div class="nav-item" data-page="concerns" onclick="go('concerns')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6a2 2 0 0 1 2-2h8l2 2h4a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v3M12 16h.01"/></svg>
+        Concerns &amp; Cases<span class="nav-badge" style="background:#7a2020;color:#fff;">Director</span>
       </div>
 
       <div class="nav-sec">Exit</div>
@@ -632,36 +640,34 @@ window.APP_BUILD="1784820239";
         Processes &amp; SOPs
       </div>
 
-      <div class="nav-sec">Compliance</div>
-      <div class="nav-item" data-page="compliance" onclick="go('compliance')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7z"/><path d="M9 12l2 2 4-4"/></svg>
-        Compliance Overview
-      </div>
-      <div class="nav-item" data-page="concerns" onclick="go('concerns')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6a2 2 0 0 1 2-2h8l2 2h4a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v3M12 16h.01"/></svg>
-        Concerns &amp; Cases<span class="nav-badge" style="background:#7a2020;color:#fff;">Director</span>
-      </div>
-
-      <div class="nav-sec">System</div>
-      <div class="nav-item" data-page="hractivity" onclick="go('hractivity')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 17V9M11 17v-5M15 17V7M19 17v-3"/></svg>
-        HR Activity &amp; Expense
+      <div class="nav-sec">Admin</div>
+      <div class="nav-item" data-page="reports" onclick="go('reports')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg>
+        Reports
       </div>
       <div class="nav-item" data-page="activity" onclick="go('activity')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
         Access &amp; Activity
       </div>
-      <div class="nav-item" data-page="demodata" onclick="go('demodata')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>
-        Demo Data
+      <div class="nav-item" data-page="audit" onclick="go('audit')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4h18v4H3z"/><path d="M3 10h18v4H3z"/><path d="M3 16h18v4H3z"/></svg>
+        Audit Log
       </div>
       <div class="nav-item" data-page="settings" onclick="go('settings')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
         Settings<span class="nav-badge tbd">TBD</span>
       </div>
+      <div class="nav-item" data-page="demodata" onclick="go('demodata')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>
+        Demo Data
+      </div>
       <div class="nav-item" data-page="parking" onclick="go('parking')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/></svg>
         Parking Lot
+      </div>
+      <div class="nav-item" data-page="hractivity" onclick="go('hractivity')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 17V9M11 17v-5M15 17V7M19 17v-3"/></svg>
+        HR Activity &amp; Expense
       </div>
     </nav>
     <div class="sidebar-foot">

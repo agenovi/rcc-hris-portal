@@ -3565,13 +3565,19 @@ function manningTransfersPanel(){
   return `<div class="panel">
      <h2>Store Transfers &amp; Deployments <span class="count-tag">${active.length} active</span></h2>
      <div class="psub">Move an employee to another store for a set period. <b>The SC raises the request → the store head confirms before (agrees to receive) → after the period the store head confirms the person was there</b> — that attestation is the proof for payroll / reliever credit. Worksite stays owned by PayPlus; once completed, update the assignment in PayPlus.</div>
-     <div class="actionbar"><button class="btn" id="trfNew">+ New transfer request</button></div>
+     <div style="background:#eef4ef;border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+       <div style="flex:1;min-width:200px;"><div style="font-size:13px;font-weight:700;">SC transfer-request link <span style="font-weight:400;color:var(--muted);font-size:11.5px;">— send to Store Coordinators; they file the request themselves (no login)</span></div></div>
+       <button class="btn ghost" data-copy="${SHARE_BASE}transfer-request.html?t=9f4c2a7e5b8d413a" style="flex-shrink:0;">Copy link</button>
+       <a class="btn ghost" href="${SHARE_BASE}transfer-request.html?t=9f4c2a7e5b8d413a" target="_blank" rel="noopener" style="flex-shrink:0;text-decoration:none;">Open</a>
+     </div>
+     <div class="actionbar"><button class="btn" id="trfNew">+ New transfer request</button> <span class="psub" style="margin:0;align-self:center;">or record one on the SC's behalf</span></div>
      ${active.length?`<table><thead><tr><th>Employee</th><th>From → To</th><th>Period</th><th>Requested by (SC)</th><th>Status</th></tr></thead><tbody>${rowsHtml(active)}</tbody></table>`:`<div class="psub" style="margin-top:6px;">No active transfer requests. Click “New transfer request”.</div>`}
      ${done.length?`<div class="subhead" style="margin-top:16px;">Recent — completed / closed</div><table><thead><tr><th>Employee</th><th>From → To</th><th>Period</th><th>Requested by (SC)</th><th>Status</th></tr></thead><tbody>${rowsHtml(done)}</tbody></table>`:''}
    </div>`;
 }
 function wireTransfers(){
   const nb=document.getElementById("trfNew"); if(nb) nb.addEventListener("click",()=>transferForm());
+  $$("#page-manning [data-copy]").forEach(b=>b.addEventListener("click",()=>{ navigator.clipboard&&navigator.clipboard.writeText(b.dataset.copy); const t=b.textContent; b.textContent="Copied ✓"; setTimeout(()=>b.textContent=t,1200); }));
   $$("#page-manning .trf-open").forEach(r=>r.addEventListener("click",()=>openTransfer((TRANSFERS||[]).find(t=>String(t.id)===r.dataset.id))));
 }
 function transferForm(t){

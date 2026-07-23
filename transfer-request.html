@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>RCC — Store Transfer Request</title>
+<style>
+  :root{ --green:#1f6b3a; --green-dark:#0e3219; --line:#e4e8ef; --ink:#1b2430; --mut:#6b7683; --red:#c0392b; --ok:#1e7d43; --bg:#f4f6fa; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  .wrap{ max-width:560px; margin:0 auto; min-height:100vh; background:#fff; }
+  .top{ background:linear-gradient(150deg,var(--green-dark),var(--green)); color:#fff; padding:22px 20px 24px; }
+  .brand{ font-weight:800; letter-spacing:.5px; font-size:13px; opacity:.9; }
+  .top h1{ margin:9px 0 2px; font-size:21px; font-weight:700; }
+  .top .sub{ font-size:13px; opacity:.9; }
+  .body{ padding:18px 18px 44px; }
+  .lead{ font-size:13.5px; color:var(--mut); line-height:1.5; margin:2px 0 14px; }
+  label.q{ display:block; font-size:13px; font-weight:700; margin:15px 0 5px; color:#374151; }
+  input,select,textarea{ width:100%; padding:12px; font-size:16px; font-family:inherit; border:1.5px solid var(--line); border-radius:11px; background:#fff; color:var(--ink); }
+  textarea{ min-height:56px; resize:vertical; }
+  input:focus,select:focus,textarea:focus{ outline:none; border-color:var(--green); }
+  .row{ display:flex; gap:10px; }
+  .row > div{ flex:1; }
+  .fair{ margin-top:14px; padding:11px 13px; background:#f3f8f4; border-radius:11px; font-size:12.5px; color:#3c5346; line-height:1.5; }
+  .btn{ width:100%; margin-top:22px; padding:16px; font-size:16px; font-weight:800; color:#fff; background:var(--green); border:none; border-radius:13px; cursor:pointer; }
+  .btn:disabled{ opacity:.55; }
+  .msg{ margin-top:14px; padding:13px 14px; border-radius:11px; font-size:14px; display:none; }
+  .msg.err{ background:#fdecea; color:var(--red); display:block; }
+  .note-priv{ font-size:12px; color:var(--mut); margin-top:14px; display:flex; gap:6px; align-items:flex-start; }
+  .done{ text-align:center; padding:48px 26px; display:none; }
+  .done .ok-ic{ width:66px; height:66px; border-radius:50%; background:var(--ok); color:#fff; font-size:38px; line-height:66px; margin:0 auto 16px; }
+  .done h2{ margin:0 0 8px; color:var(--green-dark); }
+  .done p{ color:var(--mut); font-size:14px; line-height:1.55; }
+  .load{ text-align:center; padding:70px 26px; color:var(--mut); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">ROSHAN COMMERCIAL CORPORATION</div>
+    <h1>Store transfer request</h1>
+    <div class="sub">For Store Coordinators</div>
+  </div>
+
+  <div class="load" id="load">Loading…</div>
+
+  <div class="body" id="form" style="display:none;">
+    <div class="lead">Use this to request moving an employee to another store for a set period. Once you submit, the <b>receiving store head confirms before</b> the employee starts, and <b>confirms again after</b> the period that the employee was there — that record is the proof for payroll / reliever credit.</div>
+
+    <label class="q">Your name — Store Coordinator</label>
+    <input id="sc" list="sclist" placeholder="Type your name">
+    <datalist id="sclist"></datalist>
+
+    <label class="q">Employee to transfer</label>
+    <input id="emp" placeholder="Full name">
+    <label class="q">Employee ID <span style="font-weight:400;color:var(--mut);">(if you know it)</span></label>
+    <input id="empno" placeholder="Optional">
+
+    <label class="q">Current store</label>
+    <input id="from" placeholder="Where the employee is now">
+
+    <label class="q">Transfer to (store)</label>
+    <select id="to"><option value="">Select store…</option></select>
+
+    <label class="q">Type</label>
+    <select id="type"><option>Temporary</option><option>Permanent</option></select>
+
+    <div class="row">
+      <div><label class="q">Start date</label><input id="start" type="date"></div>
+      <div><label class="q">End date</label><input id="end" type="date"></div>
+    </div>
+    <div style="font-size:11.5px;color:var(--mut);margin-top:4px;">Leave the end date blank if it's permanent.</div>
+
+    <label class="q">Reason</label>
+    <textarea id="reason" placeholder="e.g. Cover a maternity leave / store needs help this period"></textarea>
+
+    <div class="fair">Fairness reminder: a transfer must keep the same rank and pay and be to a reasonable location — it should never be a way to force someone out.</div>
+
+    <button class="btn" id="submit">Submit transfer request</button>
+    <div class="msg" id="msg"></div>
+    <div class="note-priv"><span>🔒</span><span>This request goes straight to HR. The store head still confirms before and after.</span></div>
+  </div>
+
+  <div class="done" id="done">
+    <div class="ok-ic">✓</div>
+    <h2>Request submitted</h2>
+    <p id="doneMsg"></p>
+  </div>
+</div>
+
+<script>
+const FN = "https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/transfer-request";
+const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0ZmtwbXZpZXZldGloaGZkbXFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwODA1MTksImV4cCI6MjA5MTY1NjUxOX0.ozphoaGT7jVKr3NGmqQC1wMj5lp7MvVfdqO2HZWMl6k";
+const H = { "apikey": ANON, "Authorization": "Bearer " + ANON, "Content-Type": "application/json" };
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const T = new URLSearchParams(location.search).get("t") || "";
+
+async function init(){
+  if(!T){ $("load").textContent="This link is missing its code. Please ask HR for the current transfer-request link."; return; }
+  try{
+    const r = await fetch(FN + "?t=" + encodeURIComponent(T), { headers:H });
+    const j = await r.json();
+    if(!j.ok){ $("load").textContent = j.reason || "This link is not valid."; return; }
+    $("to").innerHTML = '<option value="">Select store…</option>' + (j.stores||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
+    $("sclist").innerHTML = (j.scs||[]).map(s=>`<option value="${esc(s)}">`).join("");
+    $("load").style.display="none";
+    $("form").style.display="block";
+  }catch(e){ $("load").textContent="Couldn't load — please check your connection and reopen the link."; }
+}
+init();
+
+$("type").addEventListener("change", ()=>{ $("end").disabled = $("type").value==="Permanent"; if($("type").value==="Permanent") $("end").value=""; });
+
+$("submit").addEventListener("click", async ()=>{
+  const msg=$("msg"); msg.className="msg"; msg.style.display="none";
+  const payload = { t:T, sc_requested_by:$("sc").value.trim(), emp_name:$("emp").value.trim(), emp_no:$("empno").value.trim(),
+    from_worksite:$("from").value.trim(), to_worksite:$("to").value, request_type:$("type").value,
+    start_date:$("start").value, end_date:$("end").value, reason:$("reason").value.trim() };
+  if(!payload.sc_requested_by){ msg.className="msg err"; msg.textContent="Please enter your name."; msg.style.display="block"; return; }
+  if(!payload.emp_name){ msg.className="msg err"; msg.textContent="Please enter the employee's name."; msg.style.display="block"; return; }
+  if(!payload.to_worksite){ msg.className="msg err"; msg.textContent="Please choose the store to transfer to."; msg.style.display="block"; return; }
+  if(!payload.start_date){ msg.className="msg err"; msg.textContent="Please set the start date."; msg.style.display="block"; return; }
+  const btn=$("submit"); btn.disabled=true; btn.textContent="Submitting…";
+  try{
+    const r=await fetch(FN,{ method:"POST", headers:H, body:JSON.stringify(payload) });
+    const j=await r.json();
+    if(!j.ok){ msg.className="msg err"; msg.textContent=j.reason||"Something went wrong. Please try again."; msg.style.display="block"; btn.disabled=false; btn.textContent="Submit transfer request"; return; }
+    $("form").style.display="none";
+    $("doneMsg").innerHTML="Your transfer request is with HR. The receiving store head will confirm before the employee starts, and confirm again after the period.";
+    $("done").style.display="block";
+    window.scrollTo(0,0);
+  }catch(e){ msg.className="msg err"; msg.textContent="Network error — please try again."; msg.style.display="block"; btn.disabled=false; btn.textContent="Submit transfer request"; }
+});
+</script>
+</body>
+</html>

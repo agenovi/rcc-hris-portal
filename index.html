@@ -7631,6 +7631,7 @@ function openExitCase(id){
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn ghost" id="ex_copy_link" type="button">🔗 Copy link</button>
             <button class="btn ghost" id="ex_email_link" type="button">✉️ Email link to employee</button>
+            <button class="btn ghost" id="ex_regen_link" type="button" style="color:#9a6a00;">↻ Generate a new link</button>
           </div>
         </div>
         <div style="border:1px solid ${x.hmo_notified_at?'var(--green)':'#f0c14b'};border-radius:9px;padding:11px 13px;margin:8px 0;background:${x.hmo_notified_at?'var(--green-light)':'#fffaf0'};">
@@ -7679,6 +7680,18 @@ function openExitCase(id){
     const body="Hi "+(x.employee_name||"")+",\n\nAs part of your clearance, please open your private exit link below. You'll see the items to return and a short exit interview to complete:\n\n"+url+"\n\nPlease do this on or before your last working day"+(x.last_working_day?" ("+fmtDate(x.last_working_day)+")":"")+".\n\nThank you,\nRCC HR";
     const le=(EMPLOYEES||[]).find(y=>y.id===x.employee_id); const to=(le&&le.email)||"";
     window.location.href="mailto:"+encodeURIComponent(to)+"?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(body);
+  });
+  const rgLink=document.getElementById("ex_regen_link");
+  if(rgLink) rgLink.addEventListener("click",async()=>{
+    if(!confirm("Generate a NEW link for "+(x.employee_name||"this employee")+"?\n\nThe old link will stop working. Anyone you already sent it to will need the new one.")) return;
+    rgLink.disabled=true;
+    const tok=(crypto&&crypto.randomUUID)?crypto.randomUUID():null;
+    const {error}=await sb.from("exit_clearance").update({emp_link_token:tok, updated_at:new Date().toISOString()}).eq("id",x.id);
+    rgLink.disabled=false;
+    if(error){ alert(error.message); return; }
+    x.emp_link_token=tok;
+    const f=document.getElementById("ex_link_field"); if(f){ f.value=exitEmpLink(x); }
+    rgLink.textContent="✓ New link ready"; setTimeout(()=>rgLink.textContent="↻ Generate a new link",1800);
   });
   const hmoEmailBtn=document.getElementById("ex_hmo_email");
   if(hmoEmailBtn) hmoEmailBtn.addEventListener("click",()=>{

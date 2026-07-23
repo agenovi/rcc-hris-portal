@@ -1964,7 +1964,8 @@ function mvMapCols(hdr){
   idx.empid=find("empid","employeeid","employeeno","empno","idno");
   idx.last=find("lastname","surname");
   idx.first=find("firstname","givenname");
-  idx.name=find("employeename","fullname","name"); // fallback single-name column
+  idx.name=find("employeename","fullname"); // fallback single-name column
+  if(idx.name<0){ for(let c=0;c<hdr.length;c++){ if(mvNorm(hdr[c])==="name"){ idx.name=c; break; } } }
   idx.dept=find("department","dept");
   idx.job=find("jobtitle","position","designation");
   idx.dr=find("currentdailyrate","dailyrate","currentrate","currentdaily");

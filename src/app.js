@@ -6587,7 +6587,14 @@ function finalPayBody(x,fp){ const emp=(EMPLOYEES||[]).find(e=>e.id===x.employee
   L.push("Date hired: "+(x.hire_date?fmtDate(x.hire_date):"—")+"  ·  Last day: "+(x.last_working_day?fmtDate(x.last_working_day):"—"));
   L.push("Separation: "+(x.separation_type||"—"),"");
   L.push("CLAIMS (owed to employee)");
-  FP_CLAIMS.forEach(([k,lbl])=>{ if(Number(fp[k]||0)!==0||fp[k+"_note"]) L.push(pad(lbl,fp[k],fp[k+"_note"])); });
+  FP_CLAIMS.forEach(([k,lbl])=>{
+    if(Number(fp[k]||0)===0 && !fp[k+"_note"]) return;
+    L.push(pad(lbl,fp[k],fp[k+"_note"]));
+    if(FP_SPLIT.has(k) && (fp[k+"_basic"]!=null || fp[k+"_allowance"]!=null)){
+      L.push(pad("   • Basic salary",Number(fp[k+"_basic"]||0)));
+      L.push(pad("   • Allowance",Number(fp[k+"_allowance"]||0)));
+    }
+  });
   L.push(line, pad("Total claims",fpClaims(fp)),"");
   L.push("LESS: DEDUCTIONS");
   FP_DEDUCTIONS.forEach(([k,lbl])=>{ if(Number(fp[k]||0)!==0||fp[k+"_note"]) L.push(pad(lbl,fp[k],fp[k+"_note"])); });
@@ -6596,8 +6603,10 @@ function finalPayBody(x,fp){ const emp=(EMPLOYEES||[]).find(e=>e.id===x.employee
   L.push(("  NET PAID TO EMPLOYEE").padEnd(34," ")+" "+money(fpNet(fp)).padStart(15));
   L.push(line.replace(/-/g,"="),"");
   if(fp.payment_instruction||fp.bank_account) L.push("Payment: "+[fp.payment_instruction,fp.bank_account].filter(Boolean).join("  ·  "));
-  L.push("","Prepared by: "+((CURRENT_USER&&CURRENT_USER.email)||"HR"));
-  L.push("Approving: Director, Admin & Finance");
+  const PREP_NAME={ "anj@hassarams.com":"Anju C. Genomal — Director, Admin & Finance", "hr@hassarams.com":"Juvelyn Belvistre — HR Officer", "hr1@hassarams.com":"Vina — Human Resources", "hr3@hassarams.com":"Grazel Lyn Agulto — HR Officer", "hr4@hassarams.com":"Rhel Vinluan — HR Manager" };
+  const prepEmail=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase();
+  L.push("","Prepared by: "+(PREP_NAME[prepEmail]||"Human Resources Department"));
+  L.push("Approving: Anju C. Genomal — Director, Admin & Finance");
   L.push("","Your signature below approves this final-pay computation for release (RA 8792).");
   return L.join("\n"); }
 function openExitCase(id){

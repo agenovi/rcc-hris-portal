@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784786016";
+window.APP_BUILD="1784786781";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784786016" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784786781" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -2504,7 +2504,8 @@ let scFilter="All";
 let prehireTab="pipeline";
 let prehireSrc=null;
 // Talent Pool — filters for the pooled-candidates list
-let poolFilterPos="", poolFilterScale="", poolFilterPrio="", poolSearch="";
+let poolFilterPos="", poolFilterScale="", poolFilterPrio="", poolSearch="", poolReviewOnly=false;
+const POOL_STALE_DAYS=365; // a pooled candidate older than this is up for the annual review/cleanup
 // Salary scales are one-line editable — tell Claude to change them and they update everywhere.
 const POOL_SALARY_SCALES=["Entry / minimum wage","Daily ₱650–800","Daily ₱800–1,000","Monthly ₱15–20k","Monthly ₱20–30k","Monthly ₱30k+","Not specified"];
 const POOL_PRIORITIES=["High","Medium","Low"];
@@ -6927,7 +6928,12 @@ function phBodyPool(){
   const positions=[...new Set(all.map(p=>p.position).filter(Boolean))].sort();
   const scales=[...new Set(all.map(p=>p.pool_salary_scale).filter(Boolean))].sort();
   const q=(poolSearch||"").toLowerCase();
+  const now=Date.now();
+  const ageDays=p=>{ const d=p.pooled_at||p.updated_at; return d?Math.floor((now-new Date(d))/864e5):null; };
+  const isStale=p=>{ const a=ageDays(p); return a!=null && a>=POOL_STALE_DAYS; };
+  const staleCount=all.filter(isStale).length;
   let list=all.filter(p=>
+      (!poolReviewOnly  || isStale(p)) &&
       (!poolFilterPos   || p.position===poolFilterPos) &&
       (!poolFilterScale || p.pool_salary_scale===poolFilterScale) &&
       (!poolFilterPrio  || (p.pool_priority||"")===poolFilterPrio) &&
@@ -6938,7 +6944,8 @@ function phBodyPool(){
   $("#phBody").innerHTML=`
     <div class="panel" style="margin-top:14px;">
       <h2>Talent Pool <span class="count-tag">${all.length}</span></h2>
-      <div class="psub">Qualified applicants we liked but didn't proceed with — kept warm for future vacancies and replacements, so we can fill a slot without restarting recruitment. Ranked by priority, newest first. Set a candidate's priority &amp; salary scale when you move them here (any candidate → open → <b>Move to Talent Pool</b>).</div>
+      <div class="psub">Qualified applicants we liked but didn't proceed with — kept warm for future vacancies and replacements, so we can fill a slot without restarting recruitment. Ranked by priority, newest first. <b>Maintained by Vina &amp; Rhel</b>; review and clear it once a year so it stays fresh. Set a candidate's priority &amp; salary scale when you move them here (any candidate → open → <b>Move to Talent Pool</b>).</div>
+      ${staleCount?`<div style="margin-top:12px;padding:10px 13px;background:#fdf6e3;border:1px solid #ecdca6;border-radius:9px;font-size:12.5px;color:#7a5c12;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">⏰ <b>${staleCount}</b> candidate${staleCount>1?'s have':' has'} been in the pool over a year — time for the annual review. <button class="btn ghost" id="pf_review" style="padding:4px 10px;font-size:12px;">${poolReviewOnly?'Show all':'Show only these'}</button> <button class="btn" id="pf_archiveold" style="padding:4px 10px;font-size:12px;">Archive all ${staleCount} over a year</button></div>`:""}
       ${all.length===0
         ? `<div class="task" style="margin-top:12px;"><div class="dot a"></div><div><div class="tt">The pool is empty</div><div class="td">Open any candidate in the Pipeline (or a Rejected one) and click <b>☆ Move to Talent Pool</b> to add them here with a priority and salary scale.</div></div></div>`
         : `
@@ -6963,9 +6970,9 @@ function phBodyPool(){
           <td>${esc(c.position||"—")}<div style="font-size:11px;color:var(--muted);">${esc(c.worksite||"")}</div></td>
           <td>${esc(c.pool_salary_scale||"—")}</td>
           <td>${prioBadge(c.pool_priority)}</td>
-          <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${c.pooled_at?fmtMDY(c.pooled_at):"—"}</td>
+          <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${c.pooled_at?fmtMDY(c.pooled_at):"—"}${isStale(c)?`<div style="font-size:10.5px;color:#b7791f;font-weight:700;margin-top:2px;">⏰ ${Math.floor(ageDays(c)/30)} mos — review</div>`:""}</td>
           <td style="font-size:12px;color:#3a4540;max-width:220px;">${esc(c.pool_reason||"")}</td>
-          <td style="white-space:nowrap;"><button class="btn ghost pool-open" data-id="${c.id}" style="padding:5px 10px;font-size:12px;">Open</button> <button class="btn pool-back" data-id="${c.id}" style="padding:5px 10px;font-size:12px;">↩ To pipeline</button></td>
+          <td style="white-space:nowrap;"><button class="btn ghost pool-open" data-id="${c.id}" style="padding:5px 10px;font-size:12px;">Open</button> <button class="btn pool-back" data-id="${c.id}" style="padding:5px 10px;font-size:12px;">↩ To pipeline</button> <button class="btn ghost pool-archive" data-id="${c.id}" style="padding:5px 10px;font-size:12px;color:var(--muted);">Archive</button></td>
         </tr>`).join("")||`<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px;">No candidates match these filters.</td></tr>`}</tbody></table>
       </div>`}
     </div>`;
@@ -6982,8 +6989,23 @@ function phBodyPool(){
     const csv=cols.map(c=>c[1]).join(",")+"\n"+rows.join("\n");
     const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="talent-pool.csv";a.click();
   });
+  if(g("pf_review")) g("pf_review").addEventListener("click",()=>{ poolReviewOnly=!poolReviewOnly; reRender(); });
+  if(g("pf_archiveold")) g("pf_archiveold").addEventListener("click",()=>archiveStalePool(all.filter(isStale)));
   $$("#phBody .pool-open").forEach(b=>b.addEventListener("click",()=>openPrehire(PREHIRE.find(p=>String(p.id)===b.dataset.id))));
   $$("#phBody .pool-back").forEach(b=>b.addEventListener("click",()=>returnFromPool(PREHIRE.find(p=>String(p.id)===b.dataset.id))));
+  $$("#phBody .pool-archive").forEach(b=>b.addEventListener("click",()=>archiveFromPool(PREHIRE.find(p=>String(p.id)===b.dataset.id))));
+}
+// Annual cleanup — archived candidates leave the pool but stay on record (moved to Rejected, nothing deleted).
+async function archiveFromPool(c){
+  if(!c) return;
+  if(!confirm(`Archive ${c.full_name} out of the Talent Pool?\n\nThey move to Rejected (kept on record — nothing is deleted) so the pool stays fresh. You can still find and re-pool them later.`)) return;
+  await setPhase(c,"REJECTED",null,{rejection_reason:"Talent pool — annual cleanup (not pursued)"});
+}
+async function archiveStalePool(items){
+  const n=(items||[]).length; if(!n) return;
+  if(!confirm(`Archive all ${n} candidate${n>1?'s':''} that ${n>1?'have':'has'} been in the pool over a year?\n\nThey move to Rejected (kept on record — nothing is deleted). This is the once-a-year cleanup.`)) return;
+  for(const c of items){ await sb.from("prehire").update({phase:"REJECTED", rejection_reason:"Talent pool — annual cleanup (not pursued)", updated_at:new Date().toISOString()}).eq("id",c.id); }
+  poolReviewOnly=false; await loadEmployees(); prehireTab="pool"; window.go("prehire");
 }
 async function returnFromPool(c){
   if(!c) return;

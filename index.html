@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784818747";
+window.APP_BUILD="1784819016";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784818747" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784819016" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -5845,9 +5845,6 @@ function claimCard(s){ const d=s.details||{}; const P=n=>"₱"+Number(n||0).toLo
         <tr><td style="padding:12px 14px;background:#eaf4ec;font-size:12.5px;font-weight:800;color:#12352a;">NET TO EMPLOYEE</td><td style="padding:12px 14px;background:#eaf4ec;font-weight:800;font-size:15.5px;color:#12352a;">${P(d.net!=null?d.net:s.amount)}</td></tr>
         ${d.payment?row("Payment",esc(d.payment)):""}
       </table>
-      <details style="margin:11px 0 2px;"><summary style="cursor:pointer;font-size:12.5px;color:#1E3A5F;font-weight:600;">View full line-by-line breakdown</summary>
-        <div style="background:#f7f9fb;border:1px solid #E3E8EF;border-radius:10px;padding:12px 14px;margin-top:8px;white-space:pre-wrap;font-size:12.5px;line-height:1.55;max-height:30vh;overflow-y:auto;">${esc(s.body||"")}</div>
-      </details>
     </div>`; }
 // Branded approval card for attendance NTEs — the record the approver is signing off on.
 function nteCard(s){ const d=s.details||{};
@@ -5933,6 +5930,8 @@ function openSignDoc(id){
     <canvas id="sigPad" width="500" height="150" style="width:100%;height:150px;border:1px dashed #b9c4cf;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
     <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
       <button class="btn ghost" id="sigClear" style="flex:0 0 auto;">Clear</button>
+      <button class="btn ghost" id="sigUpload" type="button" style="flex:0 0 auto;">📷 Upload signature</button>
+      <input type="file" id="sigFile" accept="image/*" style="display:none;">
       <label style="font-size:12px;color:#6B7785;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="sigRemember" ${savedSig?"":"checked"}> Remember my signature on this device</label>
       <span id="sigMsg" style="font-size:12.5px;color:#a4322a;flex:1 1 100%;"></span>
     </div>
@@ -5952,6 +5951,13 @@ function openSignDoc(id){
   cv.addEventListener("mousedown",start); cv.addEventListener("mousemove",move); window.addEventListener("mouseup",end);
   cv.addEventListener("touchstart",start,{passive:false}); cv.addEventListener("touchmove",move,{passive:false}); cv.addEventListener("touchend",end);
   document.getElementById("sigClear").onclick=()=>{ ctx.clearRect(0,0,cv.width,cv.height); dirty=false; document.getElementById("sigMsg").textContent=""; };
+  // Upload a real signature photo → knock out the white background → drop it onto the pad (transparent, PDF-style).
+  const sigMakeTransparent=(img)=>{ const c=document.createElement("canvas"); const s2=Math.min(1,700/img.width); c.width=Math.round(img.width*s2); c.height=Math.round(img.height*s2); const xx=c.getContext("2d"); xx.drawImage(img,0,0,c.width,c.height); const dd=xx.getImageData(0,0,c.width,c.height), p=dd.data; for(let i=0;i<p.length;i+=4){ const lum=(p[i]+p[i+1]+p[i+2])/3; if(lum>205){ p[i+3]=0; } else if(lum>130){ p[i+3]=Math.round((205-lum)/75*255); } else { p[i]=18;p[i+1]=53;p[i+2]=31; } } xx.putImageData(dd,0,0); return c.toDataURL("image/png"); };
+  const sigUp=document.getElementById("sigUpload"), sigFile=document.getElementById("sigFile");
+  if(sigUp&&sigFile){ sigUp.onclick=()=>sigFile.click();
+    sigFile.onchange=(ev)=>{ const f=ev.target.files&&ev.target.files[0]; if(!f) return; const rd=new FileReader();
+      rd.onload=()=>{ const img=new Image(); img.onload=()=>{ const ti=new Image(); ti.onload=()=>{ ctx.clearRect(0,0,cv.width,cv.height); const s3=Math.min(cv.width/ti.width, cv.height/ti.height); const dw=ti.width*s3, dh=ti.height*s3; ctx.drawImage(ti,(cv.width-dw)/2,(cv.height-dh)/2,dw,dh); dirty=true; document.getElementById("sigMsg").textContent=""; }; ti.src=sigMakeTransparent(img); }; img.src=rd.result; };
+      rd.readAsDataURL(f); }; }
   const finishSign=async(dataUrl,btn,label)=>{
     if(btn){ btn.disabled=true; btn.textContent="Signing…"; }
     const err=await applySignature(s, dataUrl);

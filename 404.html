@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784792894";
+window.APP_BUILD="1784793538";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784792894" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784793538" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -3863,8 +3863,10 @@ function renderMovements(){
         <b>Management</b> approver always signs last. Meal allowance is carried on every pay movement.</div>
       <div class="actionbar">
         <button class="btn" id="mvNew">＋ New Movement</button>
+        ${canSeePay()?`<button class="btn ghost" id="mvUpload">⬆ Upload batch (Excel)</button>`:""}
         ${canSeePay()?`<button class="btn ghost" id="mvBatch">Batch statutory increase</button>`:""}
       </div>
+      <input type="file" id="mvUpFile" accept=".xlsx,.xls,.csv" style="display:none;">
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
         <div class="kpi warn"><div class="k-l">Awaiting sign-off</div><div class="k-n">${awaiting}</div><div class="k-s">on the sign chain</div></div>
         <div class="kpi"><div class="k-l">Approved this month</div><div class="k-n">${apprMonth}</div></div>
@@ -3881,6 +3883,9 @@ function renderMovements(){
     </div>`;
   const bN=$("#mvNew"); if(bN) bN.addEventListener("click",mvPickEmployee);
   const bB=$("#mvBatch"); if(bB) bB.addEventListener("click",mvBatchStatutory);
+  const bU=$("#mvUpload"), fU=$("#mvUpFile");
+  if(bU&&fU){ bU.addEventListener("click",()=>fU.click());
+    fU.addEventListener("change",e=>{ const f=e.target.files&&e.target.files[0]; if(f) mvUploadBatch(f); e.target.value=""; }); }
   $$("#page-movements tr.clickable[data-nid]").forEach(tr=>tr.addEventListener("click",()=>openMovementDrawer(NPAS.find(r=>String(r.id)===tr.dataset.nid))));
 }
 window.renderMovements=renderMovements;
@@ -4108,7 +4113,7 @@ function openMovementDrawer(r){
       </div>`:`<div class="panel"><div class="subhead">Operational memo</div>
         <div class="psub">No change in terms — documented by memo (Dept Head). No NPA approval chain required.</div></div>`}
       <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
-        <button class="btn ghost" id="mvPrint">View / Print NPA</button>
+        <button class="btn ghost" id="mvPrint">Download / Print NPA</button>
         ${signable?`<button class="btn" id="mvSign">Sign this step (${esc(signable.role)})</button>`:""}
         <button class="btn ghost" id="mvDrawerClose" style="margin-left:auto;">Close</button>
       </div>
@@ -4174,62 +4179,93 @@ function mvSignStep(r,step){
   };
 }
 
-// Read-only NPA form + print, signatures stamped where signed (reuses the printNpa layout, incl. the meal row).
+// Read-only NPA form + print on RCC letterhead. Mirrors the official
+// "Notice of Personnel Action Form"; signatures are stamped where signed.
 function printMovementNpa(r){
-  const P=n=>(n==null||n==="")?"":"₱"+Number(n).toLocaleString(undefined,{minimumFractionDigits:2});
-  const tot=(dr,al,ml)=>{ if(dr==null&&al==null&&ml==null) return ""; return P((Number(dr)||0)+(Number(al)||0)+(Number(ml)||0)); };
+  const pf=n=>(n==null||n==="")?"":"P"+Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const num=n=>(n==null||n==="")?null:Number(n);
+  const basis=mvBasis(r);
+  const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  const dateIssued=r.created_at?new Date(r.created_at).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}):today;
+  // ── II. Reason (Select One) ──
+  const reasons=[
+    {label:"Regularization",              at:["REGULARIZATION"]},
+    {label:"Reappointment",               at:["REAPPOINTMENT"]},
+    {label:"Promotion in Rank",           at:["PROMOTION"]},
+    {label:"Separation",                  at:["SEPARATION","TERMINATION"]},
+    {label:"Job-Lateral Transfer",        at:["TRANSFER","RECLASSIFICATION"]},
+    {label:"Salary Adjustment (Complete Section III)", at:["SALARY_ADJUSTMENT"]}
+  ];
+  const reasonRows=reasons.map(x=>{ const on=x.at.includes(r.action_type); return `<div class="chk">[${on?"X":"&nbsp;"}] ${esc(x.label)}</div>`; }).join("");
+  // ── III. Financial details (From / Adjustment / Total) ──
   const payRows=(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null||r.meal_allowance!=null||r.new_meal_allowance!=null);
+  const finRow=(label,cur,nw)=>{ const c=num(cur), n=num(nw); const adj=(c!=null||n!=null)?((n||0)-(c||0)):null;
+    return `<tr><td><b>${label}</b></td><td class="r">${pf(cur)}</td><td class="r">${adj==null?"":pf(adj)}</td><td class="r">${pf(nw)}</td></tr>`; };
+  const sum=(...xs)=>{ let any=false,t=0; xs.forEach(x=>{ if(x!=null){ any=true; t+=Number(x)||0; } }); return any?t:null; };
+  const fromTot=sum(r.current_daily_rate,r.current_allowance,r.meal_allowance);
+  const newTot=sum(r.new_daily_rate,r.new_allowance,r.new_meal_allowance);
+  const adjTot=(fromTot!=null||newTot!=null)?((newTot||0)-(fromTot||0)):null;
+  const remarksClean=String(r.remarks||"").replace(/^\s*\[[^\]]*\]\s*(·\s*)?/,"").trim();
   const fin=payRows?`
     <h3>III. FINANCIAL DETAILS</h3>
-    <table><tr><th></th><th>CURRENT</th><th>NEW</th></tr>
-    <tr><td><b>BASIC PAY</b></td><td>${P(r.current_daily_rate)}</td><td>${P(r.new_daily_rate)}</td></tr>
-    <tr><td><b>ALLOWANCE</b></td><td>${P(r.current_allowance)}</td><td>${P(r.new_allowance)}</td></tr>
-    <tr><td><b>MEAL ALLOWANCE</b></td><td>${P(r.meal_allowance)}</td><td>${P(r.new_meal_allowance)}</td></tr>
-    <tr><td><b>TOTAL COMPENSATION</b></td><td>${tot(r.current_daily_rate,r.current_allowance,r.meal_allowance)}</td><td>${tot(r.new_daily_rate,r.new_allowance,r.new_meal_allowance)}</td></tr></table>
-    <div class="conf">SALARY data in this form is strictly CONFIDENTIAL.</div>`:"";
-  const changeLines=[];
-  if(r.new_position) changeLines.push("New position: "+esc(r.new_position));
-  if(r.new_department) changeLines.push("To department: "+esc(r.new_department));
-  if(r.new_location) changeLines.push("To location: "+esc(r.new_location));
-  if(r.new_schedule) changeLines.push("New schedule: "+esc(r.new_schedule));
-  const basis=mvBasis(r);
-  // Signature blocks: any NPA with a chain (statutory/discretionary) stamps its chosen signatories where signed.
-  const disc=r.status==="awaiting_signoff"||r.status==="approved";
+    <table><tr><th>CATEGORY</th><th class="r">FROM</th><th class="r">ADJUSTMENT</th><th class="r">TOTAL</th></tr>
+      ${finRow("BASIC PAY",r.current_daily_rate,r.new_daily_rate)}
+      ${finRow("ALLOWANCE",r.current_allowance,r.new_allowance)}
+      ${finRow("MEAL ALLOWANCE",r.meal_allowance,r.new_meal_allowance)}
+      <tr class="tot"><td><b>TOTAL COMPENSATION</b></td><td class="r">${pf(fromTot)}</td><td class="r">${adjTot==null?"":pf(adjTot)}</td><td class="r">${pf(newTot)}</td></tr></table>
+    ${remarksClean?`<div class="rmk"><b>Remarks:</b> ${esc(remarksClean)}</div>`:""}`
+    :`<h3>III. FINANCIAL DETAILS</h3><div class="rmk">No change in compensation under this action.${remarksClean?` <b>Remarks:</b> ${esc(remarksClean)}`:""}</div>`;
+  // ── IV. Signatures (one column per signatory in the chain) ──
   const chain=mvChain(r);
-  const sigW=Math.max(20,Math.floor(100/Math.max(1,chain.length)));
-  const sigCells=chain.map(st=>{
-    const data=r["sig"+st.seq+"_data"], at=r["sig"+st.seq+"_at"];
-    const line=data?`<img src="${data}" style="height:38px;">`:"&nbsp;";
-    return `<td style="width:${sigW}%"><div class="sr">${esc((st.role||"").toUpperCase())}</div><div class="sl">${line}</div><b>${esc(st.name)}</b><br><span class="mut">Date: ${at?fmtDate(at):"____________"}</span></td>`; }).join("");
+  const w0=Math.max(16,Math.floor(84/Math.max(1,chain.length)));
+  const roleHead=chain.map(st=>`<th style="width:${w0}%">${esc((st.role||"").toUpperCase())}</th>`).join("");
+  const nameRow=chain.map(st=>`<td>${esc(st.name||"")}</td>`).join("");
+  const sigRow=chain.map(st=>{ const d=r["sig"+st.seq+"_data"]; return `<td class="sc">${d?`<img src="${d}" style="height:40px;">`:"&nbsp;"}</td>`; }).join("");
+  const dateRow=chain.map(st=>{ const at=r["sig"+st.seq+"_at"]; return `<td>${at?fmtDate(at):"________________"}</td>`; }).join("");
   const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to view/print the form."); return; }
-  w.document.write(`<!DOCTYPE html><html><head><title>${esc(r.npa_id||"NPA")} — Notice of Personnel Action</title><style>
-    body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#1F2A37;max-width:760px;margin:24px auto;padding:0 24px;font-size:13.5px;line-height:1.5;}
-    .lh{text-align:center;border-bottom:2.5px solid #1E3A5F;padding-bottom:8px;margin-bottom:14px;}
-    .lh b{font-size:17px;color:#1E3A5F;letter-spacing:.5px;} .lh div{font-size:11px;color:#667;}
-    h2{text-align:center;font-size:15px;margin:10px 0 14px;} h3{font-size:12.5px;color:#1E3A5F;border-bottom:1px solid #ccd;padding-bottom:2px;margin:16px 0 8px;}
-    table{width:100%;border-collapse:collapse;margin:6px 0;} td,th{border:1px solid #bbc;padding:6px 8px;text-align:left;font-size:12.5px;}
-    .sr{font-size:10.5px;color:#667;font-weight:700;} .sl{border-bottom:1px solid #333;min-height:40px;margin-bottom:4px;display:flex;align-items:flex-end;} .mut{color:#667;font-size:11.5px;}
-    .conf{background:#fdf6e3;border:1px solid #ecdca6;padding:6px 10px;font-size:11.5px;font-weight:600;color:#8a6a14;margin-top:6px;}
+  w.document.write(`<!DOCTYPE html><html><head><title>${esc(r.npa_id||"NPA")} — Notice of Personnel Action Form</title><style>
+    *{box-sizing:border-box;} body{font-family:Arial,Helvetica,sans-serif;color:#1F2A37;max-width:760px;margin:18px auto;padding:0 22px;font-size:9.5pt;line-height:1.35;}
+    .hd{display:flex;align-items:center;gap:12px;} .hd img{height:56px;}
+    .rule{border-bottom:3px solid #1B5E20;margin:6px 0 10px;}
+    .title{text-align:center;font-weight:800;font-size:13pt;letter-spacing:.5px;color:#12352a;margin:2px 0 12px;}
+    h3{font-size:9.5pt;color:#1B5E20;font-weight:800;border-bottom:1px solid #cfe0d5;padding-bottom:2px;margin:13px 0 6px;letter-spacing:.3px;}
+    table{width:100%;border-collapse:collapse;margin:4px 0;} td,th{border:1px solid #9fb0a6;padding:4px 7px;text-align:left;font-size:9pt;vertical-align:middle;}
+    th{background:#eef4ef;color:#12352a;font-size:8.5pt;text-transform:uppercase;letter-spacing:.3px;} .r{text-align:right;} .tot td{background:#f3f8f4;font-weight:700;}
+    .estat{margin:6px 0 2px;} .estat b{color:#12352a;} .chk{display:inline-block;margin:0 14px 3px 0;font-size:9pt;}
+    .reasons{columns:2;margin:4px 0;} .reasons .chk{display:block;}
+    .sc{height:48px;text-align:center;} .rmk{margin:6px 0;font-size:9pt;}
+    .conf{background:#fdf6e3;border:1px solid #ecdca6;padding:6px 9px;font-size:8.5pt;font-weight:700;color:#8a6a14;margin:8px 0;}
+    .conforme{margin:8px 0;font-size:9pt;} .dist{color:#667;font-size:8.5pt;margin-top:6px;}
+    .ft{display:flex;justify-content:space-between;align-items:flex-end;border-top:2px solid #1B5E20;margin-top:22px;padding-top:6px;}
+    .ft .tm{font-weight:800;color:#1B5E20;letter-spacing:.5px;font-size:10pt;} .ft .ad{text-align:right;color:#667;font-size:8pt;}
     @media print{ body{margin:0 auto;} }
   </style></head><body>
-    <div class="lh"><b>ROSHAN COMMERCIAL CORPORATION</b><div>104 Shaw Boulevard, Pasig City</div></div>
-    <h2>NOTICE OF PERSONNEL ACTION &nbsp;·&nbsp; ${esc(r.npa_id||"")}</h2>
+    <div class="hd"><img src="./rcc_logo.png" onerror="this.style.display='none'"><div style="font-weight:800;font-size:12pt;color:#1B5E20;">ROSHAN COMMERCIAL CORPORATION</div></div>
+    <div class="rule"></div>
+    <div class="title">NOTICE OF PERSONNEL ACTION FORM</div>
     <h3>I. EMPLOYEE INFORMATION</h3>
     <table>
-      <tr><td><b>Employee Name</b></td><td>${esc(r.employee_name||"—")}</td><td><b>Date Issued</b></td><td>${r.created_at?new Date(r.created_at).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}):new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}</td></tr>
+      <tr><td><b>Employee Name</b></td><td>${esc(r.employee_name||"—")}</td><td><b>Date Issued</b></td><td>${esc(dateIssued)}</td></tr>
       <tr><td><b>Employee ID</b></td><td>${esc(r.employee_number||"—")}</td><td><b>Position</b></td><td>${esc(r.current_position||"—")}</td></tr>
-      <tr><td><b>Department</b></td><td>${esc(r.department||"—")}</td><td><b>Effective Date</b></td><td>${r.effective_date?fmtDate(r.effective_date):"—"}</td></tr>
+      <tr><td><b>Location</b></td><td>${esc(r.department||"—")}</td><td><b>Effective Date</b></td><td>${r.effective_date?fmtDate(r.effective_date):"—"}</td></tr>
     </table>
-    <h3>II. REASON FOR PERSONNEL ACTION</h3>
-    <div style="margin:3px 0"><b>${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"")}</b> &nbsp;·&nbsp; Basis: ${esc(basis)}</div>
-    ${changeLines.length?`<div style="margin-left:6px;">${changeLines.join("<br>")}</div>`:""}
+    <div class="estat"><b>Employment Status (Select One):</b> &nbsp; [X] Regular &nbsp; [&nbsp;] Probationary &nbsp; [&nbsp;] Contractual &nbsp; [&nbsp;] Seasonal</div>
+    <h3>II. REASON FOR PERSONNEL ACTION (Select One)</h3>
+    <div class="reasons">${reasonRows}</div>
     ${fin}
-    ${r.remarks?`<div style="margin-top:8px"><b>Remarks:</b> ${esc(r.remarks)}</div>`:""}
     <h3>IV. SIGNATURES AND APPROVALS</h3>
-    ${disc?`<table><tr>${sigCells}</tr></table>`:(r.status==="processing"?`<div class="conf" style="background:#eef2f7;border-color:#c9d6e6;color:#1E3A5F;">Statutory movement — processed by HR; implemented on the effective date. No approval gate.${r.sig1_by?" HR authorized by "+esc(r.sig1_by)+".":""}</div>`:`<div class="conf" style="background:#eef2f7;border-color:#c9d6e6;color:#1E3A5F;">Operational movement — documented by memo (Dept Head). No NPA approval chain required.</div>`)}
-    <h3>V. ACKNOWLEDGEMENT</h3>
-    <div><b>EMPLOYEE CONFORME</b> &nbsp;·&nbsp; Signature: ______________________ &nbsp;·&nbsp; Date Received: ______________</div>
-    <div class="mut" style="margin-top:8px;">Distribution: Original — HR 201 File · Duplicate — Employee Copy · Triplicate — Payroll</div>
+    <table>
+      <tr>${roleHead}</tr>
+      <tr>${nameRow}</tr>
+      <tr>${sigRow}</tr>
+      <tr>${dateRow}</tr>
+    </table>
+    <div style="font-size:8pt;color:#667;margin-top:2px;">Row order: Role · Name · Signature · Date.</div>
+    <h3>V. ACKNOWLEDGEMENT AND DISTRIBUTION</h3>
+    <div class="conf">Important Note: SALARY data indicated in this form is strictly CONFIDENTIAL.</div>
+    <div class="conforme"><b>EMPLOYEE CONFORME</b> &nbsp;·&nbsp; Employee Signature: ______________________ &nbsp;·&nbsp; Date Received: ______________</div>
+    <div class="dist">Distribution: Original – HR 201 File, Duplicate – Employee Copy, Triplicate – Payroll.</div>
+    <div class="ft"><div class="tm">THE RIGHT MOVE</div><div class="ad">3rd Floor RCC Center, 104 Shaw Boulevard, Pasig, Manila, 1603, Philippines · +632 86386556</div></div>
     <script>window.print();</` + `script></body></html>`);
   w.document.close();
 }
@@ -4279,6 +4315,134 @@ function mvBatchStatutory(){
   refresh();
 }
 window.mvBatchStatutory=mvBatchStatutory;
+
+/* ── Excel batch upload → one NPA (Salary Adjustment) per row ──────────────────
+   Reads the min-wage-style workbook (Emp ID · Last · First · Department · Job
+   Title · Current Daily Rate · Allowance · Meal Allowance · Basic Increase ·
+   Allowance Increase · New Total Daily · Resigning? · Effective Date). Reuses the
+   Timekeeping SheetJS loader + parser. Each row becomes an awaiting_signoff NPA
+   with the standard chain Grazel → chosen Management approver. */
+let MV_UPLOAD=null; // {rows:[{...}], fileDate:"yyyy-mm-dd"|null, name}
+function mvNum(v){ if(v==null||v==="") return null; const n=Number(String(v).replace(/[,₱\s]/g,"")); return isFinite(n)?n:null; }
+function mvExcelDate(v){ // → yyyy-mm-dd (or null)
+  if(v==null||v==="") return null;
+  if(typeof v==="number" && isFinite(v) && window.XLSX && window.XLSX.SSF){ const d=window.XLSX.SSF.parse_date_code(v);
+    if(d&&d.y) return d.y+"-"+String(d.m).padStart(2,"0")+"-"+String(d.d).padStart(2,"0"); }
+  if(v instanceof Date && !isNaN(v)) return v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0");
+  const s=String(v).trim(); if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  const d=new Date(s); return isNaN(d)?null:d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function mvNorm(s){ return String(s==null?"":s).toLowerCase().replace(/[^a-z0-9]/g,""); }
+// Map a header row to column indexes — tolerant of missing / re-worded columns.
+function mvMapCols(hdr){
+  const idx={}; const find=(...keys)=>{ for(let c=0;c<hdr.length;c++){ const h=mvNorm(hdr[c]); if(!h) continue;
+    if(keys.some(k=>h===k||h.includes(k))) return c; } return -1; };
+  idx.empid=find("empid","employeeid","employeeno","empno","idno");
+  idx.last=find("lastname","surname");
+  idx.first=find("firstname","givenname");
+  idx.name=find("employeename","fullname","name"); // fallback single-name column
+  idx.dept=find("department","dept");
+  idx.job=find("jobtitle","position","designation");
+  idx.dr=find("currentdailyrate","dailyrate","currentrate","currentdaily");
+  idx.ainc=find("allowanceincrease");
+  // Current allowance = "Current Allowance", or a plain "Allowance" that is NOT the increase / meal column.
+  idx.allow=find("currentallowance");
+  if(idx.allow<0){ for(let c=0;c<hdr.length;c++){ const h=mvNorm(hdr[c]); if(h==="allowance"&&c!==idx.ainc){ idx.allow=c; break; } } }
+  idx.meal=find("mealallowance");
+  if(idx.meal<0){ for(let c=0;c<hdr.length;c++){ const h=mvNorm(hdr[c]); if(h==="meal"){ idx.meal=c; break; } } }
+  idx.binc=find("basicincrease","basicincreasedaily","increasebasic");
+  idx.newtot=find("newtotaldaily","newtotal","newdailyrate","newdaily");
+  idx.resign=find("resigning","resign","resigned");
+  idx.eff=find("effectivedate","effectivity","effective");
+  return idx;
+}
+async function mvUploadBatch(file){
+  if(!canSeePay()){ alert("Excel batch upload is payroll-only."); return; }
+  try{
+    await tkLoadSheetJS();
+    const buf=await file.arrayBuffer();
+    const wb=window.XLSX.read(new Uint8Array(buf),{type:"array"});
+    const sh=wb.Sheets[wb.SheetNames[0]]; if(!sh) throw new Error("The workbook has no sheets.");
+    const grid=window.XLSX.utils.sheet_to_json(sh,{header:1,defval:null});
+    if(!grid.length) throw new Error("The sheet is empty.");
+    // Auto-detect the header row: scan the first ~15 rows for an Emp/Employee ID or Last Name cell.
+    let hr=-1;
+    for(let r=0;r<Math.min(15,grid.length);r++){ const row=grid[r]||[];
+      if(row.some(c=>{ const h=mvNorm(c); return h==="empid"||h==="employeeid"||h==="employeeno"||h==="lastname"||h==="surname"; })){ hr=r; break; } }
+    if(hr<0) throw new Error("Couldn't find the header row (looked for “Emp ID” / “Employee ID” / “Last Name” in the first 15 rows).");
+    const idx=mvMapCols(grid[hr]);
+    const rows=[]; let fileDate=null;
+    for(let r=hr+1;r<grid.length;r++){ const row=grid[r]||[];
+      const cell=c=>c>=0?row[c]:null;
+      const first=cell(idx.first), last=cell(idx.last), single=cell(idx.name), empid=cell(idx.empid);
+      const nm=[first,last].filter(x=>x!=null&&String(x).trim()!=="").join(" ").trim() || String(single||"").trim();
+      if(!nm && (empid==null||String(empid).trim()==="")) continue; // skip blank rows
+      const drC=mvNum(cell(idx.dr)), binc=mvNum(cell(idx.binc)), newtot=mvNum(cell(idx.newtot));
+      const alC=mvNum(cell(idx.allow)), ainc=mvNum(cell(idx.ainc)), meal=mvNum(cell(idx.meal));
+      const eff=mvExcelDate(cell(idx.eff)); if(eff&&!fileDate) fileDate=eff;
+      const newDr=(newtot!=null)?newtot:((drC!=null&&binc!=null)?drC+binc:(drC!=null?drC:null));
+      const newAl=(alC!=null&&ainc!=null)?alC+ainc:(ainc!=null?ainc:null);
+      const resignRaw=cell(idx.resign); const resigning=/^(y|yes|true|1|resign)/i.test(String(resignRaw==null?"":resignRaw).trim());
+      rows.push({ empid:empid!=null?String(empid).trim():null, name:nm, dept:cell(idx.dept)!=null?String(cell(idx.dept)).trim():null,
+        job:cell(idx.job)!=null?String(cell(idx.job)).trim():null, drC, newDr, alC, newAl, meal, resigning, eff });
+    }
+    if(!rows.length) throw new Error("No data rows found under the header.");
+    MV_UPLOAD={ rows, fileDate, name:file.name };
+    mvUploadPreview();
+  }catch(e){ alert("⚠ "+((e&&e.message)||e)); }
+}
+function mvUploadPreview(){
+  if(!MV_UPLOAD) return;
+  const { rows, fileDate, name }=MV_UPLOAD;
+  let m=document.getElementById("mvUpModal"); if(!m){ m=document.createElement("div"); m.id="mvUpModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  const first5=rows.slice(0,5).map(r=>esc(r.name||"—")+(r.empid?' <span class="note" style="display:inline;padding:0 4px;">'+esc(r.empid)+"</span>":"")).join("<br>");
+  const dflt=fileDate||new Date().toISOString().slice(0,10);
+  const resigningN=rows.filter(r=>r.resigning).length;
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;padding:22px;max-height:92vh;overflow-y:auto;">
+    <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:2px;">Upload batch — ${esc(name||"Excel")}</h2>
+    <div class="psub" style="margin-bottom:8px;"><b>${rows.length}</b> row(s) parsed. One <b>Salary Adjustment</b> NPA is filed per row, each routed for sign-off (Grazel → Management).${resigningN?' <span style="color:#9a6a00;">'+resigningN+" flagged “resigning”.</span>":""}</div>
+    <div style="background:#f7faf8;border:1px solid #e2e7e4;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:13px;">
+      <div style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">First ${Math.min(5,rows.length)} of ${rows.length}</div>${first5||"—"}</div>
+    ${sel("mvu_basis","Basis *",["Statutory","Discretionary"],"Statutory")}
+    ${fld("mvu_eff","Effective date (applied to all rows) *",dflt,"date")}
+    <div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Final approver (Management) *</label>
+      <select id="mvu_mgmt" style="width:100%;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;background:#fff;">
+        ${MV_MANAGEMENT.map((mm,i)=>`<option value="${esc(mm.email)}" ${i===0?"selected":""}>${esc(mm.name)}</option>`).join("")}
+      </select></div>
+    <div id="mvuMsg" style="font-size:13px;color:#a4322a;margin:4px 0;"></div>
+    <div style="display:flex;gap:10px;"><button class="btn ghost" id="mvuCancel" style="flex:1;">Cancel</button><button class="btn" id="mvuGo" style="flex:1;">Create ${rows.length} NPA(s)</button></div>
+  </div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("mvuCancel").onclick=()=>m.remove();
+  document.getElementById("mvuGo").onclick=async()=>{
+    const msg=document.getElementById("mvuMsg");
+    const basis=v("mvu_basis")||"Statutory", eff=v("mvu_eff"), mgmt=(document.getElementById("mvu_mgmt")||{}).value;
+    if(!eff){ msg.textContent="Set the effective date."; return; }
+    const mm=MV_MANAGEMENT.find(x=>x.email===mgmt); if(!mm){ msg.textContent="Pick the Management approver."; return; }
+    const btn=document.getElementById("mvuGo"); btn.disabled=true; btn.textContent="Creating "+rows.length+"…";
+    const signers=[{seq:1, role:MV_STEP1.role, name:MV_STEP1.name, email:MV_STEP1.email},
+                   {seq:2, role:MV_MGMT_ROLE, name:mm.name, email:mm.email}];
+    const payload=rows.map(r=>{
+      const emp=(EMPLOYEES||[]).find(x=>r.empid&&String(x.employee_id)===String(r.empid));
+      const npa_id="NPA-UP-"+(r.empid||"X")+"-"+Math.random().toString(36).slice(2,6).toUpperCase();
+      const remarkParts=["[Salary Adjustment · "+basis+"]","Excel batch upload"];
+      if(r.resigning) remarkParts.push("Flagged resigning");
+      return { npa_id, action_type:"SALARY_ADJUSTMENT", employee_id:emp?emp.id:null, employee_name:r.name,
+        employee_number:r.empid||null, department:r.dept||null, current_position:r.job||null,
+        current_daily_rate:r.drC, new_daily_rate:r.newDr, current_allowance:r.alC, new_allowance:r.newAl,
+        meal_allowance:r.meal, new_meal_allowance:r.meal, effective_date:eff,
+        remarks:remarkParts.join(" · "), status:"awaiting_signoff", basis:basis.toLowerCase(), signers,
+        prepared_by:"Grazel Lyn Agulto", created_by:(CURRENT_USER&&CURRENT_USER.id)||null };
+    });
+    const { error }=await sb.from("personnel_actions").insert(payload);
+    if(error){ msg.textContent=error.message; btn.disabled=false; btn.textContent="Create "+rows.length+" NPA(s)"; return; }
+    await logChange("movement",null,MV_UPLOAD.name||"Excel batch","Movement batch uploaded (Excel)",rows.length+" NPA(s) · "+basis+" · eff "+eff);
+    MV_UPLOAD=null; m.remove(); alert("Created "+rows.length+" salary-adjustment NPA(s) — each is awaiting sign-off.");
+    await loadEmployees(); window.go("movements");
+  };
+}
+window.mvUploadBatch=mvUploadBatch;
 
 /* ================= POLICIES & PROCESSES ==================
    Reference library. Everyone logged-in can READ; only admin/manager
@@ -8557,6 +8721,18 @@ async function createExitCase(emp){
   await loadEmployees(); window.go("exit"); openExitCase(data.id);
 }
 function exNumField(id,label,val){ return `<div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px;">${label}</label><input id="${id}" type="number" step="0.01" value="${val??""}" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;"></div>`; }
+// Earned lines that split into Basic salary + Allowance (mirrors Juvelyn's Excel).
+const FP_SPLIT=new Set(["last_payroll","thirteenth_month","leave_incentive"]);
+// A split line: two boxes side by side (Basic | Allowance) + note; line total shown live.
+function fpSplitField(key,label,hint,fp){
+  const basic=(fp&&fp[key+"_basic"]!=null)?fp[key+"_basic"]:((fp&&fp[key]!=null)?fp[key]:"");
+  const allow=(fp&&fp[key+"_allowance"]!=null)?fp[key+"_allowance"]:"";
+  const n=fp&&fp[key+"_note"];
+  const box=(sub,idv,val,ph)=>`<div style="flex:1;min-width:0;"><input id="fp_${key}_${sub}" data-fpsplit="${key}" type="number" step="0.01" value="${val??""}" placeholder="${ph}" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;"><div style="font-size:10px;color:#8a948e;text-transform:uppercase;letter-spacing:.3px;margin-top:2px;text-align:center;">${idv}</div></div>`;
+  return `<div style="margin-bottom:11px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px;">${label} <span id="fptot_${key}" style="color:var(--green-dark);font-weight:800;"></span></label>
+    <div style="display:flex;gap:8px;">${box("basic","Basic salary",basic,"Basic ₱")}${box("allowance","Allowance",allow,"Allowance ₱")}</div>
+    <input id="fpn_${key}" value="${esc(n||"")}" placeholder="${esc(hint||"note / remarks (optional)")}" style="width:100%;margin-top:5px;padding:5px 9px;border:1px solid #eef1ee;border-radius:6px;font-size:11.5px;color:#5c6b60;background:#fbfcfb;"></div>`;
+}
 // One quitclaim line: amount + an optional remarks note (matches the Excel's per-line REMARKS column).
 function fpField(key,label,hint,fp){ const v=fp&&fp[key], n=fp&&fp[key+"_note"];
   return `<div style="margin-bottom:9px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px;">${label}</label>
@@ -8566,7 +8742,10 @@ function fpField(key,label,hint,fp){ const v=fp&&fp[key], n=fp&&fp[key+"_note"];
 function collectFinalPay(){ const m=document.getElementById("exModal"); if(!m) return {};
   const num=id=>{ const e=m.querySelector("#fp_"+id); return e&&e.value.trim()!==""?Number(e.value):0; };
   const note=id=>{ const e=m.querySelector("#fpn_"+id); return e?e.value.trim():""; };
-  const fp={}; FP_ALL.forEach(([k])=>{ fp[k]=num(k); const nt=note(k); if(nt) fp[k+"_note"]=nt; });
+  const fp={}; FP_ALL.forEach(([k])=>{
+    if(FP_SPLIT.has(k)){ const b=num(k+"_basic"), a=num(k+"_allowance"); fp[k+"_basic"]=b; fp[k+"_allowance"]=a; fp[k]=b+a; }
+    else { fp[k]=num(k); }
+    const nt=note(k); if(nt) fp[k+"_note"]=nt; });
   const ba=m.querySelector("#fp_bank_account"), pi=m.querySelector("#fp_payment_instruction");
   if(ba) fp.bank_account=ba.value.trim(); if(pi) fp.payment_instruction=pi.value.trim();
   fp.total_claims=fpClaims(fp); fp.total_deductions=fpDeductions(fp); fp.net=fpNet(fp); return fp; }
@@ -8663,7 +8842,7 @@ function openExitCase(id){
         ${x.quitclaim_status==="Approved"?`<div class="note" style="background:var(--green-light);border-color:var(--green);">✓ Approved &amp; e-signed by the Director${x.quitclaim_date?" on "+fmtDate(x.quitclaim_date):""}. Safe to release.</div>`:""}
         <div style="font-weight:800;color:var(--green-dark);font-size:11.5px;letter-spacing:.4px;text-transform:uppercase;margin:10px 0 4px;">Claims — owed to employee</div>
         <div class="form-grid">
-          ${FP_CLAIMS.map(([k,l,h])=>fpField(k,l,h,fp)).join("")}
+          ${FP_CLAIMS.map(([k,l,h])=>FP_SPLIT.has(k)?fpSplitField(k,l,h,fp):fpField(k,l,h,fp)).join("")}
         </div>
         <div style="font-weight:800;color:var(--red);font-size:11.5px;letter-spacing:.4px;text-transform:uppercase;margin:14px 0 4px;">Less: deductions</div>
         <div class="form-grid">
@@ -8725,6 +8904,7 @@ function openExitCase(id){
     </div></div>`;
   const recompute=()=>{
     const q=collectFinalPay(), c=fpClaims(q), d=fpDeductions(q), n=c-d;
+    FP_SPLIT.forEach(k=>{ const el=document.getElementById("fptot_"+k); if(el){ const t=Number(q[k]||0); el.textContent=t?"= "+peso(t):""; } });
     $("#ex_netbox").innerHTML=`Total claims <b>${peso(c)}</b> − Deductions <b>${peso(d)}</b> = <b style="color:var(--green-dark);font-size:16px;">Net to employee ${peso(n)}</b>`
       +(n<0?` <span style="color:var(--red);font-weight:700;">— negative: the employee would owe. Recheck before sending.</span>`:"");
   };

@@ -7577,9 +7577,9 @@ function openExitCase(id){
             return (submitted?`<span class="td" style="font-size:11.5px;color:#9a6a00;">Prepared by ${esc(x.separation_submitted_by||"HR")}${x.separation_submitted_at?" · "+fmtDate(x.separation_submitted_at):""} — your approval finalises it.</span> `:"")
               +'<button class="btn blue" id="exComplete">Approve &amp; mark Separated</button>';
           }
-          // HR (maker) — cannot separate alone; sends to the Director
+          // HR (maker) — cannot separate alone; sends to the final approver (Anju Genomal)
           return submitted
-            ? '<span class="pill cn">Awaiting Director approval</span>'
+            ? '<span class="pill cn">Awaiting Anju Genomal’s approval</span>'
             : '<button class="btn blue" id="exSubmitSep">Submit separation for approval</button>';
         })()}
         <button class="btn ghost" id="exClose" style="margin-left:auto;">Close</button>
@@ -7598,7 +7598,7 @@ function openExitCase(id){
   $("#exSave").addEventListener("click",()=>saveExitCase(x,m,false));
   wireDeptSignoffs(x, m);
   const cmp=document.getElementById("exComplete"); if(cmp) cmp.addEventListener("click",()=>{ if(confirm("Approve this separation for "+(x.employee_name||"this employee")+"?\n\nTheir status will flip to Separated.")) saveExitCase(x,m,true); });
-  const subSep=document.getElementById("exSubmitSep"); if(subSep) subSep.addEventListener("click",()=>{ if(confirm("Submit "+(x.employee_name||"this employee")+"'s separation to the Director for approval?\n\nThey stay Active until the Director approves.")) saveExitCase(x,m,"submit"); });
+  const subSep=document.getElementById("exSubmitSep"); if(subSep) subSep.addEventListener("click",()=>{ if(confirm("Submit "+(x.employee_name||"this employee")+"'s separation to Anju Genomal for approval?\n\nThey stay Active until Anju Genomal approves.")) saveExitCase(x,m,"submit"); });
   const sendFP=document.getElementById("exSendFP"); if(sendFP) sendFP.addEventListener("click",()=>sendFinalPayForSignoff(x,m));
   const viewFP=document.getElementById("exViewFP"); if(viewFP) viewFP.addEventListener("click",()=>printQuitclaim(x));
   document.getElementById("ex_interview_btn").addEventListener("click",()=>openExitInterview(x));

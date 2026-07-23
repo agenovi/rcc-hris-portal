@@ -654,6 +654,10 @@ function openLoan(id){
         <div id="loanAfford"><div class="psub">Calculating…</div></div>
       </div>
       <div class="panel">
+        <h2>Recent attendance <span style="font-size:12px;font-weight:600;color:var(--muted);">— last 3 months (PayPlus)</span></h2>
+        <div id="loanAtt"><div class="psub">Loading attendance…</div></div>
+      </div>
+      <div class="panel">
         <h2>Supporting documents</h2>
         ${(Array.isArray(l.documents)&&l.documents.length)
           ? l.documents.map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);">
@@ -749,6 +753,26 @@ function openLoan(id){
       <div class="psub" style="margin-top:8px;">Pay figure was declared on the application. Confirm against the latest payslip before approving. The 15% guide applies <b>after</b> government (SSS/PhilHealth/Pag-IBIG/tax) deductions.</div>`;
   };
   renderAfford(0);
+  // ── Recent attendance (last 3 completed months from PayPlus) ──
+  (async()=>{
+    const box=document.getElementById("loanAtt"); if(!box) return;
+    if(!l.employee_id){ box.innerHTML=`<div class="psub">No Employee ID linked — can't pull attendance.</div>`; return; }
+    const now=new Date(); let ey=now.getFullYear(), em=now.getMonth(); if(em===0){ em=12; ey--; } // month before current (1-12)
+    let sy=ey, sm=em-2; while(sm<1){ sm+=12; sy--; }
+    try{
+      const { data:{ session } }=await sb.auth.getSession();
+      const url=`${SUPABASE_URL}/functions/v1/payplus-attendance?emp=${encodeURIComponent(l.employee_id)}&y1=${sy}&m1=${sm}&y2=${ey}&m2=${em}`;
+      const r=await fetch(url,{ headers:{ Authorization:`Bearer ${session.access_token}`, apikey:SUPABASE_ANON_KEY } });
+      const j=await r.json();
+      if(j.error){ box.innerHTML=`<div class="note">Couldn't pull attendance: ${esc(j.error)}</div>`; return; }
+      const ms=(j.months||[]).filter(x=>x.hasData);
+      if(!ms.length){ box.innerHTML=`<div class="note" style="background:#fffaf0;border-color:#f0d9a6;">No attendance found in the last 3 months — may be agency (not enrolled) or newly hired. Verify manually.</div>`; return; }
+      const totAbs=ms.reduce((s,x)=>s+Number(x.absent||0),0);
+      const flag=totAbs>=6;
+      box.innerHTML=`<table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr style="color:var(--muted);"><th style="text-align:left;">Month</th><th style="text-align:right;">Present</th><th style="text-align:right;">Absent</th><th style="text-align:right;">Late(m)</th><th style="text-align:right;">UT(m)</th></tr></thead><tbody>${ms.map(x=>`<tr><td>${esc(x.month)}</td><td style="text-align:right;">${Number(x.present||0)}</td><td style="text-align:right;${Number(x.absent||0)>=3?'color:var(--red);font-weight:700;':''}">${x.absent||0}</td><td style="text-align:right;">${Number(x.lateMinutes||0).toFixed(0)}</td><td style="text-align:right;">${Number(x.undertimeMinutes||0).toFixed(0)}</td></tr>`).join("")}</tbody></table>
+        <div style="margin-top:8px;padding:9px 12px;border-radius:9px;font-size:13px;background:${flag?'#fbeee6':'#eef4ef'};border:1px solid ${flag?'#ecdca6':'#cfe0d4'};">${flag?`<b style="color:#b26a00;">⚠ ${totAbs} absences across 3 months</b> — check attendance/reliability before granting a loan.`:`${totAbs} absences across 3 months — attendance looks steady.`}</div>`;
+    }catch(e){ box.innerHTML=`<div class="note">Couldn't reach PayPlus: ${esc(String(e&&e.message||e))}</div>`; }
+  })();
   (async()=>{
     if(!l.employee_id){ renderLoanHist(null); renderAfford(0); return; }
     const {data}=await sb.from("loan_history").select("*").eq("employee_id",l.employee_id).order("date_granted",{ascending:false,nullsFirst:false});

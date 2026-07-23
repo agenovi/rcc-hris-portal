@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784791970";
+window.APP_BUILD="1784792052";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784791970" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784792052" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -2912,6 +2912,33 @@ const LOAN_SIGN_BASE="https://agenovi.github.io/rcc-hris-portal/loan-sign.html";
 const LOAN_RATES={discretionary:12,emergency:12,educational:0,moto:6};
 // Per-department approver routing (Anj 2026-06-18): Head Office → Anj, Store/Warehouse → Kaira.
 function loanApprover(l){ const t=((l.department||"")+" "+(l.position||"")).toLowerCase(); return /warehouse|store/.test(t)?"Kaira":"Anj"; }
+// NCR daily minimum wage (2026 order). Monthly floor ≈ daily × 26. Regional rates vary — HR confirms.
+const NCR_MIN_DAILY=755, MIN_WAGE_MONTHLY_EST=Math.round(755*26);
+// Eligibility snapshot for the loan review — reads the linked roster record + open loans.
+function loanEligibilityHtml(l){
+  if(!l.employee_id) return `<div class="note">No Employee ID linked yet — link the PayPlus ID to see tenure, status and second-loan checks.</div>`;
+  const e=EMPLOYEES.find(x=>String(x.employee_id)===String(l.employee_id));
+  const flags=[];
+  let tenureTxt="—", ct="—", stTxt="—", src="—";
+  if(e){
+    const ty=tenureYears(e.hire_date);
+    tenureTxt=ty!=null?(ty<1?Math.round(ty*12)+" months":ty.toFixed(1)+" years")+(e.hire_date?` (since ${fmtDate(e.hire_date)})`:""):"no hire date on file";
+    ct=e.contract_type||"—"; stTxt=e.status||"—"; src=e.hire_source||e.group_name||"Direct";
+    if((e.status||"")!=="Active") flags.push(`⚠ Roster status is <b>${esc(e.status||"unknown")}</b> — loans are for active employees.`);
+    if(/probation/i.test(ct)) flags.push(`⚠ <b>Probationary</b> — moto & discretionary loans need regular status / minimum tenure.`);
+    if(ty!=null && ty<2 && l.loan_type==="moto") flags.push(`⚠ Motorcycle loan needs <b>2+ years</b> tenure (currently ${ty.toFixed(1)}y).`);
+    if(/jell|m&g|^mg|agency/i.test(src)) flags.push(`⚠ Appears <b>agency-placed</b> (${esc(src)}) — company loans are for direct hires; confirm.`);
+  } else {
+    flags.push(`⚠ No roster record found for ID ${esc(l.employee_id)} — verify the employee exists in PayPlus.`);
+  }
+  // Second active loan (clear-first rule): any OTHER portal loan for this ID not Rejected/Released…
+  const others=(typeof LOANS!=="undefined"?LOANS:[]).filter(x=>String(x.employee_id)===String(l.employee_id) && String(x.id)!==String(l.id) && !["Rejected","Released"].includes(x.status));
+  if(others.length) flags.push(`⚠ <b>${others.length} other open loan application(s)</b> in the portal (${esc(others.map(o=>o.loan_ref).join(", "))}) — clear-first rule.`);
+  return `${phRow("Tenure",tenureTxt)}${phRow("Contract type",ct)}${phRow("Roster status",stTxt)}${phRow("Source",src)}
+    ${flags.length
+      ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">${flags.map(f=>`<div style="padding:8px 11px;border-radius:9px;background:#fbeee6;border:1px solid #ecdca6;font-size:13px;">${f}</div>`).join("")}</div>`
+      : `<div style="margin-top:10px;padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;"><b style="color:var(--green);">✓ No eligibility flags</b> — active, and no other open loan.</div>`}`;
+}
 function newLoanToken(){ try{ if(crypto&&crypto.randomUUID) return crypto.randomUUID().replace(/-/g,""); }catch(e){} return Date.now().toString(36)+Math.random().toString(36).slice(2,12); }
 // DOLE-cleaned loan agreement (Art. 113 compliant; no void post-separation penalty interest).
 function buildLoanAgreement(l,approver){
@@ -2988,7 +3015,11 @@ function openLoan(id){
     <div style="padding:18px 22px 60px;">
       <div class="panel" style="margin-top:0;">
         <h2>Application</h2>
-        ${phRow("Loan type",loanTypeLabel(l.loan_type))}${phRow("Amount",peso(l.amount))}${phRow("Term",(l.term_months||"—")+" months")}${phRow("Est. monthly",peso(l.monthly_estimate))}${phRow("Mobile",l.contact_number)}${phRow("Email",l.email)}${phRow("Employee ID",l.employee_id)}${phRow("Position",l.department)}${phRow("Take-home given",l.net_pay?peso(l.net_pay):"—")}${phRow("Purpose",l.purpose)}${phRow("Authorized",l.authorized?"Yes (RA 8792)":"—")}
+        ${phRow("Loan type",loanTypeLabel(l.loan_type))}${phRow("Amount",peso(l.amount))}${phRow("Term",(l.term_months||"—")+" months")}${phRow("Est. monthly",peso(l.monthly_estimate))}${phRow("Mobile",l.contact_number)}${phRow("Email",l.email)}${phRow("Employee ID",l.employee_id)}${phRow("Position",l.department)}${phRow("Take-home given",l.net_pay?peso(l.net_pay):"—")}${phRow("Purpose",l.purpose)}${phRow("Authorized",l.authorized?"Applied & consented online (RA 8792)":"—")}
+      </div>
+      <div class="panel" style="border:2px solid #cfe0d4;">
+        <h2>Eligibility snapshot</h2>
+        ${loanEligibilityHtml(l)}
       </div>
       <div class="panel" style="border:2px solid #cfe0d4;">
         <h2>Loan history <span style="font-size:12px;font-weight:600;color:var(--muted);">— HR check (PayPlus can't supply this)</span></h2>
@@ -3114,7 +3145,11 @@ function openLoan(id){
         ${ok?`<b style="color:var(--green);">✓ Within the 15% guide.</b> Combined ₱${combined.toLocaleString(undefined,{maximumFractionDigits:0})} fits under ₱${guide.toLocaleString(undefined,{maximumFractionDigits:0})}.`
              :`<b style="color:#b26a00;">⚠ Over the 15% guide.</b> Combined ₱${combined.toLocaleString(undefined,{maximumFractionDigits:0})} exceeds ₱${guide.toLocaleString(undefined,{maximumFractionDigits:0})} — consider a smaller amount or longer term, or clear the existing loan first.`}
       </div>
-      <div class="psub" style="margin-top:8px;">Pay figure was declared on the application. Confirm against the latest payslip before approving. The 15% guide applies <b>after</b> government (SSS/PhilHealth/Pag-IBIG/tax) deductions.</div>`;
+      ${(()=>{ const residual=disposable-combined; const below=residual<MIN_WAGE_MONTHLY_EST;
+        return `<div style="margin-top:8px;padding:11px 13px;border-radius:10px;font-size:13px;background:${below?'#fbeee6':'#eef4ef'};border:1px solid ${below?'#ecdca6':'#cfe0d4'};">
+          <b>Art. 113 — take-home floor.</b> After all loan deductions, pay left ≈ <b>₱${residual.toLocaleString(undefined,{maximumFractionDigits:0})}</b>/mo vs the minimum-wage floor ≈ ₱${MIN_WAGE_MONTHLY_EST.toLocaleString()} (NCR est.).
+          ${below?` <span style="color:#b26a00;font-weight:700;">⚠ Below the floor — deductions may not lawfully reduce take-home below minimum wage.</span>`:` <span style="color:var(--green);font-weight:700;">✓ Stays above the floor.</span>`}</div>`; })()}
+      <div class="psub" style="margin-top:8px;">Pay figure was declared on the application. Confirm against the latest payslip before approving. The 15% guide applies <b>after</b> government (SSS/PhilHealth/Pag-IBIG/tax) deductions. Min-wage floor is an NCR estimate — adjust for the employee's region.</div>`;
   };
   renderAfford(0);
   // ── Recent attendance (last 3 completed months from PayPlus) ──

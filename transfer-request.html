@@ -138,6 +138,7 @@ async function init(){
     $("from").innerHTML = '<option value="">—</option>' + stores.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
     $("load").style.display="none";
     $("form").style.display="block";
+    updatePreview();
   }catch(e){ $("load").textContent="Couldn't load — please check your connection and reopen the link."; }
 }
 init();
@@ -211,7 +212,7 @@ $("submit").addEventListener("click", async ()=>{
     const j=await r.json();
     if(!j.ok){ msg.className="msg err"; msg.textContent=j.reason||"Something went wrong. Please try again."; msg.style.display="block"; btn.disabled=false; btn.textContent="Submit transfer request"; return; }
     $("form").style.display="none";
-    $("doneMsg").innerHTML="Your transfer request is with HR. The receiving store head will confirm before the employee starts, and confirm again after the period.";
+    $("doneMsg").innerHTML="Your transfer request is now with HR automatically. The current and receiving store heads will each confirm — before the employee starts and after the period — and the employee is advised of the move (same rank &amp; pay).";
     $("done").style.display="block";
     window.scrollTo(0,0);
   }catch(e){ msg.className="msg err"; msg.textContent="Network error — please try again."; msg.style.display="block"; btn.disabled=false; btn.textContent="Submit transfer request"; }

@@ -33,6 +33,7 @@ let SC_STATUS={};  // sc_name -> {status:'Active'|'Vacant'|'Pending', note}
 let MATERNITY=[];  // maternity_claims rows
 let NPAS=[];       // personnel_actions rows (Movements / NPA module)
 let POLICIES=[];      // policies rows (Policies & Processes group)
+let CONCERNS=[];      // arbitration / ongoing legal cases (Concerns Tracker — Director only)
 let POLICY_ACKS=[];   // policy_acknowledgments rows (read-and-sign roster)
 let PROCESSES=[];     // processes rows (SOPs)
 let MEETINGS=[];   // meeting_attendance rows (merchandiser meeting sign-in + reimbursement)
@@ -110,7 +111,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes'||id==='desk') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes'||id==='desk'||id==='storemap') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
@@ -124,6 +125,7 @@ function applyRoleUI(){
     if(pg==='meetings'){ n.style.display=canRunMeetings()?'':'none'; return; } // Meetings = Anj/Grazel/Rhel/Vina
     if(pg==='movements'){ n.style.display=canSeeMovements()?'':'none'; return; } // Movements/NPA = Anj/Grazel/Rhel
     if(pg==='govremit'){ n.style.display=canEditIds()?'':'none'; return; } // Gov't Remittances = gov-ID owners (Anj/Vina/Grazel)
+    if(pg==='concerns'){ n.style.display=isAdminUser()?'':'none'; return; } // Concerns & Cases = Director/owner only (arbitration/legal)
     if(pg==='policies'||pg==='processes'||pg==='desk'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies, Processes, HR Desk = every logged-in HR
     n.style.display=(allow&&allow.indexOf(pg)===-1)?'none':'';
   });
@@ -228,7 +230,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -259,7 +261,8 @@ async function loadEmployees(){
     sb.from("hr_notes").select("*").order("created_at", {ascending:false}),
     sb.from("hr_ideas").select("*").order("created_at", {ascending:false}),
     sb.from("hr_tasks").select("*").order("created_at", {ascending:false}),
-    sb.from("external_signoffs").select("*").order("created_at", {ascending:false})
+    sb.from("external_signoffs").select("*").order("created_at", {ascending:false}),
+    sb.from("concerns").select("*").order("created_at", {ascending:false})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -293,6 +296,7 @@ async function loadEmployees(){
   HR_IDEAS=(hideas&&hideas.data)||[];
   HR_TASKS=(htasks&&htasks.data)||[];
   EXT_SIGNOFFS=(xso&&xso.data)||[];
+  CONCERNS=(cncrn&&cncrn.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -313,6 +317,8 @@ async function loadEmployees(){
   renderMovements();
   renderPolicies();
   renderProcesses();
+  renderStoremap();
+  renderConcerns();
   renderMeetings();
   renderDemoData();
   renderTimekeeping();
@@ -351,7 +357,7 @@ async function ppSyncFetch(params){
 
 // Honesty pass: every screen NOT backed by live data gets a visible "Preview" ribbon,
 // so HR never mistakes an illustrative mock-up for real data. Real pages are listed here.
-const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity","maternity","timekeeping","meetings","govremit","movements","policies","processes","orgchart"]);
+const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity","maternity","timekeeping","meetings","govremit","movements","policies","processes","orgchart","storemap","concerns"]);
 function tagPreviewPages(){
   document.querySelectorAll('section.page').forEach(sec=>{
     const id=(sec.id||"").replace("page-","");

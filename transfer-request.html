@@ -104,7 +104,8 @@ const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZ
 const H = { "apikey": ANON, "Authorization": "Bearer " + ANON, "Content-Type": "application/json" };
 const $ = id => document.getElementById(id);
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const TOKEN = new URLSearchParams(location.search).get("sc") || "";
+const _qs = new URLSearchParams(location.search);
+const TOKEN = _qs.get("sc") || _qs.get("t") || _qs.get("token") || "";
 let PEOPLE = [];
 const firstSeg = w => String(w||"").split(" · ")[0].trim();
 

@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784821786";
+window.APP_BUILD="1784821911";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784821786" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784821911" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -617,7 +617,7 @@ window.APP_BUILD="1784821786";
       </div>
       <div class="nav-item" data-page="concerns" onclick="go('concerns')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6a2 2 0 0 1 2-2h8l2 2h4a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v3M12 16h.01"/></svg>
-        Concerns &amp; Cases<span class="nav-badge" style="background:#7a2020;color:#fff;">Director</span>
+        Concerns &amp; Cases
       </div>
 
       <div class="nav-sec">Exit</div>
@@ -2421,6 +2421,7 @@ let MATERNITY=[];  // maternity_claims rows
 let NPAS=[];       // personnel_actions rows (Movements / NPA module)
 let POLICIES=[];      // policies rows (Policies & Processes group)
 let CONCERNS=[];      // arbitration / ongoing legal cases (Concerns Tracker — Director only)
+let DEPT_HEADS=[];    // department_heads — HRIS-owned org structure (dept → head employee); editable by Rhel/admins in Org Chart
 let TRANSFERS=[];     // employee_transfers — SC-requested store transfers/deployments w/ store-head before+after confirmation
 let SC_LINKS=[];      // sc_links — per-SC private transfer-request tokens (cascade to their people + anti-tamper)
 let POLICY_ACKS=[];   // policy_acknowledgments rows (read-and-sign roster)
@@ -2620,7 +2621,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2654,7 +2655,8 @@ async function loadEmployees(){
     sb.from("external_signoffs").select("*").order("created_at", {ascending:false}),
     sb.from("concerns").select("*").order("created_at", {ascending:false}),
     sb.from("employee_transfers").select("*").order("created_at", {ascending:false}),
-    sb.from("sc_links").select("*").order("sc_name")
+    sb.from("sc_links").select("*").order("sc_name"),
+    sb.from("department_heads").select("*")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2691,6 +2693,7 @@ async function loadEmployees(){
   CONCERNS=(cncrn&&cncrn.data)||[];
   TRANSFERS=(trf&&trf.data)||[];
   SC_LINKS=(scl&&scl.data)||[];
+  DEPT_HEADS=(dh&&dh.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();

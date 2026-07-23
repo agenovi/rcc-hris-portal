@@ -34,6 +34,7 @@ let MATERNITY=[];  // maternity_claims rows
 let NPAS=[];       // personnel_actions rows (Movements / NPA module)
 let POLICIES=[];      // policies rows (Policies & Processes group)
 let CONCERNS=[];      // arbitration / ongoing legal cases (Concerns Tracker — Director only)
+let DEPT_HEADS=[];    // department_heads — HRIS-owned org structure (dept → head employee); editable by Rhel/admins in Org Chart
 let TRANSFERS=[];     // employee_transfers — SC-requested store transfers/deployments w/ store-head before+after confirmation
 let SC_LINKS=[];      // sc_links — per-SC private transfer-request tokens (cascade to their people + anti-tamper)
 let POLICY_ACKS=[];   // policy_acknowledgments rows (read-and-sign roster)
@@ -233,7 +234,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -267,7 +268,8 @@ async function loadEmployees(){
     sb.from("external_signoffs").select("*").order("created_at", {ascending:false}),
     sb.from("concerns").select("*").order("created_at", {ascending:false}),
     sb.from("employee_transfers").select("*").order("created_at", {ascending:false}),
-    sb.from("sc_links").select("*").order("sc_name")
+    sb.from("sc_links").select("*").order("sc_name"),
+    sb.from("department_heads").select("*")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -304,6 +306,7 @@ async function loadEmployees(){
   CONCERNS=(cncrn&&cncrn.data)||[];
   TRANSFERS=(trf&&trf.data)||[];
   SC_LINKS=(scl&&scl.data)||[];
+  DEPT_HEADS=(dh&&dh.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();

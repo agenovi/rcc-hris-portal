@@ -26,6 +26,13 @@ if(dupes>1){ console.error("BUILD ERROR: duplicate const $ — inlining corrupte
 console.log("build ok");
 ' "$APP_DIR" "$SITE_DIR"
 
+# 1a1. Stamp a build id into the app + publish version.txt so a stale cached
+#      page detects the new version and self-refreshes (kills the cache problem).
+BUILD=$(date +%s)
+perl -pi -e "s/__BUILD__/$BUILD/g" "$SITE_DIR/index.html" "$SITE_DIR/404.html"
+printf "%s" "$BUILD" > "$SITE_DIR/version.txt"
+echo "build stamp $BUILD"
+
 # 1a2. Publish anj's preferred Loan Portal as a standalone page (embedded by the Loans tab)
 [ -f "$APP_DIR/loans.html" ] && cp "$APP_DIR/loans.html" "$SITE_DIR/loans.html"
 [ -f "$APP_DIR/agency.html" ] && cp "$APP_DIR/agency.html" "$SITE_DIR/agency.html"

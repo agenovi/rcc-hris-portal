@@ -706,15 +706,15 @@ function openLoan(id){
   const rej=document.getElementById("loanRej"); if(rej) rej.addEventListener("click",()=>setLoan({status:"Rejected"}));
 }
 const isActive=(e)=>e.status==="Active";
-// For merchandisers, "Store / Concession" = the retail account, derived (display-only) from the worksite prefix.
-// PayPlus stays the master of the raw department/worksite — this never edits the roster.
-const CONCESSIONS=["SM","Robinsons","Spyder","Metrosun","Metro","Gaisano","Fishermall","Fisher","Puregold","Citistore","GearUp","Wilson"];
+// "Store / Concession" classification, derived (display-only) from the worksite.
+// Rule (anj): worksite for Spyder / Ridelab / Gear Up = our own STORE; anything else = a CONCESSION.
+// PayPlus stays the master of the raw worksite — this never edits the roster.
+const STORE_BRANDS=/\b(spyder|ride\s*lab|gear\s*up)\b/i;
 function deriveConcession(e){
+  if(e.group_name==="Head Office"||e.group_name==="Warehouse") return "—"; // office/WH aren't retail
   const w=(e.worksite||"").trim();
-  if(e.group_name==="Head Office"||e.group_name==="Warehouse") return e.department||"—"; // office/WH keep their real department
-  if(!w) return e.department||"—";
-  for(const c of CONCESSIONS){ if(new RegExp("^"+c+"\\b","i").test(w)) return c; }
-  return w; // generic (e.g. "Company Concession") shows as-is until PayPlus is cleaned
+  if(!w) return "—";
+  return STORE_BRANDS.test(w) ? "Store" : "Concession";
 }
 const typePill=(e)=>{
   if(e.hire_source && e.hire_source!=="Direct") return `<span class="pill ag">${esc(e.hire_source)}</span>`;

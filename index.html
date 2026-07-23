@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784784823";
+window.APP_BUILD="1784786000";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784784823" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784786000" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -2406,6 +2406,7 @@ let AGENCY_PAYROLL=[];  // agency_payroll rows (M&G / Jell-On real pay + contrib
 let HR_NOTES=[];   // hr_notes — personal sticky notes (private per HR user)
 let HR_IDEAS=[];   // hr_ideas — suggestion pool routed to the Director (anj)
 let HR_TASKS=[];   // hr_tasks — assignable pending tasks with owner + due date
+let EXT_SIGNOFFS=[];  // external_signoffs — no-login e-sign links for non-portal signers (e.g. SC in charge on an exit)
 // The HR team, for task assignment + name display. Email → display name.
 const HR_TEAM=[
   {email:"anj@hassarams.com", name:"Anj (Director)"},
@@ -2502,6 +2503,12 @@ let empFilter="All";
 let scFilter="All";
 let prehireTab="pipeline";
 let prehireSrc=null;
+// Talent Pool — filters for the pooled-candidates list
+let poolFilterPos="", poolFilterScale="", poolFilterPrio="", poolSearch="";
+// Salary scales are one-line editable — tell Claude to change them and they update everywhere.
+const POOL_SALARY_SCALES=["Entry / minimum wage","Daily ₱650–800","Daily ₱800–1,000","Monthly ₱15–20k","Monthly ₱20–30k","Monthly ₱30k+","Not specified"];
+const POOL_PRIORITIES=["High","Medium","Low"];
+const POOL_PRIO_RANK={High:0,Medium:1,Low:2};
 let landed=false;
 
 /* ---------- AUTH ---------- */
@@ -2586,7 +2593,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2616,7 +2623,8 @@ async function loadEmployees(){
     sb.from("meeting_roster").select("*"),
     sb.from("hr_notes").select("*").order("created_at", {ascending:false}),
     sb.from("hr_ideas").select("*").order("created_at", {ascending:false}),
-    sb.from("hr_tasks").select("*").order("created_at", {ascending:false})
+    sb.from("hr_tasks").select("*").order("created_at", {ascending:false}),
+    sb.from("external_signoffs").select("*").order("created_at", {ascending:false})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2649,6 +2657,7 @@ async function loadEmployees(){
   HR_NOTES=(hnotes&&hnotes.data)||[];
   HR_IDEAS=(hideas&&hideas.data)||[];
   HR_TASKS=(htasks&&htasks.data)||[];
+  EXT_SIGNOFFS=(xso&&xso.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -3193,7 +3202,7 @@ function renderDashboard(){
   const dAct=DISERS.filter(d=>(d.status||"").toLowerCase().startsWith("active")); // agency merchandisers come from the diser roster (hired_by), not employees.hire_source
   const agJellon=dAct.filter(d=>/jell/i.test(d.hired_by||"")).length, agMG=dAct.filter(d=>/^mg|m&g/i.test(d.hired_by||"")).length, agency=agJellon+agMG;
   const awol=EMPLOYEES.filter(e=>e.status==="AWOL").length;
-  const phPipe=PREHIRE.filter(p=>!["HIRED","REJECTED"].includes(p.phase)).length;
+  const phPipe=PREHIRE.filter(p=>!["HIRED","REJECTED","POOLED","DRAFT"].includes(p.phase)).length;
   const phReady=PREHIRE.filter(p=>["HR_SIGNOFF","CONTRACT_SIGNING"].includes(p.phase)).length;
   const onbOpen=ONBOARDING.filter(c=>c.status!=="Complete").length;
   const onbTasksOpen=ONBTASKS.filter(t=>t.status!=="Done").length;
@@ -5222,7 +5231,7 @@ function renderManning(){
   const totAHC=open.reduce((s,b)=>s+b.ahc_stationary+b.ahc_reliever,0);
   const totCHC=open.reduce((s,b)=>s+chcFor(b.name),0);
   const OPENINGS=MANPOWER.filter(o=>o.status==="Open");
-  const opInReview=(store)=>PREHIRE.filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT"].includes(p.phase)).length;
+  const opInReview=(store)=>PREHIRE.filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT","POOLED"].includes(p.phase)).length;
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
       <h2>Openings <span class="count-tag">${OPENINGS.length} stores · ${OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0)} positions</span></h2>
@@ -6826,7 +6835,7 @@ function phLinksBar(){
 }
 function renderPrehire(){
   const pg=$("#page-prehire"); if(!pg) return;
-  const inPipe=PREHIRE.filter(p=>p.phase!=="HIRED"&&p.phase!=="REJECTED"&&p.phase!=="DRAFT");  // DRAFT = agency not-yet-submitted; not in RCC's pipeline
+  const inPipe=PREHIRE.filter(p=>p.phase!=="HIRED"&&p.phase!=="REJECTED"&&p.phase!=="DRAFT"&&p.phase!=="POOLED");  // DRAFT = agency not-yet-submitted; POOLED = talent pool — neither is in RCC's active pipeline
   const drafts=PREHIRE.filter(p=>p.phase==="DRAFT");
   const docs=PREHIRE.filter(p=>p.phase==="DOCUMENTS").length;
   const ready=PREHIRE.filter(p=>p.phase==="HR_SIGNOFF").length;
@@ -6851,6 +6860,7 @@ function renderPrehire(){
       ${drafts.length?`<div style="margin-top:10px;padding:9px 12px;background:#fdf6e3;border:1px solid #ecdca6;border-radius:9px;font-size:12.5px;color:#7a5c12;">🟡 <b>${drafts.length}</b> candidate${drafts.length>1?'s':''} saved in agency drafts but <b>not yet submitted to RCC</b> ${(()=>{const bs={};drafts.forEach(d=>{const s=d.hire_source||'Direct';bs[s]=(bs[s]||0)+1;});return '('+Object.entries(bs).map(([s,n])=>esc(s)+' '+n).join(' · ')+')';})()}. They appear in the <b>Agency Draft</b> lane below — the agency must click “Submit to RCC” on their own page before these enter your pipeline.</div>`:""}
       <div class="tabs" id="phTabs" style="margin-top:14px;">
         <div class="tab ${prehireTab==='pipeline'?'active':''}" data-t="pipeline">Pipeline</div>
+        <div class="tab ${prehireTab==='pool'?'active':''}" data-t="pool">Talent Pool${(()=>{const n=PREHIRE.filter(p=>p.phase==='POOLED').length;return n?` <span class="count-tag">${n}</span>`:'';})()}</div>
         <div class="tab ${prehireTab==='funnel'?'active':''}" data-t="funnel">Recruitment Funnel</div>
         <div class="tab ${prehireTab==='arch'?'active':''}" data-t="arch">How it works (Architecture)</div>
         <div class="tab ${prehireTab==='data'?'active':''}" data-t="data">Data model</div>
@@ -6872,6 +6882,7 @@ function renderPrehire(){
   else if(prehireTab==="data") phBodyData();
   else if(prehireTab==="feedback") phBodyFeedback();
   else if(prehireTab==="funnel") phBodyFunnel();
+  else if(prehireTab==="pool") phBodyPool();
   else phBodyPipeline();
 }
 
@@ -6909,6 +6920,105 @@ function phBodyPipeline(){
   const _cs=document.getElementById("clrSrc"); if(_cs) _cs.addEventListener("click",()=>{ prehireSrc=null; renderPrehire(); });
 }
 
+const prioBadge=(p)=>{ const c=p==="High"?"background:#fdecea;color:#c0392b;border:1px solid #f1c9c5;":p==="Medium"?"background:#fdf6e3;color:#8a6d1a;border:1px solid #ecdca6;":"background:#eef1ef;color:#5a6660;border:1px solid #dde3df;"; return `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;${c}">${esc(p||"—")}</span>`; };
+function phBodyPool(){
+  const all=PREHIRE.filter(p=>p.phase==="POOLED");
+  // filter option lists come from what's actually in the pool
+  const positions=[...new Set(all.map(p=>p.position).filter(Boolean))].sort();
+  const scales=[...new Set(all.map(p=>p.pool_salary_scale).filter(Boolean))].sort();
+  const q=(poolSearch||"").toLowerCase();
+  let list=all.filter(p=>
+      (!poolFilterPos   || p.position===poolFilterPos) &&
+      (!poolFilterScale || p.pool_salary_scale===poolFilterScale) &&
+      (!poolFilterPrio  || (p.pool_priority||"")===poolFilterPrio) &&
+      (!q || (p.full_name||"").toLowerCase().includes(q) || (p.position||"").toLowerCase().includes(q) || (p.pool_reason||"").toLowerCase().includes(q)));
+  // ranked: priority High→Low, then most-recently pooled first
+  list.sort((a,b)=>{ const ra=POOL_PRIO_RANK[a.pool_priority]??3, rb=POOL_PRIO_RANK[b.pool_priority]??3; if(ra!==rb) return ra-rb; return new Date(b.pooled_at||b.updated_at||0)-new Date(a.pooled_at||a.updated_at||0); });
+  const selOpt=(cur,arr)=>['<option value="">All</option>'].concat(arr.map(o=>`<option value="${esc(o)}" ${cur===o?'selected':''}>${esc(o)}</option>`)).join("");
+  $("#phBody").innerHTML=`
+    <div class="panel" style="margin-top:14px;">
+      <h2>Talent Pool <span class="count-tag">${all.length}</span></h2>
+      <div class="psub">Qualified applicants we liked but didn't proceed with — kept warm for future vacancies and replacements, so we can fill a slot without restarting recruitment. Ranked by priority, newest first. Set a candidate's priority &amp; salary scale when you move them here (any candidate → open → <b>Move to Talent Pool</b>).</div>
+      ${all.length===0
+        ? `<div class="task" style="margin-top:12px;"><div class="dot a"></div><div><div class="tt">The pool is empty</div><div class="td">Open any candidate in the Pipeline (or a Rejected one) and click <b>☆ Move to Talent Pool</b> to add them here with a priority and salary scale.</div></div></div>`
+        : `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:12px;">
+        <div style="flex:1;min-width:150px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Position applied for</label>
+          <select id="pf_pos" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;">${selOpt(poolFilterPos,positions)}</select></div>
+        <div style="flex:1;min-width:150px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Salary scale</label>
+          <select id="pf_scale" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;">${selOpt(poolFilterScale,scales)}</select></div>
+        <div style="min-width:130px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Priority</label>
+          <select id="pf_prio" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;">${selOpt(poolFilterPrio,POOL_PRIORITIES)}</select></div>
+        <div style="flex:1;min-width:150px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Search</label>
+          <input id="pf_q" value="${esc(poolSearch)}" placeholder="name, position…" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;"></div>
+        <button class="btn ghost" id="pf_clear" style="flex-shrink:0;">Clear</button>
+        <button class="btn blue" id="pf_export" style="flex-shrink:0;">Export CSV</button>
+      </div>
+      <div class="psub" style="margin-top:10px;">${list.length} of ${all.length} shown${(poolFilterPos||poolFilterScale||poolFilterPrio||q)?" (filtered)":""}.</div>
+      <div style="overflow-x:auto;margin-top:6px;">
+      <table style="min-width:720px;"><thead><tr><th>#</th><th>Candidate</th><th>Position</th><th>Salary scale</th><th>Priority</th><th>Pooled</th><th>Why kept</th><th></th></tr></thead>
+        <tbody>${list.map((c,i)=>`<tr>
+          <td style="color:var(--muted);">${i+1}</td>
+          <td><b>${esc(c.full_name)}</b><div style="font-size:11px;color:var(--muted);">${esc(c.hire_source||"Direct")}${c.email?` · ${esc(c.email)}`:""}${c.phone?` · ${esc(c.phone)}`:""}</div></td>
+          <td>${esc(c.position||"—")}<div style="font-size:11px;color:var(--muted);">${esc(c.worksite||"")}</div></td>
+          <td>${esc(c.pool_salary_scale||"—")}</td>
+          <td>${prioBadge(c.pool_priority)}</td>
+          <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${c.pooled_at?fmtMDY(c.pooled_at):"—"}</td>
+          <td style="font-size:12px;color:#3a4540;max-width:220px;">${esc(c.pool_reason||"")}</td>
+          <td style="white-space:nowrap;"><button class="btn ghost pool-open" data-id="${c.id}" style="padding:5px 10px;font-size:12px;">Open</button> <button class="btn pool-back" data-id="${c.id}" style="padding:5px 10px;font-size:12px;">↩ To pipeline</button></td>
+        </tr>`).join("")||`<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px;">No candidates match these filters.</td></tr>`}</tbody></table>
+      </div>`}
+    </div>`;
+  const reRender=()=>{ phBodyPool(); };
+  const g=id=>document.getElementById(id);
+  if(g("pf_pos")) g("pf_pos").addEventListener("change",e=>{ poolFilterPos=e.target.value; reRender(); });
+  if(g("pf_scale")) g("pf_scale").addEventListener("change",e=>{ poolFilterScale=e.target.value; reRender(); });
+  if(g("pf_prio")) g("pf_prio").addEventListener("change",e=>{ poolFilterPrio=e.target.value; reRender(); });
+  if(g("pf_q")) g("pf_q").addEventListener("input",e=>{ poolSearch=e.target.value; const pos=e.target.selectionStart; reRender(); const nq=document.getElementById("pf_q"); if(nq){ nq.focus(); try{nq.setSelectionRange(pos,pos);}catch(_){} } });
+  if(g("pf_clear")) g("pf_clear").addEventListener("click",()=>{ poolFilterPos=poolFilterScale=poolFilterPrio=""; poolSearch=""; reRender(); });
+  if(g("pf_export")) g("pf_export").addEventListener("click",()=>{
+    const cols=[["Rank","#"],["full_name","Candidate"],["position","Position"],["pool_salary_scale","Salary scale"],["pool_priority","Priority"],["pooled_at","Pooled"],["hire_source","Source"],["email","Email"],["phone","Phone"],["worksite","Worksite"],["pool_reason","Why kept"]];
+    const rows=list.map((c,i)=>cols.map(([k])=>{ const val=k==="Rank"?(i+1):(k==="pooled_at"?(c[k]?fmtMDY(c[k]):""):(c[k]==null?"":c[k])); return `"${String(val).replace(/"/g,'""')}"`; }).join(","));
+    const csv=cols.map(c=>c[1]).join(",")+"\n"+rows.join("\n");
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="talent-pool.csv";a.click();
+  });
+  $$("#phBody .pool-open").forEach(b=>b.addEventListener("click",()=>openPrehire(PREHIRE.find(p=>String(p.id)===b.dataset.id))));
+  $$("#phBody .pool-back").forEach(b=>b.addEventListener("click",()=>returnFromPool(PREHIRE.find(p=>String(p.id)===b.dataset.id))));
+}
+async function returnFromPool(c){
+  if(!c) return;
+  if(!confirm(`Return ${c.full_name} to the active pipeline?\n\nThey re-enter at "Applied". Their pool notes stay on record.`)) return;
+  await setPhase(c,"APPLIED");
+}
+// Move a candidate we liked into the Talent Pool (also used to edit an already-pooled candidate's details).
+function poolPrehire(c, parentModal){
+  if(!c) return;
+  let m=document.getElementById("phPoolModal"); if(!m){ m=document.createElement("div"); m.id="phPoolModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10000;background:rgba(14,50,25,.5);display:flex;align-items:center;justify-content:center;padding:24px;";
+  const already=c.phase==="POOLED";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;padding:22px;">
+    <h2 style="font-size:17px;margin-bottom:2px;">${already?"Edit pool details":"☆ Move to Talent Pool"} — ${esc(c.full_name)}</h2>
+    <div class="psub">A qualified applicant we're keeping warm for a future vacancy. Set how strongly we want them and the salary scale so HR can filter later.</div>
+    <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin:12px 0 3px;">Priority</label>
+    <select id="pl_prio" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;">${POOL_PRIORITIES.map(p=>`<option ${(c.pool_priority||"Medium")===p?"selected":""}>${p}</option>`).join("")}</select>
+    <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin:10px 0 3px;">Salary scale</label>
+    <select id="pl_scale" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;">${POOL_SALARY_SCALES.map(s=>`<option ${(c.pool_salary_scale||"Not specified")===s?"selected":""}>${esc(s)}</option>`).join("")}</select>
+    <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin:10px 0 3px;">Why we're keeping them (optional)</label>
+    <textarea id="pl_reason" rows="2" placeholder="e.g. Strong on merchandising, no slot in her area yet" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;">${esc(c.pool_reason||"")}</textarea>
+    <div id="plMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
+    <div style="display:flex;gap:10px;margin-top:12px;"><button class="btn ghost" id="plCancel" style="flex:1;">Cancel</button><button class="btn" id="plGo" style="flex:1;">${already?"Save":"Move to pool"}</button></div>
+  </div>`;
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("plCancel").addEventListener("click",()=>m.remove());
+  document.getElementById("plGo").addEventListener("click",async()=>{
+    const patch={ pool_priority:v("pl_prio"), pool_salary_scale:v("pl_scale"), pool_reason:v("pl_reason")||null, updated_at:new Date().toISOString() };
+    if(!already){ patch.phase="POOLED"; patch.pooled_at=new Date().toISOString(); patch.pooled_by=myEmail()||null; }
+    const { error } = await sb.from("prehire").update(patch).eq("id",c.id);
+    if(error){ document.getElementById("plMsg").textContent=error.message; return; }
+    m.remove(); if(parentModal) parentModal.remove();
+    await loadEmployees(); prehireTab="pool"; window.go("prehire");
+  });
+}
 function phBodyArch(){
   const stages=[
     ["1 · Applied","Recruiter / applicant","Candidate applies (direct link or agency submission). Core identity captured.","full_name, email, phone, position, department, hire_source, resume_url","Auto-create pre-hire record; per-candidate Drive folder provisioned"],
@@ -7112,8 +7222,11 @@ function openPrehire(c){
       ${c.application?`<div class="panel"><h2>Application <span class="count-tag">as submitted</span></h2>${phAppRows(c.application)}</div>`:''}
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
         <button class="btn" id="phEdit">Edit applicant details</button>
-        ${next?`<button class="btn blue" id="phAdvance">Advance → ${esc(next.label)}</button>`:'<span class="pill active">Pipeline complete</span>'}
-        ${c.phase!=="REJECTED"?'<button class="btn ghost" id="phReject" style="color:var(--red);border-color:#f1c9c5;">Reject</button>':''}
+        ${c.phase==="POOLED"
+          ? `<span class="pill ag">☆ In Talent Pool${c.pool_priority?` · ${esc(c.pool_priority)}`:""}</span><button class="btn" id="phPoolEdit">Edit pool details</button><button class="btn blue" id="phUnpool">↩ Return to pipeline</button>`
+          : `${next?`<button class="btn blue" id="phAdvance">Advance → ${esc(next.label)}</button>`:'<span class="pill active">Pipeline complete</span>'}
+             ${c.phase!=="HIRED"?'<button class="btn ghost" id="phPool" title="Keep this candidate warm for a future vacancy">☆ Move to Talent Pool</button>':''}
+             ${c.phase!=="REJECTED"?'<button class="btn ghost" id="phReject" style="color:var(--red);border-color:#f1c9c5;">Reject</button>':''}`}
         <button class="btn ghost" id="phClose" style="margin-left:auto;">Close</button>
       </div>
     </div></div>`;
@@ -7144,6 +7257,9 @@ function openPrehire(c){
     setPhase(c,next.key,m);
   });
   const rej=document.getElementById("phReject"); if(rej) rej.addEventListener("click",()=>rejectPrehire(c,m));
+  const pool=document.getElementById("phPool"); if(pool) pool.addEventListener("click",()=>poolPrehire(c,m));
+  const poolEd=document.getElementById("phPoolEdit"); if(poolEd) poolEd.addEventListener("click",()=>poolPrehire(c,null));
+  const unpool=document.getElementById("phUnpool"); if(unpool) unpool.addEventListener("click",()=>{ m.remove(); returnFromPool(c); });
 }
 function editPrehire(c){
   let m=document.getElementById("phEditModal"); if(!m){ m=document.createElement("div"); m.id="phEditModal"; document.body.appendChild(m); }
@@ -7672,6 +7788,86 @@ function issItemChecked(iss,k){ const v=iss&&iss[k]; return !!(v&&(v===true||v.v
 // The issued items for an exit case = the linked employee's record (+ HMO synthesised as hmo_card).
 function exitIssuedItems(x){ const e=(EMPLOYEES||[]).find(y=>y.id===x.employee_id); const iss=Object.assign({}, (e&&e.issued_items)||{}); if(e&&(e.hmo_member_no||e.hmo_provider)) iss.hmo_card={v:true,note:[e.hmo_provider,e.hmo_member_no].filter(Boolean).join(" · ")}; return iss; }
 function exitEmpLink(x){ return "https://agenovi.github.io/rcc-hris-portal/exit.html?token="+(x.emp_link_token||""); }
+
+/* ---- External sign-off links (no-login e-signature for non-portal signers, e.g. the SC in charge) ---- */
+const SIGNOFF_BASE="https://agenovi.github.io/rcc-hris-portal/sign-off.html";
+function newSignoffToken(){ try{ return (crypto.randomUUID()+crypto.randomUUID()).replace(/-/g,""); }catch(_){ return "t"+Date.now().toString(36)+Math.abs(Math.floor(Math.random()*1e12)).toString(36); } }
+function signoffUrl(t){ return SIGNOFF_BASE+"?token="+encodeURIComponent(t||""); }
+function exSignoffsFor(x){ return EXT_SIGNOFFS.filter(r=>r.context_type==="exit" && String(r.context_id)===String(x.id)); }
+function empIsMerch(e){ const g=(e&&e.group_name)||"", p=((e&&e.position)||"").toLowerCase(); return g==="Retail" || /diser|merchandiser|promo/.test(p); }
+// The standard signer for a merchandiser = the SC in charge of their store (derived from the worksite).
+function scForExit(x){
+  const e=(EMPLOYEES||[]).find(y=>y.id===x.employee_id); if(!e||!empIsMerch(e)) return null;
+  const ws=(e.worksite||"").trim().toLowerCase(); if(!ws) return null;
+  let b=BRANCHES.find(b=>(b.name||"").trim().toLowerCase()===ws);
+  if(!b) b=BRANCHES.find(b=>ws && (b.name||"").trim().toLowerCase() && (ws.includes((b.name||"").trim().toLowerCase())||(b.name||"").trim().toLowerCase().includes(ws)));
+  const sc=b&&b.sc; return (sc && sc!=="Unassigned")?{name:sc, role:"SC in charge — "+(b.name||e.worksite)}:null;
+}
+// The document snapshot the signer reviews + signs (no salary — just the clearance certification).
+function exSignoffDoc(x, role){
+  const e=(EMPLOYEES||[]).find(y=>y.id===x.employee_id)||{};
+  const row=(k,v)=>`<div class="row"><span class="k">${k}</span><span>${esc(v||"—")}</span></div>`;
+  return `${row("Employee", x.employee_name)}${row("Position", x.position||e.position)}${row("Store / worksite", e.worksite||x.department)}${row("Last working day", x.last_working_day?fmtDate(x.last_working_day):"—")}${row("Clearance ref", x.clearance_id)}`
+    +`<div style="margin-top:12px;line-height:1.55;">By signing below, I confirm that <b>${esc(x.employee_name||"this employee")}</b> has been <b>cleared</b> for their responsibility under <b>${esc(role||"my area")}</b>, and I have no outstanding accountability to raise against them (or I have noted it to HR separately).</div>`;
+}
+async function exCreateSignoff(x, name, role, subjectToApproval){
+  const nm=(name||"").trim(); if(!nm) return;
+  const token=newSignoffToken();
+  const label=(x.employee_name||"")+" — exit clearance";
+  const doc=exSignoffDoc(x, role)+(subjectToApproval?`<div style="margin-top:10px;font-size:12px;color:#9a6a00;">Note: this signer was chosen manually and is subject to HR's confirmation.</div>`:"");
+  const { error } = await sb.from("external_signoffs").insert({ token, context_type:"exit", context_id:String(x.id), context_label:label, signer_name:nm, signer_role:role||null, document_html:doc, created_by:myEmail() });
+  if(error){ alert(error.message); return; }
+  await loadEmployees(); openExitCase(x.id);
+  setTimeout(()=>{ try{ navigator.clipboard.writeText(signoffUrl(token)); }catch(_){} },30);
+}
+async function exDeleteSignoff(id){ if(!confirm("Remove this sign-off request?")) return; await sb.from("external_signoffs").delete().eq("id",id); await loadEmployees(); }
+function viewSignoffSignature(id){
+  const r=EXT_SIGNOFFS.find(v=>String(v.id)===String(id)); if(!r) return;
+  const w=window.open("","_blank","width=520,height=560");
+  w.document.write(`<title>Signature — ${esc(r.signer_name)}</title><body style="font-family:-apple-system,sans-serif;padding:24px;color:#1b2430;">
+    <h2 style="color:#0e3219;margin:0 0 4px;">${esc(r.signer_name)}</h2>
+    <div style="color:#6b7683;font-size:13px;">${esc(r.signer_role||"")}</div>
+    <div style="color:#6b7683;font-size:13px;margin:2px 0 14px;">Signed as: <b>${esc(r.signed_name||"—")}</b> · ${r.signed_at?new Date(r.signed_at).toLocaleString():""} · IP ${esc(r.signer_ip||"—")}</div>
+    <img src="${r.signature_data}" style="max-width:100%;border:1px solid #e4e8ef;border-radius:10px;">
+    <div style="color:#9aa3ac;font-size:11px;margin-top:12px;">Electronic signature captured under RA 8792. ${esc(r.context_label||"")}</div></body>`);
+}
+function exSignoffPanelHtml(x){
+  const list=exSignoffsFor(x); const sc=scForExit(x);
+  const statusPill=r=>r.status==="Signed"?`<span class="pill active">Signed ✓</span>`:(r.status==="Declined"?`<span class="pill closed">Declined</span>`:`<span class="pill awol">Awaiting signature</span>`);
+  const rows=list.map(r=>`<div class="task" style="align-items:flex-start;">
+      <div class="dot ${r.status==='Signed'?'g':(r.status==='Declined'?'r':'a')}" style="margin-top:5px;"></div>
+      <div style="flex:1;min-width:0;"><div class="tt">${esc(r.signer_name)} ${statusPill(r)}</div>
+        <div class="td">${esc(r.signer_role||"")}${r.status==='Signed'?` · as ${esc(r.signed_name||"")}${r.signed_at?" · "+fmtDate(r.signed_at):""}`:""}${r.status==='Declined'&&r.decline_reason?` · “${esc(r.decline_reason)}”`:""}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+          ${r.status!=='Signed'?`<button class="btn ghost" data-socopy="${esc(r.token)}" type="button" style="font-size:12px;padding:5px 10px;">🔗 Copy link</button>`:`<button class="btn ghost" data-soview="${r.id}" type="button" style="font-size:12px;padding:5px 10px;">View signature</button>`}
+          <button class="btn ghost" data-sodel="${r.id}" type="button" style="font-size:12px;padding:5px 10px;">Remove</button>
+        </div></div></div>`).join("");
+  return `<div class="panel"><h2>Sign-off links <span class="count-tag">${list.filter(r=>r.status==='Signed').length}/${list.length||0} signed</span></h2>
+    <div class="psub">For people who must sign off but <b>aren't portal users</b> (e.g. the SC in charge). Generate a private link → send it (WhatsApp/email) → they open it on their phone, sign with their finger, and it lands back here. No login, no access to anything else.</div>
+    ${sc?`<div style="background:#f3f8f4;border:1px solid #cfe6d6;border-radius:9px;padding:10px 12px;margin:10px 0;">
+      <div style="font-size:13px;"><b>Standard signer:</b> ${esc(sc.name)} <span class="td">· ${esc(sc.role)}</span></div>
+      <button class="btn" id="soAddStd" type="button" style="margin-top:8px;font-size:13px;padding:7px 13px;">+ Create sign-off link for ${esc(sc.name)}</button>
+    </div>`:`<div class="psub" style="color:#9a6a00;">No SC-in-charge found for this person's store — add one manually below.</div>`}
+    ${rows||`<div class="psub">No sign-off links yet.</div>`}
+    <div style="border:1px dashed var(--line);border-radius:9px;padding:11px;margin-top:10px;">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;">Add another signer <span class="td" style="font-weight:400;">(alternate — subject to approval)</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <input id="soName" placeholder="Signer's name" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;">
+        <input id="soRole" placeholder="Their role / what they clear" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;">
+      </div>
+      <button class="btn ghost" id="soAddCustom" type="button" style="margin-top:8px;font-size:13px;padding:7px 13px;">+ Create link</button>
+    </div>
+  </div>`;
+}
+function wireExSignoffPanel(x, m){
+  const std=m.querySelector("#soAddStd"); const sc=scForExit(x);
+  if(std&&sc) std.addEventListener("click",()=>exCreateSignoff(x, sc.name, sc.role, false));
+  const cust=m.querySelector("#soAddCustom");
+  if(cust) cust.addEventListener("click",()=>{ const n=m.querySelector("#soName").value, r=m.querySelector("#soRole").value; if(!n.trim()){ m.querySelector("#soName").focus(); return; } exCreateSignoff(x, n, r||"Sign-off", true); });
+  m.querySelectorAll("[data-socopy]").forEach(b=>b.addEventListener("click",async()=>{ const url=signoffUrl(b.dataset.socopy); try{ await navigator.clipboard.writeText(url); b.textContent="✓ Copied"; setTimeout(()=>b.textContent="🔗 Copy link",1600); }catch(_){ prompt("Copy the sign-off link:", url); } }));
+  m.querySelectorAll("[data-soview]").forEach(b=>b.addEventListener("click",()=>viewSignoffSignature(b.dataset.soview)));
+  m.querySelectorAll("[data-sodel]").forEach(b=>b.addEventListener("click",()=>exDeleteSignoff(b.dataset.sodel)));
+}
 function issItemNote(iss,k){ const v=iss&&iss[k]; return (v&&typeof v==="object"&&v.note)||""; }
 function issuedItemsPanel(c){
   const emp=linkedEmployeeForCase(c);
@@ -7900,6 +8096,8 @@ function openExitCase(id){
         </div>`;}).join("")}
       </div>
 
+      ${exSignoffPanelHtml(x)}
+
       <div class="panel"><h2>Property to return</h2>
         <div class="psub">Items marked <b style="color:var(--green-dark);">· on record</b> were auto-loaded from what was issued to this person at onboarding — no more guessing. Tick any others that apply. <b>Uniform is not collected back</b> — its cost is handled by the &lt;6-month rule below. Cash advances / loan balances settle under the Finance sign-offs above.</div>
         <div style="display:flex;flex-wrap:wrap;gap:10px 18px;">
@@ -7992,6 +8190,7 @@ function openExitCase(id){
   $("#exClose").addEventListener("click",()=>m.remove());
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   $("#exSave").addEventListener("click",()=>saveExitCase(x,m,false));
+  wireExSignoffPanel(x, m);
   const cmp=document.getElementById("exComplete"); if(cmp) cmp.addEventListener("click",()=>{ if(confirm("Approve this separation for "+(x.employee_name||"this employee")+"?\n\nTheir status will flip to Separated.")) saveExitCase(x,m,true); });
   const subSep=document.getElementById("exSubmitSep"); if(subSep) subSep.addEventListener("click",()=>{ if(confirm("Submit "+(x.employee_name||"this employee")+"'s separation to the Director for approval?\n\nThey stay Active until the Director approves.")) saveExitCase(x,m,"submit"); });
   const sendFP=document.getElementById("exSendFP"); if(sendFP) sendFP.addEventListener("click",()=>sendFinalPayForSignoff(x,m));

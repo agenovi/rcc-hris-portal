@@ -1044,7 +1044,7 @@ function renderDashboard(){
   PREHIRE.filter(p=>p.phase==="RECRUITER_REVIEW").slice(0,2).forEach(p=>waiting.push({t:"Recruiter review — "+p.full_name, d:"Vetting / offer", go:"prehire"}));
   EXITCASES.filter(x=>x.overall_status!=="Complete").slice(0,2).forEach(x=>{const pend=EXIT_STAGES.filter(s=>x[s.s]==="Pending").length; waiting.push({t:"Exit sign-off — "+x.employee_name, d:pend+" department(s) still to clear", go:"exit"});});
   ONBOARDING.filter(c=>c.status!=="Complete").slice(0,2).forEach(c=>{const op=tasksFor(c.id).filter(t=>t.status!=="Done").length; waiting.push({t:"Onboarding — "+c.employee_name, d:op+" task(s) outstanding", go:"onboarding"});});
-  try{ const _ev=evDueList(); const _evDue=_ev.filter(x=>x.bucket==="due"||x.bucket==="overdue"); if(_evDue.length) waiting.push({t:_evDue.length+" evaluation(s) due", d:"3rd/5th-month · regularization · annual", go:"evaluations"}); }catch(e){}
+  // evaluations now surface as a broken-down line in "Your pending tasks" (2.5-mo / 5.5-mo / regularization) — not lumped here
   { const _allow=allowedPages(); if(_allow){ for(let i=waiting.length-1;i>=0;i--){ if(_allow.indexOf(waiting[i].go)===-1) waiting.splice(i,1); } } }
 
   const recruiterMode = ["recruiter","manager"].includes(userRole());  // recruiters + HR Manager land on a recruitment-first scorecard
@@ -1084,7 +1084,8 @@ function renderDashboard(){
         ${(()=>{ const gone=Object.keys(SC_STATUS).filter(k=>scIsGone(k)); if(!gone.length) return ''; const stn=BRANCHES.filter(b=>b.status==='Open'&&gone.includes(b.sc)).length; return `<div class="task" style="cursor:pointer;" onclick="go('manning')"><div class="dot r"></div><div><div class="tt">${gone.length} sales coordinator seat(s) vacant — ${gone.map(esc).join(", ")}</div><div class="td">${stn} store(s) with no active SC · reassign or backfill</div></div><div class="due r">manning</div></div>`; })()}
         ${compVerify?`<div class="task" style="cursor:pointer;" onclick="go('compliance')"><div class="dot r"></div><div><div class="tt">${compVerify} trademark(s) past a deadline on file — verify with IPO records</div><div class="td">Renewal year has passed (e.g. SPYDER, AIRFLEX) — confirm renewed or lapsed</div></div><div class="due r">compliance</div></div>`:''}
         ${compDue?`<div class="task" style="cursor:pointer;" onclick="go('compliance')"><div class="dot a"></div><div><div class="tt">${compDue} trademark deadline(s) due ${CY}</div><div class="td">DAU filings &amp; renewals — missing a DAU can cancel the mark</div></div><div class="due a">compliance</div></div>`:''}
-        <div class="task" style="cursor:pointer;" onclick="go('employees')"><div class="dot a"></div><div><div class="tt">${prob} employees on probation</div><div class="td">3rd / 5th-month evaluations &amp; regularization reviews</div></div><div class="due a">review</div></div>
+        ${(()=>{ const _al=allowedPages(); if(_al&&_al.indexOf('evaluations')===-1) return ''; let _ev; try{_ev=evDueList();}catch(e){return '';} const act=_ev.filter(x=>x.bucket==='due'||x.bucket==='overdue'); if(!act.length) return ''; const c=t=>act.filter(x=>x.type===t).length; const od=act.filter(x=>x.bucket==='overdue').length; const parts=[]; if(c('3rd-month'))parts.push('<b>'+c('3rd-month')+'</b> × 2.5-mo'); if(c('5th-month'))parts.push('<b>'+c('5th-month')+'</b> × 5.5-mo'); if(c('regularization'))parts.push('<b>'+c('regularization')+'</b> × regularization'); if(c('annual'))parts.push('<b>'+c('annual')+'</b> × annual'); const dot=od?'r':'a'; return `<div class="task" style="cursor:pointer;" onclick="go('evaluations')"><div class="dot ${dot}"></div><div><div class="tt">${act.length} evaluation(s) pending${od?` · ${od} overdue`:''}</div><div class="td">${parts.join(' · ')}${c('regularization')?' — regularization must be decided <b>before</b> the 6-month mark (DOLE)':''}</div></div><div class="due ${dot}">record</div></div>`; })()}
+        <div class="task" style="cursor:pointer;" onclick="go('employees')"><div class="dot a"></div><div><div class="tt">${prob} employees on probation</div><div class="td">2.5 / 5.5-month evaluations &amp; regularization reviews</div></div><div class="due a">review</div></div>
         <div class="task" style="cursor:pointer;" onclick="go('manning')"><div class="dot a"></div><div><div class="tt">Merchandiser headcount gap to verify</div><div class="td">${openSlots} positions open across ${openStores} stores (from manning) · ${SCs.length} SCs</div></div><div class="due a">staffing</div></div>
       </div>
       <div>
@@ -5867,20 +5868,10 @@ const srcPill=(s)=> s&&s!=="Direct" ? `<span class="pill ag">${esc(s)}</span>` :
 
 const SHARE_BASE="https://agenovi.github.io/rcc-hris-portal/";
 function phLinksBar(){
-  const links=[
-    {l:"Direct applicants — apply link", s:"Public · share anywhere", u:SHARE_BASE+"direct-apply.html"},
-    {l:"Agency · Jell-on", s:"Private · send only to Jell-on", u:SHARE_BASE+"agency.html?t=3a28000c77be400f97c1d2e36c9b416e"},
-    {l:"Agency · M&G", s:"Private · send only to M&G", u:SHARE_BASE+"agency.html?t=60fc360932f049dd851131dccbd185af"},
-    {l:"Employee loan application", s:"Public · Head Office &amp; Warehouse staff", u:SHARE_BASE+"loan-apply.html"},
-    {l:"Candidate feedback — experience survey", s:"Send to applicants after their interview / decision", u:SHARE_BASE+"feedback.html"}
-  ];
-  return `<div style="background:#eef4ef;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:12px;">
-    <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Share these links</div>
-    ${links.map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:5px 0;">
-      <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;">${esc(x.l)} <span style="font-weight:400;color:var(--muted);font-size:11.5px;">${esc(x.s)}</span></div></div>
-      <button class="btn ghost" data-copy="${esc(x.u)}" style="flex-shrink:0;">Copy</button>
-      <a class="btn ghost" href="${esc(x.u)}" target="_blank" rel="noopener" style="flex-shrink:0;text-decoration:none;">Open</a>
-    </div>`).join("")}
+  // Links now live in one hub (Links to Send) — this just points there, so there's only one place to keep updated.
+  return `<div style="background:#eef4ef;border:1px solid var(--line);border-radius:10px;padding:11px 14px;margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:190px;font-size:12.5px;color:var(--muted);">Application, agency, loan &amp; candidate-survey links now live in one place.</div>
+    <button class="btn ghost" onclick="go('links')" style="flex-shrink:0;">Links to send →</button>
   </div>`;
 }
 function renderPrehire(){

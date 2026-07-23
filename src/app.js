@@ -112,7 +112,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes'||id==='desk'||id==='storemap') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
@@ -127,7 +127,7 @@ function applyRoleUI(){
     if(pg==='movements'){ n.style.display=canSeeMovements()?'':'none'; return; } // Movements/NPA = Anj/Grazel/Rhel
     if(pg==='govremit'){ n.style.display=canEditIds()?'':'none'; return; } // Gov't Remittances = gov-ID owners (Anj/Vina/Grazel)
     if(pg==='concerns'){ n.style.display=isAdminUser()?'':'none'; return; } // Concerns & Cases = Director/owner only (arbitration/legal)
-    if(pg==='policies'||pg==='processes'||pg==='desk'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies, Processes, HR Desk = every logged-in HR
+    if(pg==='policies'||pg==='processes'||pg==='desk'||pg==='orgchart'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies, Processes, HR Desk, Org Chart = every logged-in HR
     n.style.display=(allow&&allow.indexOf(pg)===-1)?'none':'';
   });
   document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display=limited?'none':''; });
@@ -321,6 +321,7 @@ async function loadEmployees(){
   renderPolicies();
   renderProcesses();
   renderStoremap();
+  renderOrgChart();
   renderConcerns();
   renderMeetings();
   renderDemoData();
@@ -3011,6 +3012,144 @@ function renderStoremap(){
 }
 window.renderStoremap=renderStoremap;
 
+/* ================= ORG CHART — reporting structure from the real roster =================
+   Read-only, data-driven view of the org. Two lenses:
+   (1) By Department — company → department (with head + headcount) → staff grouped under supervisors.
+   (2) By Reporting Line — supervisor tree built from supervisor_email → employee.
+   Nothing is edited here; the roster stays PayPlus-owned. Fields (supervisor_*, department_head_*)
+   are partially populated, so gaps are flagged helpfully rather than hidden. */
+function renderOrgChart(){
+  const pg=$("#page-orgchart"); if(!pg) return;
+  const ACT=EMPLOYEES.filter(e=>(e.status||"").toLowerCase().startsWith("active"));
+  // resolve an email to an active employee's name (else show the raw email)
+  const emailToEmp={}; ACT.forEach(e=>{ if(e.email) emailToEmp[String(e.email).toLowerCase()]=e; });
+  const resolveName=(email)=>{ if(!email) return ""; const m=emailToEmp[String(email).toLowerCase()]; return m?m.full_name:email; };
+  // departments (active only)
+  const depts=[...new Set(ACT.map(e=>(e.department||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const deptHeadEmail=(d)=>{ const c={}; ACT.filter(e=>(e.department||"").trim()===d).forEach(e=>{ const h=(e.department_head_email||"").trim(); if(h) c[h]=(c[h]||0)+1; }); const k=Object.keys(c); return k.length?k.sort((a,b)=>c[b]-c[a])[0]:""; };
+  // supervisor tree scaffolding
+  const childrenOf={}; ACT.forEach(e=>{ const se=String(e.supervisor_email||"").toLowerCase(); if(se && emailToEmp[se] && emailToEmp[se]!==e){ (childrenOf[se]=childrenOf[se]||[]).push(e); } });
+  const hasKids=(e)=> e.email && childrenOf[String(e.email).toLowerCase()];
+  const resolvableSup=(e)=>{ const se=String(e.supervisor_email||"").toLowerCase(); return !!(se && emailToEmp[se] && emailToEmp[se]!==e); };
+  // KPI figures + data-gap flags
+  const supRefs=new Set(); ACT.forEach(e=>{ const lbl=String(e.supervisor_email||e.supervisor_name||"").trim().toLowerCase(); if(lbl) supRefs.add(lbl); });
+  const noSup=ACT.filter(e=>!String(e.supervisor_name||"").trim() && !String(e.supervisor_email||"").trim());
+  const deptsNoHead=depts.filter(d=>!deptHeadEmail(d));
+  const initialsOf=(e)=>(e.full_name||"?").split(/[ ,]+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("").toUpperCase();
+  const personRow=(e,extra)=>`<div class="oc-person clickable" data-idx="${EMPLOYEES.indexOf(e)}" style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:7px;cursor:pointer;">
+      <span style="width:26px;height:26px;border-radius:50%;background:#e6efe9;color:#1F6B52;font-size:10.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">${esc(initialsOf(e))}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><b style="font-size:13px;color:#12352a;">${esc(e.full_name)}</b> <span style="color:#6b7785;font-size:12px;">· ${esc(e.position||"—")}</span>${extra||""}</span>
+    </div>`;
+
+  let lens="dept";                 // "dept" | "tree"
+  const ocExpanded=new Set(depts); // departments expanded by default
+
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Org Chart</h2>
+      <div class="psub">Reporting structure built live from the roster (active staff). Read-only — the roster stays PayPlus-owned; edit people in their record. Click any person to open their record.</div>
+      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
+        <div class="kpi"><div class="k-l">Departments</div><div class="k-n">${depts.length}</div></div>
+        <div class="kpi"><div class="k-l">Supervisors</div><div class="k-n">${supRefs.size}</div></div>
+        <div class="kpi"><div class="k-l">Active staff</div><div class="k-n">${ACT.length}</div></div>
+        <div class="kpi ${noSup.length?"warn":""}"><div class="k-l">No supervisor set</div><div class="k-n">${noSup.length}</div><div class="k-s">reporting line blank</div></div>
+      </div>
+      ${(noSup.length||deptsNoHead.length)?`<div class="psub" style="margin:6px 0 0;color:#8a5a1c;">⚠ Data gaps: ${noSup.length?`<b>${noSup.length}</b> staff have no supervisor set`:""}${(noSup.length&&deptsNoHead.length)?" · ":""}${deptsNoHead.length?`<b>${deptsNoHead.length}</b> department${deptsNoHead.length!==1?"s have":" has"} no head assigned (${esc(deptsNoHead.slice(0,6).join(", "))}${deptsNoHead.length>6?"…":""})`:""}. Fill <i>Supervisor</i> / <i>Department head</i> on the employee record to complete the chart.</div>`:""}
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 4px;">
+        <div class="toggle" style="display:inline-flex;border:1px solid var(--line,#dbe4dd);border-radius:9px;overflow:hidden;">
+          <div id="ocByDept" class="active" style="padding:7px 14px;cursor:pointer;font-size:13px;font-weight:600;background:#1F6B52;color:#fff;">By Department</div>
+          <div id="ocByTree" style="padding:7px 14px;cursor:pointer;font-size:13px;font-weight:600;">By Reporting Line</div>
+        </div>
+        <input id="ocSearch" class="search" style="flex:1;min-width:180px;" placeholder="Search name, department, position…">
+      </div>
+      <div id="ocBody" style="margin-top:8px;"></div>
+    </div>`;
+
+  const paint=()=>{
+    const q=(($("#ocSearch")||{}).value||"").trim().toLowerCase();
+    const match=e=> !q || [e.full_name,e.department,e.position,e.worksite].filter(Boolean).join(" ").toLowerCase().includes(q);
+    const body=$("#ocBody");
+    if(lens==="dept"){
+      const headBox=`<div class="panel" style="margin-top:0;margin-bottom:12px;background:#123528;color:#fff;">
+        <div style="font-size:16px;font-weight:800;">🏢 Roshan Commercial Corporation</div>
+        <div style="font-size:12px;opacity:.8;">${ACT.length} active staff · ${depts.length} departments</div></div>`;
+      const cards=depts.map(d=>{
+        const staff=ACT.filter(e=>(e.department||"").trim()===d && match(e));
+        if(q && !staff.length) return "";
+        const all=ACT.filter(e=>(e.department||"").trim()===d);
+        const headEmail=deptHeadEmail(d);
+        const headName=headEmail?resolveName(headEmail):"";
+        const expanded=q?true:ocExpanded.has(d);   // always expand when searching
+        let inner="";
+        if(expanded){
+          // group staff under their supervisor; those with none report directly to the department
+          const groups={}; const direct=[];
+          staff.forEach(e=>{ const sup=String(e.supervisor_name||e.supervisor_email||"").trim(); if(sup){ (groups[sup]=groups[sup]||[]).push(e); } else direct.push(e); });
+          const byName=(a,b)=>(a.full_name||"").localeCompare(b.full_name||"");
+          inner=`<div style="margin-top:8px;">`;
+          if(direct.length) inner+=direct.slice().sort(byName).map(e=>personRow(e)).join("");
+          Object.keys(groups).sort((a,b)=>a.localeCompare(b)).forEach(sup=>{
+            inner+=`<div style="margin-top:8px;padding:4px 8px;font-size:11.5px;font-weight:700;color:#1F6B52;text-transform:uppercase;letter-spacing:.4px;">↳ reports to ${esc(resolveName(sup)||sup)}</div>`;
+            inner+=`<div style="margin-left:14px;">`+groups[sup].slice().sort(byName).map(e=>personRow(e)).join("")+`</div>`;
+          });
+          inner+=`</div>`;
+        }
+        return `<div class="panel" style="margin-top:0;margin-bottom:12px;">
+          <div class="oc-dept-h clickable" data-dept="${esc(d)}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;cursor:pointer;">
+            <div style="font-size:15px;font-weight:800;color:#12352a;">${q?"":`<span style="color:#6b7785;">${expanded?"▾":"▸"}</span> `}${esc(d)}</div>
+            <div style="font-size:12px;color:var(--muted,#6b7785);">${headName?`Head: <b>${esc(headName)}</b>`:`<span style="color:#a12;">⚠ no head assigned</span>`} · ${all.length} staff${q&&staff.length!==all.length?` · ${staff.length} matching`:""}</div>
+          </div>${inner}</div>`;
+      }).join("");
+      body.innerHTML=headBox+(cards || `<div class="psub">No staff match “${esc(q)}”.</div>`);
+    } else {
+      // reporting-line tree
+      const byName=(a,b)=>(a.full_name||"").localeCompare(b.full_name||"");
+      if(q){
+        const hits=ACT.filter(match).sort(byName);
+        body.innerHTML=`<div class="panel" style="margin-top:0;"><div style="font-size:12px;color:#6b7785;margin-bottom:6px;">${hits.length} matching · showing flat list (clear search to see the tree)</div>${hits.map(e=>{
+          const sup=e.supervisor_name||resolveName(e.supervisor_email)||"—";
+          return personRow(e,` <span style="color:#6b7785;font-size:11.5px;">· ${esc(e.department||"—")} · ↳ ${esc(sup)}</span>`);
+        }).join("")||`<div class="psub">No one matches.</div>`}</div>`;
+      } else {
+        const roots=ACT.filter(e=>hasKids(e) && !resolvableSup(e)).sort(byName);
+        const visited=new Set();
+        const treeHtml=(e,depth)=>{
+          if(visited.has(e)) return ""; visited.add(e);
+          const kids=(childrenOf[String(e.email||"").toLowerCase()]||[]).slice().sort(byName);
+          const badge=kids.length?` <span class="pill di" style="font-size:10px;">${kids.length} report${kids.length!==1?"s":""}</span>`:"";
+          let h=`<div style="margin-left:${depth*22}px;border-left:${depth?"2px solid #e3ece6":"none"};padding-left:${depth?10:0}px;">`+personRow(e,badge)+`</div>`;
+          h+=kids.map(k=>treeHtml(k,depth+1)).join("");
+          return h;
+        };
+        const treeRows=roots.map(r=>treeHtml(r,0)).join("");
+        const leftover=ACT.filter(e=>!visited.has(e)).sort(byName); // no boss & no reports (or unresolved supervisor)
+        body.innerHTML=`<div class="panel" style="margin-top:0;margin-bottom:12px;">
+            <div style="font-size:12px;color:#6b7785;margin-bottom:6px;">${roots.length} top-level supervisor${roots.length!==1?"s":""} · nested by reporting line</div>
+            ${treeRows||`<div class="psub">No reporting lines are set yet — fill the Supervisor field on employee records.</div>`}
+          </div>
+          ${leftover.length?`<div class="panel" style="margin-top:0;">
+            <div style="font-size:14px;font-weight:800;color:#12352a;">Unassigned / flat <span class="pill di">${leftover.length}</span></div>
+            <div style="font-size:12px;color:#6b7785;margin-bottom:6px;">No supervisor set and no direct reports — not yet placed in the tree.</div>
+            ${leftover.map(e=>personRow(e,e.supervisor_name?` <span style="color:#8a5a1c;font-size:11px;">· supervisor “${esc(e.supervisor_name)}” not in roster</span>`:"")).join("")}
+          </div>`:""}`;
+      }
+    }
+    $$("#ocBody .oc-person").forEach(el=>el.addEventListener("click",()=>openRecord(EMPLOYEES[+el.dataset.idx])));
+    $$("#ocBody .oc-dept-h").forEach(el=>el.addEventListener("click",()=>{ const d=el.dataset.dept; if(ocExpanded.has(d)) ocExpanded.delete(d); else ocExpanded.add(d); paint(); }));
+  };
+  const setLens=(v)=>{ lens=v;
+    $("#ocByDept").style.background=v==="dept"?"#1F6B52":""; $("#ocByDept").style.color=v==="dept"?"#fff":"";
+    $("#ocByTree").style.background=v==="tree"?"#1F6B52":""; $("#ocByTree").style.color=v==="tree"?"#fff":"";
+    paint();
+  };
+  $("#ocByDept").addEventListener("click",()=>setLens("dept"));
+  $("#ocByTree").addEventListener("click",()=>setLens("tree"));
+  $("#ocSearch").addEventListener("input",paint);
+  paint();
+}
+window.renderOrgChart=renderOrgChart;
+window.openRecord=openRecord;
+
 /* ================= CONCERNS & CASES — arbitration + ongoing legal matters (Director/owner only) ================= */
 const CASE_TYPES=["SEnA (DOLE)","NLRC","Voluntary Arbitration","Internal Grievance","Civil","Criminal","Other"];
 const CASE_STATUSES=["Open","Ongoing","Settled","Dismissed","Awarded","Withdrawn","Closed"];
@@ -3288,6 +3427,24 @@ function defaultSignTop(s){ return `<h2 style="font-size:18px;color:#1E3A5F;marg
     <div class="psub">From ${esc(s.from_name||"HR")}${s.amount?" · ₱"+Number(s.amount).toLocaleString():""}${s.meta?" · "+esc(s.meta):""}</div>
     <div style="background:#f7f9fb;border:1px solid #E3E8EF;border-radius:10px;padding:14px 16px;margin:12px 0;white-space:pre-wrap;font-size:13.5px;line-height:1.6;max-height:34vh;overflow-y:auto;">${esc(s.body||"(document body)")}</div>`; }
 // Branded approval card for final-pay quitclaims — the figures you review sit in one clean table (RCC-Portal style).
+function hrDisplayName(email){ const M={ "anj@hassarams.com":"Anju C. Genomal — Director, Admin & Finance", "hr@hassarams.com":"Juvelyn Belvistre — HR Officer", "hr1@hassarams.com":"Vina — Human Resources", "hr3@hassarams.com":"Grazel Lyn Agulto — HR Officer", "hr4@hassarams.com":"Rhel Vinluan — HR Manager" }; return M[(email||"").toLowerCase()]||email||"Human Resources"; }
+// The full line-by-line breakdown (salary + allowance per line) rendered ON the approval card.
+function claimLines(fp,P){
+  const amt=(lbl,v,strong,pad)=>`<tr><td style="padding:6px 14px 6px ${pad||26}px;color:${strong?'#12352a':'#6B7785'};font-size:12px;${strong?'font-weight:800;':''}border-bottom:1px solid #f2f5f7;">${lbl}</td><td style="padding:6px 14px;font-size:12.5px;${strong?'font-weight:800;color:#12352a;':''}border-bottom:1px solid #f2f5f7;text-align:right;white-space:nowrap;">${P(v)}</td></tr>`;
+  const sub=(lbl,v)=>`<tr><td style="padding:2px 14px 2px 42px;color:#9aa3ac;font-size:11px;">${lbl}</td><td style="padding:2px 14px;color:#6B7785;font-size:11px;text-align:right;white-space:nowrap;">${P(v)}</td></tr>`;
+  const head=(lbl)=>`<tr><td colspan="2" style="padding:9px 14px 3px;font-size:10.5px;font-weight:800;letter-spacing:.6px;color:#12352a;background:#f4f8f5;">${lbl}</td></tr>`;
+  let h=head("CLAIMS — OWED TO EMPLOYEE");
+  FP_CLAIMS.forEach(([k,lbl])=>{ if(Number(fp[k]||0)===0 && !fp[k+"_note"]) return;
+    h+=amt(lbl,fp[k]);
+    if(FP_SPLIT.has(k) && (fp[k+"_basic"]!=null||fp[k+"_allowance"]!=null)){ h+=sub("• Basic salary",fp[k+"_basic"]||0)+sub("• Allowance",fp[k+"_allowance"]||0); }
+  });
+  h+=amt("Total claims",fpClaims(fp),true);
+  h+=head("LESS — DEDUCTIONS");
+  let any=false; FP_DEDUCTIONS.forEach(([k,lbl])=>{ if(Number(fp[k]||0)===0 && !fp[k+"_note"]) return; any=true; h+=amt(lbl,fp[k]); });
+  if(!any) h+=`<tr><td style="padding:5px 14px 5px 26px;color:#9aa3ac;font-size:11.5px;border-bottom:1px solid #f2f5f7;">None</td><td style="border-bottom:1px solid #f2f5f7;"></td></tr>`;
+  h+=amt("Total deductions",fpDeductions(fp),true);
+  return h;
+}
 function claimCard(s){ const d=s.details||{}; const P=n=>"₱"+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   const row=(k,v)=>`<tr><td style="padding:9px 14px;color:#6B7785;font-size:12.5px;border-bottom:1px solid #eef1f4;white-space:nowrap;vertical-align:top;">${k}</td><td style="padding:9px 14px;font-weight:700;font-size:13px;border-bottom:1px solid #eef1f4;">${v}</td></tr>`;
   return `<div style="background:linear-gradient(135deg,#12352a,#1c4b39);margin:-22px -22px 0;padding:15px 20px;border-radius:14px 14px 0 0;color:#fff;">
@@ -3296,15 +3453,14 @@ function claimCard(s){ const d=s.details||{}; const P=n=>"₱"+Number(n||0).toLo
     <div style="padding:16px 2px 0;">
       <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#6B7785;">FINAL PAY · QUITCLAIM</div>
       <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 3px;">Final pay needs your approval</div>
-      <div class="psub" style="margin-bottom:11px;">Submitted by ${esc(s.from_name||"HR")}${s.created_at?" · "+fmtAgo(s.created_at):""}. Review the figures, then e-sign below.</div>
+      <div class="psub" style="margin-bottom:11px;">Prepared by ${esc(d.prepared_by||s.from_name||"HR")}${s.created_at?" · "+fmtAgo(s.created_at):""}. Review the figures, then e-sign below.</div>
       <table style="width:100%;border:1px solid #e6eaee;border-radius:10px;border-collapse:separate;border-spacing:0;overflow:hidden;">
         ${row("Employee",esc(d.employee||s.subject_name||"—"))}
         ${(d.employee_id||d.position)?row("ID / Position",esc([d.employee_id,d.position].filter(Boolean).join(" · ")||"—")):""}
         ${d.branch?row("Branch",esc(d.branch)):""}
         ${d.last_day?row("Last day",fmtDate(d.last_day)):""}
         ${d.separation?row("Separation",esc(d.separation)):""}
-        ${row("Total claims",P(d.claims))}
-        ${row("Less: deductions",P(d.deductions))}
+        ${d.fp?claimLines(d.fp,P):(row("Total claims",P(d.claims))+row("Less: deductions",P(d.deductions)))}
         <tr><td style="padding:12px 14px;background:#eaf4ec;font-size:12.5px;font-weight:800;color:#12352a;">NET TO EMPLOYEE</td><td style="padding:12px 14px;background:#eaf4ec;font-weight:800;font-size:15.5px;color:#12352a;">${P(d.net!=null?d.net:s.amount)}</td></tr>
         ${d.payment?row("Payment",esc(d.payment)):""}
       </table>
@@ -6902,7 +7058,7 @@ async function sendFinalPayForSignoff(x,modal){
   const emp=(EMPLOYEES||[]).find(e=>e.id===x.employee_id)||{};
   const details={ employee:x.employee_name, employee_id:emp.employee_id||"", position:x.position||emp.position||"",
     branch:emp.worksite||x.department||"", last_day:x.last_working_day||"", separation:x.separation_type||"",
-    claims:fpClaims(fp), deductions:fpDeductions(fp), net:net,
+    claims:fpClaims(fp), deductions:fpDeductions(fp), net:net, fp:fp, prepared_by:hrDisplayName(sender),
     payment:[fp.payment_instruction,fp.bank_account].filter(Boolean).join(" · "), clearance_id:x.clearance_id };
   const { data:sig, error:e2 } = await sb.from("signature_requests").insert({
     doc_type:"claim", doc_title:"Quitclaim — Final Pay Computation", subject_name:x.employee_name,

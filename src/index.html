@@ -521,6 +521,10 @@ window.APP_BUILD="__BUILD__";
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>
         Store Mapping
       </div>
+      <div class="nav-item" data-page="orgchart" onclick="go('orgchart')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="4" rx="1"/><rect x="3" y="17" width="6" height="4" rx="1"/><rect x="15" y="17" width="6" height="4" rx="1"/><path d="M12 7v5M6 17v-3h12v3"/></svg>
+        Org Chart
+      </div>
       <div class="nav-item" data-page="positions" onclick="go('positions')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>
         Positions &amp; JD<span class="nav-badge tbd">TBD</span>
@@ -1310,6 +1314,7 @@ window.APP_BUILD="__BUILD__";
       <section class="page" id="page-maternity"></section>
       <section class="page" id="page-meetings"></section>
       <section class="page" id="page-storemap"></section>
+      <section class="page" id="page-orgchart"></section>
       <section class="page" id="page-concerns"></section>
       <section class="page" id="page-demodata"></section>
       <section class="page" id="page-exit">
@@ -1950,7 +1955,7 @@ window.APP_BUILD="__BUILD__";
     exitinterview:'Exit Interview', compliance:'Compliance', audit:'Audit Log',
     settings:'Settings', parking:'Parking Lot', hractivity:'HR Activity & Expense',
     hmo:'HMO Coverage', insurance:'Personal Insurance', maternity:'Maternity Benefits',
-    storemap:'Store Mapping', concerns:'Concerns & Cases',
+    storemap:'Store Mapping', orgchart:'Org Chart', concerns:'Concerns & Cases',
     desk:'HR Desk'
   };
   var NAVFOR={employee:'employees', store:'branches'};

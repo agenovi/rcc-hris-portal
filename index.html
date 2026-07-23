@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784786781";
+window.APP_BUILD="1784787628";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784786781" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784787628" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -2894,6 +2894,13 @@ async function openLoanDoc(path,btn){
   window.open(data.signedUrl,"_blank");
 }
 window.openLoanDoc=openLoanDoc;
+async function delLoanHist(histId,loanId){
+  if(!confirm("Remove this loan-history entry?")) return;
+  const {error}=await sb.from("loan_history").delete().eq("id",histId);
+  if(error){ alert(error.message); return; }
+  const mm=document.getElementById("loanModal"); if(mm) mm.remove(); openLoan(loanId);
+}
+window.delLoanHist=delLoanHist;
 async function openPrehireDoc(path,btn){
   if(btn){ btn.disabled=true; btn.textContent="Opening…"; }
   const {data,error}=await sb.storage.from("prehire-docs").createSignedUrl(path,3600);
@@ -2984,6 +2991,33 @@ function openLoan(id){
         <h2>Application</h2>
         ${phRow("Loan type",loanTypeLabel(l.loan_type))}${phRow("Amount",peso(l.amount))}${phRow("Term",(l.term_months||"—")+" months")}${phRow("Est. monthly",peso(l.monthly_estimate))}${phRow("Mobile",l.contact_number)}${phRow("Email",l.email)}${phRow("Employee ID",l.employee_id)}${phRow("Position",l.department)}${phRow("Take-home given",l.net_pay?peso(l.net_pay):"—")}${phRow("Purpose",l.purpose)}${phRow("Authorized",l.authorized?"Yes (RA 8792)":"—")}
       </div>
+      <div class="panel" style="border:2px solid #cfe0d4;">
+        <h2>Loan history <span style="font-size:12px;font-weight:600;color:var(--muted);">— HR check (PayPlus can't supply this)</span></h2>
+        <div class="psub">Previous &amp; still-running loans for this employee. PayPlus doesn't expose loan balances, so HR records them here from the payslip / old ledger. What you enter shows on every future loan review for this person.</div>
+        <div id="loanHistBody" style="margin-top:10px;"><div class="psub">Loading history…</div></div>
+        <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px;">
+          <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">＋ Add a past / existing loan</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;">
+            <select id="lhType" style="padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
+              <option value="">Type…</option><option value="discretionary">Discretionary</option><option value="emergency">Emergency</option><option value="educational">Educational</option><option value="moto">Motorcycle</option><option value="sss">SSS</option><option value="pagibig">Pag-IBIG</option><option value="other">Other</option>
+            </select>
+            <input id="lhDate" type="date" title="Date granted" style="padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
+            <input id="lhAmt" type="number" inputmode="numeric" placeholder="Original amount ₱" style="padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
+            <input id="lhOut" type="number" inputmode="numeric" placeholder="Outstanding balance ₱" style="padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
+            <input id="lhMonthly" type="number" inputmode="numeric" placeholder="Monthly deduction ₱" style="padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
+            <select id="lhStatus" style="padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
+              <option value="Active">Active (still deducting)</option><option value="Paid">Fully paid</option>
+            </select>
+            <input id="lhSource" placeholder="Source (payslip / old ledger)" style="padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;grid-column:1/3;">
+            <input id="lhNote" placeholder="Note (optional)" style="padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;grid-column:1/3;">
+          </div>
+          <button class="btn" id="lhAdd" style="margin-top:9px;">Add to history</button>
+        </div>
+      </div>
+      <div class="panel" style="border:2px solid #cfe0d4;">
+        <h2>Affordability — 15%-of-pay rule</h2>
+        <div id="loanAfford"><div class="psub">Calculating…</div></div>
+      </div>
       <div class="panel">
         <h2>Supporting documents</h2>
         ${(Array.isArray(l.documents)&&l.documents.length)
@@ -3031,6 +3065,7 @@ function openLoan(id){
         <textarea id="loanNotes" rows="2" placeholder="HR notes…" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin-top:8px;">${esc(l.hr_notes||"")}</textarea>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
           ${next?`<button class="btn" id="loanAdv">Advance → ${esc(next)}</button>`:""}
+          ${(l.status!=="Submitted"&&l.status!=="Rejected"&&l.status!=="Released")?`<button class="btn ghost" id="loanBack" style="color:#8a5a00;border-color:#ecdca6;">↩ Send back to HR</button>`:""}
           ${l.status!=="Rejected"&&l.status!=="Released"?`<button class="btn ghost" id="loanRej" style="color:var(--red);border-color:#f1c9c5;">Reject</button>`:""}
           ${l.status==="Approved"?`<button class="btn" id="loanRel">Mark Released</button>`:""}
           <button class="btn ghost" id="loanClose" style="margin-left:auto;">Close</button>
@@ -3038,6 +3073,74 @@ function openLoan(id){
       </div>
     </div></div>`;
   $("#loanClose").addEventListener("click",()=>m.remove());
+  // ── Loan history (HR-maintained; PayPlus doesn't expose loan balances) ──
+  const renderLoanHist=(rows)=>{
+    const body=document.getElementById("loanHistBody"); if(!body) return;
+    if(!l.employee_id){ body.innerHTML=`<div class="note">No Employee ID on this application yet — link the PayPlus ID first, then history can be attached to the person.</div>`; return; }
+    if(!rows||!rows.length){ body.innerHTML=`<div class="psub">No previous loans recorded yet. If you know this person has running loans (SSS, Pag-IBIG, company), add them below so the take-home check is accurate.</div>`; return; }
+    const activeOut=rows.filter(r=>r.status==="Active").reduce((s,r)=>s+Number(r.outstanding||0),0);
+    const activeMon=rows.filter(r=>r.status==="Active").reduce((s,r)=>s+Number(r.monthly_deduction||0),0);
+    body.innerHTML=`
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+        <div style="flex:1;min-width:130px;background:#eef4ef;border-radius:10px;padding:8px 12px;"><div class="esub">Active outstanding</div><div style="font-weight:800;font-size:16px;">${peso(activeOut)}</div></div>
+        <div style="flex:1;min-width:130px;background:#eef4ef;border-radius:10px;padding:8px 12px;"><div class="esub">Monthly deductions now</div><div style="font-weight:800;font-size:16px;">${peso(activeMon)}</div></div>
+      </div>
+      ${rows.map(r=>`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);">
+        <div>
+          <div style="font-weight:700;">${esc(loanTypeLabel(r.loan_type))} · ${peso(r.amount)} <span class="pill ${r.status==="Active"?"active":"closed"}" style="margin-left:4px;">${esc(r.status||"")}</span></div>
+          <div class="esub">${r.date_granted?("Granted "+fmtDate(r.date_granted)+" · "):""}Outstanding ${peso(r.outstanding)} · ${peso(r.monthly_deduction)}/mo${r.source?(" · "+esc(r.source)):""}${r.note?(" · "+esc(r.note)):""}</div>
+        </div>
+        <button class="btn ghost" style="flex:none;padding:4px 10px;font-size:12px;color:var(--red);border-color:#f1c9c5;" onclick="delLoanHist('${r.id}','${esc(l.id)}')">Remove</button>
+      </div>`).join("")}`;
+  };
+  const renderAfford=(activeMon)=>{
+    const box=document.getElementById("loanAfford"); if(!box) return;
+    const disposable=Number(l.net_pay||0);
+    const guide=disposable*0.15;
+    const thisMon=Number(l.monthly_estimate||0);
+    const combined=thisMon+Number(activeMon||0);
+    if(!disposable){ box.innerHTML=`<div class="note">No pay figure captured with this application — HR must check the 15% rule against the payslip manually.</div>`; return; }
+    const ok=combined<=guide;
+    box.innerHTML=`
+      ${phRow("Pay available for repayment","₱"+disposable.toLocaleString())}
+      ${phRow("15% guide (max monthly)","₱"+guide.toLocaleString(undefined,{maximumFractionDigits:0}))}
+      ${phRow("This loan — monthly","₱"+thisMon.toLocaleString(undefined,{maximumFractionDigits:0}))}
+      ${activeMon?phRow("Existing loan deductions (from history)","₱"+Number(activeMon).toLocaleString(undefined,{maximumFractionDigits:0})):""}
+      ${phRow("Combined monthly","₱"+combined.toLocaleString(undefined,{maximumFractionDigits:0}))}
+      <div style="margin-top:10px;padding:11px 13px;border-radius:10px;font-size:13.5px;background:${ok?'#e6f4ea':'#fbeee6'};border:1px solid ${ok?'#bfe0c8':'#ecdca6'};">
+        ${ok?`<b style="color:var(--green);">✓ Within the 15% guide.</b> Combined ₱${combined.toLocaleString(undefined,{maximumFractionDigits:0})} fits under ₱${guide.toLocaleString(undefined,{maximumFractionDigits:0})}.`
+             :`<b style="color:#b26a00;">⚠ Over the 15% guide.</b> Combined ₱${combined.toLocaleString(undefined,{maximumFractionDigits:0})} exceeds ₱${guide.toLocaleString(undefined,{maximumFractionDigits:0})} — consider a smaller amount or longer term, or clear the existing loan first.`}
+      </div>
+      <div class="psub" style="margin-top:8px;">Pay figure was declared on the application. Confirm against the latest payslip before approving. The 15% guide applies <b>after</b> government (SSS/PhilHealth/Pag-IBIG/tax) deductions.</div>`;
+  };
+  renderAfford(0);
+  (async()=>{
+    if(!l.employee_id){ renderLoanHist(null); renderAfford(0); return; }
+    const {data}=await sb.from("loan_history").select("*").eq("employee_id",l.employee_id).order("date_granted",{ascending:false,nullsFirst:false});
+    renderLoanHist(data||[]);
+    const activeMon=(data||[]).filter(r=>r.status==="Active").reduce((s,r)=>s+Number(r.monthly_deduction||0),0);
+    renderAfford(activeMon);
+  })();
+  const lhAdd=document.getElementById("lhAdd"); if(lhAdd) lhAdd.addEventListener("click",async()=>{
+    if(!l.employee_id){ alert("Link this application's Employee ID first — history is attached to the person's PayPlus ID."); return; }
+    const type=document.getElementById("lhType").value;
+    const amt=parseFloat(document.getElementById("lhAmt").value||"0");
+    if(!type){ alert("Pick a loan type."); return; }
+    if(!amt){ alert("Enter the original loan amount."); return; }
+    lhAdd.disabled=true; lhAdd.textContent="Saving…";
+    const row={ employee_id:l.employee_id, applicant_name:l.applicant_name, loan_type:type,
+      amount:amt, outstanding:parseFloat(document.getElementById("lhOut").value||"0")||null,
+      monthly_deduction:parseFloat(document.getElementById("lhMonthly").value||"0")||null,
+      date_granted:document.getElementById("lhDate").value||null,
+      status:document.getElementById("lhStatus").value, source:document.getElementById("lhSource").value||null,
+      note:document.getElementById("lhNote").value||null, added_by:myEmail()||"HR" };
+    const {error}=await sb.from("loan_history").insert(row);
+    if(error){ alert(error.message); lhAdd.disabled=false; lhAdd.textContent="Add to history"; return; }
+    const {data}=await sb.from("loan_history").select("*").eq("employee_id",l.employee_id).order("date_granted",{ascending:false,nullsFirst:false});
+    renderLoanHist(data||[]);
+    ["lhType","lhDate","lhAmt","lhOut","lhMonthly","lhSource","lhNote"].forEach(id=>{const el=document.getElementById(id); if(el) el.value="";});
+    lhAdd.disabled=false; lhAdd.textContent="Add to history";
+  });
   const dUp=document.getElementById("loanDocUp"); if(dUp) dUp.addEventListener("click",async()=>{
     const inp=document.getElementById("loanDocAdd");
     if(!inp||!inp.files||!inp.files.length){ alert("Choose the file(s) first."); return; }
@@ -3102,6 +3205,17 @@ function openLoan(id){
     await loadEmployees(); m.remove();
   });
   const rej=document.getElementById("loanRej"); if(rej) rej.addEventListener("click",()=>setLoan({status:"Rejected"}));
+  const back=document.getElementById("loanBack"); if(back) back.addEventListener("click",async()=>{
+    const c=prompt("Send back to HR — what should they add or check?\n(e.g. \"attach latest payslip\", \"confirm existing SSS loan balance\", \"missing valid ID\")");
+    if(c==null) return;
+    const stamp=`[Sent back to HR by ${myName()||myEmail()||"reviewer"} · ${fmtDate(new Date().toISOString())}] ${c.trim()}`;
+    const prev=document.getElementById("loanNotes").value;
+    const merged=(prev?prev+"\n":"")+stamp;
+    const {error}=await sb.from("loans").update({status:"HR Review",hr_notes:merged,updated_at:new Date().toISOString()}).eq("id",l.id);
+    if(error){ alert(error.message); return; }
+    await logChange("loan",l.id,l.applicant_name,"Sent back to HR",l.loan_ref+" — "+c.trim().slice(0,80));
+    await loadEmployees(); m.remove();
+  });
 }
 const isActive=(e)=>e.status==="Active";
 // "Store / Concession" classification, derived (display-only) from the worksite.
@@ -6099,23 +6213,55 @@ function meetingMissHistory(emp_no,name,uptoDate){
     expected++; if(!mAttended(r)) missed++; });
   return {expected,missed};
 }
-// Snapshot the active merchandiser roster onto a meeting (idempotent — skips people already snapshotted).
-async function meetingPrepareRoster(date,label){
-  if(!date){ alert("Open a meeting first (set its date), then load the expected roster."); return; }
-  const have=new Set(meetingRosterFor(date).map(r=>mPersonKey(r.emp_no,r.name)));
-  const seen=new Set(have);
-  const rows=[];
-  (DISERS||[]).filter(d=>(d.status||"").toLowerCase().startsWith("active")).forEach(d=>{
-    const k=mPersonKey(d.emp_no,d.name); if(seen.has(k)) return; seen.add(k);
-    rows.push({ meeting_date:date, meeting_label:label||null, diser_id:d.id, emp_no:d.emp_no||null,
-      name:d.name, store:d.store||null, position:d.position||null, hired_by:d.hired_by||null, expected:true });
-  });
-  if(!rows.length){ alert("The expected roster for this meeting is already loaded ("+have.size+" merchandisers). Untick anyone not required below."); return; }
-  const { error } = await sb.from("meeting_roster").insert(rows);
-  if(error){ alert("Couldn't load the roster: "+error.message); return; }
-  await reloadMeetings();
+// Upload the invite list for ONE meeting from Excel/CSV. Replaces any existing roster for that meeting.
+// Looks for a Name column (Employee No / Store optional); enriches from the merchandiser roster by name.
+async function meetingUploadRoster(file,date,label){
+  const st=document.getElementById("mtgRosterStatus");
+  const setSt=(t,bad)=>{ if(st){ st.textContent=t; st.style.color=bad?"#a4322a":"#6b7785"; } };
+  if(!date){ alert("Open a meeting first (set its date), then upload the expected list."); return; }
+  setSt("Reading "+file.name+"…");
+  try{
+    await tkLoadSheetJS();
+    const wb=window.XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:"array"});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const grid=window.XLSX.utils.sheet_to_json(ws,{header:1,blankrows:false,defval:""}).map(r=>r.map(c=>String(c==null?"":c).trim()));
+    // Find the header row (one that mentions "name") within the first few rows.
+    let hIdx=-1;
+    for(let i=0;i<Math.min(grid.length,6);i++){ if(grid[i].some(c=>/name/i.test(c))){ hIdx=i; break; } }
+    let nameCol=0,empCol=-1,storeCol=-1,dataStart=0;
+    if(hIdx>=0){ const H=grid[hIdx];
+      H.forEach((c,i)=>{ const h=c.toLowerCase();
+        if(nameCol===0 && /name/.test(h)) nameCol=i;
+        if(empCol<0 && /(emp|employee|id|no\b|number)/.test(h) && !/name/.test(h)) empCol=i;
+        if(storeCol<0 && /(store|branch|worksite|outlet|site|account)/.test(h)) storeCol=i;
+      });
+      dataStart=hIdx+1;
+    }
+    const seen=new Set(); let matched=0; const rows=[];
+    for(let i=dataStart;i<grid.length;i++){ const g=grid[i]||[]; const name=(g[nameCol]||"").trim();
+      if(!name || /^name$/i.test(name)) continue;
+      let emp=empCol>=0?(g[empCol]||"").trim():""; let store=storeCol>=0?(g[storeCol]||"").trim():"";
+      // enrich from the active merchandiser roster by name
+      const d=(DISERS||[]).find(x=>mNorm(x.name)===mNorm(name));
+      if(d){ matched++; if(!emp) emp=d.emp_no||""; if(!store) store=d.store||""; }
+      const key=(emp||"")+"|"+mNorm(name); if(seen.has(key)) continue; seen.add(key);
+      rows.push({ meeting_date:date, meeting_label:label||null, diser_id:d?d.id:null, emp_no:emp||null,
+        name, store:store||null, position:d?d.position||null:null, hired_by:d?d.hired_by||null:null, expected:true });
+    }
+    if(!rows.length){ setSt("⚠ No names found — the file needs a column headed \"Name\" (or a single column of names).",true); return; }
+    if(!confirm("Load "+rows.length+" expected attendee(s) for "+fmtDate(date)+"?"+(matched<rows.length?"\n\n("+matched+" matched to the merchandiser roster; "+(rows.length-matched)+" by name only.)":"")+"\n\nThis replaces any list already loaded for this meeting.")){ setSt(""); return; }
+    // replace-by-meeting: clear this meeting's roster, then insert the uploaded list
+    await sb.from("meeting_roster").delete().eq("meeting_date",date);
+    const { error } = await sb.from("meeting_roster").insert(rows);
+    if(error){ setSt("⚠ "+error.message,true); return; }
+    setSt("✓ "+rows.length+" loaded"+(matched<rows.length?" ("+(rows.length-matched)+" by name only)":""));
+    await reloadMeetings();
+  }catch(e){ setSt("⚠ "+((e&&e.message)||e),true); }
 }
-window.mtgPrepareRoster=(date,label)=>meetingPrepareRoster(date,label);
+window.mtgUploadRosterEl=(el)=>{ const f=el.files&&el.files[0]; if(!f) return; const date=el.dataset.date;
+  const a=meetingActive(); const rr=meetingRosterFor(date)[0];
+  const label=(a&&a.date===date&&a.label)||(rr&&rr.meeting_label)||"Monthly Merchandiser Meeting";
+  meetingUploadRoster(f,date,label); el.value=""; };
 async function meetingToggleExpected(id,expected){
   await sb.from("meeting_roster").update({expected}).eq("id",id);
   const r=(MEETING_ROSTER||[]).find(x=>String(x.id)===String(id)); if(r) r.expected=expected;

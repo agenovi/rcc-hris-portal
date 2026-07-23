@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784802858";
+window.APP_BUILD="1784806938";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784802858" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784806938" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -8536,15 +8536,22 @@ function exSignoffDoc(x, role){
   return `${row("Employee", x.employee_name)}${row("Position", x.position||e.position)}${row("Store / worksite", e.worksite||x.department)}${row("Last working day", x.last_working_day?fmtDate(x.last_working_day):"—")}${row("Clearance ref", x.clearance_id)}`
     +`<div style="margin-top:12px;line-height:1.55;">By signing below, I confirm that <b>${esc(x.employee_name||"this employee")}</b> has been <b>cleared</b> for their responsibility under <b>${esc(role||"my area")}</b>, and I have no outstanding accountability to raise against them (or I have noted it to HR separately).</div>`;
 }
-async function exCreateSignoff(x, name, role, subjectToApproval){
+async function exCreateSignoff(x, name, role, deptKey, email){
   const nm=(name||"").trim(); if(!nm) return;
   const token=newSignoffToken();
-  const label=(x.employee_name||"")+" — exit clearance";
-  const doc=exSignoffDoc(x, role)+(subjectToApproval?`<div style="margin-top:10px;font-size:12px;color:#9a6a00;">Note: this signer was chosen manually and is subject to HR's confirmation.</div>`:"");
-  const { error } = await sb.from("external_signoffs").insert({ token, context_type:"exit", context_id:String(x.id), context_label:label, signer_name:nm, signer_role:role||null, document_html:doc, created_by:myEmail() });
+  const label=(x.employee_name||"")+" — exit clearance"+(role?" · "+role:"");
+  const doc=exSignoffDoc(x, role);
+  const { error } = await sb.from("external_signoffs").insert({ token, context_type:"exit", context_id:String(x.id), context_label:label, signer_name:nm, signer_role:role||null, signer_email:(email||"").trim()||null, dept_key:deptKey||null, document_html:doc, created_by:myEmail() });
   if(error){ alert(error.message); return; }
+  const url=signoffUrl(token);
+  try{ await navigator.clipboard.writeText(url); }catch(_){}
+  const to=(email||"").trim();
+  if(to && confirm("Sign-off link created & copied.\n\nOpen an email to "+nm+" ("+to+") with the link now?")){
+    const subject="RCC exit clearance — please sign off ("+(role||"")+")";
+    const body="Hi "+nm+",\n\nPlease review and sign off this exit clearance for "+(x.employee_name||"")+" — open your private link (no login, sign with your real signature on your phone):\n\n"+url+"\n\nThank you,\nRCC HR";
+    window.location.href="mailto:"+encodeURIComponent(to)+"?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(body);
+  } else if(!to){ alert("Sign-off link created & copied — send it to "+nm+" via WhatsApp or email."); }
   await loadEmployees(); openExitCase(x.id);
-  setTimeout(()=>{ try{ navigator.clipboard.writeText(signoffUrl(token)); }catch(_){} },30);
 }
 async function exDeleteSignoff(id){ if(!confirm("Remove this sign-off request?")) return; await sb.from("external_signoffs").delete().eq("id",id); await loadEmployees(); }
 function viewSignoffSignature(id){
@@ -8585,11 +8592,15 @@ function exSignoffPanelHtml(x){
     </div>
   </div>`;
 }
-function wireExSignoffPanel(x, m){
-  const std=m.querySelector("#soAddStd"); const sc=scForExit(x);
-  if(std&&sc) std.addEventListener("click",()=>exCreateSignoff(x, sc.name, sc.role, false));
-  const cust=m.querySelector("#soAddCustom");
-  if(cust) cust.addEventListener("click",()=>{ const n=m.querySelector("#soName").value, r=m.querySelector("#soRole").value; if(!n.trim()){ m.querySelector("#soName").focus(); return; } exCreateSignoff(x, n, r||"Sign-off", true); });
+// Per-department sign-off wiring (merged into each department row).
+function wireDeptSignoffs(x, m){
+  m.querySelectorAll("[data-sosend]").forEach(b=>b.addEventListener("click",()=>{
+    const k=b.dataset.sosend; const nm=((document.getElementById("cbnm_"+k)||{}).value||"").trim();
+    const em=((document.getElementById("cbem_"+k)||{}).value||"").trim();
+    if(!nm){ const f=document.getElementById("cbnm_"+k); if(f) f.focus(); return; }
+    const st=EXIT_STAGES.find(s=>s.key===k);
+    exCreateSignoff(x, nm, st?st.label:"Sign-off", k, em);
+  }));
   m.querySelectorAll("[data-socopy]").forEach(b=>b.addEventListener("click",async()=>{ const url=signoffUrl(b.dataset.socopy); try{ await navigator.clipboard.writeText(url); b.textContent="✓ Copied"; setTimeout(()=>b.textContent="🔗 Copy link",1600); }catch(_){ prompt("Copy the sign-off link:", url); } }));
   m.querySelectorAll("[data-soview]").forEach(b=>b.addEventListener("click",()=>viewSignoffSignature(b.dataset.soview)));
   m.querySelectorAll("[data-sodel]").forEach(b=>b.addEventListener("click",()=>exDeleteSignoff(b.dataset.sodel)));
@@ -8821,23 +8832,35 @@ function openExitCase(id){
       </div>
 
       <div class="panel"><h2>Department sign-offs <span class="count-tag">${exitStagesDone(x)}/8 cleared</span></h2>
-        <div class="psub">Each department clears its items (per RCC's Exit Clearance form) and flags any charges.</div>
-        ${EXIT_STAGES.map(s=>{ const by=(x.signoff_by||{})[s.key]||{}; return `<div class="task" style="align-items:flex-start;">
-          <div class="dot ${x[s.s]==='Cleared'?'g':(x[s.s]==='With Charges'?'r':'a')}" style="margin-top:6px;"></div>
-          <div style="flex:1;min-width:0;"><div class="tt">${s.label}</div><div class="td">${s.items||''}</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:5px;">
-              <input data-signoffby="${s.key}" value="${esc(by.name||"")}" placeholder="Cleared by (name)" style="width:100%;max-width:230px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;">
-              ${by.at?`<span class="td" style="font-size:11px;color:var(--green-dark);white-space:nowrap;">✓ ${fmtDate(by.at)}</span>`:''}
+        <div class="psub">Each department clears its items. Enter who cleared it, or <b>send that person a private sign-off link</b> (they upload their real signature on their phone, no login) — signing <b>auto-clears</b> that department.</div>
+        ${(()=>{ const emp0=(EMPLOYEES||[]).find(e=>e.id===x.employee_id)||{}; return EXIT_STAGES.map(s=>{
+          const by=(x.signoff_by||{})[s.key]||{};
+          const so=exSignoffsFor(x).find(r=>String(r.dept_key||"")===s.key);
+          const defEmail=s.key==='supervisor'?(emp0.supervisor_email||""):"";
+          let signer;
+          if(so && so.status==='Signed'){
+            signer=`<div style="margin-top:5px;font-size:12px;color:var(--green-dark);font-weight:700;">✓ Signed by ${esc(so.signed_name||so.signer_name)}${so.signed_at?" · "+fmtDate(so.signed_at):""} <button class="btn ghost" data-soview="${so.id}" type="button" style="font-size:11px;padding:3px 8px;margin-left:4px;">View signature</button></div>`;
+          } else if(so && so.status==='Declined'){
+            signer=`<div style="margin-top:5px;font-size:12px;color:var(--red);">Declined by ${esc(so.signer_name)}${so.decline_reason?` — “${esc(so.decline_reason)}”`:""} <button class="btn ghost" data-sodel="${so.id}" type="button" style="font-size:11px;padding:3px 8px;">Remove</button></div>`;
+          } else if(so){
+            signer=`<div style="margin-top:5px;font-size:12px;"><span class="pill awol">Awaiting ${esc(so.signer_name)}</span> <button class="btn ghost" data-socopy="${esc(so.token)}" type="button" style="font-size:11px;padding:3px 8px;">🔗 Copy link</button> <button class="btn ghost" data-sodel="${so.id}" type="button" style="font-size:11px;padding:3px 8px;">Remove</button></div>`;
+          } else {
+            signer=`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:5px;">
+              <input data-signoffby="${s.key}" id="cbnm_${s.key}" value="${esc(by.name||"")}" placeholder="Cleared by / signer name" style="flex:1;min-width:140px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;">
+              <input id="cbem_${s.key}" value="${esc(defEmail)}" placeholder="their email (to send link)" style="flex:1;min-width:140px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;">
+              <button class="btn ghost" data-sosend="${s.key}" type="button" style="font-size:11.5px;padding:5px 10px;white-space:nowrap;">Send sign-off link</button>
+              ${by.at?`<span class="td" style="font-size:11px;color:var(--green-dark);">✓ ${fmtDate(by.at)}</span>`:""}
+            </div>`;
+          }
+          return `<div class="task" style="align-items:flex-start;">
+            <div class="dot ${x[s.s]==='Cleared'?'g':(x[s.s]==='With Charges'?'r':'a')}" style="margin-top:6px;"></div>
+            <div style="flex:1;min-width:0;"><div class="tt">${s.label}</div><div class="td">${s.items||''}</div>${signer}</div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+              <select data-stage="${s.s}" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;background:#fff;">${opt(EXIT_STATUSES,x[s.s]||"Pending")}</select>
+              ${s.c?`<input data-charge="${s.c}" type="number" step="0.01" placeholder="₱" value="${x[s.c]??""}" style="width:84px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;">`:''}
             </div>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-            <select data-stage="${s.s}" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;background:#fff;">${opt(EXIT_STATUSES,x[s.s]||"Pending")}</select>
-            ${s.c?`<input data-charge="${s.c}" type="number" step="0.01" placeholder="₱" value="${x[s.c]??""}" style="width:84px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;">`:''}
-          </div>
-        </div>`;}).join("")}
+          </div>`;}).join(""); })()}
       </div>
-
-      ${exSignoffPanelHtml(x)}
 
       <div class="panel"><h2>Property to return</h2>
         <div class="psub">Items marked <b style="color:var(--green-dark);">· on record</b> were auto-loaded from what was issued to this person at onboarding — no more guessing. Tick any others that apply. <b>Uniform is not collected back</b> — its cost is handled by the &lt;6-month rule below. Cash advances / loan balances settle under the Finance sign-offs above.</div>
@@ -8932,7 +8955,7 @@ function openExitCase(id){
   $("#exClose").addEventListener("click",()=>m.remove());
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   $("#exSave").addEventListener("click",()=>saveExitCase(x,m,false));
-  wireExSignoffPanel(x, m);
+  wireDeptSignoffs(x, m);
   const cmp=document.getElementById("exComplete"); if(cmp) cmp.addEventListener("click",()=>{ if(confirm("Approve this separation for "+(x.employee_name||"this employee")+"?\n\nTheir status will flip to Separated.")) saveExitCase(x,m,true); });
   const subSep=document.getElementById("exSubmitSep"); if(subSep) subSep.addEventListener("click",()=>{ if(confirm("Submit "+(x.employee_name||"this employee")+"'s separation to the Director for approval?\n\nThey stay Active until the Director approves.")) saveExitCase(x,m,"submit"); });
   const sendFP=document.getElementById("exSendFP"); if(sendFP) sendFP.addEventListener("click",()=>sendFinalPayForSignoff(x,m));

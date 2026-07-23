@@ -503,6 +503,10 @@ window.APP_BUILD="__BUILD__";
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17c4-1 4-7 8-7s4 6 8 7"/><path d="M3 21h18"/></svg>
         Signatures<span class="nav-badge">3</span>
       </div>
+      <div class="nav-item" data-page="desk" onclick="go('desk')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 8h6M7 12h10"/></svg>
+        HR Desk<span class="nav-badge" id="deskBadge"></span>
+      </div>
 
       <div class="nav-sec">Master Data</div>
       <div class="nav-item" data-page="employees" onclick="go('employees')">
@@ -1518,6 +1522,10 @@ window.APP_BUILD="__BUILD__";
       </section>
 
       <!-- PARKING LOT -->
+      <section class="page" id="page-desk">
+        <div id="deskRoot"></div>
+      </section>
+
       <section class="page" id="page-parking">
         <div class="panel" style="margin-top:0;">
           <h2>Parking Lot</h2>
@@ -1931,7 +1939,8 @@ window.APP_BUILD="__BUILD__";
     claims:'Government Claims', govremit:"Gov't Remittances", manning:'Manning / Headcount', agencysubs:'Agency Submissions',
     exitinterview:'Exit Interview', compliance:'Compliance', audit:'Audit Log',
     settings:'Settings', parking:'Parking Lot', hractivity:'HR Activity & Expense',
-    hmo:'HMO Coverage', insurance:'Personal Insurance', maternity:'Maternity Benefits'
+    hmo:'HMO Coverage', insurance:'Personal Insurance', maternity:'Maternity Benefits',
+    desk:'HR Desk'
   };
   var NAVFOR={employee:'employees', store:'branches'};
   function go(id){

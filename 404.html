@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784782342";
+window.APP_BUILD="1784784823";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784782342" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784784823" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -502,6 +502,10 @@ window.APP_BUILD="1784782342";
       <div class="nav-item" data-page="signatures" onclick="go('signatures')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17c4-1 4-7 8-7s4 6 8 7"/><path d="M3 21h18"/></svg>
         Signatures<span class="nav-badge">3</span>
+      </div>
+      <div class="nav-item" data-page="desk" onclick="go('desk')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 8h6M7 12h10"/></svg>
+        HR Desk<span class="nav-badge" id="deskBadge"></span>
       </div>
 
       <div class="nav-sec">Master Data</div>
@@ -1518,6 +1522,10 @@ window.APP_BUILD="1784782342";
       </section>
 
       <!-- PARKING LOT -->
+      <section class="page" id="page-desk">
+        <div id="deskRoot"></div>
+      </section>
+
       <section class="page" id="page-parking">
         <div class="panel" style="margin-top:0;">
           <h2>Parking Lot</h2>
@@ -1931,7 +1939,8 @@ window.APP_BUILD="1784782342";
     claims:'Government Claims', govremit:"Gov't Remittances", manning:'Manning / Headcount', agencysubs:'Agency Submissions',
     exitinterview:'Exit Interview', compliance:'Compliance', audit:'Audit Log',
     settings:'Settings', parking:'Parking Lot', hractivity:'HR Activity & Expense',
-    hmo:'HMO Coverage', insurance:'Personal Insurance', maternity:'Maternity Benefits'
+    hmo:'HMO Coverage', insurance:'Personal Insurance', maternity:'Maternity Benefits',
+    desk:'HR Desk'
   };
   var NAVFOR={employee:'employees', store:'branches'};
   function go(id){
@@ -2394,6 +2403,22 @@ let PROCESSES=[];     // processes rows (SOPs)
 let MEETINGS=[];   // meeting_attendance rows (merchandiser meeting sign-in + reimbursement)
 let MEETING_ROSTER=[]; // meeting_roster rows (who was EXPECTED at each meeting; snapshot of active merchandisers)
 let AGENCY_PAYROLL=[];  // agency_payroll rows (M&G / Jell-On real pay + contributions from payroll files)
+let HR_NOTES=[];   // hr_notes — personal sticky notes (private per HR user)
+let HR_IDEAS=[];   // hr_ideas — suggestion pool routed to the Director (anj)
+let HR_TASKS=[];   // hr_tasks — assignable pending tasks with owner + due date
+// The HR team, for task assignment + name display. Email → display name.
+const HR_TEAM=[
+  {email:"anj@hassarams.com", name:"Anj (Director)"},
+  {email:"sanjay@hassarams.com", name:"Sanjay"},
+  {email:"hr4@hassarams.com", name:"Rhel (HR Manager)"},
+  {email:"hr3@hassarams.com", name:"Grazel (Payroll)"},
+  {email:"hr@hassarams.com", name:"Juvy (HR Relations)"},
+  {email:"hr2@hassarams.com", name:"Vina (Recruitment)"},
+  {email:"richard@hassarams.com", name:"Richard (IT)"}
+];
+function myEmail(){ return ((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); }
+function nameForEmail(e){ const m=HR_TEAM.find(x=>x.email===((e||"").toLowerCase())); return m?m.name:(e||"—"); }
+function myName(){ return nameForEmail(myEmail()); }
 // Latest agency payroll row for an employee/diser id (handles the "500002.0" float form)
 function agencyPayFor(id){ if(!id) return null; const key=String(id).replace(/\.0$/,""); const rows=AGENCY_PAYROLL.filter(r=>String(r.emp_no).replace(/\.0$/,"")===key); if(!rows.length) return null; return rows.sort((a,b)=>String(b.cutoff||"").localeCompare(String(a.cutoff||"")))[0]; }
 let MEETING_CFG={}; // system_settings: meeting_active / meeting_allowed_ips / meeting_require_selfie
@@ -2449,7 +2474,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes'||id==='desk') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
@@ -2463,7 +2488,7 @@ function applyRoleUI(){
     if(pg==='meetings'){ n.style.display=canRunMeetings()?'':'none'; return; } // Meetings = Anj/Grazel/Rhel/Vina
     if(pg==='movements'){ n.style.display=canSeeMovements()?'':'none'; return; } // Movements/NPA = Anj/Grazel/Rhel
     if(pg==='govremit'){ n.style.display=canEditIds()?'':'none'; return; } // Gov't Remittances = gov-ID owners (Anj/Vina/Grazel)
-    if(pg==='policies'||pg==='processes'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies & Processes = every logged-in HR
+    if(pg==='policies'||pg==='processes'||pg==='desk'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies, Processes, HR Desk = every logged-in HR
     n.style.display=(allow&&allow.indexOf(pg)===-1)?'none':'';
   });
   document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display=limited?'none':''; });
@@ -2561,7 +2586,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2588,7 +2613,10 @@ async function loadEmployees(){
     sb.from("policies").select("*").order("title"),
     sb.from("policy_acknowledgments").select("*").order("acknowledged_at", {ascending:false}),
     sb.from("processes").select("*").order("title"),
-    sb.from("meeting_roster").select("*")
+    sb.from("meeting_roster").select("*"),
+    sb.from("hr_notes").select("*").order("created_at", {ascending:false}),
+    sb.from("hr_ideas").select("*").order("created_at", {ascending:false}),
+    sb.from("hr_tasks").select("*").order("created_at", {ascending:false})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2618,6 +2646,9 @@ async function loadEmployees(){
   POLICIES=(pol&&pol.data)||[];
   POLICY_ACKS=(pack&&pack.data)||[];
   PROCESSES=(proc&&proc.data)||[];
+  HR_NOTES=(hnotes&&hnotes.data)||[];
+  HR_IDEAS=(hideas&&hideas.data)||[];
+  HR_TASKS=(htasks&&htasks.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -2642,6 +2673,7 @@ async function loadEmployees(){
   renderDemoData();
   renderTimekeeping();
   renderGovRemit();
+  renderDesk();
   tagPreviewPages();
   wireGlobalSearch();
   if(!landed){ landed=true;
@@ -3635,7 +3667,7 @@ function renderMovements(){
         ${canSeePay()?`<button class="btn ghost" id="mvBatch">Batch statutory increase</button>`:""}
       </div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-        <div class="kpi warn"><div class="k-l">Awaiting sign-off</div><div class="k-n">${awaiting}</div><div class="k-s">discretionary NPAs</div></div>
+        <div class="kpi warn"><div class="k-l">Awaiting sign-off</div><div class="k-n">${awaiting}</div><div class="k-s">on the sign chain</div></div>
         <div class="kpi"><div class="k-l">Approved this month</div><div class="k-n">${apprMonth}</div></div>
         <div class="kpi"><div class="k-l">For memo</div><div class="k-n">${forMemo}</div><div class="k-s">operational</div></div>
       </div>
@@ -5382,6 +5414,133 @@ function wireGlobalSearch(){
   s.addEventListener("focus",()=>{ if((s.value||"").trim().length>=2) build(s.value); });
   s.addEventListener("keydown",e=>{ if(e.key==="Escape"){ hide(); s.blur(); } });
   document.addEventListener("click",e=>{ if(bar && !bar.contains(e.target)) hide(); });
+}
+
+/* ============================ HR DESK — notes · ideas · pending tasks ============================ */
+const DMINI='style="font-size:11.5px;padding:4px 9px;border:1px solid #cfe0d5;background:#fff;border-radius:7px;cursor:pointer;white-space:nowrap;"';
+function deskTodayMid(){ const n=new Date(); n.setHours(0,0,0,0); return n; }
+function deskOverdue(t){ if(!t.due_date) return false; return new Date(t.due_date+"T00:00:00")<deskTodayMid(); }
+function deskDueChip(due){
+  if(!due) return '';
+  const d=new Date(due+"T00:00:00"), days=Math.round((d-deskTodayMid())/86400000);
+  let bg='#e8f3ec',fg='#0f6e56',txt="in "+days+"d";
+  if(days<0){ bg='#fbe9e7'; fg='#a4322a'; txt=(-days)+"d overdue"; }
+  else if(days===0){ bg='#fef3d9'; fg='#8a5a00'; txt="due today"; }
+  else if(days<=3){ bg='#fef3d9'; fg='#8a5a00'; }
+  return `<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;background:${bg};color:${fg};">${txt}</span>`;
+}
+function canMarkTask(t){ const me=myEmail(); return isAdminUser()||userRole()==="manager"||t.assignee_email===me||t.assigned_by===me; }
+function deskByDue(a,b){ const x=a.due_date||"9999", y=b.due_date||"9999"; return x<y?-1:x>y?1:0; }
+
+async function reloadDesk(){
+  const [n,i,t]=await Promise.all([
+    sb.from("hr_notes").select("*").order("created_at",{ascending:false}),
+    sb.from("hr_ideas").select("*").order("created_at",{ascending:false}),
+    sb.from("hr_tasks").select("*").order("created_at",{ascending:false})
+  ]);
+  HR_NOTES=(n&&n.data)||HR_NOTES; HR_IDEAS=(i&&i.data)||HR_IDEAS; HR_TASKS=(t&&t.data)||HR_TASKS;
+  renderDesk();
+}
+/* notes */
+async function deskAddNote(){ await sb.from("hr_notes").insert({owner_email:myEmail(), body:"", color:"yellow"}); await reloadDesk(); setTimeout(()=>{ const f=document.querySelector('#deskNotes textarea'); if(f) f.focus(); },40); }
+async function deskSaveNote(id,body){ await sb.from("hr_notes").update({body, updated_at:new Date().toISOString()}).eq("id",id); const n=HR_NOTES.find(x=>x.id===id); if(n) n.body=body; }
+async function deskNoteDone(id,done){ await sb.from("hr_notes").update({done, updated_at:new Date().toISOString()}).eq("id",id); await reloadDesk(); }
+async function deskDeleteNote(id){ if(!confirm("Delete this note?")) return; await sb.from("hr_notes").delete().eq("id",id); await reloadDesk(); }
+/* ideas */
+async function deskSendIdea(){ const t=document.getElementById("ideaTitle"), d=document.getElementById("ideaDetail"); const title=(t.value||"").trim(); if(!title){ t.focus(); return; } await sb.from("hr_ideas").insert({from_email:myEmail(), from_name:myName(), title, detail:(d.value||"").trim()||null}); t.value=""; d.value=""; await reloadDesk(); }
+async function deskIdeaStatus(id,status){ await sb.from("hr_ideas").update({status}).eq("id",id); await reloadDesk(); }
+/* tasks */
+async function deskAddTask(){ const el=id=>document.getElementById(id); const title=(el("taskTitle").value||"").trim(); if(!title){ el("taskTitle").focus(); return; } const assignee=el("taskAssignee").value||null; await sb.from("hr_tasks").insert({ title, detail:(el("taskDetail").value||"").trim()||null, assignee_email:assignee, assignee_name:assignee?nameForEmail(assignee):null, assigned_by:myEmail(), assigned_by_name:myName(), due_date:el("taskDue").value||null, ongoing:el("taskOngoing").checked, status:"Open" }); el("taskTitle").value=""; el("taskDetail").value=""; el("taskDue").value=""; el("taskOngoing").checked=false; await reloadDesk(); }
+async function deskTaskDone(id){ await sb.from("hr_tasks").update({status:"Done", completed_at:new Date().toISOString(), completed_by:myName()}).eq("id",id); await reloadDesk(); }
+async function deskTaskReopen(id){ await sb.from("hr_tasks").update({status:"Open", completed_at:null, completed_by:null}).eq("id",id); await reloadDesk(); }
+async function deskDeleteTask(id){ if(!confirm("Delete this task?")) return; await sb.from("hr_tasks").delete().eq("id",id); await reloadDesk(); }
+
+function deskTaskRow(t){
+  const del=(isAdminUser()||t.assigned_by===myEmail());
+  return `<div class="task" style="align-items:flex-start;">
+    <div class="dot ${t.ongoing?'a':(deskOverdue(t)?'r':'g')}"></div>
+    <div style="flex:1;"><div class="tt">${esc(t.title)} ${deskDueChip(t.due_date)}</div>
+      <div class="td">${t.assignee_name?('→ '+esc(t.assignee_name)):'unassigned'}${t.assigned_by_name?(' · by '+esc(t.assigned_by_name)):''}${t.detail?(' · '+esc(t.detail)):''}</div></div>
+    <div style="display:flex;gap:6px;">${canMarkTask(t)?`<button ${DMINI} data-taskdone="${t.id}">Mark done</button>`:''}${del?`<button ${DMINI} data-taskdel="${t.id}">✕</button>`:''}</div>
+  </div>`;
+}
+
+function renderDesk(){
+  const root=document.getElementById("deskRoot"); if(!root) return;
+  const me=myEmail(), admin=isAdminUser(), mgr=admin||userRole()==="manager";
+  const myNotes=HR_NOTES.filter(n=>n.owner_email===me && !n.done);
+  const myNotesDone=HR_NOTES.filter(n=>n.owner_email===me && n.done).length;
+  const mineTasks=HR_TASKS.filter(t=>t.status==="Open" && !t.ongoing && t.assignee_email===me).sort(deskByDue);
+  const ongoing=HR_TASKS.filter(t=>t.status==="Open" && t.ongoing).sort(deskByDue);
+  const teamTasks=(mgr?HR_TASKS.filter(t=>t.status==="Open"&&!t.ongoing&&t.assignee_email!==me):HR_TASKS.filter(t=>t.status==="Open"&&!t.ongoing&&t.assigned_by===me&&t.assignee_email!==me)).sort(deskByDue);
+  const doneRecent=HR_TASKS.filter(t=>t.status==="Done").slice(0,8);
+  const newIdeas=HR_IDEAS.filter(i=>i.status==="New").length;
+  const ideasList=admin?HR_IDEAS:HR_IDEAS.filter(i=>i.from_email===me);
+
+  const badge=document.getElementById("deskBadge");
+  if(badge){ const c=mineTasks.filter(t=>deskOverdue(t)||(t.due_date&&deskDueChip(t.due_date).includes("today"))).length + (admin?newIdeas:0); badge.textContent=c||""; badge.style.display=c?"":"none"; }
+
+  const notesHtml=`<div class="panel" style="margin-top:0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;"><h2 style="margin:0;">My notes</h2><button ${DMINI} id="deskAddNote">+ Add note</button></div>
+    <div class="psub">Private sticky notes — only you see these. Type freely; edits save automatically. Tick ✓ Done to file it away.</div>
+    <div id="deskNotes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:12px;margin-top:10px;">
+      ${myNotes.length?myNotes.map(n=>`<div style="background:#fff7cc;border:1px solid #efe08a;border-radius:10px;padding:10px;display:flex;flex-direction:column;min-height:118px;">
+        <textarea data-note="${n.id}" placeholder="Write a note…" style="flex:1;border:none;background:transparent;resize:none;font-size:13px;line-height:1.4;outline:none;min-height:66px;font-family:inherit;color:#4a3f14;">${esc(n.body||"")}</textarea>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;"><button ${DMINI} data-notedone="${n.id}">✓ Done</button><button ${DMINI} data-notedel="${n.id}">Delete</button></div></div>`).join(""):`<div class="psub" style="grid-column:1/-1;">No notes yet — click “+ Add note”.</div>`}
+    </div>
+    ${myNotesDone?`<div class="psub" style="margin-top:8px;">${myNotesDone} note(s) marked done (hidden).</div>`:""}
+  </div>`;
+
+  const ideaInbox=admin?`<div style="margin-top:12px;"><div class="subhead">Ideas inbox <span class="count-tag">${HR_IDEAS.length}</span></div>
+    ${HR_IDEAS.length?HR_IDEAS.map(i=>`<div class="task" style="align-items:flex-start;"><div class="dot ${i.status==='New'?'a':'g'}"></div><div style="flex:1;"><div class="tt">${esc(i.title)} <span style="font-size:11px;color:#8a938c;">· ${esc(i.status)}</span></div><div class="td">from ${esc(i.from_name||i.from_email)}${i.detail?(' · '+esc(i.detail)):''}</div></div><div style="display:flex;gap:6px;">${i.status!=='Reviewed'?`<button ${DMINI} data-ideastatus="Reviewed" data-idea="${i.id}">Reviewed</button>`:''}${i.status!=='Actioned'?`<button ${DMINI} data-ideastatus="Actioned" data-idea="${i.id}">Actioned</button>`:''}${i.status!=='Archived'?`<button ${DMINI} data-ideastatus="Archived" data-idea="${i.id}">Archive</button>`:''}</div></div>`).join(""):`<div class="psub">No ideas submitted yet.</div>`}</div>`
+    :`<div style="margin-top:12px;"><div class="subhead">Your suggestions</div>${ideasList.length?ideasList.map(i=>`<div class="task"><div class="dot ${i.status==='New'?'a':'g'}"></div><div><div class="tt">${esc(i.title)}</div><div class="td">${esc(i.status)}${i.detail?(' · '+esc(i.detail)):''}</div></div></div>`).join(""):`<div class="psub">You haven’t sent any yet.</div>`}</div>`;
+
+  const ideasHtml=`<div class="panel">
+    <h2 style="margin:0 0 2px;">Ideas &amp; suggestions</h2>
+    <div class="psub">Send an idea straight to the Director. ${admin?"You’re the Director — new ideas land in the inbox below.":"Anj sees these; you’ll see the status here."}</div>
+    <input id="ideaTitle" placeholder="Your idea in one line…" style="width:100%;margin-top:8px;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;">
+    <textarea id="ideaDetail" rows="2" placeholder="Any detail (optional)" style="width:100%;margin-top:8px;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;font-family:inherit;"></textarea>
+    <div style="margin-top:8px;"><button class="btn" id="ideaSend">Send to Director</button></div>
+    ${ideaInbox}
+  </div>`;
+
+  const assignOpts=['<option value="">— assign to —</option>'].concat(HR_TEAM.map(m=>`<option value="${m.email}">${esc(m.name)}</option>`)).join("");
+  const tasksHtml=`<div class="panel">
+    <h2 style="margin:0 0 2px;">Pending tasks</h2>
+    <div class="psub">Assign an action to whoever’s responsible, with a due date. They see it under “Assigned to me” and tick it done. Ongoing items sit at the bottom.</div>
+    <div style="background:#f6f9f7;border:1px solid #e2e7e4;border-radius:10px;padding:11px;margin-top:10px;">
+      <input id="taskTitle" placeholder="What needs doing? e.g. Memo issuance for attendance concerns" style="width:100%;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <select id="taskAssignee" style="flex:1;min-width:160px;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;background:#fff;">${assignOpts}</select>
+        <input id="taskDue" type="date" style="padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#4a544c;"><input id="taskOngoing" type="checkbox"> Ongoing</label>
+      </div>
+      <input id="taskDetail" placeholder="Detail (optional)" style="width:100%;margin-top:8px;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;">
+      <div style="margin-top:8px;"><button class="btn" id="taskAdd">Add task</button></div>
+    </div>
+    <div class="subhead" style="margin-top:14px;">Assigned to me <span class="count-tag">${mineTasks.length}</span></div>
+    ${mineTasks.length?mineTasks.map(deskTaskRow).join(""):`<div class="psub">Nothing on your plate right now.</div>`}
+    <div class="subhead" style="margin-top:14px;">${mgr?"Team — all open tasks":"Tasks I assigned"} <span class="count-tag">${teamTasks.length}</span></div>
+    ${teamTasks.length?teamTasks.map(deskTaskRow).join(""):`<div class="psub">${mgr?"No other open tasks.":"You haven’t assigned any."}</div>`}
+    <div class="subhead" style="margin-top:14px;color:#8a5a00;">Ongoing <span class="count-tag">${ongoing.length}</span></div>
+    ${ongoing.length?ongoing.map(deskTaskRow).join(""):`<div class="psub">No ongoing items.</div>`}
+    ${doneRecent.length?`<div class="subhead" style="margin-top:14px;">Recently done</div>${doneRecent.map(t=>`<div class="task"><div class="dot g"></div><div style="flex:1;"><div class="tt" style="text-decoration:line-through;color:#7a847c;">${esc(t.title)}</div><div class="td">done by ${esc(t.completed_by||"—")}${t.completed_at?(" · "+fmtDate(t.completed_at)):""}</div></div>${canMarkTask(t)?`<button ${DMINI} data-taskreopen="${t.id}">Reopen</button>`:''}</div>`).join("")}`:""}
+  </div>`;
+
+  root.innerHTML=notesHtml+ideasHtml+tasksHtml;
+
+  // wire
+  const q=s=>root.querySelectorAll(s);
+  const add=document.getElementById("deskAddNote"); if(add) add.onclick=deskAddNote;
+  q('textarea[data-note]').forEach(t=>t.addEventListener("blur",()=>deskSaveNote(+t.dataset.note, t.value)));
+  q('[data-notedone]').forEach(b=>b.onclick=()=>deskNoteDone(+b.dataset.notedone,true));
+  q('[data-notedel]').forEach(b=>b.onclick=()=>deskDeleteNote(+b.dataset.notedel));
+  const isend=document.getElementById("ideaSend"); if(isend) isend.onclick=deskSendIdea;
+  q('[data-ideastatus]').forEach(b=>b.onclick=()=>deskIdeaStatus(+b.dataset.idea, b.dataset.ideastatus));
+  const tadd=document.getElementById("taskAdd"); if(tadd) tadd.onclick=deskAddTask;
+  q('[data-taskdone]').forEach(b=>b.onclick=()=>deskTaskDone(+b.dataset.taskdone));
+  q('[data-taskreopen]').forEach(b=>b.onclick=()=>deskTaskReopen(+b.dataset.taskreopen));
+  q('[data-taskdel]').forEach(b=>b.onclick=()=>deskDeleteTask(+b.dataset.taskdel));
 }
 
 /* ---------- ADD / EDIT FORM (modal) ---------- */

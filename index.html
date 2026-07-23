@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784824876";
+window.APP_BUILD="1784825237";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784824876" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784825237" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -5273,9 +5273,14 @@ function openStore(b){
   });
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
 }
+/* City → [lat, lng] lookup for the Worksites Map lens. Case-insensitive matched. */
+const CITY_LATLNG={"Quezon City":[14.68,121.05],"Cebu":[10.32,123.90],"Cebu City":[10.32,123.90],"Cagayan de Oro":[8.48,124.65],"Baguio":[16.41,120.60],"Pasay":[14.54,121.00],"Caloocan":[14.65,120.97],"Tuguegarao":[17.61,121.73],"Davao":[7.19,125.46],"Davao City":[7.19,125.46],"San Fernando":[15.03,120.69],"Pasig":[14.58,121.06],"Legazpi":[13.14,123.74],"Iloilo":[10.72,122.56],"General Santos":[6.11,125.17],"Batangas":[13.76,121.06],"Taguig":[14.52,121.05],"Mandaluyong":[14.58,121.03],"Manila":[14.60,120.98],"Angeles":[15.15,120.59],"Zamboanga":[6.92,122.08],"Cabanatuan":[15.49,120.97],"San Jose":[15.79,120.99],"Quezon":[14.00,122.00],"Olongapo":[14.83,120.28],"Lucena":[13.93,121.62],"Rosales":[15.90,120.63],"Calamba":[14.21,121.16],"Makati":[14.55,121.03],"Taytay":[14.57,121.13],"Cauayan":[16.93,121.77],"Paranaque":[14.48,121.02],"Bacoor":[14.46,120.95],"Santa Rosa":[14.31,121.11],"Butuan":[8.95,125.53],"Bacolod":[10.68,122.95],"Rosario":[13.85,121.20],"Balanga":[14.68,120.54],"Baliwag":[14.95,120.90],"Mandaue":[10.33,123.94]};
+/* Fixed palette (~10) for coloring pins by Sales Coordinator. */
+const SC_MAP_COLORS=["#1F6B52","#C7562E","#2E6FB0","#8B5CA6","#B5872A","#2E9E8F","#C23B6B","#5A7D2A","#4B5563","#B03A3A"];
 function renderBranchesPage(){
   const pg=$("#page-branches");
   const open=BRANCHES.filter(b=>b.status==="Open");
+  let lens="list";  // "list" | "map"
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
       <h2>Worksites — every store</h2>
@@ -5286,12 +5291,21 @@ function renderBranchesPage(){
         <div class="kpi"><div class="k-l">Boutique</div><div class="k-n">${open.filter(b=>b.category==="CO").length}</div></div>
         <div class="kpi"><div class="k-l">Sales Coordinators</div><div class="k-n">${new Set(open.map(b=>b.sc).filter(x=>x&&x!=='Unassigned')).size}</div></div>
       </div>
-      <input id="wsSearch" class="search" style="width:100%;margin:10px 0;" placeholder="Search store, city, SC…">
-      <table>
-        <thead><tr><th>Store</th><th>Sales Coordinator</th><th>City · Area</th><th>Type</th><th>Status</th><th>Approved HC</th></tr></thead>
-        <tbody id="wsRows"></tbody>
-      </table>
-      <div id="wsCount" style="font-size:12px;color:var(--muted);margin-top:10px;"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 4px;">
+        <div class="toggle" id="wsToggle" style="display:inline-flex;border:1px solid var(--line,#dbe4dd);border-radius:9px;overflow:hidden;">
+          <div id="wsList" style="padding:7px 14px;cursor:pointer;font-size:13px;font-weight:600;background:#1F6B52;color:#fff;">List</div>
+          <div id="wsMap" style="padding:7px 14px;cursor:pointer;font-size:13px;font-weight:600;">Map</div>
+        </div>
+        <input id="wsSearch" class="search" style="flex:1;min-width:180px;" placeholder="Search store, city, SC…">
+      </div>
+      <div id="wsListBody" style="margin-top:8px;">
+        <table>
+          <thead><tr><th>Store</th><th>Sales Coordinator</th><th>City · Area</th><th>Type</th><th>Status</th><th>Approved HC</th></tr></thead>
+          <tbody id="wsRows"></tbody>
+        </table>
+        <div id="wsCount" style="font-size:12px;color:var(--muted);margin-top:10px;"></div>
+      </div>
+      <div id="wsMapBody" style="margin-top:8px;display:none;"></div>
     </div>`;
   const paint=()=>{
     const q=($("#wsSearch").value||"").trim().toLowerCase();
@@ -5304,7 +5318,84 @@ function renderBranchesPage(){
     $("#wsCount").textContent=`${shown.length} of ${BRANCHES.length} stores · click a store to see its merchandisers`;
     $$("#wsRows tr").forEach(tr=>tr.addEventListener("click",()=>openStore(BRANCHES[+tr.dataset.bi])));
   };
-  $("#wsSearch").addEventListener("input",paint); paint();
+  const paintMap=()=>{
+    const W=520,H=760;
+    // Projection: lng 116→127 → x 0→W ; lat 21.5→4.0 → y 0→H (lat inverts).
+    const proj=(lat,lng)=>[ (lng-116)/(127-116)*W, (21.5-lat)/(21.5-4.0)*H ];
+    const rxDeg=d=>d/11*W, ryDeg=d=>d/17.5*H;
+    // Active, non-demo stores only.
+    const stores=BRANCHES.filter(b=>!b.is_demo);
+    // SC → color (each distinct SC gets a fixed palette color).
+    const scList=[...new Set(stores.map(b=>(b.sc||"").trim()).filter(x=>x&&x!=="Unassigned"))].sort((a,b)=>a.localeCompare(b));
+    const scColor={}; scList.forEach((sc,i)=>scColor[sc]=SC_MAP_COLORS[i%SC_MAP_COLORS.length]);
+    const scCount={}; // stores per SC (mapped)
+    // Group by city via the lookup (case-insensitive).
+    const keyLower={}; Object.keys(CITY_LATLNG).forEach(k=>keyLower[k.toLowerCase()]=CITY_LATLNG[k]);
+    const cityGroups={}; const notPlaced={};
+    stores.forEach(b=>{
+      const c=(b.city||"").trim(); if(!c) return;
+      const ll=keyLower[c.toLowerCase()];
+      if(!ll){ notPlaced[c]=(notPlaced[c]||0)+1; return; }
+      (cityGroups[c]=cityGroups[c]||{ll,rows:[]}).rows.push(b);
+    });
+    // Build pins.
+    const pins=Object.keys(cityGroups).map(city=>{
+      const g=cityGroups[city]; const [x,y]=proj(g.ll[0],g.ll[1]);
+      const scTally={}; g.rows.forEach(b=>{ const s=(b.sc||"").trim()||"Unassigned"; scTally[s]=(scTally[s]||0)+1; if(s!=="Unassigned"){scCount[s]=(scCount[s]||0)+1;} });
+      const scKeys=Object.keys(scTally);
+      // dominant SC (most stores); neutral gray if >1 distinct SC and no clear single.
+      let dom=scKeys.sort((a,b)=>scTally[b]-scTally[a])[0];
+      const distinct=scKeys.filter(s=>s!=="Unassigned");
+      const color = distinct.length===0 ? "#9AA5B1"
+        : distinct.length>1 ? (scColor[dom]&&dom!=="Unassigned"?scColor[dom]:"#9AA5B1")
+        : scColor[distinct[0]];
+      const r=Math.min(14, 5+(g.rows.length-1));
+      const names=g.rows.map(b=>`${b.name}${b.sc?" ("+b.sc+")":""}`).join("\n");
+      return {city,x,y,r,color,count:g.rows.length,names};
+    });
+    const mapped=pins.reduce((s,p)=>s+p.count,0);
+    const npKeys=Object.keys(notPlaced);
+    // SVG map
+    const blob=(lat,lng,dLat,dLng)=>{ const [cx,cy]=proj(lat,lng); return `<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="${rxDeg(dLng).toFixed(1)}" ry="${ryDeg(dLat).toFixed(1)}" fill="#E1F0EA" stroke="#B9D8CC" stroke-width="1.5"/>`; };
+    const lbl=(lat,lng,t)=>{ const [x,y]=proj(lat,lng); return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" font-size="13" font-weight="700" fill="#9CC3B4" letter-spacing="1">${t}</text>`; };
+    const svg=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;">
+      <rect x="0" y="0" width="${W}" height="${H}" fill="#F7FBF9"/>
+      <!-- Luzon -->
+      ${blob(15.7,121.25,3.1,1.55)}${blob(13.4,122.6,1.4,1.2)}${blob(14.4,120.9,1.6,1.0)}
+      <!-- Visayas -->
+      ${blob(10.7,123.5,1.35,1.6)}
+      <!-- Mindanao -->
+      ${blob(7.5,124.35,2.0,2.25)}
+      ${lbl(17.0,120.4,"LUZON")}${lbl(11.6,124.6,"VISAYAS")}${lbl(9.2,123.4,"MINDANAO")}
+      ${pins.map((p,i)=>`<circle class="wsPin" data-city="${esc(p.city)}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${p.r}" fill="${p.color}" fill-opacity="0.82" stroke="#fff" stroke-width="1.5" style="cursor:pointer;"><title>${esc(p.city)} — ${p.count} store${p.count!==1?"s":""}\n${esc(p.names)}</title></circle>`).join("")}
+    </svg>`;
+    const legend=scList.map(sc=>`<div style="display:flex;align-items:center;gap:6px;font-size:12px;"><span style="width:12px;height:12px;border-radius:50%;background:${scColor[sc]};display:inline-block;"></span>${esc(sc)} <span style="color:var(--muted,#6b7785);">· ${scCount[sc]||0}</span></div>`).join("");
+    $("#wsMapBody").innerHTML=`
+      <div style="font-size:12px;color:var(--muted,#6b7785);margin-bottom:8px;"><b>${mapped}</b> stores mapped · <b>${pins.length}</b> cities · <b>${scList.length}</b> coordinators · click a pin to see that city's stores</div>
+      <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+        <div style="overflow:auto;border:1px solid var(--line,#dbe4dd);border-radius:10px;background:#fff;">${svg}</div>
+        <div style="min-width:180px;">
+          <div style="font-size:12.5px;font-weight:800;color:#12352a;margin-bottom:6px;">Sales Coordinators</div>
+          <div style="display:flex;flex-direction:column;gap:5px;">${legend||'<div style="font-size:12px;color:var(--muted);">No coordinators</div>'}</div>
+        </div>
+      </div>
+      ${npKeys.length?`<div style="font-size:12px;color:#a12;margin-top:10px;">Not on map yet (${npKeys.length}): ${npKeys.map(c=>esc(c)+" ("+notPlaced[c]+")").join(" · ")}</div>`:""}`;
+    $$("#wsMapBody circle.wsPin").forEach(el=>el.addEventListener("click",()=>{
+      const city=el.getAttribute("data-city");
+      setLens("list"); $("#wsSearch").value=city; paint();
+    }));
+  };
+  const setLens=(l)=>{ lens=l;
+    $("#wsList").style.background=l==="list"?"#1F6B52":""; $("#wsList").style.color=l==="list"?"#fff":"";
+    $("#wsMap").style.background=l==="map"?"#1F6B52":""; $("#wsMap").style.color=l==="map"?"#fff":"";
+    $("#wsListBody").style.display=l==="list"?"":"none";
+    $("#wsMapBody").style.display=l==="map"?"":"none";
+    if(l==="map") paintMap();
+  };
+  $("#wsList").addEventListener("click",()=>setLens("list"));
+  $("#wsMap").addEventListener("click",()=>setLens("map"));
+  $("#wsSearch").addEventListener("input",()=>{ if(lens==="list") paint(); });
+  paint();
 }
 
 /* ================= STORE MAPPING — every store laid out under its Store Coordinator (store lead), with vacancy flags =================
@@ -5951,24 +6042,21 @@ function renderLinks(){
   const recruit=[
     lkRow("Job application — open to anyone","Public. Post it anywhere; applicants apply themselves.", SHARE_BASE+"direct-apply.html"),
     lkRow("Agency intake — Jell-on","Private. Send ONLY to Jell-on — shows their placements under their name.", SHARE_BASE+"agency.html?t=3a28000c77be400f97c1d2e36c9b416e",{tag:"private",tagCls:"ag"}),
-    lkRow("Agency intake — M&amp;G","Private. Send ONLY to M&amp;G.", SHARE_BASE+"agency.html?t=60fc360932f049dd851131dccbd185af",{tag:"private",tagCls:"ag"}),
+    lkRow("Agency intake — M&G","Private. Send ONLY to M&amp;G.", SHARE_BASE+"agency.html?t=60fc360932f049dd851131dccbd185af",{tag:"private",tagCls:"ag"}),
     lkRow("Candidate experience survey","Send to an applicant after their interview / decision.", SHARE_BASE+"feedback.html")
   ].join("");
   const services=[
     lkRow("Employee loan application","Public. Head Office &amp; Warehouse staff apply + upload documents.", LOAN_APPLY_URL),
     lkRow("Merchandiser meeting sign-in","Show the QR or send the link on meeting day (locks to venue Wi-Fi).", MEETING_SIGNIN_URL)
   ].join("");
-  const scs=[...new Set((BRANCHES||[]).map(b=>b.sc).filter(x=>x&&x!=='Unassigned'))].sort();
+  const scs=[...new Set((BRANCHES||[]).map(b=>b.sc).filter(x=>x&&x!=='Unassigned'))].sort()
+    .filter(sc=>!(SC_STATUS[sc]&&SC_STATUS[sc].status&&SC_STATUS[sc].status!=='Active'));  // don't offer send-links for coordinators who've left
   const scRows=scs.length ? scs.map(sc=>{
     const link=scLinkFor(sc);
     return link
       ? lkRow(`Store Transfer Request — ${sc}`, `Private. Only ${esc(sc)}'s own staff — they request a store move, the store head confirms.`, SHARE_BASE+"transfer-request.html?who="+encodeURIComponent(sc)+"&sc="+link.token, {tag:"per-SC",tagCls:"di"})
       : lkRow(`Store Transfer Request — ${sc}`, "No link yet — create one to send.", null, {mkSc:sc});
   }).join("") : `<div class="lk-row psub" style="border-top:1px solid var(--line,#e4eae6);padding-top:9px;">No Store Coordinators on file yet.</div>`;
-  const openExits=(EXITCASES||[]).filter(x=>x.overall_status!=="Complete"&&x.emp_link_token);
-  const exitRows=openExits.length ? openExits.map(x=>
-    lkRow(`Exit Clearance — ${x.employee_name||'employee'}`, "Private. The departing employee lists items to return + does the exit interview.", exitEmpLink(x), {tag:"per-person",tagCls:"di"})
-  ).join("") : lkRow("Exit clearance links","Created per case — open a case in Exit Clearance to generate & copy the employee's link.", null, {goto:"exit",gotoLabel:"Open Exit Clearance"});
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
       <h2>Links to Send</h2>
@@ -5979,7 +6067,6 @@ function renderLinks(){
       ${lkGroup("Recruitment", "Applicants and agencies.", recruit)}
       ${lkGroup("Employee services", "For current staff.", services)}
       ${lkGroup("Store transfers — one private link per Store Coordinator", "Send each SC their own link so they only request moves for their own staff.", scRows)}
-      ${lkGroup("Exit clearance — one private link per departing employee", "The employee's return-items + exit-interview page.", exitRows)}
     </div>`;
   $$("#page-links .lk-copy").forEach(b=>b.addEventListener("click",async()=>{ try{ await navigator.clipboard.writeText(b.dataset.copy); const t=b.textContent; b.textContent="Copied ✓"; setTimeout(()=>b.textContent=t,1200); }catch(_){ prompt("Copy this link:", b.dataset.copy); } }));
   $$("#page-links .lk-go").forEach(b=>b.addEventListener("click",()=>window.go(b.dataset.go)));

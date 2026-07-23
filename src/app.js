@@ -34,6 +34,7 @@ let MATERNITY=[];  // maternity_claims rows
 let NPAS=[];       // personnel_actions rows (Movements / NPA module)
 let POLICIES=[];      // policies rows (Policies & Processes group)
 let CONCERNS=[];      // arbitration / ongoing legal cases (Concerns Tracker — Director only)
+let TRANSFERS=[];     // employee_transfers — SC-requested store transfers/deployments w/ store-head before+after confirmation
 let POLICY_ACKS=[];   // policy_acknowledgments rows (read-and-sign roster)
 let PROCESSES=[];     // processes rows (SOPs)
 let MEETINGS=[];   // meeting_attendance rows (merchandiser meeting sign-in + reimbursement)
@@ -230,7 +231,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -262,7 +263,8 @@ async function loadEmployees(){
     sb.from("hr_ideas").select("*").order("created_at", {ascending:false}),
     sb.from("hr_tasks").select("*").order("created_at", {ascending:false}),
     sb.from("external_signoffs").select("*").order("created_at", {ascending:false}),
-    sb.from("concerns").select("*").order("created_at", {ascending:false})
+    sb.from("concerns").select("*").order("created_at", {ascending:false}),
+    sb.from("employee_transfers").select("*").order("created_at", {ascending:false})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -297,6 +299,7 @@ async function loadEmployees(){
   HR_TASKS=(htasks&&htasks.data)||[];
   EXT_SIGNOFFS=(xso&&xso.data)||[];
   CONCERNS=(cncrn&&cncrn.data)||[];
+  TRANSFERS=(trf&&trf.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -3533,6 +3536,165 @@ function viewMemo(id){
   document.getElementById("mvClose").onclick=()=>el.remove();
   const iv=document.getElementById("mvIssue"); if(iv) iv.onclick=()=>{ el.remove(); issueMemo(m.id); };
 }
+/* ---------- STORE TRANSFERS / DEPLOYMENTS ----------
+   SC raises → store head confirms BEFORE (agrees to receive) → in effect →
+   store head confirms AFTER (attests the person was at the store for the period → payroll proof).
+   Worksite stays PayPlus-owned; on completion HR updates the assignment in PayPlus. */
+function transferStatusPill(s){
+  const c={Requested:'#8a6d1a',InEffect:'#1c6b3f',Completed:'#2b5c8a',Declined:'#c0392b',Cancelled:'#6a766f'}[s]||'#6a766f';
+  const bg={Requested:'#fdf6e3',InEffect:'#e7f3ec',Completed:'#e8f0f8',Declined:'#fdecea',Cancelled:'#eef1ef'}[s]||'#eef1ef';
+  const lbl={Requested:'Requested',InEffect:'In effect',Completed:'Completed',Declined:'Declined',Cancelled:'Cancelled'}[s]||s;
+  return `<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;color:${c};background:${bg};">${esc(lbl)}</span>`;
+}
+function transferPeriod(t){
+  const s=t.start_date?fmtDate(t.start_date):'—';
+  if(t.request_type==='Permanent') return s+' · permanent';
+  const e=t.end_date?fmtDate(t.end_date):'open';
+  return s+' → '+e;
+}
+function manningTransfersPanel(){
+  const active=(TRANSFERS||[]).filter(t=>['Requested','InEffect'].includes(t.status));
+  const done=(TRANSFERS||[]).filter(t=>['Completed','Declined','Cancelled'].includes(t.status)).slice(0,8);
+  const rowsHtml=(arr)=>arr.map(t=>`<tr class="trf-open" data-id="${t.id}" style="cursor:pointer;">
+     <td><b>${esc(t.emp_name||'—')}</b>${t.is_demo?' <span class="pill ag" style="font-size:9.5px;">DEMO</span>':''}<div style="font-size:11px;color:var(--muted);">${esc(t.emp_no||'')}</div></td>
+     <td>${esc(t.from_worksite||'—')} <span style="color:var(--muted);">→</span> <b>${esc(t.to_worksite||'—')}</b></td>
+     <td style="font-size:12px;white-space:nowrap;">${transferPeriod(t)}</td>
+     <td>${esc(t.sc_requested_by||'—')}</td>
+     <td>${transferStatusPill(t.status)}${t.status==='InEffect'&&t.before_by?`<div style="font-size:10.5px;color:var(--muted);margin-top:2px;">✓ before: ${esc(t.before_by)}</div>`:''}</td>
+   </tr>`).join('');
+  return `<div class="panel">
+     <h2>Store Transfers &amp; Deployments <span class="count-tag">${active.length} active</span></h2>
+     <div class="psub">Move an employee to another store for a set period. <b>The SC raises the request → the store head confirms before (agrees to receive) → after the period the store head confirms the person was there</b> — that attestation is the proof for payroll / reliever credit. Worksite stays owned by PayPlus; once completed, update the assignment in PayPlus.</div>
+     <div class="actionbar"><button class="btn" id="trfNew">+ New transfer request</button></div>
+     ${active.length?`<table><thead><tr><th>Employee</th><th>From → To</th><th>Period</th><th>Requested by (SC)</th><th>Status</th></tr></thead><tbody>${rowsHtml(active)}</tbody></table>`:`<div class="psub" style="margin-top:6px;">No active transfer requests. Click “New transfer request”.</div>`}
+     ${done.length?`<div class="subhead" style="margin-top:16px;">Recent — completed / closed</div><table><thead><tr><th>Employee</th><th>From → To</th><th>Period</th><th>Requested by (SC)</th><th>Status</th></tr></thead><tbody>${rowsHtml(done)}</tbody></table>`:''}
+   </div>`;
+}
+function wireTransfers(){
+  const nb=document.getElementById("trfNew"); if(nb) nb.addEventListener("click",()=>transferForm());
+  $$("#page-manning .trf-open").forEach(r=>r.addEventListener("click",()=>openTransfer((TRANSFERS||[]).find(t=>String(t.id)===r.dataset.id))));
+}
+function transferForm(t){
+  t=t||{}; const isNew=!t.id;
+  const emps=(EMPLOYEES||[]).filter(e=>e.full_name).sort((a,b)=>(a.full_name||'').localeCompare(b.full_name||''));
+  const stores=[...new Set((BRANCHES||[]).filter(b=>b.status==="Open").map(b=>b.name))].sort();
+  const scNames=[...new Set((BRANCHES||[]).map(b=>b.sc).filter(x=>x&&x!=='Unassigned'))].sort();
+  const lbl=(s)=>`<label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin:10px 0 3px;">${s}</label>`;
+  const inp=(id,val,type)=>`<input id="${id}" ${type?`type="${type}"`:''} value="${esc(val==null?'':val)}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;">`;
+  const opts=(arr,cur)=>arr.map(o=>`<option ${cur===o?'selected':''}>${esc(o)}</option>`).join('');
+  let m=document.getElementById("trfModal"); if(!m){ m=document.createElement("div"); m.id="trfModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.5);display:flex;justify-content:flex-end;";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:520px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">${isNew?'New transfer request':'Edit transfer'}</div><div style="font-size:12.5px;opacity:.85;">Raised by the Store Coordinator · store head confirms before &amp; after</div></div>
+    <div style="padding:18px 22px;"><div class="panel" style="margin-top:0;">
+      ${lbl('Employee')}<input id="trf_emp" list="trf_emplist" value="${esc(t.emp_name||'')}" placeholder="Type a name…" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;">
+      <datalist id="trf_emplist">${emps.map(e=>`<option value="${esc(e.full_name)}">`).join('')}</datalist>
+      ${lbl('Current store (from)')}${inp('trf_from',t.from_worksite)}<div style="font-size:11px;color:var(--muted);margin-top:2px;">Auto-fills from the employee's record; edit if needed.</div>
+      ${lbl('Transfer to (store)')}<select id="trf_to" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;"><option value="">Select store…</option>${opts(stores,t.to_worksite)}</select>
+      ${lbl('Requested by — Store Coordinator')}<input id="trf_sc" list="trf_sclist" value="${esc(t.sc_requested_by||'')}" placeholder="SC name" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;">
+      <datalist id="trf_sclist">${scNames.map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
+      ${lbl('Type')}<select id="trf_type" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;">${opts(['Temporary','Permanent'],t.request_type||'Temporary')}</select>
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;">${lbl('Start date')}${inp('trf_start',t.start_date,'date')}</div>
+        <div style="flex:1;">${lbl('End date')}${inp('trf_end',t.end_date,'date')}<div style="font-size:11px;color:var(--muted);margin-top:2px;">Blank if permanent.</div></div>
+      </div>
+      ${lbl('Reason')}<textarea id="trf_reason" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;">${esc(t.reason||'')}</textarea>
+      <div style="margin-top:8px;padding:8px 10px;background:#eef4ef;border:1px solid var(--line);border-radius:8px;font-size:11.5px;color:#4a5751;">Fairness check: a transfer must keep the same rank and pay and be to a reasonable location — never a way to force someone out.</div>
+      <div id="trfMsg" style="font-size:13px;color:#a4322a;margin:8px 0;"></div>
+      <div style="display:flex;gap:10px;"><button class="btn ghost" id="trfCancel" style="flex:1;">Cancel</button><button class="btn" id="trfSave" style="flex:1;">${isNew?'Raise request':'Save'}</button></div>
+    </div></div></div>`;
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("trfCancel").addEventListener("click",()=>m.remove());
+  const empEl=document.getElementById("trf_emp");
+  empEl.addEventListener("input",()=>{ const e=emps.find(x=>(x.full_name||'').toLowerCase()===empEl.value.trim().toLowerCase()); if(e){ const fe=document.getElementById("trf_from"); if(fe&&!fe.value) fe.value=e.worksite||''; } });
+  document.getElementById("trfSave").addEventListener("click",async()=>{
+    const name=v("trf_emp").trim(); if(!name){ document.getElementById("trfMsg").textContent="Employee is required."; return; }
+    if(!v("trf_to")){ document.getElementById("trfMsg").textContent="Choose the store to transfer to."; return; }
+    const e=emps.find(x=>(x.full_name||'').toLowerCase()===name.toLowerCase());
+    const perm=v("trf_type")==='Permanent';
+    const payload={ emp_name:name, emp_no:e?e.employee_id:(t.emp_no||null), from_worksite:v("trf_from")||null, to_worksite:v("trf_to")||null,
+      sc_requested_by:v("trf_sc")||null, request_type:v("trf_type"), reason:v("trf_reason")||null,
+      start_date:v("trf_start")||null, end_date:perm?null:(v("trf_end")||null), updated_at:new Date().toISOString() };
+    let res;
+    if(isNew){ payload.status='Requested'; payload.created_by=myEmail()||null; res=await sb.from("employee_transfers").insert(payload); }
+    else res=await sb.from("employee_transfers").update(payload).eq("id",t.id);
+    if(res.error){ document.getElementById("trfMsg").textContent=res.error.message; return; }
+    await logChange("transfer",t.id||null,name, isNew?"Transfer requested":"Transfer edited", `${v("trf_from")||'—'} → ${v("trf_to")}`);
+    m.remove(); await loadEmployees(); window.go("manning");
+  });
+}
+function openTransfer(t){
+  if(!t) return;
+  const row=(k,val)=>`<div class="efield"><div class="el">${k}</div><div class="ev">${val==null||val===''?'<span class="note">—</span>':esc(val)}</div><div class="em"></div></div>`;
+  let m=document.getElementById("trfViewModal"); if(!m){ m=document.createElement("div"); m.id="trfViewModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  const beforeDone=!!t.before_at, afterDone=!!t.after_at;
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:560px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;">
+      <div style="font-size:21px;font-weight:800;">${esc(t.emp_name||'—')}</div>
+      <div style="font-size:12.5px;opacity:.9;margin-top:3px;">${esc(t.from_worksite||'—')} → <b>${esc(t.to_worksite||'—')}</b> · ${transferPeriod(t)} · ${transferStatusPill(t.status)}</div>
+    </div>
+    <div style="padding:18px 22px 60px;">
+      <div class="panel" style="margin-top:0;">
+        ${row('Employee', (t.emp_name||'')+(t.emp_no?` · ${t.emp_no}`:''))}${row('From', t.from_worksite)}${row('To', t.to_worksite)}${row('Type', t.request_type)}${row('Period', transferPeriod(t))}${row('Requested by (SC)', t.sc_requested_by)}${row('Reason', t.reason)}
+      </div>
+      <div class="panel">
+        <h2>Store-head confirmation</h2>
+        <div class="task" style="align-items:flex-start;"><div class="dot ${beforeDone?'g':'a'}"></div><div style="flex:1;"><div class="tt">Before — store head agrees to receive</div><div class="td">${beforeDone?`✓ ${esc(t.before_by||'')} · ${fmtDate(t.before_at)}${t.before_note?` — ${esc(t.before_note)}`:''}`:'Pending — the receiving store head confirms they will take the employee for the period.'}</div></div></div>
+        <div class="task" style="align-items:flex-start;"><div class="dot ${afterDone?'g':'a'}"></div><div style="flex:1;"><div class="tt">After — store head attests presence</div><div class="td">${afterDone?`✓ ${esc(t.after_by||'')} · ${fmtDate(t.after_at)}${t.after_note?` — ${esc(t.after_note)}`:''}`:`Pending — after the period, the store head confirms <b>${esc(t.emp_name||'the employee')}</b> was at <b>${esc(t.to_worksite||'the store')}</b> for ${transferPeriod(t)}.`}</div></div></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+        ${t.status==='Requested'?`<button class="btn blue" id="trfBefore">Store head confirmed (before)</button><button class="btn ghost" id="trfEdit">Edit</button><button class="btn ghost" id="trfDecline" style="color:var(--red);border-color:#f1c9c5;">Store head declined</button>`:''}
+        ${t.status==='InEffect'?`<button class="btn blue" id="trfAfter">Store head confirms — was here for the period</button>`:''}
+        ${['Requested','InEffect'].includes(t.status)?`<button class="btn ghost" id="trfCancel2" style="color:var(--muted);">Cancel request</button>`:''}
+        ${t.status==='Completed'?`<span class="pill active">✓ Completed — attestation on record</span><span class="psub" style="align-self:center;margin:0 0 0 6px;">Next: update the worksite in PayPlus.</span>`:''}
+        <button class="btn ghost" id="trfViewClose" style="margin-left:auto;">Close</button>
+      </div>
+    </div></div>`;
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("trfViewClose").addEventListener("click",()=>m.remove());
+  const wireStep=(id,fn)=>{ const b=document.getElementById(id); if(b) b.addEventListener("click",fn); };
+  wireStep("trfEdit",()=>{ m.remove(); transferForm(t); });
+  wireStep("trfBefore",()=>transferConfirm(t,'before',m));
+  wireStep("trfAfter",()=>transferConfirm(t,'after',m));
+  wireStep("trfDecline",async()=>{ if(!confirm("Mark this request as declined by the store head?")) return; await transferSet(t,{status:'Declined'},m,"Store head declined"); });
+  wireStep("trfCancel2",async()=>{ if(!confirm("Cancel this transfer request?")) return; await transferSet(t,{status:'Cancelled'},m,"Request cancelled"); });
+}
+function transferConfirm(t,phase,parent){
+  const isBefore=phase==='before';
+  let m=document.getElementById("trfCfmModal"); if(!m){ m=document.createElement("div"); m.id="trfCfmModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,50,25,.5);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:440px;width:100%;padding:22px;">
+    <h2 style="font-size:17px;margin-bottom:2px;">${isBefore?'Store head confirms — before':'Store head confirms — after'}</h2>
+    <div class="psub">${isBefore?`The receiving store head agrees to take <b>${esc(t.emp_name||'')}</b> at <b>${esc(t.to_worksite||'')}</b> for ${transferPeriod(t)}.`:`The store head attests that <b>${esc(t.emp_name||'')}</b> was at <b>${esc(t.to_worksite||'')}</b> for ${transferPeriod(t)}. This is the payroll / reliever-credit proof.`}</div>
+    <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin:12px 0 3px;">Store head name</label>
+    <input id="cf_name" placeholder="Name of the store head confirming" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;">
+    <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin:10px 0 3px;">Note (optional)</label>
+    <textarea id="cf_note" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;"></textarea>
+    <div id="cfMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
+    <div style="display:flex;gap:10px;margin-top:12px;"><button class="btn ghost" id="cfCancel" style="flex:1;">Cancel</button><button class="btn" id="cfGo" style="flex:1;">Record confirmation</button></div>
+  </div>`;
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("cfCancel").addEventListener("click",()=>m.remove());
+  document.getElementById("cfGo").addEventListener("click",async()=>{
+    const nm=document.getElementById("cf_name").value.trim(); if(!nm){ document.getElementById("cfMsg").textContent="Store head name is required."; return; }
+    const note=document.getElementById("cf_note").value.trim();
+    const now=new Date().toISOString();
+    const patch=isBefore
+      ? { before_by:nm, before_at:now, before_note:note||null, status:'InEffect' }
+      : { after_by:nm, after_at:now, after_note:note||null, status:'Completed' };
+    m.remove();
+    await transferSet(t,patch,parent, isBefore?`Store head confirmed (before): ${nm}`:`Store head attested presence (after): ${nm}`);
+  });
+}
+async function transferSet(t,patch,parent,logMsg){
+  patch.updated_at=new Date().toISOString();
+  const { error } = await sb.from("employee_transfers").update(patch).eq("id",t.id);
+  if(error){ alert(error.message); return; }
+  if(logMsg) await logChange("transfer",t.id,t.emp_name,logMsg,`${t.from_worksite||'—'} → ${t.to_worksite||'—'}`);
+  if(parent) parent.remove();
+  await loadEmployees(); window.go("manning");
+}
 function renderManning(){
   const pg=$("#page-manning"); if(!pg) return;
   const open=BRANCHES.filter(b=>b.status==="Open");
@@ -3548,6 +3710,7 @@ function renderManning(){
       <div class="actionbar">${canPostOpenings()?'<button class="btn" id="opNew">+ Post opening</button> ':''}${canManageStores()?'<button class="btn ghost" id="stNew">+ Add store</button>':''}${!canPostOpenings()?'<span class="psub" style="margin:0;">Openings open automatically when someone resigns. You can view and fill them below.</span>':''}</div>
       ${OPENINGS.length?`<table><thead><tr><th>Store</th><th>SC</th><th>Need</th><th>In review</th><th>Posted</th><th>Deadline</th><th></th></tr></thead><tbody id="opRows"></tbody></table>`:`<div class="psub" style="margin-top:6px;">No open requests yet — click “Post opening”.</div>`}
     </div>
+    ${manningTransfersPanel()}
     ${phLinksBar()}
     <div class="panel">
       <h2>Manning / Headcount <span class="count-tag">by Sales Coordinator</span></h2>
@@ -3565,6 +3728,7 @@ function renderManning(){
     </div>`;
   const opNewBtn=$("#opNew"); if(opNewBtn) opNewBtn.addEventListener("click",()=>openingForm());
   const stNewBtn=$("#stNew"); if(stNewBtn) stNewBtn.addEventListener("click",()=>storeForm());
+  wireTransfers();
   const opRows=$("#opRows");
   if(opRows){
     const today=new Date(new Date().toDateString());

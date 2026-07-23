@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784793615";
+window.APP_BUILD="1784793700";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784793615" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784793700" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -3439,6 +3439,7 @@ function renderDashboard(){
         ${(()=>{ if(!canSeePay()) return ''; const fpAwait=(SIGNATURES||[]).filter(s=>s.doc_type==="claim"&&s.awaiting==="you"&&s.status==="pending"); return fpAwait.length?`<div class="task" style="cursor:pointer;" onclick="go('signatures')"><div class="dot r"></div><div><div class="tt">${fpAwait.length} final-pay quitclaim(s) awaiting your sign-off</div><div class="td">Full figures are on the sign screen — review &amp; e-sign in one place${fpAwait[0]?` · e.g. ${esc(fpAwait[0].subject_name||"")} ${fpAwait[0].amount!=null?"("+peso(fpAwait[0].amount)+")":""}`:""}</div></div><div class="due r">sign-off</div></div>`:''; })()}
         ${(()=>{ if(!canSeeMovements()) return ''; const mine=(NPAS||[]).filter(r=>{ const st=mvCanSignNow(r); return st!=null; }); return mine.length?`<div class="task" style="cursor:pointer;" onclick="go('movements')"><div class="dot r"></div><div><div class="tt">${mine.length} personnel movement(s) awaiting your sign-off</div><div class="td">Notice of Personnel Action — review the figures &amp; e-sign${mine[0]?" · e.g. "+esc(mine[0].employee_name||""):""}</div></div><div class="due r">sign-off</div></div>`:''; })()}
         ${(()=>{ if(!isAdminUser()) return ''; const sep=(EXITCASES||[]).filter(e=>e.separation_status==="Submitted"&&e.overall_status!=="Complete"); return sep.length?`<div class="task" style="cursor:pointer;" onclick="go('exit')"><div class="dot r"></div><div><div class="tt">${sep.length} separation(s) awaiting your approval</div><div class="td">HR prepared these — approve to flip the employee to Separated${sep[0]?" · e.g. "+esc(sep[0].employee_name||""):""}</div></div><div class="due r">approve</div></div>`:''; })()}
+        ${(()=>{ if(!isAdminUser()) return ''; const hs=(CONCERNS||[]).filter(c=>{ const n=daysUntil(c.next_hearing); return n!=null&&n<=14&&(c.status==="Open"||c.status==="Ongoing"); }).sort((a,b)=>daysUntil(a.next_hearing)-daysUntil(b.next_hearing)); if(!hs.length) return ''; const c0=hs[0]; const n0=daysUntil(c0.next_hearing); const when=n0<0?`overdue ${-n0}d`:n0===0?"today":`in ${n0}d`; return `<div class="task" style="cursor:pointer;" onclick="go('concerns')"><div class="dot r"></div><div><div class="tt">${hs.length} case hearing${hs.length!==1?"s":""} within 14 days</div><div class="td">${esc(c0.title||"Case")} — ${when}${c0.forum?" · "+esc(c0.forum):""}</div></div><div class="due r">hearing</div></div>`; })()}
         ${phReady?`<div class="task" style="cursor:pointer;" onclick="go('prehire')"><div class="dot r"></div><div><div class="tt">${phReady} candidate(s) ready for contract / onboarding</div><div class="td">Move them into an onboarding case</div></div><div class="due r">hiring</div></div>`:''}
         ${onbTasksOpen?`<div class="task" style="cursor:pointer;" onclick="go('onboarding')"><div class="dot a"></div><div><div class="tt">${onbTasksOpen} open onboarding task(s)</div><div class="td">${onbOpen} case(s) in progress — bank, uniform, gov forms, Employee ID</div></div><div class="due a">onboarding</div></div>`:''}
         ${exitOpen?`<div class="task" style="cursor:pointer;" onclick="go('exit')"><div class="dot a"></div><div><div class="tt">${exitOpen} exit clearance(s) in progress</div><div class="td">Department sign-offs &amp; final-pay computation</div></div><div class="due a">offboarding</div></div>`:''}
@@ -5593,9 +5594,18 @@ async function loadConcerns(){
 const SIG_ICON={contract:"contract",advance:"advance",memo:"memo",coe:"contract",claim:"advance"};
 const sigInitial=s=>((s.subject_name||s.doc_title||"?").trim()[0]||"?").toUpperCase();
 function fmtAgo(d){ if(!d) return ""; const h=(Date.now()-new Date(d).getTime())/36e5; if(h<1) return "just now"; if(h<24) return Math.round(h)+"h ago"; const dd=Math.round(h/24); return dd+(dd===1?" day ago":" days ago"); }
+// Director-approval items — final-pay quitclaims (and anything routed to the Director).
+// Maker-checker: only an admin (Director: Anj / Sanjay) may sign these; they stay in the
+// Director's inbox and never appear as signable to HR/managers.
+function isDirectorItem(s){ return s && (s.doc_type==="claim" || /director/i.test(s.with_whom||"")); }
 function sigParts(){
-  const pend=SIGNATURES.filter(s=>s.awaiting==="you"&&s.status==="pending");
-  const oth=SIGNATURES.filter(s=>s.awaiting==="other"&&s.status==="pending");
+  const isAdmin=isAdminUser();
+  const rawPend=SIGNATURES.filter(s=>s.awaiting==="you"&&s.status==="pending");
+  const rawOth=SIGNATURES.filter(s=>s.awaiting==="other"&&s.status==="pending");
+  // For non-Directors, Director-approval items are NOT theirs to sign — show them as
+  // "awaiting the Director" instead, so they can see status but can't clear them.
+  const pend = isAdmin ? rawPend : rawPend.filter(s=>!isDirectorItem(s));
+  const oth  = isAdmin ? rawOth  : rawOth.concat(rawPend.filter(s=>isDirectorItem(s)));
   const signed=SIGNATURES.filter(s=>s.status==="signed").sort((a,b)=>new Date(b.signed_at||0)-new Date(a.signed_at||0));
   const now=new Date();
   const signedMonth=signed.filter(s=>s.signed_at&&new Date(s.signed_at).getMonth()===now.getMonth()&&new Date(s.signed_at).getFullYear()===now.getFullYear());
@@ -5707,6 +5717,10 @@ function getSavedSig(){ try{ return localStorage.getItem(mySigKey())||""; }catch
 function saveSavedSig(dataUrl){ try{ localStorage.setItem(mySigKey(), dataUrl); }catch(_){} }
 // Apply a signature image to a pending request and run its doc-type side effects. Returns an error or null.
 async function applySignature(s, dataUrl){
+  // Maker-checker lock: a final-pay quitclaim / Director item can ONLY be signed by the Director (admin).
+  if(isDirectorItem(s) && !isAdminUser()){
+    return { message:"Only the Director (Anj or Sanjay) can approve this final-pay quitclaim. It stays in the Director's Signatures inbox until they sign — HR cannot clear it." };
+  }
   const signer=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"Signed-in user";
   const { error } = await sb.from("signature_requests").update({ status:"signed", signed_at:new Date().toISOString(), signer_name:signer, signature_data:dataUrl, updated_at:new Date().toISOString() }).eq("id",s.id);
   if(error) return error;
@@ -9063,7 +9077,7 @@ async function sendFinalPayForSignoff(x,modal){
   const { data:sig, error:e2 } = await sb.from("signature_requests").insert({
     doc_type:"claim", doc_title:"Quitclaim — Final Pay Computation", subject_name:x.employee_name,
     body:finalPayBody(x,fp), from_name:sender, amount:net, meta:x.clearance_id, details,
-    awaiting:"you", with_whom:"Director (approval)", status:"pending" }).select().single();
+    awaiting:"you", with_whom:"Anj Genomal (Director)", status:"pending" }).select().single();
   if(e2){ if(msg) msg.textContent=e2.message; if(btn){ btn.disabled=false; btn.textContent="Send to Director for sign-off"; } return; }
   await sb.from("exit_clearance").update({quitclaim_signature_id:sig.id}).eq("id",x.id);
   // Email the Director the branded approval card (Supabase → Resend → their inbox). Best-effort: never block the sign-off.

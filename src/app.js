@@ -139,8 +139,7 @@ let scFilter="All";
 let prehireTab="pipeline";
 let prehireSrc=null;
 // Talent Pool — filters for the pooled-candidates list
-let poolFilterPos="", poolFilterScale="", poolFilterPrio="", poolSearch="", poolReviewOnly=false;
-const POOL_STALE_DAYS=365; // a pooled candidate older than this is up for the annual review/cleanup
+let poolFilterPos="", poolFilterScale="", poolFilterPrio="", poolSearch="";
 // Salary scales are one-line editable — tell Claude to change them and they update everywhere.
 const POOL_SALARY_SCALES=["Entry / minimum wage","Daily ₱650–800","Daily ₱800–1,000","Monthly ₱15–20k","Monthly ₱20–30k","Monthly ₱30k+","Not specified"];
 const POOL_PRIORITIES=["High","Medium","Low"];
@@ -3823,11 +3822,8 @@ function meetingOpenDialog(){
   const date=prompt("Meeting date (YYYY-MM-DD):", a.date||today); if(date===null) return;
   const label=prompt("Meeting name:", a.label||"Monthly Sales Meeting"); if(label===null) return;
   const d=(date||"").trim()||today, l=(label||"").trim()||"Monthly Sales Meeting";
-  meetingSaveCfg("meeting_active",{date:d,label:l,open:true}).then(async()=>{
-    // Auto-load the expected roster (active merchandisers) so absentees can be computed once sign-in closes.
-    if(!meetingRosterFor(d).length){ try{ await meetingPrepareRoster(d,l); return; }catch(_){} }
-    reloadMeetings();
-  });
+  // Expected roster is uploaded per meeting (Excel/CSV), not auto-filled from the full active list.
+  meetingSaveCfg("meeting_active",{date:d,label:l,open:true}).then(reloadMeetings);
 }
 async function meetingLockIP(){
   try{
@@ -4067,20 +4063,20 @@ function meetingNteCard(s){ const d=s.details||{};
 // ---- Panels: expected roster · absentees (graduated notice) · regular-attendance tracker ----
 function meetingRosterPanel(viewDate,active){
   const roster=meetingRosterFor(viewDate);
-  const label=(active&&active.date===viewDate&&active.label)||(roster[0]&&roster[0].meeting_label)||"Monthly Merchandiser Meeting";
-  const activeDisers=(DISERS||[]).filter(d=>(d.status||"").toLowerCase().startsWith("active")).length;
   const expected=roster.filter(r=>r.expected);
-  if(!viewDate){ return `<div class="panel"><h2>Expected roster</h2><div class="psub">Open a meeting first — then load the list of merchandisers who should attend.</div></div>`; }
+  if(!viewDate){ return `<div class="panel"><h2>Expected roster</h2><div class="psub">Open a meeting first — then upload the list of merchandisers who should attend it.</div></div>`; }
+  const uploadBtn=(txt,ghost)=>`<label class="btn${ghost?" ghost":""}" style="${SBTN};margin-top:10px;cursor:pointer;display:inline-block;">${txt}<input type="file" accept=".xlsx,.xls,.csv" data-date="${esc(viewDate)}" onchange="mtgUploadRosterEl(this)" style="display:none;"></label>`;
   if(!roster.length){ return `<div class="panel"><h2>Expected roster · ${fmtDate(viewDate)}</h2>
-      <div class="psub">Who <b>should</b> attend this meeting. Load the current active merchandisers, then untick anyone not required for this meeting.</div>
-      <button class="btn" style="${SBTN};margin-top:10px;" onclick="mtgPrepareRoster('${esc(viewDate)}',${JSON.stringify(label)})">Load expected roster (${activeDisers} active merchandisers)</button></div>`; }
+      <div class="psub">Who <b>should</b> attend <b>this</b> meeting. Upload the invite list for this meeting — an Excel/CSV with a <b>Name</b> column (Employee&nbsp;No and Store optional; names are matched to the merchandiser roster automatically). Only these people are counted, and anyone who doesn't sign in shows as absent.</div>
+      ${uploadBtn("⬆ Upload expected list (Excel / CSV)")}
+      <span id="mtgRosterStatus" class="psub" style="margin-left:10px;"></span></div>`; }
   const sorted=roster.slice().sort((a,b)=>String(a.store||"~").localeCompare(String(b.store||"~"))||String(a.name).localeCompare(String(b.name)));
   return `<div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
       <h2 style="margin:0;">Expected roster · ${fmtDate(viewDate)}</h2>
       <div class="psub" style="margin:0;"><b>${expected.length}</b> expected${roster.length!==expected.length?` · ${roster.length-expected.length} excused`:""} · ${roster.length} on file</div>
     </div>
-    <div class="psub">Untick anyone not required for this meeting — they won't be counted as absent. <button class="btn ghost" style="${SBTN};margin-left:6px;" onclick="mtgPrepareRoster('${esc(viewDate)}',${JSON.stringify(label)})">Refresh from active list</button></div>
+    <div class="psub">Uploaded invite list for this meeting. Untick anyone not required — they won't be counted as absent. ${uploadBtn("⬆ Replace list (re-upload)",true)} <span id="mtgRosterStatus" class="psub" style="margin-left:6px;"></span></div>
     <div style="overflow-x:auto;margin-top:12px;max-height:340px;overflow-y:auto;">
     <table><thead><tr><th style="width:70px;">Expected</th><th>Name</th><th>Store</th><th>Agency</th><th>Attended?</th></tr></thead><tbody>
     ${sorted.map(r=>{ const att=mAttended(r); return `<tr>
@@ -4734,23 +4730,41 @@ function phBodyPool(){
   const scales=[...new Set(all.map(p=>p.pool_salary_scale).filter(Boolean))].sort();
   const q=(poolSearch||"").toLowerCase();
   const now=Date.now();
-  const ageDays=p=>{ const d=p.pooled_at||p.updated_at; return d?Math.floor((now-new Date(d))/864e5):null; };
-  const isStale=p=>{ const a=ageDays(p); return a!=null && a>=POOL_STALE_DAYS; };
-  const staleCount=all.filter(isStale).length;
+  const yearOf=p=>{ const d=p.pooled_at||p.updated_at; return d?String(new Date(d).getFullYear()):"Undated"; };
+  const monthsIn=p=>{ const d=p.pooled_at||p.updated_at; return d?Math.floor((now-new Date(d))/2629800000):null; };
   let list=all.filter(p=>
-      (!poolReviewOnly  || isStale(p)) &&
       (!poolFilterPos   || p.position===poolFilterPos) &&
       (!poolFilterScale || p.pool_salary_scale===poolFilterScale) &&
       (!poolFilterPrio  || (p.pool_priority||"")===poolFilterPrio) &&
       (!q || (p.full_name||"").toLowerCase().includes(q) || (p.position||"").toLowerCase().includes(q) || (p.pool_reason||"").toLowerCase().includes(q)));
-  // ranked: priority High→Low, then most-recently pooled first
+  // ranked WITHIN a year: priority High→Low, then most-recently pooled first
   list.sort((a,b)=>{ const ra=POOL_PRIO_RANK[a.pool_priority]??3, rb=POOL_PRIO_RANK[b.pool_priority]??3; if(ra!==rb) return ra-rb; return new Date(b.pooled_at||b.updated_at||0)-new Date(a.pooled_at||a.updated_at||0); });
+  // group into annual buckets, most recent year first (Undated last)
+  const years=[...new Set(list.map(yearOf))].sort((a,b)=> a==="Undated"?1 : b==="Undated"?-1 : Number(b)-Number(a));
+  const curYear=String(new Date(now).getFullYear());
   const selOpt=(cur,arr)=>['<option value="">All</option>'].concat(arr.map(o=>`<option value="${esc(o)}" ${cur===o?'selected':''}>${esc(o)}</option>`)).join("");
+  const rowHtml=(c,i)=>`<tr>
+          <td style="color:var(--muted);">${i+1}</td>
+          <td><b>${esc(c.full_name)}</b><div style="font-size:11px;color:var(--muted);">${esc(c.hire_source||"Direct")}${c.email?` · ${esc(c.email)}`:""}${c.phone?` · ${esc(c.phone)}`:""}</div></td>
+          <td>${esc(c.position||"—")}<div style="font-size:11px;color:var(--muted);">${esc(c.worksite||"")}</div></td>
+          <td>${esc(c.pool_salary_scale||"—")}</td>
+          <td>${prioBadge(c.pool_priority)}</td>
+          <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${c.pooled_at?fmtMDY(c.pooled_at):"—"}</td>
+          <td style="font-size:12px;color:#3a4540;max-width:220px;">${esc(c.pool_reason||"")}</td>
+          <td style="white-space:nowrap;"><button class="btn ghost pool-open" data-id="${c.id}" style="padding:5px 10px;font-size:12px;">Open</button> <button class="btn pool-back" data-id="${c.id}" style="padding:5px 10px;font-size:12px;">↩ To pipeline</button></td>
+        </tr>`;
+  const yearBlock=(yr)=>{ const rows=list.filter(p=>yearOf(p)===yr); const old=yr!=="Undated"&&yr!==curYear;
+    return `<div style="display:flex;align-items:baseline;gap:8px;margin-top:18px;">
+        <div style="font-size:15px;font-weight:800;color:var(--ink,#1E3A5F);">${yr==="Undated"?"Undated":"Pooled "+yr}</div>
+        <span class="count-tag">${rows.length}</span>${old?`<span style="font-size:11.5px;color:#b7791f;">· earlier year</span>`:""}
+      </div>
+      <div style="overflow-x:auto;margin-top:6px;">
+      <table style="min-width:720px;"><thead><tr><th>#</th><th>Candidate</th><th>Position</th><th>Salary scale</th><th>Priority</th><th>Pooled</th><th>Why kept</th><th></th></tr></thead>
+        <tbody>${rows.map(rowHtml).join("")}</tbody></table></div>`; };
   $("#phBody").innerHTML=`
     <div class="panel" style="margin-top:14px;">
       <h2>Talent Pool <span class="count-tag">${all.length}</span></h2>
-      <div class="psub">Qualified applicants we liked but didn't proceed with — kept warm for future vacancies and replacements, so we can fill a slot without restarting recruitment. Ranked by priority, newest first. <b>Maintained by Vina &amp; Rhel</b>; review and clear it once a year so it stays fresh. Set a candidate's priority &amp; salary scale when you move them here (any candidate → open → <b>Move to Talent Pool</b>).</div>
-      ${staleCount?`<div style="margin-top:12px;padding:10px 13px;background:#fdf6e3;border:1px solid #ecdca6;border-radius:9px;font-size:12.5px;color:#7a5c12;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">⏰ <b>${staleCount}</b> candidate${staleCount>1?'s have':' has'} been in the pool over a year — time for the annual review. <button class="btn ghost" id="pf_review" style="padding:4px 10px;font-size:12px;">${poolReviewOnly?'Show all':'Show only these'}</button> <button class="btn" id="pf_archiveold" style="padding:4px 10px;font-size:12px;">Archive all ${staleCount} over a year</button></div>`:""}
+      <div class="psub">Qualified applicants we liked but didn't proceed with — kept warm for future vacancies and replacements, so we can fill a slot without restarting recruitment. <b>Grouped by the year they were pooled</b>, and within each year ranked by priority (High→Low), newest first. <b>Maintained by Vina &amp; Rhel.</b> Set a candidate's priority &amp; salary scale when you move them here (any candidate → open → <b>Move to Talent Pool</b>).</div>
       ${all.length===0
         ? `<div class="task" style="margin-top:12px;"><div class="dot a"></div><div><div class="tt">The pool is empty</div><div class="td">Open any candidate in the Pipeline (or a Rejected one) and click <b>☆ Move to Talent Pool</b> to add them here with a priority and salary scale.</div></div></div>`
         : `
@@ -4766,20 +4780,8 @@ function phBodyPool(){
         <button class="btn ghost" id="pf_clear" style="flex-shrink:0;">Clear</button>
         <button class="btn blue" id="pf_export" style="flex-shrink:0;">Export CSV</button>
       </div>
-      <div class="psub" style="margin-top:10px;">${list.length} of ${all.length} shown${(poolFilterPos||poolFilterScale||poolFilterPrio||q)?" (filtered)":""}.</div>
-      <div style="overflow-x:auto;margin-top:6px;">
-      <table style="min-width:720px;"><thead><tr><th>#</th><th>Candidate</th><th>Position</th><th>Salary scale</th><th>Priority</th><th>Pooled</th><th>Why kept</th><th></th></tr></thead>
-        <tbody>${list.map((c,i)=>`<tr>
-          <td style="color:var(--muted);">${i+1}</td>
-          <td><b>${esc(c.full_name)}</b><div style="font-size:11px;color:var(--muted);">${esc(c.hire_source||"Direct")}${c.email?` · ${esc(c.email)}`:""}${c.phone?` · ${esc(c.phone)}`:""}</div></td>
-          <td>${esc(c.position||"—")}<div style="font-size:11px;color:var(--muted);">${esc(c.worksite||"")}</div></td>
-          <td>${esc(c.pool_salary_scale||"—")}</td>
-          <td>${prioBadge(c.pool_priority)}</td>
-          <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${c.pooled_at?fmtMDY(c.pooled_at):"—"}${isStale(c)?`<div style="font-size:10.5px;color:#b7791f;font-weight:700;margin-top:2px;">⏰ ${Math.floor(ageDays(c)/30)} mos — review</div>`:""}</td>
-          <td style="font-size:12px;color:#3a4540;max-width:220px;">${esc(c.pool_reason||"")}</td>
-          <td style="white-space:nowrap;"><button class="btn ghost pool-open" data-id="${c.id}" style="padding:5px 10px;font-size:12px;">Open</button> <button class="btn pool-back" data-id="${c.id}" style="padding:5px 10px;font-size:12px;">↩ To pipeline</button> <button class="btn ghost pool-archive" data-id="${c.id}" style="padding:5px 10px;font-size:12px;color:var(--muted);">Archive</button></td>
-        </tr>`).join("")||`<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px;">No candidates match these filters.</td></tr>`}</tbody></table>
-      </div>`}
+      <div class="psub" style="margin-top:10px;">${list.length} of ${all.length} shown${(poolFilterPos||poolFilterScale||poolFilterPrio||q)?" (filtered)":""} · ${years.length} year${years.length>1?'s':''}.</div>
+      ${list.length? years.map(yearBlock).join("") : `<div class="psub" style="margin-top:14px;text-align:center;color:var(--muted);">No candidates match these filters.</div>`}`}
     </div>`;
   const reRender=()=>{ phBodyPool(); };
   const g=id=>document.getElementById(id);
@@ -4789,28 +4791,13 @@ function phBodyPool(){
   if(g("pf_q")) g("pf_q").addEventListener("input",e=>{ poolSearch=e.target.value; const pos=e.target.selectionStart; reRender(); const nq=document.getElementById("pf_q"); if(nq){ nq.focus(); try{nq.setSelectionRange(pos,pos);}catch(_){} } });
   if(g("pf_clear")) g("pf_clear").addEventListener("click",()=>{ poolFilterPos=poolFilterScale=poolFilterPrio=""; poolSearch=""; reRender(); });
   if(g("pf_export")) g("pf_export").addEventListener("click",()=>{
-    const cols=[["Rank","#"],["full_name","Candidate"],["position","Position"],["pool_salary_scale","Salary scale"],["pool_priority","Priority"],["pooled_at","Pooled"],["hire_source","Source"],["email","Email"],["phone","Phone"],["worksite","Worksite"],["pool_reason","Why kept"]];
-    const rows=list.map((c,i)=>cols.map(([k])=>{ const val=k==="Rank"?(i+1):(k==="pooled_at"?(c[k]?fmtMDY(c[k]):""):(c[k]==null?"":c[k])); return `"${String(val).replace(/"/g,'""')}"`; }).join(","));
+    const cols=[["Year","Year"],["full_name","Candidate"],["position","Position"],["pool_salary_scale","Salary scale"],["pool_priority","Priority"],["pooled_at","Pooled"],["hire_source","Source"],["email","Email"],["phone","Phone"],["worksite","Worksite"],["pool_reason","Why kept"]];
+    const rows=list.map((c)=>cols.map(([k])=>{ const val=k==="Year"?yearOf(c):(k==="pooled_at"?(c[k]?fmtMDY(c[k]):""):(c[k]==null?"":c[k])); return `"${String(val).replace(/"/g,'""')}"`; }).join(","));
     const csv=cols.map(c=>c[1]).join(",")+"\n"+rows.join("\n");
     const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="talent-pool.csv";a.click();
   });
-  if(g("pf_review")) g("pf_review").addEventListener("click",()=>{ poolReviewOnly=!poolReviewOnly; reRender(); });
-  if(g("pf_archiveold")) g("pf_archiveold").addEventListener("click",()=>archiveStalePool(all.filter(isStale)));
   $$("#phBody .pool-open").forEach(b=>b.addEventListener("click",()=>openPrehire(PREHIRE.find(p=>String(p.id)===b.dataset.id))));
   $$("#phBody .pool-back").forEach(b=>b.addEventListener("click",()=>returnFromPool(PREHIRE.find(p=>String(p.id)===b.dataset.id))));
-  $$("#phBody .pool-archive").forEach(b=>b.addEventListener("click",()=>archiveFromPool(PREHIRE.find(p=>String(p.id)===b.dataset.id))));
-}
-// Annual cleanup — archived candidates leave the pool but stay on record (moved to Rejected, nothing deleted).
-async function archiveFromPool(c){
-  if(!c) return;
-  if(!confirm(`Archive ${c.full_name} out of the Talent Pool?\n\nThey move to Rejected (kept on record — nothing is deleted) so the pool stays fresh. You can still find and re-pool them later.`)) return;
-  await setPhase(c,"REJECTED",null,{rejection_reason:"Talent pool — annual cleanup (not pursued)"});
-}
-async function archiveStalePool(items){
-  const n=(items||[]).length; if(!n) return;
-  if(!confirm(`Archive all ${n} candidate${n>1?'s':''} that ${n>1?'have':'has'} been in the pool over a year?\n\nThey move to Rejected (kept on record — nothing is deleted). This is the once-a-year cleanup.`)) return;
-  for(const c of items){ await sb.from("prehire").update({phase:"REJECTED", rejection_reason:"Talent pool — annual cleanup (not pursued)", updated_at:new Date().toISOString()}).eq("id",c.id); }
-  poolReviewOnly=false; await loadEmployees(); prehireTab="pool"; window.go("prehire");
 }
 async function returnFromPool(c){
   if(!c) return;

@@ -3341,9 +3341,13 @@ function getSavedSig(){ try{ return localStorage.getItem(mySigKey())||""; }catch
 function saveSavedSig(dataUrl){ try{ localStorage.setItem(mySigKey(), dataUrl); }catch(_){} }
 // Apply a signature image to a pending request and run its doc-type side effects. Returns an error or null.
 async function applySignature(s, dataUrl){
-  // Maker-checker lock: a final-pay quitclaim / Director item can ONLY be signed by the Director (admin).
+  // Final-pay quitclaim: Anj is the SOLE final sign-off (her explicit call). No one else — not even Sanjay.
+  if(s.doc_type==="claim" && ((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()!=="anj@hassarams.com"){
+    return { message:"Only Anj (Director, Admin & Finance) is the final sign-off for a final-pay quitclaim. It stays in her Signatures inbox until she signs." };
+  }
+  // Other Director items may be signed by any admin (Anj or Sanjay).
   if(isDirectorItem(s) && !isAdminUser()){
-    return { message:"Only the Director (Anj or Sanjay) can approve this final-pay quitclaim. It stays in the Director's Signatures inbox until they sign — HR cannot clear it." };
+    return { message:"Only the Director can approve this. It stays in the Director's Signatures inbox until they sign — HR cannot clear it." };
   }
   const signer=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"Signed-in user";
   const { error } = await sb.from("signature_requests").update({ status:"signed", signed_at:new Date().toISOString(), signer_name:signer, signature_data:dataUrl, updated_at:new Date().toISOString() }).eq("id",s.id);

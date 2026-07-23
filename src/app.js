@@ -113,7 +113,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
@@ -121,6 +121,7 @@ function applyRoleUI(){
   const allow=allowedPages(), limited=isLimitedUser();
   document.querySelectorAll('.nav-item[data-page]').forEach(n=>{
     const pg=n.getAttribute('data-page');
+    if(pg==='parking'){ n.style.display=(((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com')?'':'none'; return; }  // Parking Lot = anj only
     if(pg==='activity'){ n.style.display=isAdminUser()?'':'none'; return; }  // Access & Activity = owners only
     if(pg==='demodata'){ n.style.display=isAdminUser()?'':'none'; return; } // Demo Data sandbox = owners only
     if(pg==='maternity'){ n.style.display=canSeePay()?'':'none'; return; }   // Maternity = salary viewers (Anj/Sanjay/Grazel)

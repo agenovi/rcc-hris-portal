@@ -116,7 +116,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
@@ -132,7 +132,7 @@ function applyRoleUI(){
     if(pg==='movements'){ n.style.display=canSeeMovements()?'':'none'; return; } // Movements/NPA = Anj/Grazel/Rhel
     if(pg==='govremit'){ n.style.display=canEditIds()?'':'none'; return; } // Gov't Remittances = gov-ID owners (Anj/Vina/Grazel)
     if(pg==='concerns'){ n.style.display=isAdminUser()?'':'none'; return; } // Concerns & Cases = Director/owner only (arbitration/legal)
-    if(pg==='policies'||pg==='processes'||pg==='desk'||pg==='orgchart'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies, Processes, HR Desk, Org Chart = every logged-in HR
+    if(pg==='policies'||pg==='processes'||pg==='desk'||pg==='orgchart'||pg==='links'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies, Processes, HR Desk, Org Chart, Links = every logged-in HR
     n.style.display=(allow&&allow.indexOf(pg)===-1)?'none':'';
   });
   document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display=limited?'none':''; });
@@ -330,6 +330,7 @@ async function loadEmployees(){
   renderPolicies();
   renderProcesses();
   renderStoremap();
+  renderLinks();
   renderOrgChart();
   renderConcerns();
   renderMeetings();
@@ -370,7 +371,7 @@ async function ppSyncFetch(params){
 
 // Honesty pass: every screen NOT backed by live data gets a visible "Preview" ribbon,
 // so HR never mistakes an illustrative mock-up for real data. Real pages are listed here.
-const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity","maternity","timekeeping","meetings","govremit","movements","policies","processes","orgchart","storemap","concerns"]);
+const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity","maternity","timekeeping","meetings","govremit","movements","policies","processes","orgchart","storemap","concerns","links"]);
 function tagPreviewPages(){
   document.querySelectorAll('section.page').forEach(sec=>{
     const id=(sec.id||"").replace("page-","");
@@ -3436,6 +3437,83 @@ window.deleteConcern=deleteConcern;
 async function loadConcerns(){
   const { data }=await sb.from("concerns").select("*").order("created_at",{ascending:false});
   CONCERNS=data||[];
+}
+
+/* ================= LINKS TO SEND — one hub for every self-service / share link, named by purpose ================= */
+function lkRow(purpose, who, url, opts){
+  opts=opts||{};
+  const tag=opts.tag?` <span class="pill ${opts.tagCls||'di'}" style="font-size:9.5px;">${esc(opts.tag)}</span>`:'';
+  const right = url
+    ? `<button class="btn ghost lk-copy" data-copy="${esc(url)}" style="flex-shrink:0;padding:5px 12px;font-size:12px;">Copy</button>
+       <a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener" style="flex-shrink:0;padding:5px 12px;font-size:12px;text-decoration:none;">Open</a>`
+    : opts.mkSc
+      ? `<button class="btn ghost lk-mksc" data-sc="${esc(opts.mkSc)}" style="flex-shrink:0;padding:5px 12px;font-size:12px;">Create link</button>`
+      : opts.goto
+        ? `<button class="btn ghost lk-go" data-go="${esc(opts.goto)}" style="flex-shrink:0;padding:5px 12px;font-size:12px;">${esc(opts.gotoLabel||'Open module')}</button>`
+        : '';
+  return `<div class="lk-row" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line,#e4eae6);flex-wrap:wrap;">
+    <div style="flex:1;min-width:190px;">
+      <div style="font-size:13.5px;font-weight:700;color:#12352a;">${esc(purpose)}${tag}</div>
+      <div style="font-size:11.5px;color:var(--muted,#6b7785);">${who}</div>
+    </div>${right}</div>`;
+}
+function lkGroup(title, sub, rowsHtml){
+  return `<div class="panel lk-group">
+    <div style="font-size:15px;font-weight:800;color:#12352a;">${esc(title)}</div>
+    ${sub?`<div class="psub" style="margin:2px 0 2px;">${sub}</div>`:''}
+    ${rowsHtml}
+  </div>`;
+}
+function renderLinks(){
+  const pg=$("#page-links"); if(!pg) return;
+  const recruit=[
+    lkRow("Job application — open to anyone","Public. Post it anywhere; applicants apply themselves.", SHARE_BASE+"direct-apply.html"),
+    lkRow("Agency intake — Jell-on","Private. Send ONLY to Jell-on — shows their placements under their name.", SHARE_BASE+"agency.html?t=3a28000c77be400f97c1d2e36c9b416e",{tag:"private",tagCls:"ag"}),
+    lkRow("Agency intake — M&amp;G","Private. Send ONLY to M&amp;G.", SHARE_BASE+"agency.html?t=60fc360932f049dd851131dccbd185af",{tag:"private",tagCls:"ag"}),
+    lkRow("Candidate experience survey","Send to an applicant after their interview / decision.", SHARE_BASE+"feedback.html")
+  ].join("");
+  const services=[
+    lkRow("Employee loan application","Public. Head Office &amp; Warehouse staff apply + upload documents.", LOAN_APPLY_URL),
+    lkRow("Merchandiser meeting sign-in","Show the QR or send the link on meeting day (locks to venue Wi-Fi).", MEETING_SIGNIN_URL)
+  ].join("");
+  const scs=[...new Set((BRANCHES||[]).map(b=>b.sc).filter(x=>x&&x!=='Unassigned'))].sort();
+  const scRows=scs.length ? scs.map(sc=>{
+    const link=scLinkFor(sc);
+    return link
+      ? lkRow(`Store Transfer Request — ${sc}`, `Private. Only ${esc(sc)}'s own staff — they request a store move, the store head confirms.`, SHARE_BASE+"transfer-request.html?sc="+link.token, {tag:"per-SC",tagCls:"di"})
+      : lkRow(`Store Transfer Request — ${sc}`, "No link yet — create one to send.", null, {mkSc:sc});
+  }).join("") : `<div class="lk-row psub" style="border-top:1px solid var(--line,#e4eae6);padding-top:9px;">No Store Coordinators on file yet.</div>`;
+  const openExits=(EXITCASES||[]).filter(x=>x.overall_status!=="Complete"&&x.emp_link_token);
+  const exitRows=openExits.length ? openExits.map(x=>
+    lkRow(`Exit Clearance — ${x.employee_name||'employee'}`, "Private. The departing employee lists items to return + does the exit interview.", exitEmpLink(x), {tag:"per-person",tagCls:"di"})
+  ).join("") : lkRow("Exit clearance links","Created per case — open a case in Exit Clearance to generate & copy the employee's link.", null, {goto:"exit",gotoLabel:"Open Exit Clearance"});
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Links to Send</h2>
+      <div class="psub">Every self-service link in one place, named by what it's for. <b>Copy</b> a link, then paste it into email or WhatsApp. Links marked <b>private</b> are keyed to one person or partner — only send to that recipient.</div>
+      <input id="lkSearch" class="search" style="width:100%;margin:10px 0 2px;" placeholder="Search links…">
+    </div>
+    <div id="lkBody">
+      ${lkGroup("Recruitment", "Applicants and agencies.", recruit)}
+      ${lkGroup("Employee services", "For current staff.", services)}
+      ${lkGroup("Store transfers — one private link per Store Coordinator", "Send each SC their own link so they only request moves for their own staff.", scRows)}
+      ${lkGroup("Exit clearance — one private link per departing employee", "The employee's return-items + exit-interview page.", exitRows)}
+    </div>`;
+  $$("#page-links .lk-copy").forEach(b=>b.addEventListener("click",async()=>{ try{ await navigator.clipboard.writeText(b.dataset.copy); const t=b.textContent; b.textContent="Copied ✓"; setTimeout(()=>b.textContent=t,1200); }catch(_){ prompt("Copy this link:", b.dataset.copy); } }));
+  $$("#page-links .lk-go").forEach(b=>b.addEventListener("click",()=>window.go(b.dataset.go)));
+  $$("#page-links .lk-mksc").forEach(b=>b.addEventListener("click",async()=>{ b.disabled=true; b.textContent="Creating…"; await createScLinkForHub(b.dataset.sc); }));
+  const s=$("#lkSearch"); if(s) s.addEventListener("input",()=>{
+    const q=s.value.trim().toLowerCase();
+    $$("#page-links .lk-row").forEach(r=>{ r.style.display=(!q||r.textContent.toLowerCase().includes(q))?'':'none'; });
+    $$("#page-links .lk-group").forEach(g=>{ const vis=[...g.querySelectorAll('.lk-row')].some(r=>r.style.display!=='none'); g.style.display=(!q||vis)?'':'none'; });
+  });
+}
+window.renderLinks=renderLinks;
+async function createScLinkForHub(sc){
+  const token=(crypto&&crypto.randomUUID?crypto.randomUUID():String(Math.random())).replace(/-/g,"");
+  const { error }=await sb.from("sc_links").insert({ sc_name:sc, token });
+  if(error){ alert(error.message); return; }
+  await loadEmployees(); window.go("links");
 }
 
 /* ---------- MANNING / HEADCOUNT — grouped by Sales Coordinator ---------- */

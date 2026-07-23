@@ -15,8 +15,11 @@
   .top .sub{ font-size:13px; opacity:.9; }
   .body{ padding:18px 18px 44px; }
   .lead{ font-size:13.5px; color:var(--mut); line-height:1.5; margin:2px 0 14px; }
+  .who{ margin:2px 0 6px; padding:11px 13px; background:#eef4ef; border:1px solid var(--line); border-radius:11px; font-size:14px; }
+  .who b{ color:var(--green-dark); }
   label.q{ display:block; font-size:13px; font-weight:700; margin:15px 0 5px; color:#374151; }
   input,select,textarea{ width:100%; padding:12px; font-size:16px; font-family:inherit; border:1.5px solid var(--line); border-radius:11px; background:#fff; color:var(--ink); }
+  select:disabled,input:disabled{ background:#f2f4f7; color:#55606c; }
   textarea{ min-height:56px; resize:vertical; }
   input:focus,select:focus,textarea:focus{ outline:none; border-color:var(--green); }
   .row{ display:flex; gap:10px; }
@@ -45,19 +48,17 @@
   <div class="load" id="load">Loading…</div>
 
   <div class="body" id="form" style="display:none;">
-    <div class="lead">Use this to request moving an employee to another store for a set period. Once you submit, the <b>receiving store head confirms before</b> the employee starts, and <b>confirms again after</b> the period that the employee was there — that record is the proof for payroll / reliever credit.</div>
-
-    <label class="q">Your name — Store Coordinator</label>
-    <input id="sc" list="sclist" placeholder="Type your name">
-    <datalist id="sclist"></datalist>
+    <div class="who">Requesting as <b id="scName">—</b></div>
+    <div class="lead">Move one of your employees to another store for a set period. Once you submit, the <b>receiving store head confirms before</b> the employee starts, and <b>confirms again after</b> the period that the employee was there — that record is the proof for payroll / reliever credit.</div>
 
     <label class="q">Employee to transfer</label>
-    <input id="emp" placeholder="Full name">
-    <label class="q">Employee ID <span style="font-weight:400;color:var(--mut);">(if you know it)</span></label>
-    <input id="empno" placeholder="Optional">
+    <select id="emp"><option value="">Select employee…</option></select>
+
+    <label class="q">Employee ID</label>
+    <input id="empno" placeholder="Fills in automatically" disabled>
 
     <label class="q">Current store</label>
-    <input id="from" placeholder="Where the employee is now">
+    <select id="from"><option value="">—</option></select>
 
     <label class="q">Transfer to (store)</label>
     <select id="to"><option value="">Select store…</option></select>
@@ -78,7 +79,7 @@
 
     <button class="btn" id="submit">Submit transfer request</button>
     <div class="msg" id="msg"></div>
-    <div class="note-priv"><span>🔒</span><span>This request goes straight to HR. The store head still confirms before and after.</span></div>
+    <div class="note-priv"><span>🔒</span><span>This is your personal link — please don't share it. Your request goes straight to HR; the store head still confirms before and after.</span></div>
   </div>
 
   <div class="done" id="done">
@@ -94,31 +95,46 @@ const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZ
 const H = { "apikey": ANON, "Authorization": "Bearer " + ANON, "Content-Type": "application/json" };
 const $ = id => document.getElementById(id);
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const T = new URLSearchParams(location.search).get("t") || "";
+const TOKEN = new URLSearchParams(location.search).get("sc") || "";
+let PEOPLE = [];
+const firstSeg = w => String(w||"").split(" · ")[0].trim();
 
 async function init(){
-  if(!T){ $("load").textContent="This link is missing its code. Please ask HR for the current transfer-request link."; return; }
+  if(!TOKEN){ $("load").textContent="This link is missing its code. Please ask HR for your personal transfer-request link."; return; }
   try{
-    const r = await fetch(FN + "?t=" + encodeURIComponent(T), { headers:H });
+    const r = await fetch(FN + "?sc=" + encodeURIComponent(TOKEN), { headers:H });
     const j = await r.json();
     if(!j.ok){ $("load").textContent = j.reason || "This link is not valid."; return; }
-    $("to").innerHTML = '<option value="">Select store…</option>' + (j.stores||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
-    $("sclist").innerHTML = (j.scs||[]).map(s=>`<option value="${esc(s)}">`).join("");
+    $("scName").textContent = j.sc_name || "—";
+    PEOPLE = j.employees || [];
+    $("emp").innerHTML = '<option value="">Select employee…</option>' + PEOPLE.map((e,i)=>`<option value="${i}">${esc(e.name)}</option>`).join("");
+    const stores = j.stores || [];
+    $("to").innerHTML = '<option value="">Select store…</option>' + stores.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
+    $("from").innerHTML = '<option value="">—</option>' + stores.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
     $("load").style.display="none";
     $("form").style.display="block";
   }catch(e){ $("load").textContent="Couldn't load — please check your connection and reopen the link."; }
 }
 init();
 
+$("emp").addEventListener("change", ()=>{
+  const e = PEOPLE[$("emp").value]; if(!e) return;
+  $("empno").value = e.emp_no || "";
+  const cur = firstSeg(e.worksite);
+  if(cur){
+    if(![...$("from").options].some(o=>o.value===cur)) $("from").insertAdjacentHTML("beforeend", `<option value="${esc(cur)}">${esc(cur)}</option>`);
+    $("from").value = cur;
+  }
+});
 $("type").addEventListener("change", ()=>{ $("end").disabled = $("type").value==="Permanent"; if($("type").value==="Permanent") $("end").value=""; });
 
 $("submit").addEventListener("click", async ()=>{
   const msg=$("msg"); msg.className="msg"; msg.style.display="none";
-  const payload = { t:T, sc_requested_by:$("sc").value.trim(), emp_name:$("emp").value.trim(), emp_no:$("empno").value.trim(),
-    from_worksite:$("from").value.trim(), to_worksite:$("to").value, request_type:$("type").value,
+  const e = PEOPLE[$("emp").value];
+  const payload = { sc:TOKEN, emp_name:e?e.name:"", emp_no:$("empno").value.trim(),
+    from_worksite:$("from").value, to_worksite:$("to").value, request_type:$("type").value,
     start_date:$("start").value, end_date:$("end").value, reason:$("reason").value.trim() };
-  if(!payload.sc_requested_by){ msg.className="msg err"; msg.textContent="Please enter your name."; msg.style.display="block"; return; }
-  if(!payload.emp_name){ msg.className="msg err"; msg.textContent="Please enter the employee's name."; msg.style.display="block"; return; }
+  if(!payload.emp_name){ msg.className="msg err"; msg.textContent="Please choose the employee."; msg.style.display="block"; return; }
   if(!payload.to_worksite){ msg.className="msg err"; msg.textContent="Please choose the store to transfer to."; msg.style.display="block"; return; }
   if(!payload.start_date){ msg.className="msg err"; msg.textContent="Please set the start date."; msg.style.display="block"; return; }
   const btn=$("submit"); btn.disabled=true; btn.textContent="Submitting…";

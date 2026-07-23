@@ -35,6 +35,7 @@ let NPAS=[];       // personnel_actions rows (Movements / NPA module)
 let POLICIES=[];      // policies rows (Policies & Processes group)
 let CONCERNS=[];      // arbitration / ongoing legal cases (Concerns Tracker — Director only)
 let TRANSFERS=[];     // employee_transfers — SC-requested store transfers/deployments w/ store-head before+after confirmation
+let SC_LINKS=[];      // sc_links — per-SC private transfer-request tokens (cascade to their people + anti-tamper)
 let POLICY_ACKS=[];   // policy_acknowledgments rows (read-and-sign roster)
 let PROCESSES=[];     // processes rows (SOPs)
 let MEETINGS=[];   // meeting_attendance rows (merchandiser meeting sign-in + reimbursement)
@@ -231,7 +232,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -264,7 +265,8 @@ async function loadEmployees(){
     sb.from("hr_tasks").select("*").order("created_at", {ascending:false}),
     sb.from("external_signoffs").select("*").order("created_at", {ascending:false}),
     sb.from("concerns").select("*").order("created_at", {ascending:false}),
-    sb.from("employee_transfers").select("*").order("created_at", {ascending:false})
+    sb.from("employee_transfers").select("*").order("created_at", {ascending:false}),
+    sb.from("sc_links").select("*").order("sc_name")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -300,6 +302,7 @@ async function loadEmployees(){
   EXT_SIGNOFFS=(xso&&xso.data)||[];
   CONCERNS=(cncrn&&cncrn.data)||[];
   TRANSFERS=(trf&&trf.data)||[];
+  SC_LINKS=(scl&&scl.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -3714,6 +3717,36 @@ function transferPeriod(t){
   const e=t.end_date?fmtDate(t.end_date):'open';
   return s+' → '+e;
 }
+function scLinkFor(sc){ return (SC_LINKS||[]).find(x=>x.sc_name===sc); }
+function scLinksBlock(){
+  const scs=[...new Set((BRANCHES||[]).map(b=>b.sc).filter(x=>x&&x!=='Unassigned'))].sort();
+  const rows=scs.map(sc=>{
+    const link=scLinkFor(sc);
+    if(link){ const u=`${SHARE_BASE}transfer-request.html?sc=${link.token}`;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;flex-wrap:wrap;">
+        <div style="flex:1;min-width:140px;font-size:13px;font-weight:600;">${esc(sc)} <span style="font-weight:400;color:var(--muted);font-size:11px;">private link — only their own people</span></div>
+        <button class="btn ghost" data-copy="${u}" style="flex-shrink:0;padding:5px 10px;font-size:12px;">Copy link</button>
+        <a class="btn ghost" href="${u}" target="_blank" rel="noopener" style="flex-shrink:0;padding:5px 10px;font-size:12px;text-decoration:none;">Open</a>
+      </div>`;
+    }
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
+        <div style="flex:1;min-width:140px;font-size:13px;font-weight:600;">${esc(sc)} <span style="font-weight:400;color:var(--muted);font-size:11px;">no link yet</span></div>
+        <button class="btn ghost sc-mklink" data-sc="${esc(sc)}" style="flex-shrink:0;padding:5px 10px;font-size:12px;">Create link</button>
+      </div>`;
+  }).join("");
+  return `<div style="background:#eef4ef;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:12px;">
+    <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Store Coordinator request links</div>
+    <div class="psub" style="margin:0 0 6px;">Each SC gets their <b>own private link</b> — it only shows <b>their own people</b> and files under their name, so no one can request for someone else's staff.</div>
+    ${rows||'<div class="psub" style="margin:0;">No Store Coordinators on file yet.</div>'}
+  </div>`;
+}
+async function createScLink(sc){
+  if(!sc) return;
+  const token=(crypto&&crypto.randomUUID?crypto.randomUUID():String(Math.random())).replace(/-/g,"");
+  const { error } = await sb.from("sc_links").insert({ sc_name:sc, token });
+  if(error){ alert(error.message); return; }
+  await loadEmployees(); window.go("manning");
+}
 function manningTransfersPanel(){
   const active=(TRANSFERS||[]).filter(t=>['Requested','InEffect'].includes(t.status));
   const done=(TRANSFERS||[]).filter(t=>['Completed','Declined','Cancelled'].includes(t.status)).slice(0,8);
@@ -3727,11 +3760,7 @@ function manningTransfersPanel(){
   return `<div class="panel">
      <h2>Store Transfers &amp; Deployments <span class="count-tag">${active.length} active</span></h2>
      <div class="psub">Move an employee to another store for a set period. <b>The SC raises the request → the store head confirms before (agrees to receive) → after the period the store head confirms the person was there</b> — that attestation is the proof for payroll / reliever credit. Worksite stays owned by PayPlus; once completed, update the assignment in PayPlus.</div>
-     <div style="background:#eef4ef;border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-       <div style="flex:1;min-width:200px;"><div style="font-size:13px;font-weight:700;">SC transfer-request link <span style="font-weight:400;color:var(--muted);font-size:11.5px;">— send to Store Coordinators; they file the request themselves (no login)</span></div></div>
-       <button class="btn ghost" data-copy="${SHARE_BASE}transfer-request.html?t=9f4c2a7e5b8d413a" style="flex-shrink:0;">Copy link</button>
-       <a class="btn ghost" href="${SHARE_BASE}transfer-request.html?t=9f4c2a7e5b8d413a" target="_blank" rel="noopener" style="flex-shrink:0;text-decoration:none;">Open</a>
-     </div>
+     ${scLinksBlock()}
      <div class="actionbar"><button class="btn" id="trfNew">+ New transfer request</button> <span class="psub" style="margin:0;align-self:center;">or record one on the SC's behalf</span></div>
      ${active.length?`<table><thead><tr><th>Employee</th><th>From → To</th><th>Period</th><th>Requested by (SC)</th><th>Status</th></tr></thead><tbody>${rowsHtml(active)}</tbody></table>`:`<div class="psub" style="margin-top:6px;">No active transfer requests. Click “New transfer request”.</div>`}
      ${done.length?`<div class="subhead" style="margin-top:16px;">Recent — completed / closed</div><table><thead><tr><th>Employee</th><th>From → To</th><th>Period</th><th>Requested by (SC)</th><th>Status</th></tr></thead><tbody>${rowsHtml(done)}</tbody></table>`:''}
@@ -3740,6 +3769,7 @@ function manningTransfersPanel(){
 function wireTransfers(){
   const nb=document.getElementById("trfNew"); if(nb) nb.addEventListener("click",()=>transferForm());
   $$("#page-manning [data-copy]").forEach(b=>b.addEventListener("click",()=>{ navigator.clipboard&&navigator.clipboard.writeText(b.dataset.copy); const t=b.textContent; b.textContent="Copied ✓"; setTimeout(()=>b.textContent=t,1200); }));
+  $$("#page-manning .sc-mklink").forEach(b=>b.addEventListener("click",()=>createScLink(b.dataset.sc)));
   $$("#page-manning .trf-open").forEach(r=>r.addEventListener("click",()=>openTransfer((TRANSFERS||[]).find(t=>String(t.id)===r.dataset.id))));
 }
 function transferForm(t){

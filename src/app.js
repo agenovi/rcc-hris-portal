@@ -37,6 +37,7 @@ let CONCERNS=[];      // arbitration / ongoing legal cases (Concerns Tracker —
 let DEPT_HEADS=[];    // department_heads — HRIS-owned org structure (dept → head employee); editable by Rhel/admins in Org Chart
 let TRANSFERS=[];     // employee_transfers — SC-requested store transfers/deployments w/ store-head before+after confirmation
 let SC_LINKS=[];      // sc_links — per-SC private transfer-request tokens (cascade to their people + anti-tamper)
+let POSITION_PROFILES=[]; // position_profiles — per-position Job Description / Key Tasks / Deliverables / Reports-To (HRIS-owned, fill once per role)
 let POLICY_ACKS=[];   // policy_acknowledgments rows (read-and-sign roster)
 let PROCESSES=[];     // processes rows (SOPs)
 let MEETINGS=[];   // meeting_attendance rows (merchandiser meeting sign-in + reimbursement)
@@ -116,7 +117,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return isAdminUser(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
@@ -132,7 +133,7 @@ function applyRoleUI(){
     if(pg==='movements'){ n.style.display=canSeeMovements()?'':'none'; return; } // Movements/NPA = Anj/Grazel/Rhel
     if(pg==='govremit'){ n.style.display=canEditIds()?'':'none'; return; } // Gov't Remittances = gov-ID owners (Anj/Vina/Grazel)
     if(pg==='concerns'){ n.style.display=isAdminUser()?'':'none'; return; } // Concerns & Cases = Director/owner only (arbitration/legal)
-    if(pg==='policies'||pg==='processes'||pg==='desk'||pg==='orgchart'||pg==='links'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies, Processes, HR Desk, Org Chart, Links = every logged-in HR
+    if(pg==='policies'||pg==='processes'||pg==='desk'||pg==='orgchart'||pg==='positions'||pg==='links'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies, Processes, HR Desk, Org Chart, Positions & JD, Links = every logged-in HR
     n.style.display=(allow&&allow.indexOf(pg)===-1)?'none':'';
   });
   document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display=limited?'none':''; });
@@ -236,7 +237,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh, ppf] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -271,7 +272,8 @@ async function loadEmployees(){
     sb.from("concerns").select("*").order("created_at", {ascending:false}),
     sb.from("employee_transfers").select("*").order("created_at", {ascending:false}),
     sb.from("sc_links").select("*").order("sc_name"),
-    sb.from("department_heads").select("*")
+    sb.from("department_heads").select("*"),
+    sb.from("position_profiles").select("*")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -309,6 +311,7 @@ async function loadEmployees(){
   TRANSFERS=(trf&&trf.data)||[];
   SC_LINKS=(scl&&scl.data)||[];
   DEPT_HEADS=(dh&&dh.data)||[];
+  POSITION_PROFILES=(ppf&&ppf.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -332,6 +335,7 @@ async function loadEmployees(){
   renderStoremap();
   renderLinks();
   renderOrgChart();
+  renderPositions();
   renderConcerns();
   renderMeetings();
   renderDemoData();
@@ -371,7 +375,7 @@ async function ppSyncFetch(params){
 
 // Honesty pass: every screen NOT backed by live data gets a visible "Preview" ribbon,
 // so HR never mistakes an illustrative mock-up for real data. Real pages are listed here.
-const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity","maternity","timekeeping","meetings","govremit","movements","policies","processes","orgchart","storemap","concerns","links"]);
+const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity","maternity","timekeeping","meetings","govremit","movements","policies","processes","orgchart","storemap","concerns","links","positions"]);
 function tagPreviewPages(){
   document.querySelectorAll('section.page').forEach(sec=>{
     const id=(sec.id||"").replace("page-","");
@@ -3149,10 +3153,12 @@ function renderOrgChart(){
   const initialsOf=(e)=>(e.full_name||"?").split(/[ ,]+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("").toUpperCase();
   // Unobtrusive ghost button to (re)assign a person's supervisor — only editors see it; stops the row's open-record click.
   const supBtn=(e)=> canEdit ? `<button class="oc-setsup" data-idx="${EMPLOYEES.indexOf(e)}" title="Set / replace / clear supervisor" style="flex-shrink:0;background:none;border:1px solid #dbe4dd;color:#1F6B52;font-size:11px;padding:2px 8px;border-radius:6px;cursor:pointer;white-space:nowrap;">⇧ supervisor</button>` : "";
+  // Unobtrusive JD link → opens the position's Job Description / Key Tasks / Deliverables (Positions & JD module).
+  const jdBtn=(e)=> String(e.position||"").trim() ? `<button class="oc-jd" data-idx="${EMPLOYEES.indexOf(e)}" title="View the job description for ${esc(e.position||"")}" style="flex-shrink:0;background:none;border:1px solid #dbe4dd;color:#1F6B52;font-size:11px;padding:2px 8px;border-radius:6px;cursor:pointer;white-space:nowrap;">📋 JD</button>` : "";
   const personRow=(e,extra)=>`<div class="oc-person clickable" data-idx="${EMPLOYEES.indexOf(e)}" style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:7px;cursor:pointer;">
       <span style="width:26px;height:26px;border-radius:50%;background:#e6efe9;color:#1F6B52;font-size:10.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">${esc(initialsOf(e))}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><b style="font-size:13px;color:#12352a;">${esc(e.full_name)}</b> <span style="color:#6b7785;font-size:12px;">· ${esc(e.position||"—")}</span>${extra||""}</span>
-      ${supBtn(e)}
+      ${jdBtn(e)}${supBtn(e)}
     </div>`;
 
   let lens="dept";                 // "dept" | "tree" | "map"
@@ -3260,6 +3266,7 @@ function renderOrgChart(){
           <div class="ocmp-name">${esc(e.full_name)}</div>
           <div class="ocmp-pos">${esc(e.position||"—")}</div>
           ${nkids?`<div class="ocmp-badge">${nkids} report${nkids!==1?"s":""}</div>`:""}
+          ${String(e.position||"").trim()?`<div class="oc-jd-map" data-idx="${EMPLOYEES.indexOf(e)}" title="View job description" style="margin-top:4px;font-size:10px;font-weight:700;color:#1F6B52;cursor:pointer;">📋 JD</div>`:""}
         </div>`;
       // Build a department's reporting sub-tree (dept-scoped): supervisors → their reports.
       // If no supervisors are set, every staff member is a leaf hanging directly under the department.
@@ -3340,6 +3347,8 @@ function renderOrgChart(){
     // Map lens: person box → open record; department box → toggle its sub-tree (accordion allows multiple open).
     $$("#ocBody .oc-map-person").forEach(el=>el.addEventListener("click",()=>openRecord(EMPLOYEES[+el.dataset.idx])));
     $$("#ocBody .oc-map-dept").forEach(el=>el.addEventListener("click",()=>{ const d=el.dataset.dept; if(ocMapOpen.has(d)) ocMapOpen.delete(d); else ocMapOpen.add(d); paint(); }));
+    // JD links (all lenses) → open the position's Job Description; stop propagation so the row's open-record click doesn't also fire.
+    $$("#ocBody .oc-jd, #ocBody .oc-jd-map").forEach(el=>el.addEventListener("click",ev=>{ ev.stopPropagation(); const e=EMPLOYEES[+el.dataset.idx]; if(e) openPositionProfile(e.position, e.department); }));
     // Inline org-structure editing (editors only) — stop propagation so we don't toggle the card / open the record.
     $$("#ocBody .oc-sethead").forEach(el=>el.addEventListener("click",ev=>{ ev.stopPropagation(); ocSetDeptHead(el.dataset.dept); }));
     $$("#ocBody .oc-setsup").forEach(el=>el.addEventListener("click",ev=>{ ev.stopPropagation(); ocSetSupervisor(EMPLOYEES[+el.dataset.idx]); }));
@@ -3415,6 +3424,160 @@ async function ocSetSupervisor(person){
 }
 window.ocSetDeptHead=ocSetDeptHead;
 window.ocSetSupervisor=ocSetSupervisor;
+
+/* ================= POSITIONS & JOB DESCRIPTIONS =================
+   Per-position Job Description · Key Tasks · Deliverables · Reports-To. Fill ONCE per role
+   (position+department pair) and it applies to everyone in that role. The list of roles is
+   derived live from active EMPLOYEES (PayPlus roster); the JD content is HRIS-owned
+   (position_profiles). Everyone logged-in VIEWS; only admins + Rhel (canEditOrg) edit. */
+function posKey(pos,dept){ return String(pos||"").trim().toLowerCase()+"||"+String(dept||"").trim().toLowerCase(); }
+function positionProfileFor(pos,dept){ const k=posKey(pos,dept); return POSITION_PROFILES.find(p=>posKey(p.position,p.department)===k)||null; }
+function positionHasJD(p){ if(!p) return false; const t=x=>String(x||"").trim(); const arr=x=>Array.isArray(x)?x.filter(v=>t(v)):[]; return !!(t(p.job_description) || arr(p.key_tasks).length || arr(p.deliverables).length); }
+// Distinct (position, department) pairs across ACTIVE staff, with headcount + matching profile.
+function positionPairs(){
+  const ACT=EMPLOYEES.filter(e=>(e.status||"").toLowerCase().startsWith("active") && String(e.position||"").trim());
+  const map={};
+  ACT.forEach(e=>{ const pos=String(e.position).trim(), dept=String(e.department||"").trim(); const k=posKey(pos,dept);
+    if(!map[k]) map[k]={ position:pos, department:dept, people:[] };
+    map[k].people.push(e); });
+  return Object.values(map).map(r=>({ ...r, headcount:r.people.length, profile:positionProfileFor(r.position,r.department) }));
+}
+let posSearch="";
+function renderPositions(){
+  const pg=$("#page-positions"); if(!pg) return;
+  const canEdit=canEditOrg();
+  const pairs=positionPairs();
+  const filled=pairs.filter(p=>positionHasJD(p.profile));
+  const coveredStaff=filled.reduce((s,p)=>s+p.headcount,0);
+  const totalStaff=pairs.reduce((s,p)=>s+p.headcount,0);
+  const q=posSearch.trim().toLowerCase();
+  const shown=pairs.filter(p=> !q || [p.position,p.department].filter(Boolean).join(" ").toLowerCase().includes(q))
+    .sort((a,b)=> b.headcount-a.headcount || a.position.localeCompare(b.position) || a.department.localeCompare(b.department));
+  const rows=shown.map(p=>{
+    const jd=positionHasJD(p.profile);
+    const status=jd?`<span class="pill" style="background:#e4f3ea;color:#155e3f;border:1px solid #bfe0cc;">JD ✓</span>`
+                   :`<span class="pill" style="background:#eceff1;color:#8a6a14;border:1px solid #ecd9a6;">— not filled</span>`;
+    return `<tr class="pos-row clickable" data-key="${esc(posKey(p.position,p.department))}" style="cursor:pointer;">
+      <td><b style="color:#12352a;">${esc(p.position)}</b></td>
+      <td>${p.department?esc(p.department):'<span class="note">—</span>'}</td>
+      <td style="text-align:center;">${p.headcount}</td>
+      <td>${status}</td></tr>`;
+  }).join("");
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Positions &amp; Job Descriptions</h2>
+      <div class="psub">Job descriptions, key tasks, and deliverables per position. Fill once — applies to everyone in that role. ${canEdit?"Admins/Rhel can edit.":"Read-only for your role."} Roles are derived live from active staff (PayPlus roster); the JD content is HRIS-owned.</div>
+      <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
+        <div class="kpi"><div class="k-l">Distinct positions</div><div class="k-n">${pairs.length}</div><div class="k-s">position · department pairs</div></div>
+        <div class="kpi ${filled.length?'':'warn'}"><div class="k-l">Positions with a JD</div><div class="k-n">${filled.length}</div><div class="k-s">${pairs.length-filled.length} still to fill</div></div>
+        <div class="kpi"><div class="k-l">Staff covered by a JD</div><div class="k-n">${coveredStaff}</div><div class="k-s">of ${totalStaff} active in a role</div></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 4px;">
+        <input id="posSearch" class="search" style="flex:1;min-width:200px;" placeholder="Search position or department…" value="${esc(posSearch)}">
+      </div>
+      <table style="margin-top:8px;"><thead><tr><th>Position</th><th>Department</th><th style="text-align:center;">Headcount</th><th>Job description</th></tr></thead>
+        <tbody>${rows||`<tr><td colspan="4"><div class="psub" style="padding:8px 0;">No positions match “${esc(posSearch)}”.</div></td></tr>`}</tbody></table>
+    </div>`;
+  const s=$("#posSearch"); if(s){ s.addEventListener("input",()=>{ posSearch=s.value; renderPositions(); const el=$("#posSearch"); if(el){ el.focus(); const v=el.value.length; el.setSelectionRange(v,v); } }); }
+  $$("#page-positions .pos-row").forEach(el=>el.addEventListener("click",()=>{
+    const pair=pairs.find(p=>posKey(p.position,p.department)===el.dataset.key);
+    if(pair) openPositionProfile(pair.position, pair.department);
+  }));
+}
+window.renderPositions=renderPositions;
+
+// Drawer — one position's full JD, the people in the role, and (editors) an Edit button.
+function openPositionProfile(position, department){
+  const canEdit=canEditOrg();
+  const prof=positionProfileFor(position,department);
+  const people=EMPLOYEES.filter(e=>(e.status||"").toLowerCase().startsWith("active") && String(e.position||"").trim().toLowerCase()===String(position||"").trim().toLowerCase() && String(e.department||"").trim().toLowerCase()===String(department||"").trim().toLowerCase())
+    .sort((a,b)=>(a.full_name||"").localeCompare(b.full_name||""));
+  const tasks=Array.isArray(prof&&prof.key_tasks)?prof.key_tasks.filter(t=>String(t||"").trim()):[];
+  const delivs=Array.isArray(prof&&prof.deliverables)?prof.deliverables.filter(t=>String(t||"").trim()):[];
+  const hasJD=positionHasJD(prof);
+  const peopleHtml=people.length?people.map(e=>`<span class="pos-person clickable" data-idx="${EMPLOYEES.indexOf(e)}" style="display:inline-block;background:#eef4f0;border:1px solid #d6e3db;border-radius:20px;padding:3px 11px;margin:0 6px 6px 0;font-size:12.5px;color:#155e3f;cursor:pointer;">${esc(e.full_name)}</span>`).join(""):`<span class="note">No active staff in this role.</span>`;
+  let m=document.getElementById("posDrawer"); if(!m){ m=document.createElement("div"); m.id="posDrawer"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  const sec=(title,body)=>`<div class="panel"><div class="subhead">${esc(title)}</div>${body}</div>`;
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#123528,#1F6B52);color:#fff;padding:18px 22px;position:sticky;top:0;z-index:2;">
+      <div style="font-size:20px;font-weight:800;">${esc(position)}</div>
+      <div style="font-size:12.5px;opacity:.9;">${esc(department||"No department")} · ${people.length} in this role</div>
+    </div>
+    <div style="padding:16px 20px 70px;">
+      <div class="panel" style="margin-top:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+          <h2 style="margin:0;">Job description</h2>
+          ${canEdit?`<button class="btn" id="posEdit">✎ Edit</button>`:""}
+        </div>
+        <div class="subhead" style="margin-top:10px;">People in this role <span class="sh-note">${people.length}</span></div>
+        <div style="margin-top:6px;">${peopleHtml}</div>
+      </div>
+      ${!hasJD?`<div class="panel"><div class="psub">No job description yet.${canEdit?" Click <b>✎ Edit</b> above to fill it in.":""}</div></div>`:`
+        ${sec("Job Description", `<div class="psub" style="white-space:pre-wrap;">${prof.job_description?esc(prof.job_description):'<span class="note">—</span>'}</div>`)}
+        ${sec("Key Tasks", tasks.length?`<ol style="margin:2px 0 0;padding-left:20px;font-size:13px;color:#2c3b33;line-height:1.6;">${tasks.map(t=>`<li>${esc(t)}</li>`).join("")}</ol>`:`<div class="psub"><span class="note">—</span></div>`)}
+        ${sec("Deliverables", delivs.length?`<ul style="margin:2px 0 0;padding-left:20px;font-size:13px;color:#2c3b33;line-height:1.6;">${delivs.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`:`<div class="psub"><span class="note">—</span></div>`)}
+        ${sec("Reports To", `<div class="psub">${prof.reports_to?esc(prof.reports_to):'<span class="note">—</span>'}</div>`)}
+        <div class="psub" style="margin-top:6px;color:#6b7785;">${prof.updated_by?"Last updated by "+esc(prof.updated_by)+(prof.updated_at?" · "+fmtDate(prof.updated_at):""):""}</div>`}
+      <div style="display:flex;gap:10px;margin-top:6px;">
+        <button class="btn ghost" id="posDrawerClose" style="margin-left:auto;">Close</button>
+      </div>
+    </div></div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  $("#posDrawerClose").onclick=()=>m.remove();
+  const eb=$("#posEdit"); if(eb) eb.onclick=()=>openPositionForm(position, department, prof);
+  $$("#posDrawer .pos-person").forEach(el=>el.addEventListener("click",()=>{ m.remove(); openRecord(EMPLOYEES[+el.dataset.idx]); }));
+}
+window.openPositionProfile=openPositionProfile;
+
+// Form — editors only. Upsert the JD on the (position, department) unique key.
+function openPositionForm(position, department, existing){
+  if(!canEditOrg()) return;
+  const p=existing||{};
+  const tasksTxt=Array.isArray(p.key_tasks)?p.key_tasks.filter(t=>String(t||"").trim()).join("\n"):"";
+  const delivTxt=Array.isArray(p.deliverables)?p.deliverables.filter(t=>String(t||"").trim()).join("\n"):"";
+  let m=document.getElementById("posForm"); if(!m){ m=document.createElement("div"); m.id="posForm"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+  const fld="width:100%;padding:9px 11px;border:1px solid var(--line,#dbe4dd);border-radius:8px;background:#fff;font-size:13px;font-family:inherit;box-sizing:border-box;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
+    <div style="font-size:10.5px;font-weight:800;letter-spacing:1.4px;color:#1F6B52;">POSITION · JOB DESCRIPTION</div>
+    <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 1px;">${esc(position)}</div>
+    <div class="psub" style="margin-bottom:12px;">${esc(department||"No department")} · fill once — applies to everyone in this role.</div>
+    <label class="el" style="display:block;margin:0 0 4px;">Job Description</label>
+    <textarea id="pfJD" rows="4" style="${fld}" placeholder="Purpose and scope of the role…">${esc(p.job_description||"")}</textarea>
+    <label class="el" style="display:block;margin:12px 0 4px;">Key Tasks <span class="note" style="font-weight:400;">— one per line</span></label>
+    <textarea id="pfTasks" rows="6" style="${fld}" placeholder="Open and merchandise the store&#10;Submit the daily sales report&#10;…">${esc(tasksTxt)}</textarea>
+    <label class="el" style="display:block;margin:12px 0 4px;">Deliverables <span class="note" style="font-weight:400;">— one per line</span></label>
+    <textarea id="pfDeliv" rows="4" style="${fld}" placeholder="Daily sales report&#10;Monthly inventory count&#10;…">${esc(delivTxt)}</textarea>
+    <label class="el" style="display:block;margin:12px 0 4px;">Reports To</label>
+    <input id="pfReports" type="text" style="${fld}" placeholder="e.g. Store Coordinator" value="${esc(p.reports_to||"")}">
+    <div id="pfMsg" style="font-size:12.5px;color:#a4322a;margin-top:8px;min-height:16px;"></div>
+    <div style="display:flex;gap:10px;margin-top:8px;">
+      <button class="btn ghost" id="pfCancel" style="margin-left:auto;">Cancel</button>
+      <button class="btn" id="pfSave">Save job description</button>
+    </div></div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  $("#pfCancel").onclick=()=>m.remove();
+  $("#pfSave").onclick=async()=>{
+    const toArr=v=>String(v||"").split("\n").map(x=>x.trim()).filter(Boolean);
+    const jd=$("#pfJD").value.trim();
+    const tasks=toArr($("#pfTasks").value);
+    const delivs=toArr($("#pfDeliv").value);
+    const reports=$("#pfReports").value.trim();
+    const btn=$("#pfSave"); btn.disabled=true; btn.textContent="Saving…";
+    const { error } = await sb.from("position_profiles").upsert({
+      position:String(position).trim(), department:String(department||"").trim(),
+      job_description:jd||null, key_tasks:tasks, deliverables:delivs, reports_to:reports||null,
+      updated_by:(CURRENT_USER&&CURRENT_USER.email)||null, updated_at:new Date().toISOString()
+    }, { onConflict:"position,department" });
+    if(error){ $("#pfMsg").textContent="Could not save: "+error.message; btn.disabled=false; btn.textContent="Save job description"; return; }
+    await logChange("position", null, position, "Updated JD", department||"");
+    m.remove();
+    await loadEmployees();
+    openPositionProfile(position, department);
+  };
+}
+window.openPositionForm=openPositionForm;
 
 /* ================= CONCERNS & CASES — arbitration + ongoing legal matters (Director/owner only) ================= */
 const CASE_TYPES=["SEnA (DOLE)","NLRC","Voluntary Arbitration","Internal Grievance","Civil","Criminal","Other"];
@@ -4735,7 +4898,11 @@ function renderEvaluations(){
   const itemRow=(x)=>`<div class="task" style="cursor:pointer;align-items:center;" onclick="openEvalForm('${x.emp.id}','${x.type}','${x.due}')">
       <div class="dot ${x.bucket==='overdue'?'r':(x.bucket==='due'?'a':'g')}"></div>
       <div style="flex:1;min-width:0;"><div class="tt">${esc(x.emp.full_name)}</div><div class="td">${EVAL_LABEL[x.type]} · ${esc(x.emp.position||x.emp.department||"")}</div></div>
-      <div style="text-align:right;flex-shrink:0;"><div style="font-size:12px;font-weight:700;color:${x.bucket==='overdue'?'#c0392b':'#6a766f'};">${fmtDate(x.due)}</div><button class="btn ghost" style="padding:4px 10px;font-size:12px;margin-top:3px;">Record</button></div></div>`;
+      <div style="text-align:right;flex-shrink:0;"><div style="font-size:12px;font-weight:700;color:${x.bucket==='overdue'?'#c0392b':'#6a766f'};">${fmtDate(x.due)}</div>
+        <div style="margin-top:3px;display:flex;gap:6px;justify-content:flex-end;">
+          <button class="btn ghost" style="padding:4px 10px;font-size:12px;" onclick="event.stopPropagation();openEvalForm('${x.emp.id}','${x.type}','${x.due}')">Record</button>
+          <button class="btn ghost" style="padding:4px 10px;font-size:12px;" title="Already evaluated on paper — clear it from pending" onclick="event.stopPropagation();evMarkPrePortal('${x.emp.id}','${x.type}','${x.due}')">Done on paper</button>
+        </div></div></div>`;
   const byType=(t)=>list.filter(x=>x.type===t);
   const typeSection=(t,title,sub)=>{ const arr=byType(t); return `<div class="panel"><h2>${title} <span class="count-tag">${arr.length}</span></h2>${sub?`<div class="psub" style="margin:2px 0 8px;">${sub}</div>`:""}${arr.length?arr.map(itemRow).join(""):`<div class="psub">Nothing due.</div>`}</div>`; };
   const recent=EVALUATIONS.slice(0,10).map(e=>`<div class="task" style="align-items:center;"><div class="dot g"></div><div style="flex:1;"><div class="tt">${esc(e.employee_name||"")}</div><div class="td">${EVAL_LABEL[e.eval_type]||e.eval_type} · ${esc(e.recommendation||"")}${e.overall_rating?` · ${e.overall_rating}/5`:""}</div></div><div style="font-size:12px;color:#6a766f;flex-shrink:0;">${e.eval_date?fmtDate(e.eval_date):""}${e.evaluator?`<div style="font-size:10.5px;">${esc(e.evaluator)}</div>`:""}</div></div>`).join("");
@@ -4747,6 +4914,7 @@ function renderEvaluations(){
       <h2>Evaluations</h2>
       <div class="psub">Auto-computed from each employee's <b>hire date</b>. Probationary reviews (3rd / 5th month + regularization) cover <b>2026 hires only</b> — earlier staff are already past probation. Annual reviews start 2027.${noHire?` <span style="color:#9a6a00;">⚠ ${noHire} active staff have no hire date yet — upload the hires list to include them.</span>`:""}</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px;">${card("Due this month",due.length)}${card("Overdue",overdue.length)}${card("Upcoming 60d",upcoming.length)}${card("Completed",EVALUATIONS.length)}</div>
+      ${overdue.length?`<div style="margin-top:12px;padding:10px 12px;background:#eef4ef;border:1px solid var(--line);border-radius:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><div style="flex:1;min-width:190px;font-size:12.5px;color:var(--muted);">Already did some of these <b>on paper</b> before the portal? Clear the backlog so it stops flagging them.</div><button class="btn ghost" onclick="evClearBacklog()" style="flex-shrink:0;">✓ Clear ${overdue.length} overdue as done pre-portal…</button></div>`:""}
     </div>
     ${typeSection("3rd-month","First review · 2.5 months","Early coaching check-in — timed 2 weeks early so a delay still lands by the 3-month mark.")}
     ${typeSection("5th-month","Second review · 5.5 months","Decision prep — lands 2 weeks before the 6-month regularization deadline, so there's room for delays.")}
@@ -4795,6 +4963,32 @@ function openEvalForm(empId,type,due){
   });
 }
 window.openEvalForm=openEvalForm;
+
+/* Interim helper — clear evaluations already done OUTSIDE the portal (on paper / prior record), so the
+   auto-generated due list stops flagging them. Records a lightweight, audited "done on file" entry. */
+async function evInsertPrePortal(emp,type,due){
+  const row={ employee_ref:emp.id, employee_name:emp.full_name, position:emp.position||emp.department||null, eval_type:type, period_due:due,
+    overall_rating:null, ratings:{}, recommendation:"Done pre-portal (on file)",
+    strengths:null, improvements:"Marked complete outside the portal (paper / prior record) — no scored form on file.",
+    evaluator:(CURRENT_USER&&CURRENT_USER.email)||null, eval_date:evIso(new Date()), is_demo:!!emp.is_demo };
+  await logChange("evaluation",emp.id,emp.full_name,"Cleared (pre-portal)",EVAL_LABEL[type]+" · marked done on file");
+  return sb.from("evaluations").insert(row);
+}
+async function evMarkPrePortal(empId,type,due){
+  const emp=EMPLOYEES.find(x=>String(x.id)===String(empId)); if(!emp) return;
+  if(!confirm(`Mark ${emp.full_name}'s ${EVAL_LABEL[type]} as done pre-portal?\n\nIt moves to “Recently completed” tagged on-file (recorded under your name, dated today) and leaves the pending list.\n\nUse this only for a review you already handled on paper.`)) return;
+  const {error}=await evInsertPrePortal(emp,type,due);
+  if(error){ alert(error.message); return; }
+  await loadEmployees();
+}
+async function evClearBacklog(){
+  const list=evDueList().filter(x=>x.bucket==='overdue');
+  if(!list.length){ alert("No overdue evaluations to clear."); return; }
+  if(!confirm(`Clear the pre-portal backlog?\n\n${list.length} OVERDUE evaluation(s) will be marked “done on file” — recorded under your name, dated today — and will leave the pending list.\n\nUse this only for reviews you already handled on paper before the portal. Reviews due this month are left alone (clear those one-by-one).`)) return;
+  for(const x of list){ const emp=EMPLOYEES.find(e=>String(e.id)===String(x.emp.id)); if(emp) await evInsertPrePortal(emp,x.type,x.due); }
+  await loadEmployees();
+}
+window.evMarkPrePortal=evMarkPrePortal; window.evClearBacklog=evClearBacklog;
 
 /* ============================ RECRUITMENT REPORTS (Rhel's KPI workbook, computed live) ============================ */
 const RPT_DAY=86400000;

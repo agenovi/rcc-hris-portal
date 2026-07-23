@@ -2378,6 +2378,7 @@ let POLICIES=[];      // policies rows (Policies & Processes group)
 let POLICY_ACKS=[];   // policy_acknowledgments rows (read-and-sign roster)
 let PROCESSES=[];     // processes rows (SOPs)
 let MEETINGS=[];   // meeting_attendance rows (merchandiser meeting sign-in + reimbursement)
+let MEETING_ROSTER=[]; // meeting_roster rows (who was EXPECTED at each meeting; snapshot of active merchandisers)
 let AGENCY_PAYROLL=[];  // agency_payroll rows (M&G / Jell-On real pay + contributions from payroll files)
 // Latest agency payroll row for an employee/diser id (handles the "500002.0" float form)
 function agencyPayFor(id){ if(!id) return null; const key=String(id).replace(/\.0$/,""); const rows=AGENCY_PAYROLL.filter(r=>String(r.emp_no).replace(/\.0$/,"")===key); if(!rows.length) return null; return rows.sort((a,b)=>String(b.cutoff||"").localeCompare(String(a.cutoff||"")))[0]; }
@@ -2546,7 +2547,7 @@ function openChangePassword(){
 
 /* ---------- DATA ---------- */
 async function loadEmployees(){
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2572,7 +2573,8 @@ async function loadEmployees(){
     sb.from("personnel_actions").select("*").order("created_at", {ascending:false}),
     sb.from("policies").select("*").order("title"),
     sb.from("policy_acknowledgments").select("*").order("acknowledged_at", {ascending:false}),
-    sb.from("processes").select("*").order("title")
+    sb.from("processes").select("*").order("title"),
+    sb.from("meeting_roster").select("*")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2595,6 +2597,7 @@ async function loadEmployees(){
   SC_STATUS={}; ((scs&&scs.data)||[]).forEach(r=>{ SC_STATUS[r.sc_name]=r; });
   MATERNITY=(mcl&&mcl.data)||[];
   MEETINGS=(mtg&&mtg.data)||[];
+  MEETING_ROSTER=(mros&&mros.data)||[];
   MEETING_CFG={}; ((sysset&&sysset.data)||[]).forEach(r=>{ MEETING_CFG[r.key]=r.value; });
   AGENCY_PAYROLL=(apay&&apay.data)||[];
   NPAS=(npa&&npa.data)||[];
@@ -4896,6 +4899,10 @@ async function applySignature(s, dataUrl){
     try{ await sb.from("memos").update({ status:"Signed", updated_at:new Date().toISOString() }).eq("signature_request_id",s.id); }catch(_){}
     try{ await logChange("memo",null,s.subject_name||"","NTE approved (e-signed)",(s.details?("combined "+s.details.combined+" · "+(s.details.month||"")):"")); }catch(_){}
   }
+  if(s.doc_type==="meeting_nte"){
+    try{ await sb.from("memos").update({ status:"Signed", updated_at:new Date().toISOString() }).eq("signature_request_id",s.id); }catch(_){}
+    try{ await logChange("memo",null,s.subject_name||"","Meeting-absence NTE approved (e-signed)",(s.details?("missed "+s.details.missed+" of "+s.details.expected+" · "+(s.details.label||"")):"")); }catch(_){}
+  }
   return null;
 }
 // Batch: approve & e-sign every pending NTE awaiting you, using your saved signature.
@@ -4914,7 +4921,7 @@ function openSignDoc(id){
   let m=document.getElementById("sigModal"); if(!m){ m=document.createElement("div"); m.id="sigModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
-    ${(s.doc_type==="claim"&&s.details)?claimCard(s):(s.doc_type==="nte"&&s.details)?nteCard(s):defaultSignTop(s)}
+    ${(s.doc_type==="claim"&&s.details)?claimCard(s):(s.doc_type==="nte"&&s.details)?nteCard(s):(s.doc_type==="meeting_nte"&&s.details)?meetingNteCard(s):defaultSignTop(s)}
     ${savedSig?`<div style="display:flex;align-items:center;gap:10px;background:#eef6f0;border:1px solid #cfe6d8;border-radius:9px;padding:8px 12px;margin-bottom:10px;">
       <img src="${savedSig}" style="height:34px;background:#fff;border-radius:4px;padding:2px 4px;border:1px solid #e2e7e4;">
       <div style="flex:1;font-size:12.5px;color:#12352a;">Your saved signature is on file — one tap to approve.</div>
@@ -4931,7 +4938,7 @@ function openSignDoc(id){
     <div style="display:flex;gap:10px;margin-top:14px;">
       <button class="btn ghost" id="sigDecline" style="color:#c0392b;border-color:#f1c9c5;">Decline</button>
       <button class="btn ghost" id="sigCancel" style="margin-left:auto;">Cancel</button>
-      <button class="btn" id="sigDo">${(s.doc_type==="claim"||s.doc_type==="nte")?"Approve &amp; Sign":"Sign document"}</button>
+      <button class="btn" id="sigDo">${(s.doc_type==="claim"||s.doc_type==="nte"||s.doc_type==="meeting_nte")?"Approve &amp; Sign":"Sign document"}</button>
     </div></div>`;
   m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
   document.getElementById("sigCancel").onclick=()=>m.remove();
@@ -4954,7 +4961,7 @@ function openSignDoc(id){
     if(!dirty){ document.getElementById("sigMsg").textContent="Please draw your signature first."; return; }
     const remember=document.getElementById("sigRemember"); const data=cv.toDataURL("image/png");
     if(remember&&remember.checked) saveSavedSig(data);
-    finishSign(data, document.getElementById("sigDo"), (s.doc_type==="claim"||s.doc_type==="nte")?"Approve & Sign":"Sign document");
+    finishSign(data, document.getElementById("sigDo"), (s.doc_type==="claim"||s.doc_type==="nte"||s.doc_type==="meeting_nte")?"Approve & Sign":"Sign document");
   };
   const savedBtn=document.getElementById("sigSaved");
   if(savedBtn) savedBtn.onclick=()=> finishSign(savedSig, savedBtn, "Approve & Sign with this");
@@ -5590,11 +5597,13 @@ const SBTN="padding:8px 13px;font-size:13px;";
 const MSEL="padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:13px;background:#fff;";
 async function meetingSaveCfg(key,value){ MEETING_CFG[key]=value; await sb.from("system_settings").upsert({ key, value, updated_at:new Date().toISOString() }, { onConflict:"key" }); }
 async function reloadMeetings(){
-  const [mtg,sysset]=await Promise.all([
+  const [mtg,sysset,mros]=await Promise.all([
     sb.from("meeting_attendance").select("*").order("signed_in_at",{ascending:false}),
-    sb.from("system_settings").select("*")
+    sb.from("system_settings").select("*"),
+    sb.from("meeting_roster").select("*")
   ]);
   MEETINGS=(mtg&&mtg.data)||[];
+  MEETING_ROSTER=(mros&&mros.data)||[];
   MEETING_CFG={}; ((sysset&&sysset.data)||[]).forEach(r=>{ MEETING_CFG[r.key]=r.value; });
   renderMeetings();
 }
@@ -5691,7 +5700,10 @@ function renderMeetings(){
     </tr>`).join("")}
     </tbody></table></div>`
     : `<div class="placeholder" style="margin-top:12px;"><h2>No sign-ins yet${viewDate?" for "+esc(viewDate):""}</h2><p>Open a meeting, display the QR, and merchandiser sign-ins appear here live.</p></div>`}
-  </div>`;
+  </div>
+  ${meetingRosterPanel(viewDate,active)}
+  ${meetingAbsenteePanel(viewDate,active)}
+  ${meetingTrackerPanel()}`;
 
   const on=(id,ev,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener(ev,fn); };
   on("mtgCopyLink","click",()=>{ if(navigator.clipboard) navigator.clipboard.writeText(MEETING_SIGNIN_URL); const b=document.getElementById("mtgCopyLink"); if(b){ const t=b.textContent; b.textContent="Copied ✓"; setTimeout(()=>b.textContent=t,1200); } });
@@ -5713,7 +5725,12 @@ function meetingOpenDialog(){
   const today=new Date().toISOString().slice(0,10);
   const date=prompt("Meeting date (YYYY-MM-DD):", a.date||today); if(date===null) return;
   const label=prompt("Meeting name:", a.label||"Monthly Sales Meeting"); if(label===null) return;
-  meetingSaveCfg("meeting_active",{date:(date||"").trim()||today,label:(label||"").trim()||"Monthly Sales Meeting",open:true}).then(reloadMeetings);
+  const d=(date||"").trim()||today, l=(label||"").trim()||"Monthly Sales Meeting";
+  meetingSaveCfg("meeting_active",{date:d,label:l,open:true}).then(async()=>{
+    // Auto-load the expected roster (active merchandisers) so absentees can be computed once sign-in closes.
+    if(!meetingRosterFor(d).length){ try{ await meetingPrepareRoster(d,l); return; }catch(_){} }
+    reloadMeetings();
+  });
 }
 async function meetingLockIP(){
   try{
@@ -5738,6 +5755,299 @@ function meetingExport(rows,viewDate){
   a.download="bank-report-"+(viewDate||"meeting")+".csv"; a.click();
 }
 
+/* ---- MEETING: expected roster · absentees · graduated notice · regular-attendance tracker ---- */
+const MEETING_EXPLAIN_DAYS=5;
+const MEETING_NOTED_BY="Anj Genomal"; // merchandisers = retail; Director notes disciplinary notices
+function mNorm(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim(); }
+function mPersonKey(emp_no,name){ return (emp_no?String(emp_no):"")+"|"+mNorm(name); }
+// Did this roster person sign in at their meeting? Match on emp_no when both have it, else on name.
+function mAttended(row){
+  const d=String(row.meeting_date);
+  return (MEETINGS||[]).some(a=> String(a.meeting_date)===d && (
+    (row.emp_no && a.emp_no && String(row.emp_no)===String(a.emp_no)) || mNorm(row.name)===mNorm(a.name) ));
+}
+function meetingRosterFor(date){ return (MEETING_ROSTER||[]).filter(r=>String(r.meeting_date)===String(date)); }
+// Across every meeting this person was EXPECTED at (up to & incl. `uptoDate`), how many did they miss.
+function meetingMissHistory(emp_no,name,uptoDate){
+  const key=mPersonKey(emp_no,name); let expected=0,missed=0;
+  (MEETING_ROSTER||[]).forEach(r=>{ if(!r.expected) return; if(mPersonKey(r.emp_no,r.name)!==key) return;
+    if(uptoDate && String(r.meeting_date)>String(uptoDate)) return;
+    expected++; if(!mAttended(r)) missed++; });
+  return {expected,missed};
+}
+// Snapshot the active merchandiser roster onto a meeting (idempotent — skips people already snapshotted).
+async function meetingPrepareRoster(date,label){
+  if(!date){ alert("Open a meeting first (set its date), then load the expected roster."); return; }
+  const have=new Set(meetingRosterFor(date).map(r=>mPersonKey(r.emp_no,r.name)));
+  const seen=new Set(have);
+  const rows=[];
+  (DISERS||[]).filter(d=>(d.status||"").toLowerCase().startsWith("active")).forEach(d=>{
+    const k=mPersonKey(d.emp_no,d.name); if(seen.has(k)) return; seen.add(k);
+    rows.push({ meeting_date:date, meeting_label:label||null, diser_id:d.id, emp_no:d.emp_no||null,
+      name:d.name, store:d.store||null, position:d.position||null, hired_by:d.hired_by||null, expected:true });
+  });
+  if(!rows.length){ alert("The expected roster for this meeting is already loaded ("+have.size+" merchandisers). Untick anyone not required below."); return; }
+  const { error } = await sb.from("meeting_roster").insert(rows);
+  if(error){ alert("Couldn't load the roster: "+error.message); return; }
+  await reloadMeetings();
+}
+window.mtgPrepareRoster=(date,label)=>meetingPrepareRoster(date,label);
+async function meetingToggleExpected(id,expected){
+  await sb.from("meeting_roster").update({expected}).eq("id",id);
+  const r=(MEETING_ROSTER||[]).find(x=>String(x.id)===String(id)); if(r) r.expected=expected;
+  renderMeetings();
+}
+window.mtgToggleExpected=(id,checked)=>meetingToggleExpected(id,!!checked);
+
+// ---- Notice text (reminder = non-disciplinary; NTE = repeat, DOLE twin-notice) ----
+function meetingReminderText(row,label,date){
+  return `REMINDER — MONTHLY MERCHANDISER MEETING\n\n`
+    +`To: ${row.name}${row.store?" · "+row.store:""}\n\n`
+    +`Our records show you were not able to attend the ${label||"monthly merchandiser meeting"} held on ${fmtDate(date)}. Attendance at the monthly meeting is part of your responsibilities — important updates, product information, and concerns are discussed there.\n\n`
+    +`This is a friendly reminder, not a disciplinary notice. Kindly make sure to attend the next scheduled meeting. If you were absent for a valid reason (illness, emergency, or prior approval), please inform your supervisor or the Merchandising/HR coordinator so it can be properly noted.\n\n`
+    +`Thank you for your cooperation.\n\nHuman Resources / Merchandising Department — Roshan Commercial Corporation`;
+}
+function meetingNteText(row,label,date,hist){
+  return `NOTICE TO EXPLAIN — REPEATED ABSENCE FROM MANDATORY MEETINGS\n\n`
+    +`To: ${row.name}${row.store?" · "+row.store:""}\n\n`
+    +`This notice concerns your attendance at the Company's monthly merchandiser meetings. Based on our records, you have missed ${hist.missed} of the ${hist.expected} meeting(s) you were expected to attend, including the ${label||"monthly meeting"} held on ${fmtDate(date)}.\n\n`
+    +`Attendance at these meetings is a reasonable requirement connected to your duties. Repeated absence without a valid reason may constitute a violation of Company policy and a ground for disciplinary action under the Labor Code.\n\n`
+    +`In line with your right to due process, you are directed to submit a WRITTEN EXPLANATION within ${MEETING_EXPLAIN_DAYS} calendar days from receipt of this notice, stating why no disciplinary action should be taken against you for the above. If any of these absences were for a valid or justifiable reason (illness, emergency, or approved leave), please state this clearly and attach any supporting documents — these will be duly considered. You may request a conference to be heard and may be assisted by a representative of your choice.\n\n`
+    +`This is the first of the twin notices required by due process. It is issued to give you the opportunity to be heard; it is not a finding or a penalty.\n\n`
+    +`Prepared by: Human Resources Department\nNoted by: ${MEETING_NOTED_BY} — Management`;
+}
+// Printable notice on RCC letterhead (kind = 'reminder' | 'nte'). approval = {signer,date,img} stamps the e-sig on NTE.
+function meetingPrintNotice(row,label,date,kind,hist,approval){
+  const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  const isNte=kind==="nte";
+  const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to print the notice."); return; }
+  const subject=isNte?"NOTICE TO EXPLAIN — REPEATED ABSENCE FROM MANDATORY MEETINGS":"REMINDER — MONTHLY MERCHANDISER MEETING";
+  const bodyP = isNte
+    ? `<p>This notice concerns your attendance at the Company's monthly merchandiser meetings. Based on our records, you have missed <b>${hist.missed} of the ${hist.expected}</b> meeting(s) you were expected to attend, including the <b>${esc(label||"monthly meeting")}</b> held on ${esc(fmtDate(date))}.</p>
+       <p>Attendance at these meetings is a reasonable requirement connected to your duties. Repeated absence without a valid reason may constitute a violation of Company policy and a ground for disciplinary action under the Labor Code.</p>
+       <p>In line with your right to due process, you are directed to submit a <b>WRITTEN EXPLANATION within ${MEETING_EXPLAIN_DAYS} calendar days</b> from your receipt of this notice, stating why no disciplinary action should be taken against you for the above.</p>
+       <p>If any of these absences were for a valid or justifiable reason (illness, emergency, or approved leave), please state this clearly and attach any supporting documents — these will be duly considered. You may request a conference to be heard, and you may be assisted by a representative of your choice.</p>
+       <p>This is the first of the twin notices required by due process. It is issued to give you the opportunity to be heard; it is not a finding or a penalty.</p>`
+    : `<p>Our records show you were not able to attend the <b>${esc(label||"monthly merchandiser meeting")}</b> held on ${esc(fmtDate(date))}. Attendance at the monthly meeting is part of your responsibilities — important updates, product information, and concerns are discussed there.</p>
+       <p>This is a <b>friendly reminder, not a disciplinary notice</b>. Kindly make sure to attend the next scheduled meeting. If you were absent for a valid reason (illness, emergency, or prior approval), please inform your supervisor or the Merchandising/HR coordinator so it can be properly noted.</p>
+       <p>Thank you for your cooperation.</p>`;
+  w.document.write(`<!DOCTYPE html><html><head><title>${isNte?"NTE":"Reminder"} — ${esc(row.name)}</title><style>
+    body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#1F2A37;max-width:760px;margin:24px auto;padding:0 24px;font-size:13.5px;line-height:1.6;}
+    .lh{border-bottom:2.5px solid #1B5E20;padding-bottom:8px;margin-bottom:16px;}
+    .lh b{font-size:17px;color:#1B5E20;letter-spacing:.4px;} .lh div{font-size:11px;color:#667;}
+    .mf{margin:2px 0;} .mf b{display:inline-block;width:90px;}
+    .sub{border-top:2px solid #1B5E20;margin:14px 0 16px;padding-top:2px;}
+    p{margin:0 0 11px;} .sig{margin-top:26px;} .sigrole{font-weight:700;margin-top:16px;}
+    .line{border-bottom:1px solid #333;width:280px;height:26px;margin:4px 0 2px;}
+    .ack{font-style:italic;color:#555;font-size:11.5px;margin-top:4px;}
+    @media print{ body{margin:0 auto;} }
+  </style></head><body>
+    <div class="lh"><b>ROSHAN COMMERCIAL CORPORATION</b><div>3rd Floor RCC Center, 104 Shaw Boulevard, Pasig, Manila, 1603 · +632 86386556</div></div>
+    <div class="mf">${today}</div>
+    <div class="sub"></div>
+    <div class="mf"><b>TO</b>: ${esc((row.name||"").toUpperCase())}${row.store?" — "+esc(row.store):""}</div>
+    <div class="mf"><b>FROM</b>: HUMAN RESOURCES / MERCHANDISING DEPARTMENT</div>
+    <div class="mf"><b>SUBJECT</b>: ${subject}</div>
+    <div class="sub"></div>
+    ${bodyP}
+    <div class="sig">
+      <div class="sigrole">Prepared by:</div><div class="line"></div>Human Resources Department
+      ${isNte?`<div class="sigrole">Noted by:</div>${(approval&&approval.img)?`<div style="margin:2px 0;"><img src="${approval.img}" style="height:44px;display:block;">${esc(approval.signer||MEETING_NOTED_BY)}<br><span style="color:#667;">Management · e-signed via RCC Portal${approval.date?" on "+new Date(approval.date).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}):""}</span></div>`:`<div class="line"></div>${esc(MEETING_NOTED_BY)}<br><span style="color:#667;">Management</span>`}
+      <div class="sigrole">Received by:</div><div class="line"></div>${esc(row.name)}<br><span style="color:#667;">Signature over printed name / Date</span>
+      <div class="ack">By signing, I acknowledge receipt of this notice. My signature does not mean I admit the contents.</div>`:""}
+    </div>
+    <script>window.print();</`+`script></body></html>`);
+  w.document.close();
+}
+// ---- Notice state per absentee (already reminded / NTE pending / NTE signed) ----
+function meetingNoticeState(row,date){
+  const nte=(SIGNATURES||[]).find(s=>s.doc_type==="meeting_nte"&&s.details&&String(s.details.meeting_date)===String(date)&&(s.subject_name||"")===row.name);
+  if(nte) return {kind:"nte",state:nte.status==="signed"?"signed":nte.status==="declined"?"declined":"pending",sig:nte};
+  const rem=(MEMOS||[]).find(m=>m.memo_type==="Meeting Reminder"&&String(m.relevant_date)===String(date)&&(m.subject_name||"")===row.name);
+  if(rem) return {kind:"reminder",state:"sent",memo:rem};
+  return {state:"none"};
+}
+// Send a (non-disciplinary) reminder: print on letterhead + log to Memos.
+async function meetingSendReminder(rosterId){
+  const row=(MEETING_ROSTER||[]).find(r=>String(r.id)===String(rosterId)); if(!row) return;
+  const label=row.meeting_label||meetingActive().label||"Monthly Merchandiser Meeting";
+  meetingPrintNotice(row,label,row.meeting_date,"reminder");
+  const ref="MRM-"+String(row.meeting_date).replace(/-/g,"")+"-"+mNorm(row.name).replace(/\s+/g,"").slice(0,8);
+  try{ await sb.from("memos").insert({ ref_no:ref, memo_type:"Meeting Reminder", subject_name:row.name,
+    title:"Meeting reminder — "+label+" ("+row.meeting_date+")",
+    body:"Reminder issued for non-attendance at "+label+" on "+row.meeting_date+". Non-disciplinary.",
+    relevant_date:row.meeting_date, status:"Issued", created_by:(CURRENT_USER&&CURRENT_USER.email)||"HR", is_demo:!!row.is_demo });
+  }catch(_){}
+  try{ const me=await sb.from("memos").select("*").order("created_at",{ascending:false}); MEMOS=(me&&me.data)||MEMOS; renderMemos(); }catch(_){}
+  renderMeetings();
+}
+window.mtgSendReminder=(id)=>meetingSendReminder(id);
+// Route a repeat-absence NTE to the Signatures inbox for the Director's sign-off, and log to Memos.
+async function meetingSendNte(rosterId){
+  const row=(MEETING_ROSTER||[]).find(r=>String(r.id)===String(rosterId)); if(!row) return;
+  const label=row.meeting_label||meetingActive().label||"Monthly Merchandiser Meeting";
+  const hist=meetingMissHistory(row.emp_no,row.name,row.meeting_date);
+  const body=meetingNteText(row,label,row.meeting_date,hist);
+  const details={ meeting_date:row.meeting_date, label, employee:row.name, emp_no:row.emp_no||null, store:row.store||null,
+    position:row.position||null, expected:hist.expected, missed:hist.missed, noted_by:MEETING_NOTED_BY };
+  const { data:sig, error } = await sb.from("signature_requests").insert({ doc_type:"meeting_nte",
+    doc_title:"Notice to Explain — Meeting Absence", subject_name:row.name, body,
+    from_name:(CURRENT_USER&&CURRENT_USER.email)||"HR", awaiting:"you", with_whom:MEETING_NOTED_BY+" (Noted by)",
+    status:"pending", meta:"Meeting absence · "+label+" "+row.meeting_date, details }).select().single();
+  if(error){ alert("Couldn't send the NTE: "+error.message); return; }
+  const ref="MTGNTE-"+String(row.meeting_date).replace(/-/g,"")+"-"+mNorm(row.name).replace(/\s+/g,"").slice(0,8);
+  try{ await sb.from("memos").insert({ ref_no:ref, memo_type:"Notice to Explain", subject_name:row.name,
+    title:"NTE — Meeting absence ("+label+", "+row.meeting_date+")",
+    body:"NTE for repeated meeting absence: missed "+hist.missed+" of "+hist.expected+" expected meetings. Sent to "+MEETING_NOTED_BY+" for sign-off.",
+    relevant_date:row.meeting_date, status:"Issued", signature_request_id:sig.id, created_by:(CURRENT_USER&&CURRENT_USER.email)||"HR", is_demo:!!row.is_demo });
+  }catch(_){}
+  try{ const [sg,me]=await Promise.all([ sb.from("signature_requests").select("*").order("created_at",{ascending:false}), sb.from("memos").select("*").order("created_at",{ascending:false}) ]);
+    SIGNATURES=(sg&&sg.data)||SIGNATURES; MEMOS=(me&&me.data)||MEMOS; renderSignatures(); renderMemos(); }catch(_){}
+  renderMeetings();
+}
+window.mtgSendNte=(id)=>meetingSendNte(id);
+// Print an APPROVED meeting NTE with the e-signature stamped on the "Noted by" line.
+window.mtgPrintSignedNte=(sigId)=>{
+  const s=(SIGNATURES||[]).find(x=>String(x.id)===String(sigId)); if(!s||!s.details) return;
+  const d=s.details, row={ name:d.employee, store:d.store, emp_no:d.emp_no };
+  meetingPrintNotice(row, d.label, d.meeting_date, "nte", {expected:d.expected,missed:d.missed}, { signer:s.signer_name, date:s.signed_at, img:s.signature_data });
+};
+// Branded sign-off card for a meeting-absence NTE (mirrors the attendance nteCard).
+function meetingNteCard(s){ const d=s.details||{};
+  const rw=(k,v)=>`<tr><td style="padding:9px 14px;color:#6B7785;font-size:12.5px;border-bottom:1px solid #eef1f4;white-space:nowrap;vertical-align:top;">${k}</td><td style="padding:9px 14px;font-weight:700;font-size:13px;border-bottom:1px solid #eef1f4;">${v}</td></tr>`;
+  return `<div style="background:linear-gradient(135deg,#12352a,#1c4b39);margin:-22px -22px 0;padding:15px 20px;border-radius:14px 14px 0 0;color:#fff;">
+      <div style="font-weight:800;font-size:15px;letter-spacing:.2px;">RCC Portal <span style="opacity:.72;font-weight:500;font-size:12.5px;">Roshan Commercial Corporation</span></div>
+    </div>
+    <div style="padding:16px 2px 0;">
+      <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#6B7785;">NOTICE TO EXPLAIN · MEETING ABSENCE</div>
+      <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 3px;">NTE needs your sign-off</div>
+      <div class="psub" style="margin-bottom:11px;">Submitted by ${esc(s.from_name||"HR")}${s.created_at?" · "+fmtAgo(s.created_at):""}. Review the record, then approve &amp; e-sign as “Noted by”.</div>
+      <table style="width:100%;border:1px solid #e6eaee;border-radius:10px;border-collapse:separate;border-spacing:0;overflow:hidden;">
+        ${rw("Merchandiser",esc(d.employee||s.subject_name||"—"))}
+        ${d.store?rw("Store",esc(d.store)):""}
+        ${rw("Meeting missed",esc((d.label?d.label+" · ":"")+fmtDate(d.meeting_date)))}
+        <tr><td style="padding:12px 14px;background:#eaf4ec;font-size:12.5px;font-weight:800;color:#12352a;">MEETINGS MISSED</td><td style="padding:12px 14px;background:#eaf4ec;font-weight:800;font-size:15.5px;color:#12352a;">${d.missed} of ${d.expected} expected</td></tr>
+        ${d.noted_by?rw("Noted by",esc(d.noted_by)):""}
+      </table>
+      <div class="note" style="margin-top:10px;background:#fdeaea;border-color:#f0c9c5;color:#8a2e26;">⚠ Repeat absence — this is the DOLE first notice (Notice to Explain). Confirm the absences were unauthorized (no approved leave / valid reason) before serving.</div>
+      <details style="margin:11px 0 2px;"><summary style="cursor:pointer;font-size:12.5px;color:#1E3A5F;font-weight:600;">Read the full notice text</summary>
+        <div style="background:#f7f9fb;border:1px solid #E3E8EF;border-radius:10px;padding:12px 14px;margin-top:8px;white-space:pre-wrap;font-size:12.5px;line-height:1.55;max-height:30vh;overflow-y:auto;">${esc(s.body||"")}</div>
+      </details>
+    </div>`; }
+
+// ---- Panels: expected roster · absentees (graduated notice) · regular-attendance tracker ----
+function meetingRosterPanel(viewDate,active){
+  const roster=meetingRosterFor(viewDate);
+  const label=(active&&active.date===viewDate&&active.label)||(roster[0]&&roster[0].meeting_label)||"Monthly Merchandiser Meeting";
+  const activeDisers=(DISERS||[]).filter(d=>(d.status||"").toLowerCase().startsWith("active")).length;
+  const expected=roster.filter(r=>r.expected);
+  if(!viewDate){ return `<div class="panel"><h2>Expected roster</h2><div class="psub">Open a meeting first — then load the list of merchandisers who should attend.</div></div>`; }
+  if(!roster.length){ return `<div class="panel"><h2>Expected roster · ${fmtDate(viewDate)}</h2>
+      <div class="psub">Who <b>should</b> attend this meeting. Load the current active merchandisers, then untick anyone not required for this meeting.</div>
+      <button class="btn" style="${SBTN};margin-top:10px;" onclick="mtgPrepareRoster('${esc(viewDate)}',${JSON.stringify(label)})">Load expected roster (${activeDisers} active merchandisers)</button></div>`; }
+  const sorted=roster.slice().sort((a,b)=>String(a.store||"~").localeCompare(String(b.store||"~"))||String(a.name).localeCompare(String(b.name)));
+  return `<div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+      <h2 style="margin:0;">Expected roster · ${fmtDate(viewDate)}</h2>
+      <div class="psub" style="margin:0;"><b>${expected.length}</b> expected${roster.length!==expected.length?` · ${roster.length-expected.length} excused`:""} · ${roster.length} on file</div>
+    </div>
+    <div class="psub">Untick anyone not required for this meeting — they won't be counted as absent. <button class="btn ghost" style="${SBTN};margin-left:6px;" onclick="mtgPrepareRoster('${esc(viewDate)}',${JSON.stringify(label)})">Refresh from active list</button></div>
+    <div style="overflow-x:auto;margin-top:12px;max-height:340px;overflow-y:auto;">
+    <table><thead><tr><th style="width:70px;">Expected</th><th>Name</th><th>Store</th><th>Agency</th><th>Attended?</th></tr></thead><tbody>
+    ${sorted.map(r=>{ const att=mAttended(r); return `<tr>
+      <td><input type="checkbox" ${r.expected?"checked":""} onchange="mtgToggleExpected('${r.id}',this.checked)" style="width:auto;margin:0;"></td>
+      <td><b>${esc(r.name)}</b></td><td>${esc(r.store||"—")}</td><td>${esc(r.hired_by||"—")}</td>
+      <td>${att?'<span class="pill active">Present ✓</span>':r.expected?'<span class="pill awol">Absent</span>':'<span class="pill" style="background:#eef1f4;color:#6b7785;">excused</span>'}</td>
+    </tr>`; }).join("")}
+    </tbody></table></div></div>`;
+}
+function meetingAbsenteePanel(viewDate,active){
+  const roster=meetingRosterFor(viewDate); if(!viewDate||!roster.length) return "";
+  const label=(active&&active.date===viewDate&&active.label)||(roster[0]&&roster[0].meeting_label)||"Monthly Merchandiser Meeting";
+  const absent=roster.filter(r=>r.expected && !mAttended(r))
+    .sort((a,b)=>String(a.store||"~").localeCompare(String(b.store||"~"))||String(a.name).localeCompare(String(b.name)));
+  const open=active&&active.open&&active.date===viewDate;
+  const firsts=absent.filter(r=>meetingMissHistory(r.emp_no,r.name,viewDate).missed<2 && meetingNoticeState(r,viewDate).state==="none").length;
+  const repeats=absent.filter(r=>meetingMissHistory(r.emp_no,r.name,viewDate).missed>=2 && meetingNoticeState(r,viewDate).state==="none").length;
+  return `<div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+      <h2 style="margin:0;">Did not attend · ${fmtDate(viewDate)}</h2>
+      <div class="psub" style="margin:0;"><b>${absent.length}</b> absent of ${roster.filter(r=>r.expected).length} expected</div>
+    </div>
+    ${open?`<div class="note" style="margin-top:10px;">Sign-in is still <b>open</b> — close it (top of page) before serving notices, so late sign-ins aren't wrongly flagged absent.</div>`:""}
+    ${absent.length?`
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;">
+      ${firsts?`<button class="btn ghost" style="${SBTN}" onclick="mtgReminderAll('${esc(viewDate)}')">Send reminder to all first-time absentees (${firsts})</button>`:""}
+      ${repeats?`<button class="btn" style="${SBTN}" onclick="mtgNteAll('${esc(viewDate)}')">Send NTE to all repeat absentees (${repeats})</button>`:""}
+    </div>
+    <div style="overflow-x:auto;">
+    <table><thead><tr><th>Name</th><th>Store</th><th>Missed</th><th>Notice</th><th style="min-width:230px;">Action</th></tr></thead><tbody>
+    ${absent.map(r=>{ const h=meetingMissHistory(r.emp_no,r.name,viewDate); const repeat=h.missed>=2; const st=meetingNoticeState(r,viewDate);
+      const badge=repeat?`<span class="pill" style="background:#fdeaea;color:#a4322a;font-weight:700;">${h.missed}× missed</span>`:`<span class="pill" style="background:#fdf0d9;color:#9a6a00;font-weight:700;">1st miss</span>`;
+      let action;
+      if(st.kind==="nte"){ action = st.state==="signed"
+          ? `<span class="pill active">NTE signed ✓</span> <button class="btn ghost" style="${SBTN}" onclick="mtgPrintSignedNte('${st.sig.id}')">Print signed NTE</button>`
+          : st.state==="declined" ? `<span class="pill awol">NTE declined</span> <button class="btn ghost" style="${SBTN}" onclick="mtgSendNte('${r.id}')">Re-send</button>`
+          : `<span class="pill probation">NTE awaiting sign-off</span>`;
+      } else if(st.kind==="reminder"){ action = `<span class="pill active">Reminder sent ✓</span> <button class="btn ghost" style="${SBTN}" onclick="mtgSendReminder('${r.id}')">Reprint</button>${repeat?` <button class="btn" style="${SBTN}" onclick="mtgSendNte('${r.id}')">Escalate to NTE</button>`:""}`;
+      } else if(repeat){ action = `<button class="btn" style="${SBTN}" onclick="mtgSendNte('${r.id}')">Send NTE (repeat)</button> <button class="btn ghost" style="${SBTN}" onclick="mtgSendReminder('${r.id}')">Reminder instead</button>`;
+      } else { action = `<button class="btn ghost" style="${SBTN}" onclick="mtgSendReminder('${r.id}')">Send reminder</button> <button class="btn ghost" style="${SBTN}" onclick="mtgSendNte('${r.id}')">Escalate to NTE</button>`; }
+      return `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.store||"—")}</td><td>${badge}<br><span class="psub" style="margin:0;font-size:11px;">missed ${h.missed} of ${h.expected}</span></td><td>${st.state==="none"?'<span class="psub" style="margin:0;">—</span>':""}</td><td>${action}</td></tr>`;
+    }).join("")}
+    </tbody></table></div>`
+    : `<div class="placeholder" style="margin-top:12px;"><h2>Everyone expected attended 🎉</h2><p>No absentees for this meeting.</p></div>`}
+  </div>`;
+}
+window.mtgReminderAll=async(date)=>{
+  const roster=meetingRosterFor(date);
+  const list=roster.filter(r=>r.expected && !mAttended(r) && meetingMissHistory(r.emp_no,r.name,date).missed<2 && meetingNoticeState(r,date).state==="none");
+  if(!list.length){ alert("No first-time absentees pending a reminder."); return; }
+  if(!confirm("Send a reminder to "+list.length+" first-time absentee(s)? Each opens as a printable notice on RCC letterhead.")) return;
+  for(const r of list){ await meetingSendReminder(r.id); }
+};
+window.mtgNteAll=async(date)=>{
+  const roster=meetingRosterFor(date);
+  const list=roster.filter(r=>r.expected && !mAttended(r) && meetingMissHistory(r.emp_no,r.name,date).missed>=2 && meetingNoticeState(r,date).state==="none");
+  if(!list.length){ alert("No repeat absentees pending an NTE."); return; }
+  if(!confirm("Send an NTE (repeat absence) to "+list.length+" merchandiser(s)? Each goes to "+MEETING_NOTED_BY+"'s Signatures inbox for sign-off. Only serve after confirming the absences were unauthorized.")) return;
+  for(const r of list){ await meetingSendNte(r.id); }
+};
+let MEETING_TRACK_ALL=false;
+window.mtgTrackerToggle=()=>{ MEETING_TRACK_ALL=!MEETING_TRACK_ALL; renderMeetings(); };
+function meetingTrackerPanel(){
+  const dates=[...new Set((MEETING_ROSTER||[]).filter(r=>r.expected).map(r=>String(r.meeting_date)))].sort();
+  if(dates.length<1) return "";
+  const people={};
+  (MEETING_ROSTER||[]).filter(r=>r.expected).forEach(r=>{ const k=mPersonKey(r.emp_no,r.name);
+    if(!people[k]) people[k]={name:r.name,store:r.store,attended:{},expected:new Set()};
+    people[k].expected.add(String(r.meeting_date)); if(mAttended(r)) people[k].attended[String(r.meeting_date)]=true; });
+  let list=Object.values(people).map(p=>{ const exp=p.expected.size, att=Object.keys(p.attended).length;
+    return {...p, exp, att, rate: exp?att/exp:0, missed:exp-att }; });
+  list.sort((a,b)=> a.rate-b.rate || b.missed-a.missed || String(a.name).localeCompare(String(b.name)));
+  const chronic=list.filter(p=>p.exp>=2 && p.rate<0.5);
+  const perfect=list.filter(p=>p.exp>=2 && p.rate===1);
+  const shown=MEETING_TRACK_ALL?list:list.slice(0,15);
+  const recent=dates.slice(-6);
+  const rateColor=r=> r>=0.8?"#1c6b3f":r>=0.5?"#9a6a00":"#a4322a";
+  return `<div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+      <h2 style="margin:0;">Regular attendance</h2>
+      <div class="psub" style="margin:0;">${dates.length} meeting${dates.length===1?"":"s"} tracked · ${list.length} merchandisers</div>
+    </div>
+    <div class="psub">Attendance rate across every meeting each person was expected at. ${chronic.length?`<b style="color:#a4322a;">${chronic.length}</b> chronic (below 50%). `:""}${perfect.length?`<b style="color:#1c6b3f;">${perfect.length}</b> perfect attendance.`:""}</div>
+    <div style="overflow-x:auto;margin-top:12px;">
+    <table><thead><tr><th>Name</th><th>Store</th><th>Rate</th><th>Attended</th><th>Last ${recent.length} meeting${recent.length===1?"":"s"}</th></tr></thead><tbody>
+    ${shown.map(p=>`<tr>
+      <td><b>${esc(p.name)}</b></td><td>${esc(p.store||"—")}</td>
+      <td><b style="color:${rateColor(p.rate)};">${Math.round(p.rate*100)}%</b></td>
+      <td>${p.att}/${p.exp}${p.exp>=2&&p.rate<0.5?' <span class="pill" style="background:#fdeaea;color:#a4322a;font-weight:700;">chronic</span>':p.exp>=2&&p.rate===1?' <span class="pill active">perfect</span>':""}</td>
+      <td style="white-space:nowrap;">${recent.map(d=>{ const wasExp=p.expected.has(d); if(!wasExp) return '<span title="'+esc(d)+' — not expected" style="color:#c3c9d0;">·</span>'; const a=p.attended[d]; return '<span title="'+esc(d)+'" style="color:'+(a?"#1c6b3f":"#a4322a")+';font-weight:700;">'+(a?"✓":"✗")+'</span>'; }).join(" ")}</td>
+    </tr>`).join("")}
+    </tbody></table></div>
+    ${list.length>15?`<button class="btn ghost" style="${SBTN};margin-top:10px;" onclick="mtgTrackerToggle()">${MEETING_TRACK_ALL?"Show top 15 only":"Show all "+list.length}</button>`:""}
+  </div>`;
+}
+
 /* ===================== DEMO DATA — safe sandbox (delete only DEMO-marked records) ===================== */
 function isDemoText(s){ return /demo/i.test(String(s||"")); }
 // "This is demo data" checkbox for create forms — lets entries use realistic names but stay cleanable.
@@ -5755,6 +6065,7 @@ function renderDemoData(){
     {label:"Memo", table:"memos", rows:MEMOS, name:r=>[r.subject_name,r.title].filter(Boolean).join(" — ")},
     {label:"Opening", table:"manpower_requests", rows:MANPOWER, name:r=>r.worksite},
     {label:"Meeting sign-in", table:"meeting_attendance", rows:MEETINGS, name:r=>r.name},
+    {label:"Meeting roster", table:"meeting_roster", rows:MEETING_ROSTER, name:r=>r.name},
     {label:"Store", table:"branches", rows:BRANCHES, name:r=>r.name},
   ];
   const found=[];

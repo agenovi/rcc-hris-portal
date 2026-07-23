@@ -5225,10 +5225,53 @@ function closeOpening(o){
   });
 }
 
-/* ---------- GLOBAL SEARCH (topbar) ---------- */
+/* ---------- GLOBAL SEARCH (topbar) — universal, access-gated ---------- */
+// One bar: type any name/word/ref and it pulls matches from every module the
+// logged-in user is allowed to see (pageAllowed gates each group), click to open.
 function wireGlobalSearch(){
   const s=$(".topbar .search"); if(!s||s.dataset.wired) return; s.dataset.wired="1";
-  s.addEventListener("input",()=>{ window.go("employees"); setTimeout(()=>{ const es=$("#empSearch"); if(es){ es.value=s.value; paintEmpRows(); } },20); });
+  s.placeholder="Search anything — people, stores, memos, loans, exits…";
+  const bar=s.parentElement; if(bar) bar.style.position="relative";
+  let dd=document.getElementById("gsDrop");
+  if(!dd){ dd=document.createElement("div"); dd.id="gsDrop"; bar.appendChild(dd); }
+  dd.style.cssText="position:absolute;top:100%;right:0;margin-top:6px;width:min(480px,82vw);max-height:72vh;overflow-y:auto;background:#fff;border:1px solid #e2e7e4;border-radius:12px;box-shadow:0 12px 34px rgba(0,0,0,.16);z-index:9997;display:none;";
+  let ACTS=[];
+  const hide=()=>{ dd.style.display="none"; };
+  const run=(i)=>{ const a=ACTS[i]; hide(); if(typeof a==="function"){ try{a();}catch(err){} } };
+  const build=(raw)=>{
+    const q=(raw||"").trim().toLowerCase(); ACTS=[];
+    if(q.length<2){ hide(); return; }
+    const mt=(...fs)=>fs.some(f=>f&&String(f).toLowerCase().includes(q));
+    const groups=[];
+    const add=(pageId,title,items)=>{ if(!pageAllowed(pageId)||!items.length) return; groups.push({title,items:items.slice(0,6)}); };
+    add('employees','People', EMPLOYEES.filter(e=>mt(e.full_name,e.position,e.worksite,e.department,e.employee_id,e.agency_name,e.email)).map(e=>({label:e.full_name,sub:[e.position,e.worksite].filter(Boolean).join(' · '),act:()=>openRecord(e)})));
+    add('branches','Stores', BRANCHES.filter(b=>mt(b.name,b.sc,b.city,b.area)).map(b=>({label:b.name,sub:['SC '+(b.sc||'—'),b.city].filter(Boolean).join(' · '),act:()=>openStore(b)})));
+    add('memos','Memos', MEMOS.filter(m=>mt(m.subject_name,m.ref_no,m.memo_type)).map(m=>({label:m.subject_name||m.ref_no,sub:['Memo',m.memo_type,m.ref_no].filter(Boolean).join(' · '),act:()=>viewMemo(m.id)})));
+    add('loans','Loans', LOANS.filter(l=>mt(l.applicant_name,l.loan_ref,l.loan_type,l.department)).map(l=>({label:l.applicant_name,sub:['Loan',loanTypeLabel(l.loan_type),l.loan_ref].filter(Boolean).join(' · '),act:()=>openLoan(l.id)})));
+    add('exit','Exit clearance', EXITCASES.filter(x=>mt(x.employee_name,x.position,x.department,x.clearance_id,x.separation_type)).map(x=>({label:x.employee_name,sub:['Exit',x.separation_type].filter(Boolean).join(' · '),act:()=>openExitCase(x.id)})));
+    add('movements','Movements / NPA', NPAS.filter(r=>mt(r.employee_name,r.npa_id,r.action,r.new_position)).map(r=>({label:r.employee_name,sub:['NPA',r.action,r.npa_id].filter(Boolean).join(' · '),act:()=>openMovementDrawer(r)})));
+    add('prehire','Pre-hire', PREHIRE.filter(c=>mt(c.full_name,c.position,c.worksite,c.prehire_id)).map(c=>({label:c.full_name,sub:['Pre-hire',c.position].filter(Boolean).join(' · '),act:()=>openPrehire(c)})));
+    add('onboarding','Onboarding', ONBOARDING.filter(o=>mt(o.employee_name,o.position,o.worksite)).map(o=>({label:o.employee_name,sub:['Onboarding',o.position].filter(Boolean).join(' · '),act:()=>openOnboardingCase(o.id)})));
+    add('maternity','Maternity', MATERNITY.filter(c=>mt(c.employee_name,c.claim_ref,c.category)).map(c=>({label:c.employee_name,sub:['Maternity',c.claim_ref].filter(Boolean).join(' · '),act:()=>openMaternityForm(c)})));
+    add('contracts','Contracts', CONTRACTS.filter(c=>mt(c.employee_name)).map(c=>({label:c.employee_name,sub:'Contract',act:()=>openContract(c.id)})));
+    add('signatures','Signatures', SIGNATURES.filter(x=>mt(x.subject_name,x.doc_type)).map(x=>({label:x.subject_name||'(unnamed)',sub:['Signature',x.doc_type].filter(Boolean).join(' · '),act:()=>openSignDoc(x.id)})));
+    if(!groups.length){ dd.innerHTML='<div style="padding:14px;color:#6a766f;font-size:13px;">No matches you have access to.</div>'; dd.style.display="block"; return; }
+    let html='', idx=0;
+    groups.forEach(g=>{
+      html+=`<div style="padding:8px 14px 3px;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#8a938c;background:#f7f9f8;">${esc(g.title)}</div>`;
+      g.items.forEach(it=>{ ACTS.push(it.act); html+=`<div class="gsRow" data-i="${idx}" style="padding:9px 14px;cursor:pointer;border-top:0.5px solid #f0f2f0;"><div style="font-size:13.5px;font-weight:600;color:#17281d;">${esc(it.label||'—')}</div>${it.sub?`<div style="font-size:11.5px;color:#6a766f;">${esc(it.sub)}</div>`:''}</div>`; idx++; });
+    });
+    dd.innerHTML=html; dd.style.display="block";
+    dd.querySelectorAll('.gsRow').forEach(r=>{
+      r.addEventListener('mouseenter',()=>r.style.background='#f1f7f3');
+      r.addEventListener('mouseleave',()=>r.style.background='');
+      r.addEventListener('mousedown',ev=>{ ev.preventDefault(); run(+r.dataset.i); s.value=''; });
+    });
+  };
+  s.addEventListener("input",()=>build(s.value));
+  s.addEventListener("focus",()=>{ if((s.value||"").trim().length>=2) build(s.value); });
+  s.addEventListener("keydown",e=>{ if(e.key==="Escape"){ hide(); s.blur(); } });
+  document.addEventListener("click",e=>{ if(bar && !bar.contains(e.target)) hide(); });
 }
 
 /* ---------- ADD / EDIT FORM (modal) ---------- */
@@ -5384,6 +5427,7 @@ function evDueList(){
 }
 function renderEvaluations(){
   const pg=$("#page-evaluations"); if(!pg) return;
+  const today=new Date();
   const list=evDueList();
   const due=list.filter(x=>x.bucket==="due"), overdue=list.filter(x=>x.bucket==="overdue"), upcoming=list.filter(x=>x.bucket==="upcoming");
   const noHire=EMPLOYEES.filter(e=>(e.status||"").toLowerCase().startsWith("active")&&!e.hire_date).length;

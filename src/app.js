@@ -851,6 +851,7 @@ function renderDashboard(){
         <div class="psub">Computed from your data — most actionable first</div>
         ${(()=>{ if(!canSeePay()) return ''; const fpAwait=(SIGNATURES||[]).filter(s=>s.doc_type==="claim"&&s.awaiting==="you"&&s.status==="pending"); return fpAwait.length?`<div class="task" style="cursor:pointer;" onclick="go('signatures')"><div class="dot r"></div><div><div class="tt">${fpAwait.length} final-pay quitclaim(s) awaiting your sign-off</div><div class="td">Full figures are on the sign screen — review &amp; e-sign in one place${fpAwait[0]?` · e.g. ${esc(fpAwait[0].subject_name||"")} ${fpAwait[0].amount!=null?"("+peso(fpAwait[0].amount)+")":""}`:""}</div></div><div class="due r">sign-off</div></div>`:''; })()}
         ${(()=>{ if(!canSeeMovements()) return ''; const mine=(NPAS||[]).filter(r=>{ const st=mvCanSignNow(r); return st!=null; }); return mine.length?`<div class="task" style="cursor:pointer;" onclick="go('movements')"><div class="dot r"></div><div><div class="tt">${mine.length} personnel movement(s) awaiting your sign-off</div><div class="td">Notice of Personnel Action — review the figures &amp; e-sign${mine[0]?" · e.g. "+esc(mine[0].employee_name||""):""}</div></div><div class="due r">sign-off</div></div>`:''; })()}
+        ${(()=>{ if(!isAdminUser()) return ''; const sep=(EXITCASES||[]).filter(e=>e.separation_status==="Submitted"&&e.overall_status!=="Complete"); return sep.length?`<div class="task" style="cursor:pointer;" onclick="go('exit')"><div class="dot r"></div><div><div class="tt">${sep.length} separation(s) awaiting your approval</div><div class="td">HR prepared these — approve to flip the employee to Separated${sep[0]?" · e.g. "+esc(sep[0].employee_name||""):""}</div></div><div class="due r">approve</div></div>`:''; })()}
         ${phReady?`<div class="task" style="cursor:pointer;" onclick="go('prehire')"><div class="dot r"></div><div><div class="tt">${phReady} candidate(s) ready for contract / onboarding</div><div class="td">Move them into an onboarding case</div></div><div class="due r">hiring</div></div>`:''}
         ${onbTasksOpen?`<div class="task" style="cursor:pointer;" onclick="go('onboarding')"><div class="dot a"></div><div><div class="tt">${onbTasksOpen} open onboarding task(s)</div><div class="td">${onbOpen} case(s) in progress — bank, uniform, gov forms, Employee ID</div></div><div class="due a">onboarding</div></div>`:''}
         ${exitOpen?`<div class="task" style="cursor:pointer;" onclick="go('exit')"><div class="dot a"></div><div><div class="tt">${exitOpen} exit clearance(s) in progress</div><div class="td">Department sign-offs &amp; final-pay computation</div></div><div class="due a">offboarding</div></div>`:''}
@@ -5123,7 +5124,7 @@ function renderExit(){
         <td>${esc(x.separation_type||"—")}</td>
         <td><div class="barrow"><div class="bartrack"><div class="bar${dn===8?'':' def'}" style="width:${Math.round(dn/8*100)}%"></div></div><span style="font-size:11.5px;color:var(--muted);">${dn}/8</span></div></td>
         <td><b>${peso(exitNet(x))}</b></td>
-        <td>${x.overall_status==="Complete"?'<span class="pill closed">Separated</span>':'<span class="pill probation">In Progress</span>'+ageTag}</td></tr>`;
+        <td>${x.overall_status==="Complete"?'<span class="pill closed">Separated</span>':(x.separation_status==="Submitted"?'<span class="pill cn">Awaiting approval</span>':'<span class="pill probation">In Progress</span>')+ageTag}</td></tr>`;
     }).join("");
     $$("#exRows tr").forEach(tr=>tr.addEventListener("click",()=>openExitCase(tr.dataset.id)));
   }
@@ -5305,9 +5306,20 @@ function openExitCase(id){
       </div>
 
       <div id="exMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px;">
         <button class="btn" id="exSave">Save</button>
-        ${x.overall_status!=="Complete"?'<button class="btn blue" id="exComplete">Complete &amp; mark Separated</button>':'<span class="pill closed">Separated</span>'}
+        ${(()=>{
+          if(x.overall_status==="Complete") return '<span class="pill closed">Separated</span>'+(x.separation_approved_by?`<span class="td" style="font-size:11.5px;">approved by ${esc(x.separation_approved_by)}${x.separation_approved_at?" · "+fmtDate(x.separation_approved_at):""}</span>`:"");
+          const submitted=x.separation_status==="Submitted";
+          if(isAdminUser()){
+            return (submitted?`<span class="td" style="font-size:11.5px;color:#9a6a00;">Prepared by ${esc(x.separation_submitted_by||"HR")}${x.separation_submitted_at?" · "+fmtDate(x.separation_submitted_at):""} — your approval finalises it.</span> `:"")
+              +'<button class="btn blue" id="exComplete">Approve &amp; mark Separated</button>';
+          }
+          // HR (maker) — cannot separate alone; sends to the Director
+          return submitted
+            ? '<span class="pill cn">Awaiting Director approval</span>'
+            : '<button class="btn blue" id="exSubmitSep">Submit separation for approval</button>';
+        })()}
         <button class="btn ghost" id="exClose" style="margin-left:auto;">Close</button>
       </div>
     </div></div>`;
@@ -5321,7 +5333,8 @@ function openExitCase(id){
   $("#exClose").addEventListener("click",()=>m.remove());
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   $("#exSave").addEventListener("click",()=>saveExitCase(x,m,false));
-  const cmp=document.getElementById("exComplete"); if(cmp) cmp.addEventListener("click",()=>saveExitCase(x,m,true));
+  const cmp=document.getElementById("exComplete"); if(cmp) cmp.addEventListener("click",()=>{ if(confirm("Approve this separation for "+(x.employee_name||"this employee")+"?\n\nTheir status will flip to Separated.")) saveExitCase(x,m,true); });
+  const subSep=document.getElementById("exSubmitSep"); if(subSep) subSep.addEventListener("click",()=>{ if(confirm("Submit "+(x.employee_name||"this employee")+"'s separation to the Director for approval?\n\nThey stay Active until the Director approves.")) saveExitCase(x,m,"submit"); });
   const sendFP=document.getElementById("exSendFP"); if(sendFP) sendFP.addEventListener("click",()=>sendFinalPayForSignoff(x,m));
   const viewFP=document.getElementById("exViewFP"); if(viewFP) viewFP.addEventListener("click",()=>printQuitclaim(x));
   document.getElementById("ex_interview_btn").addEventListener("click",()=>openExitInterview(x));
@@ -5409,7 +5422,11 @@ function collectExit(x){
   o.final_pay=collectFinalPay();   // the quitclaim breakdown is now the source of truth for payables/deductions/net
   return o;
 }
-async function saveExitCase(x,modal,complete){
+// mode: false = plain save · 'submit' = HR sends the separation for the Director's approval ·
+//       true / 'approve' = Director approves → status flips to Separated (Director only).
+async function saveExitCase(x,modal,mode){
+  const complete=(mode===true||mode==="approve");
+  const submit=(mode==="submit");
   const o=collectExit(x);
   // fairness guard: uniform deduction needs signed authorization
   if(Number(o.uniform_deduction||0)>0 && !o.uniform_auth_on_file){
@@ -5422,15 +5439,23 @@ async function saveExitCase(x,modal,complete){
     document.getElementById("exMsg").textContent=`“${badCharge.label}” is marked With Charges but has no amount — enter the charge (₱) or change its status.`;
     return;
   }
-  o.total_payable=exitPayables(o); o.total_deductions=exitDeductions(o); o.net_payable=exitNet(o); o.updated_at=new Date().toISOString();
-  if(complete){ o.overall_status="Complete"; o.completion_date=new Date().toISOString(); }
+  const now=new Date().toISOString();
+  o.total_payable=exitPayables(o); o.total_deductions=exitDeductions(o); o.net_payable=exitNet(o); o.updated_at=now;
+  if(complete){
+    // Second-approver gate: only the Director (admin) can finalise a separation.
+    if(!isAdminUser()){ document.getElementById("exMsg").textContent="Only the Director can approve a separation. Use “Submit separation for approval”."; return; }
+    o.overall_status="Complete"; o.completion_date=now;
+    o.separation_status="Approved"; o.separation_approved_by=(CURRENT_USER&&CURRENT_USER.email)||"Director"; o.separation_approved_at=now;
+  }
+  if(submit){ o.separation_status="Submitted"; o.separation_submitted_by=(CURRENT_USER&&CURRENT_USER.email)||"HR"; o.separation_submitted_at=now; }
   const { error } = await sb.from("exit_clearance").update(o).eq("id",x.id);
   if(error){ document.getElementById("exMsg").textContent=error.message; return; }
   if(complete && x.employee_id){
     const er=o.separation_type==="AWOL"?"AWOL":(o.separation_type==="Termination"?"Terminated":(o.separation_type==="End of Contract"?"End of Contract":(o.separation_type==="Retirement"?"Retired":"Resigned")));
     await sb.from("employees").update({status:"Separated", end_date:o.last_working_day, end_reason:er}).eq("id",x.employee_id);
-    await logChange("exit",x.id,x.employee_name,"Separated",er+" · last day "+(o.last_working_day||"—")+" · net pay "+peso(o.net_payable||0));
+    await logChange("exit",x.id,x.employee_name,"Separated (approved by Director)",er+" · last day "+(o.last_working_day||"—")+" · net pay "+peso(o.net_payable||0)+" · prepared by "+(x.separation_submitted_by||"—"));
   }
+  if(submit){ await logChange("exit",x.id,x.employee_name,"Separation submitted for approval","by "+((CURRENT_USER&&CURRENT_USER.email)||"HR")); }
   if(modal) modal.remove();
   await loadEmployees(); window.go("exit");
 }

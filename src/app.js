@@ -1565,15 +1565,18 @@ function renderMovements(){
   // Checklist recap: tick rows → see the running total + increase, and sign the ticked ones in place.
   function mvRecalc(){
     const boxes=$$("#page-movements .mvchk"), checked=boxes.filter(b=>b.checked);
-    let curSum=0,newSum=0,nSign=0;
-    checked.forEach(b=>{ curSum+=Number(b.dataset.cur)||0; newSum+=Number(b.dataset.new)||0; if(b.dataset.cansign==="1") nSign++; });
     const rb=$("#mvRecap"); if(!rb) return;
     const all=$("#mvChkAll"); if(all) all.checked=boxes.length>0&&checked.length===boxes.length;
     if(!checked.length){ rb.style.display="none"; rb.innerHTML=""; return; }
-    rb.style.cssText="display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin:8px 0;padding:11px 15px;background:#eef7f0;border:1px solid #cfe6d6;border-radius:10px;";
+    // Group the ticked rows by their pay change (from → to) so the bar reads like the actual raise, not a meaningless sum.
+    const groups={}; let totalInc=0, nSign=0;
+    checked.forEach(b=>{ const cur=Number(b.dataset.cur)||0, nw=Number(b.dataset.new)||0; const k=cur+"|"+nw; (groups[k]=groups[k]||{cur,nw,n:0}).n++; totalInc+=(nw-cur); if(b.dataset.cansign==="1") nSign++; });
+    const g=Object.values(groups).sort((a,b)=>b.n-a.n);
+    const lines=g.map(x=>`<span style="white-space:nowrap;"><b>${x.n}</b> ${x.n===1?"item":"items"} · ${mvPeso(x.cur)} → <b>${mvPeso(x.nw)}</b> <span style="color:#1f6b3a;">(+${mvPeso(x.nw-x.cur)}/day)</span></span>`).join(' &nbsp;·&nbsp; ');
+    rb.style.cssText="display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin:8px 0;padding:11px 15px;background:#eef7f0;border:1px solid #cfe6d6;border-radius:10px;";
     rb.innerHTML=`<div style="font-weight:800;color:#12352a;">${checked.length} selected to increase</div>
-      <div style="color:#2c5b41;">New pay total <b>${mvPeso(newSum)}</b> <span class="note" style="display:inline;">(was ${mvPeso(curSum)})</span></div>
-      <div style="font-weight:800;color:#1f6b3a;">Increase +${mvPeso(newSum-curSum)}</div>
+      <div style="color:#2c5b41;">${lines}</div>
+      ${g.length>1?`<div style="font-weight:800;color:#1f6b3a;">Total +${mvPeso(totalInc)}/day</div>`:""}
       <div style="flex:1;"></div>
       ${nSign?`<button class="btn" id="mvSignSel">✍ Sign the ${nSign} selected</button>`:`<span class="note" style="display:inline;">Nothing here needs your signature — you're not on these sign chains.</span>`}`;
     const bss=$("#mvSignSel"); if(bss) bss.addEventListener("click",()=>{
@@ -1833,12 +1836,21 @@ function openMovementDrawer(r){
       <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
         <button class="btn ghost" id="mvPrint">Download / Print NPA</button>
         ${signable?`<button class="btn" id="mvSign">Sign this step (${esc(signable.role)})</button>`:""}
+        ${isAdminUser()?`<button class="btn ghost" id="mvDelete" style="color:#c0392b;border-color:#f1c9c5;">🗑 Delete this record</button>`:""}
         <button class="btn ghost" id="mvDrawerClose" style="margin-left:auto;">Close</button>
       </div>
     </div></div>`;
   m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
   document.getElementById("mvDrawerClose").onclick=()=>m.remove();
   document.getElementById("mvPrint").onclick=()=>printMovementNpa(r);
+  const mvDel=document.getElementById("mvDelete"); if(mvDel) mvDel.onclick=async()=>{
+    if(!confirm("Delete this record permanently?\n\n"+(r.employee_name||"")+" · "+(MV_ACTION_LABEL[r.action_type]||r.action_type||"")+(r.npa_id?" · "+r.npa_id:"")+"\n\nThis cannot be undone.")) return;
+    mvDel.disabled=true; mvDel.textContent="Deleting…";
+    const { error }=await sb.from("personnel_actions").delete().eq("id",r.id);
+    if(error){ alert("Couldn't delete: "+error.message); mvDel.disabled=false; mvDel.textContent="🗑 Delete this record"; return; }
+    await logChange("movement",null,r.employee_name,"NPA record deleted",r.npa_id||"");
+    m.remove(); await loadEmployees(); window.go("movements");
+  };
   const sg=document.getElementById("mvSign"); if(sg) sg.onclick=()=>mvSignStep(r,signable);
   const au=document.getElementById("mvAuth"); if(au) au.onclick=async()=>{
     au.disabled=true; au.textContent="Stamping…";

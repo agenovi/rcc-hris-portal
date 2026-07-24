@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784878245";
+window.APP_BUILD="1784878642";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784878245" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784878642" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -4360,7 +4360,7 @@ function openMovementDrawer(r){
       <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
         <button class="btn ghost" id="mvPrint">Download / Print NPA</button>
         ${signable?`<button class="btn" id="mvSign">Sign this step (${esc(signable.role)})</button>`:""}
-        ${(isAdminUser()||canSeePay())&&r.status!=="cancelled"&&r.status!=="approved"?`<button class="btn ghost" id="mvCancel" style="color:#9a6a00;border-color:#f0e2b8;">✖ Cancel NPA (e.g. reached EOC)</button>`:""}
+        ${(isAdminUser()||canSeePay())&&r.status!=="cancelled"&&(r.status!=="approved"||isAdminUser())?`<button class="btn ghost" id="mvCancel" style="color:#9a6a00;border-color:#f0e2b8;">${r.status==="approved"?"✖ Void this approved NPA":"✖ Cancel NPA (e.g. reached EOC)"}</button>`:""}
         ${(isAdminUser()||canSeePay())&&r.status==="cancelled"?`<button class="btn ghost" id="mvReopen" style="color:#1f6b3a;border-color:#cfe6d6;">↩ Reopen NPA</button>`:""}
         <button class="btn ghost" id="mvDrawerClose" style="margin-left:auto;">Close</button>
       </div>
@@ -4369,18 +4369,21 @@ function openMovementDrawer(r){
   document.getElementById("mvDrawerClose").onclick=()=>m.remove();
   document.getElementById("mvPrint").onclick=()=>printMovementNpa(r);
   const mvCancelBtn=document.getElementById("mvCancel"); if(mvCancelBtn) mvCancelBtn.onclick=async()=>{
-    const reason=prompt("Cancel this NPA for "+(r.employee_name||"")+"?\n\nType a reason (e.g. \"Reached end of contract\", \"Duplicate\", \"Wrong rate\"). It stays on record and can be reopened later.");
+    const origLabel=mvCancelBtn.textContent;
+    const reason=prompt((r.status==="approved"?"⚠ This NPA is already APPROVED. Voiding it marks it Cancelled (kept on record, reopenable).\n\n":"Cancel this NPA for "+(r.employee_name||"")+"?\n\n")+"Type a reason (e.g. \"Reached end of contract\", \"Duplicate\", \"Wrong rate\"). Who cancelled, when, and this reason are all logged.");
     if(reason===null) return;
+    if(!(reason||"").trim()){ alert("A reason is required so the cancellation is logged."); return; }
     mvCancelBtn.disabled=true; mvCancelBtn.textContent="Cancelling…";
     const em=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"HR";
     const { error }=await sb.from("personnel_actions").update({ status:"cancelled", cancel_reason:(reason||"").trim()||null, cancelled_by:em, cancelled_at:new Date().toISOString(), updated_at:new Date().toISOString() }).eq("id",r.id);
-    if(error){ alert("Couldn't cancel: "+error.message); mvCancelBtn.disabled=false; mvCancelBtn.textContent="✖ Cancel NPA (e.g. reached EOC)"; return; }
+    if(error){ alert("Couldn't cancel: "+error.message); mvCancelBtn.disabled=false; mvCancelBtn.textContent=origLabel; return; }
     await logChange("movement",null,r.employee_name,"NPA cancelled",(r.npa_id||"")+(reason?" — "+reason:""));
     m.remove(); await loadEmployees(); window.go("movements");
   };
   const mvReopenBtn=document.getElementById("mvReopen"); if(mvReopenBtn) mvReopenBtn.onclick=async()=>{
     mvReopenBtn.disabled=true; mvReopenBtn.textContent="Reopening…";
-    const back=mvSignedCount(r)>0?"awaiting_signoff":"awaiting_signoff";
+    const chain=mvChain(r); const allSigned=chain.length>0 && chain.every(st=>r["sig"+st.seq+"_data"]);
+    const back=allSigned?"approved":"awaiting_signoff";
     const { error }=await sb.from("personnel_actions").update({ status:back, cancel_reason:null, cancelled_by:null, cancelled_at:null, updated_at:new Date().toISOString() }).eq("id",r.id);
     if(error){ alert("Couldn't reopen: "+error.message); mvReopenBtn.disabled=false; mvReopenBtn.textContent="↩ Reopen NPA"; return; }
     await logChange("movement",null,r.employee_name,"NPA reopened",r.npa_id||"");

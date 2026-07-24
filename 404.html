@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784879788";
+window.APP_BUILD="1784880237";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784879788" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784880237" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -3985,6 +3985,7 @@ function mvCat(r){ const d=String(r.department||"").toUpperCase(), p=String(r.cu
 
 // Group movements into "batches" — one increase/event = many people sharing effective date + basis + action.
 let MV_FILTER=null;
+let MV_MISSING_ONLY=false;   // when true, table shows only pay NPAs with NO staff email on file
 function mvBatchKey(r){ return (r.effective_date||"—")+"|"+mvBasis(r)+"|"+(r.action_type||""); }
 function mvBatchLabel(r){ const act=MV_ACTION_LABEL[r.action_type]||r.action_type||"Movement"; return mvBasis(r)+" · "+act; }
 
@@ -3993,6 +3994,7 @@ function renderMovements(){
   const R=NPAS||[];
   let Rf = MV_FILTER ? R.filter(r=>mvBatchKey(r)===MV_FILTER) : R;
   if(MV_FILTER && !Rf.length){ MV_FILTER=null; Rf=R; }
+  if(MV_MISSING_ONLY){ Rf = Rf.filter(r=>r.status!=="cancelled" && (r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null) && !String(r.notify_email||"").trim()); }
   const now=new Date(), ym=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
   const awaiting=R.filter(r=>r.status==="awaiting_signoff").length;
   const forMemo=R.filter(r=>r.status==="memo").length;
@@ -4049,6 +4051,7 @@ function renderMovements(){
         ${canSeePay()?`<a class="btn ghost" href="./NPA-batch-template.xlsx" download style="text-decoration:none;">⬇ Excel template</a>`:""}
         ${canSeePay()?`<button class="btn ghost" id="mvBatch">Batch statutory increase</button>`:""}
         ${R.some(r=>r.status==="approved")?`<button class="btn ghost" id="mvDownloadAll">⬇ Download all approved (print)</button>`:""}
+        ${canSeePay()&&payN.length?`<button class="btn ghost" id="mvEmailAll">✉ Email staff their NPA</button>`:""}
       </div>
       <input type="file" id="mvUpFile" accept=".xlsx,.xls,.csv" style="display:none;">
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
@@ -4059,7 +4062,7 @@ function renderMovements(){
       <div class="psub" style="margin:6px 0 2px;"><b>${R.length}</b> total = <b>${awaiting}</b> awaiting sign-off · <b>${approvedAll}</b> approved${cancelledAll?` · <b>${cancelledAll}</b> cancelled`:""}${forMemo?` · <b>${forMemo}</b> memo`:""}</div>
       ${iCanSign.length?`<div class="note" style="margin:2px 0 6px;background:#fff8e6;border-color:#f0e2b8;color:#6b5a17;">✍ <b>${iCanSign.length}</b> NPA${iCanSign.length>1?"s":""} ${iCanSign.length>1?"are":"is"} waiting on <b>your</b> signature. Use <b>Tick all → Sign the selected</b>.</div>`
         :(iSignedWaiting.length?`<div class="note" style="margin:2px 0 6px;background:#eef7f0;border-color:#cfe6d6;color:#12352a;">✓ You've already signed your part on <b>${iSignedWaiting.length}</b> NPA${iSignedWaiting.length>1?"s":""}. Now waiting on ${nextSigners.length?"<b>"+nextSigners.join(", ")+"</b>":"the other signatory"} to countersign — then ${iSignedWaiting.length>1?"they become":"it becomes"} <b>Approved</b>. Nothing more for you to do here.</div>`:"")}
-      ${mvCatLine?`<div class="psub" style="margin:2px 0 6px;padding:8px 12px;background:#f4f7f5;border:1px solid #e2ebe5;border-radius:9px;"><b>By group:</b> ${mvCatLine} &nbsp;·&nbsp; <b>${Object.values(mvCatCounts).reduce((a,b)=>a+b,0)}</b> total &nbsp;·&nbsp; 📧 <b>${emailN}</b>/${payN.length} have a staff email${emailN<payN.length?` <span style="color:#9a6a00;">(${payN.length-emailN} to add — open the NPA to enter it)</span>`:" — all set for auto-email"}</div>`:""}
+      ${mvCatLine?`<div class="psub" style="margin:2px 0 6px;padding:8px 12px;background:#f4f7f5;border:1px solid #e2ebe5;border-radius:9px;"><b>By group:</b> ${mvCatLine} &nbsp;·&nbsp; <b>${Object.values(mvCatCounts).reduce((a,b)=>a+b,0)}</b> total &nbsp;·&nbsp; 📧 <b>${emailN}</b>/${payN.length} have a staff email${emailN<payN.length?` · <a href="#" id="mvShowMissing" style="color:#9a6a00;font-weight:700;">${MV_MISSING_ONLY?"↺ show all":"show the "+(payN.length-emailN)+" missing →"}</a>`:" — all set for auto-email"}</div>`:""}
       ${batchCardsHtml?`<div class="subhead" style="margin:10px 0 6px;">By increase — click a card to see just those people</div>${batchCardsHtml}`:""}
       ${MV_FILTER?`<div class="psub" style="margin:2px 0 6px;">Showing one batch below · <a href="#" id="mvClearFilter" style="color:#1f6b3a;font-weight:700;">↺ show all</a></div>`:""}
       <div id="mvRecap" style="display:none;"></div>
@@ -4078,11 +4081,13 @@ function renderMovements(){
           <td>${r.effective_date?fmtDate(r.effective_date):"—"}</td>
           <td>${mvStatusPill(r.status)}</td>
           <td>${disc?`<span class="pill ${sc>=tot?"active":(sc>0?"cn":"closed")}">${sc}/${tot} signed</span>`:'<span class="note" style="display:inline;padding:1px 6px;">—</span>'}</td></tr>`; }).join("")}
-      </tbody></table>`:`<div class="psub" style="margin-top:6px;">No movements filed yet — click “＋ New Movement”.</div>`}
+      </tbody></table>`:`<div class="psub" style="margin-top:6px;">${MV_MISSING_ONLY?"✓ Every NPA has a staff email on file — nothing to fill.":"No movements filed yet — click “＋ New Movement”."}</div>`}
     </div>`;
   const bN=$("#mvNew"); if(bN) bN.addEventListener("click",mvPickEmployee);
   const bB=$("#mvBatch"); if(bB) bB.addEventListener("click",mvBatchStatutory);
   const bDA=$("#mvDownloadAll"); if(bDA) bDA.addEventListener("click",()=>mvDownloadAll(R.filter(r=>r.status==="approved")));
+  const bSM=$("#mvShowMissing"); if(bSM) bSM.addEventListener("click",e=>{ e.preventDefault(); MV_MISSING_ONLY=!MV_MISSING_ONLY; renderMovements(); });
+  const bEA=$("#mvEmailAll"); if(bEA) bEA.addEventListener("click",()=>mvEmailBatch(R));
   // Checklist recap: tick rows → see the running total + increase, and sign the ticked ones in place.
   function mvRecalc(){
     const boxes=$$("#page-movements .mvchk"), checked=boxes.filter(b=>b.checked);
@@ -4635,6 +4640,37 @@ function printMovementNpa(r){
   w.document.close();
 }
 // Download/print ALL supplied NPAs in ONE document, one per page — for 201-file printing.
+// Batch email: send each staff member their NPA PDF. Sender = Grazel (paymaster). Actual send
+// is gated behind the Resend key + hassarams.com domain check — until then the button is disabled.
+function mvEmailBatch(R){
+  const payN=(R||[]).filter(r=>r.status!=="cancelled" && (r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null));
+  const ready=payN.filter(r=>String(r.notify_email||"").trim());
+  const missing=payN.filter(r=>!String(r.notify_email||"").trim());
+  const alreadySent=ready.filter(r=>r.notified_at).length;
+  let m=document.getElementById("mvEmailModal"); if(!m){ m=document.createElement("div"); m.id="mvEmailModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:540px;width:100%;max-height:90vh;overflow-y:auto;padding:22px;">
+    <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#6B7785;">EMAIL NPA TO STAFF · BATCH</div>
+    <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 8px;">Send each employee their NPA</div>
+    <div class="psub" style="margin-bottom:8px;">Emails the RCC-letterhead NPA PDF to each staff member and stamps “✓ emailed” on their record.</div>
+    <div style="background:#f4f7f5;border:1px solid #e2ebe5;border-radius:9px;padding:10px 12px;font-size:13px;">
+      <div><b>From:</b> Grazel Lyn Agulto — RCC HR &lt;hr3@hassarams.com&gt;</div>
+      <div style="margin-top:4px;"><b>${ready.length}</b> ready to email${alreadySent?` <span class="note" style="display:inline;">(${alreadySent} already sent)</span>`:""} &nbsp;·&nbsp; <b style="color:#9a6a00;">${missing.length}</b> skipped — no email</div>
+    </div>
+    ${missing.length?`<div style="margin-top:10px;"><div style="font-weight:700;color:#9a6a00;font-size:12.5px;margin-bottom:4px;">Won't be emailed — no address on file (fill these first):</div>
+      <div style="max-height:150px;overflow-y:auto;border:1px solid #f0e2b8;border-radius:8px;padding:6px 10px;font-size:12.5px;background:#fffdf6;">${missing.map(r=>esc(r.employee_name||"—")+(r.employee_number?" · "+esc(String(r.employee_number)):"")).join("<br>")}</div>
+      <button class="btn ghost" id="mvEmailShowMissing" style="margin-top:6px;">Show these in the list so I can fill them</button></div>`:`<div class="note" style="margin-top:10px;background:#eef7f0;border-color:#cfe6d6;color:#12352a;">✓ Everyone has an email — no one will be skipped.</div>`}
+    <div class="note" style="margin-top:12px;background:#fff8e6;border-color:#f0e2b8;color:#6b5a17;">⚠ <b>Sending isn't switched on yet.</b> To email staff as <b>hr3@hassarams.com</b> (Grazel), two one-time steps: (1) the free <b>Resend key</b> (waiting item #16) and (2) a quick <b>domain check</b> on hassarams.com. Once both are in, this button sends all ${ready.length} at once and marks each “emailed”.</div>
+    <div style="display:flex;gap:10px;margin-top:14px;">
+      <button class="btn ghost" id="mvEmailClose" style="margin-left:auto;">Close</button>
+      <button class="btn" id="mvEmailSend" disabled title="Turns on once the Resend key + domain are set" style="opacity:.55;cursor:not-allowed;">✉ Send all ${ready.length} — setup needed</button>
+    </div></div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("mvEmailClose").onclick=()=>m.remove();
+  const sm=document.getElementById("mvEmailShowMissing"); if(sm) sm.onclick=()=>{ m.remove(); MV_MISSING_ONLY=true; renderMovements(); };
+}
+window.mvEmailBatch=mvEmailBatch;
+
 function mvDownloadAll(list){
   list=(list||[]).filter(Boolean); if(!list.length){ alert("No NPAs to download yet."); return; }
   const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to print."); return; }

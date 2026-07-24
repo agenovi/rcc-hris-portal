@@ -1596,9 +1596,16 @@ function mvCat(r){ const d=String(r.department||"").toUpperCase(), p=String(r.cu
   if(d.includes("DISER")||d.includes("STORE")||d.includes("RETAIL")||p.includes("DISER")||p.includes("ROVING")||p.includes("PROMO")||p.includes("MERCHAND")) return "Store / Promo Diser";
   return "Head Office / Warehouse"; }
 
+// Group movements into "batches" — one increase/event = many people sharing effective date + basis + action.
+let MV_FILTER=null;
+function mvBatchKey(r){ return (r.effective_date||"—")+"|"+mvBasis(r)+"|"+(r.action_type||""); }
+function mvBatchLabel(r){ const act=MV_ACTION_LABEL[r.action_type]||r.action_type||"Movement"; return mvBasis(r)+" · "+act; }
+
 function renderMovements(){
   const pg=$("#page-movements"); if(!pg||!canSeeMovements()) return;
   const R=NPAS||[];
+  let Rf = MV_FILTER ? R.filter(r=>mvBatchKey(r)===MV_FILTER) : R;
+  if(MV_FILTER && !Rf.length){ MV_FILTER=null; Rf=R; }
   const now=new Date(), ym=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
   const awaiting=R.filter(r=>r.status==="awaiting_signoff").length;
   const forMemo=R.filter(r=>r.status==="memo").length;
@@ -1613,7 +1620,26 @@ function renderMovements(){
   const iCanSign=openRows.filter(r=>mvCanSignNow(r));                          // rows waiting on ME to sign
   const iSignedWaiting=openRows.filter(r=>{ const mine=mvChain(r).find(s=>String(s.email||"").toLowerCase()===meEmail); return mine && r["sig"+mine.seq+"_data"] && !mvCanSignNow(r); }); // I signed, waiting on others
   const nextSigners=[...new Set(iSignedWaiting.map(r=>{ const ns=mvNextStep(r); return ns?(ns.name?ns.name+(ns.role?" ("+ns.role+")":""):(ns.role||"another signer")):""; }).filter(Boolean))];
-  const mvSelCount=iCanSign.filter(r=>(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null)).length;
+  const mvSelCount=Rf.filter(r=>r.status==="awaiting_signoff"&&mvCanSignNow(r)&&(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null)).length;
+  // Batch progress cards — one card per increase/event (effective date + basis + action).
+  const _batches={}; R.forEach(r=>{ const k=mvBatchKey(r); (_batches[k]=_batches[k]||{key:k,rows:[]}).rows.push(r); });
+  const batchArr=Object.values(_batches).sort((a,b)=>String(b.rows[0].effective_date||"").localeCompare(String(a.rows[0].effective_date||"")));
+  const batchCardsHtml=batchArr.map(b=>{ const rows=b.rows, tot=rows.length;
+    const ap=rows.filter(r=>r.status==="approved").length, aw=rows.filter(r=>r.status==="awaiting_signoff").length, cx=rows.filter(r=>r.status==="cancelled").length, mo=rows.filter(r=>r.status==="memo").length;
+    const eff=rows[0].effective_date, label=mvBatchLabel(rows[0]);
+    const awRows=rows.filter(r=>r.status==="awaiting_signoff"); const myTurn=awRows.filter(r=>mvCanSignNow(r)).length;
+    const nexts=[...new Set(awRows.map(r=>{ const s=mvNextStep(r); return s?(s.name||s.role||""):""; }).filter(Boolean))];
+    const step=myTurn?`▶ <b>Your turn</b> — ${myTurn} to sign`:(aw?`⏳ Waiting on <b>${esc(nexts.join(", ")||"the next signer")}</b>`:(ap===tot?`✓ <b>Complete</b> — all approved`:(cx?`✓ Done — remainder cancelled`:"—")));
+    const seg=(n,c)=> n>0?`<div style="width:${(n/tot*100).toFixed(1)}%;background:${c};"></div>`:"";
+    const sel=MV_FILTER===b.key;
+    return `<div class="mvbatch" data-bk="${esc(b.key)}" style="cursor:pointer;border:1px solid ${sel?"#2f9e5f":"#e2ebe5"};background:${sel?"#f2faf5":"#fff"};border-radius:11px;padding:12px 14px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;">
+        <div style="font-weight:800;color:#12352a;">${esc(label)} <span class="note" style="display:inline;font-weight:600;">— effective ${eff?fmtDate(eff):"—"}</span></div>
+        <div class="note" style="display:inline;">${tot} staff${sel?" · ▼ showing below":""}</div></div>
+      <div style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:#eef0ef;margin:8px 0 6px;">${seg(ap,"#2f9e5f")}${seg(aw,"#e0a92a")}${seg(cx,"#b9c0c7")}${seg(mo,"#8fa7d8")}</div>
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12.5px;">
+        <div style="color:#3a5a48;"><b style="color:#2f9e5f;">${ap}</b> approved · <b style="color:#b5891f;">${aw}</b> awaiting${cx?` · <b style="color:#7a828a;">${cx}</b> cancelled`:""}${mo?` · <b>${mo}</b> memo`:""}</div>
+        <div style="color:#12352a;">${step}</div></div></div>`; }).join("");
   // Batch-wide split by group (Store/Promo Diser vs Head Office/Warehouse) across all pay movements.
   const mvCatCounts=(()=>{ const c={}; R.filter(r=>(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null)).forEach(r=>{ const k=mvCat(r); c[k]=(c[k]||0)+1; }); return c; })();
   const mvCatLine=Object.entries(mvCatCounts).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${esc(k)} <b>${v}</b>`).join(" &nbsp;·&nbsp; ");
@@ -1644,9 +1670,11 @@ function renderMovements(){
       ${iCanSign.length?`<div class="note" style="margin:2px 0 6px;background:#fff8e6;border-color:#f0e2b8;color:#6b5a17;">✍ <b>${iCanSign.length}</b> NPA${iCanSign.length>1?"s":""} ${iCanSign.length>1?"are":"is"} waiting on <b>your</b> signature. Use <b>Tick all → Sign the selected</b>.</div>`
         :(iSignedWaiting.length?`<div class="note" style="margin:2px 0 6px;background:#eef7f0;border-color:#cfe6d6;color:#12352a;">✓ You've already signed your part on <b>${iSignedWaiting.length}</b> NPA${iSignedWaiting.length>1?"s":""}. Now waiting on ${nextSigners.length?"<b>"+nextSigners.join(", ")+"</b>":"the other signatory"} to countersign — then ${iSignedWaiting.length>1?"they become":"it becomes"} <b>Approved</b>. Nothing more for you to do here.</div>`:"")}
       ${mvCatLine?`<div class="psub" style="margin:2px 0 6px;padding:8px 12px;background:#f4f7f5;border:1px solid #e2ebe5;border-radius:9px;"><b>By group:</b> ${mvCatLine} &nbsp;·&nbsp; <b>${Object.values(mvCatCounts).reduce((a,b)=>a+b,0)}</b> total</div>`:""}
+      ${batchCardsHtml?`<div class="subhead" style="margin:10px 0 6px;">By increase — click a card to see just those people</div>${batchCardsHtml}`:""}
+      ${MV_FILTER?`<div class="psub" style="margin:2px 0 6px;">Showing one batch below · <a href="#" id="mvClearFilter" style="color:#1f6b3a;font-weight:700;">↺ show all</a></div>`:""}
       <div id="mvRecap" style="display:none;"></div>
-      ${R.length?`<table><thead><tr><th style="width:30px;text-align:center;">${mvSelCount?'<input type="checkbox" id="mvChkAll" title="Tick all to increase">':""}</th><th>Employee</th><th>Movement</th><th>Effective</th><th>Status</th><th>Sign chain</th></tr></thead><tbody>
-        ${R.map(r=>{ const disc=r.status==="awaiting_signoff"||r.status==="approved"; const sc=mvSignedCount(r); const tot=mvChain(r).length;
+      ${Rf.length?`<table><thead><tr><th style="width:30px;text-align:center;">${mvSelCount?'<input type="checkbox" id="mvChkAll" title="Tick all to increase">':""}</th><th>Employee</th><th>Movement</th><th>Effective</th><th>Status</th><th>Sign chain</th></tr></thead><tbody>
+        ${Rf.map(r=>{ const disc=r.status==="awaiting_signoff"||r.status==="approved"; const sc=mvSignedCount(r); const tot=mvChain(r).length;
           const paychg=(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null);
           const selectable=r.status==="awaiting_signoff"&&paychg;
           const curPay=(Number(r.current_daily_rate)||0)+(Number(r.current_allowance)||0)+(Number(r.meal_allowance)||0);
@@ -1701,6 +1729,9 @@ function renderMovements(){
   if(bU&&fU){ bU.addEventListener("click",()=>fU.click());
     fU.addEventListener("change",e=>{ const f=e.target.files&&e.target.files[0]; if(f) mvUploadBatch(f); e.target.value=""; }); }
   $$("#page-movements tr.clickable[data-nid]").forEach(tr=>tr.addEventListener("click",()=>openMovementDrawer(NPAS.find(r=>String(r.id)===tr.dataset.nid))));
+  // Batch cards: click to filter the table to just that increase (click again to clear).
+  $$("#page-movements .mvbatch").forEach(el=>el.addEventListener("click",()=>{ const k=el.dataset.bk; MV_FILTER=(MV_FILTER===k)?null:k; renderMovements(); }));
+  const bCF=$("#mvClearFilter"); if(bCF) bCF.addEventListener("click",e=>{ e.preventDefault(); MV_FILTER=null; renderMovements(); });
 }
 window.renderMovements=renderMovements;
 
@@ -1944,7 +1975,6 @@ function openMovementDrawer(r){
         ${signable?`<button class="btn" id="mvSign">Sign this step (${esc(signable.role)})</button>`:""}
         ${(isAdminUser()||canSeePay())&&r.status!=="cancelled"&&r.status!=="approved"?`<button class="btn ghost" id="mvCancel" style="color:#9a6a00;border-color:#f0e2b8;">✖ Cancel NPA (e.g. reached EOC)</button>`:""}
         ${(isAdminUser()||canSeePay())&&r.status==="cancelled"?`<button class="btn ghost" id="mvReopen" style="color:#1f6b3a;border-color:#cfe6d6;">↩ Reopen NPA</button>`:""}
-        ${isAdminUser()?`<button class="btn ghost" id="mvDelete" style="color:#c0392b;border-color:#f1c9c5;">🗑 Delete this record</button>`:""}
         <button class="btn ghost" id="mvDrawerClose" style="margin-left:auto;">Close</button>
       </div>
     </div></div>`;
@@ -1967,14 +1997,6 @@ function openMovementDrawer(r){
     const { error }=await sb.from("personnel_actions").update({ status:back, cancel_reason:null, cancelled_by:null, cancelled_at:null, updated_at:new Date().toISOString() }).eq("id",r.id);
     if(error){ alert("Couldn't reopen: "+error.message); mvReopenBtn.disabled=false; mvReopenBtn.textContent="↩ Reopen NPA"; return; }
     await logChange("movement",null,r.employee_name,"NPA reopened",r.npa_id||"");
-    m.remove(); await loadEmployees(); window.go("movements");
-  };
-  const mvDel=document.getElementById("mvDelete"); if(mvDel) mvDel.onclick=async()=>{
-    if(!confirm("Delete this record permanently?\n\n"+(r.employee_name||"")+" · "+(MV_ACTION_LABEL[r.action_type]||r.action_type||"")+(r.npa_id?" · "+r.npa_id:"")+"\n\nThis cannot be undone.")) return;
-    mvDel.disabled=true; mvDel.textContent="Deleting…";
-    const { error }=await sb.from("personnel_actions").delete().eq("id",r.id);
-    if(error){ alert("Couldn't delete: "+error.message); mvDel.disabled=false; mvDel.textContent="🗑 Delete this record"; return; }
-    await logChange("movement",null,r.employee_name,"NPA record deleted",r.npa_id||"");
     m.remove(); await loadEmployees(); window.go("movements");
   };
   const sg=document.getElementById("mvSign"); if(sg) sg.onclick=()=>mvSignStep(r,signable);

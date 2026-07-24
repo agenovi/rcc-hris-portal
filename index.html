@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784870824";
+window.APP_BUILD="1784870916";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784870824" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784870916" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -5052,7 +5052,7 @@ async function tkSendSignoffDo(p, MON, btn){
     repeat:p.repeat||1, hist:(p.hist||[]).map(h=>({mon:h.mon,combined:h.combined,held:h.held,flagged:h.flagged})) };
   const { data:sig, error } = await sb.from("signature_requests").insert({ doc_type:"nte", doc_title:"Notice to Explain — Attendance",
     subject_name:p.name, body, from_name:(CURRENT_USER&&CURRENT_USER.email)||"HR", awaiting:"you",
-    with_whom:tkNoted(p.pos)+" (Noted by)", status:"pending", meta:"Attendance · "+TK_MONTH_FULL[MON]+" "+TK_YEAR, details }).select().single();
+    with_whom:tkNoted(p.pos)+" (Noted by)", signer_email:(/warehouse/i.test(p.pos||"")?"pervin@hassarams.com":"anj@hassarams.com"), status:"pending", meta:"Attendance · "+TK_MONTH_FULL[MON]+" "+TK_YEAR, details }).select().single();
   if(error){ if(btn){ btn.disabled=false; btn.textContent="Send for sign-off"; } alert("Couldn't send: "+error.message); return; }
   const ref="NTE-"+new Date().toISOString().slice(0,10).replace(/-/g,"")+"-"+String(p.id||"").slice(-4);
   try{ await sb.from("memos").insert({ ref_no:ref, memo_type:"Notice to Explain", subject_name:p.name, title:"NTE — Attendance ("+TK_MONTH_FULL[MON]+" "+TK_YEAR+")",
@@ -6588,6 +6588,12 @@ async function applySignature(s, dataUrl){
   if(isDirectorItem(s) && !isAdminUser()){
     return { message:"Only the Director can approve this. It stays in the Director's Signatures inbox until they sign — HR cannot clear it." };
   }
+  // Person-based routing: an item routed to a NAMED signer can only be signed by that person
+  // (or the Director). Defense-in-depth behind the inbox filter — blocks a stale page too.
+  if(!canSignItem(s)){
+    const who=s.with_whom||nameForEmail((s.signer_email||"").toLowerCase())||"its named signer";
+    return { message:"This item is routed to "+who+" — only they (or the Director) can sign it. It won't appear in anyone else's inbox." };
+  }
   const signer=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"Signed-in user";
   const { error } = await sb.from("signature_requests").update({ status:"signed", signed_at:new Date().toISOString(), signer_name:signer, signature_data:dataUrl, updated_at:new Date().toISOString() }).eq("id",s.id);
   if(error) return error;
@@ -6667,7 +6673,7 @@ function openSignDoc(id){
     m.remove(); await loadEmployees(); window.go("signatures");
   };
   document.getElementById("sigDo").onclick=async()=>{
-    if(!dirty){ document.getElementById("sigMsg").textContent="Please draw your signature first."; return; }
+    if(!dirty){ document.getElementById("sigMsg").textContent="Add your signature first — upload an image or draw it."; return; }
     const remember=document.getElementById("sigRemember"); const data=cv.toDataURL("image/png");
     if(remember&&remember.checked) saveSavedSig(data);
     finishSign(data, document.getElementById("sigDo"), (s.doc_type==="claim"||s.doc_type==="nte"||s.doc_type==="meeting_nte")?"Approve & Sign":"Sign document");
@@ -10216,7 +10222,7 @@ async function sendFinalPayForSignoff(x,modal){
   const { data:sig, error:e2 } = await sb.from("signature_requests").insert({
     doc_type:"claim", doc_title:"Quitclaim — Final Pay Computation", subject_name:x.employee_name,
     body:finalPayBody(x,fp), from_name:sender, amount:net, meta:x.clearance_id, details,
-    awaiting:"you", with_whom:"Anj Genomal (Director)", status:"pending" }).select().single();
+    awaiting:"you", with_whom:"Anj Genomal (Director)", signer_email:"anj@hassarams.com", status:"pending" }).select().single();
   if(e2){ if(msg) msg.textContent=e2.message; if(btn){ btn.disabled=false; btn.textContent="Send to Director for sign-off"; } return; }
   await sb.from("exit_clearance").update({quitclaim_signature_id:sig.id}).eq("id",x.id);
   // Email the Director the branded approval card (Supabase → Resend → their inbox). Best-effort: never block the sign-off.

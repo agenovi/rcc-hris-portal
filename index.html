@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784857388";
+window.APP_BUILD="1784869650";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784857388" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784869650" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -3924,7 +3924,6 @@ function renderMovements(){
       <div class="note" style="margin:8px 0;background:#fff8e6;border-color:#f0e2b8;color:#6b5a17;">📅 Reminder — NCR-27 2nd tranche: +₱25 → ₱780, effective Jan 20, 2027 (105 staff). Not yet filed; generate nearer the date.</div>
       <div class="actionbar">
         <button class="btn" id="mvNew">＋ New Movement</button>
-        ${mvMineStat.length?`<button class="btn" id="mvSignAll">✍ Sign all (as you) · ${mvMineStat.length}</button>`:""}
         ${canSeePay()?`<button class="btn ghost" id="mvUpload">⬆ Upload batch (Excel)</button>`:""}
         ${canSeePay()?`<button class="btn ghost" id="mvBatch">Batch statutory increase</button>`:""}
       </div>
@@ -3934,9 +3933,17 @@ function renderMovements(){
         <div class="kpi"><div class="k-l">Approved this month</div><div class="k-n">${apprMonth}</div></div>
         <div class="kpi"><div class="k-l">For memo</div><div class="k-n">${forMemo}</div><div class="k-s">operational</div></div>
       </div>
-      ${R.length?`<table><thead><tr><th>Employee</th><th>Movement</th><th>Effective</th><th>Status</th><th>Sign chain</th></tr></thead><tbody>
+      <div id="mvRecap" style="display:none;"></div>
+      ${R.length?`<table><thead><tr><th style="width:30px;text-align:center;"><input type="checkbox" id="mvChkAll" title="Tick all to increase"></th><th>Employee</th><th>Movement</th><th>Effective</th><th>Status</th><th>Sign chain</th></tr></thead><tbody>
         ${R.map(r=>{ const disc=r.status==="awaiting_signoff"||r.status==="approved"; const sc=mvSignedCount(r); const tot=mvChain(r).length;
-          return `<tr class="clickable" data-nid="${esc(String(r.id))}"><td><b>${esc(r.employee_name||"—")}</b><div class="esub">${esc(r.current_position||"")}${r.employee_number?" · "+esc(r.employee_number):""}</div></td>
+          const paychg=(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null);
+          const selectable=r.status==="awaiting_signoff"&&paychg;
+          const curPay=(Number(r.current_daily_rate)||0)+(Number(r.current_allowance)||0)+(Number(r.meal_allowance)||0);
+          const newPay=(Number(r.new_daily_rate!=null?r.new_daily_rate:r.current_daily_rate)||0)+(Number(r.new_allowance!=null?r.new_allowance:r.current_allowance)||0)+(Number(r.new_meal_allowance!=null?r.new_meal_allowance:r.meal_allowance)||0);
+          const canSign=selectable&&!!mvCanSignNow(r);
+          return `<tr class="clickable" data-nid="${esc(String(r.id))}">
+          <td class="mvchk-cell" style="text-align:center;">${selectable?`<input type="checkbox" class="mvchk" data-nid="${esc(String(r.id))}" data-cur="${curPay}" data-new="${newPay}" data-cansign="${canSign?1:0}" ${canSign?"checked":""}>`:""}</td>
+          <td><b>${esc(r.employee_name||"—")}</b><div class="esub">${esc(r.current_position||"")}${r.employee_number?" · "+esc(r.employee_number):""}</div></td>
           <td>${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"—")}<div class="esub">${esc(mvBasis(r))}</div></td>
           <td>${r.effective_date?fmtDate(r.effective_date):"—"}</td>
           <td>${mvStatusPill(r.status)}</td>
@@ -3944,8 +3951,32 @@ function renderMovements(){
       </tbody></table>`:`<div class="psub" style="margin-top:6px;">No movements filed yet — click “＋ New Movement”.</div>`}
     </div>`;
   const bN=$("#mvNew"); if(bN) bN.addEventListener("click",mvPickEmployee);
-  const bSA=$("#mvSignAll"); if(bSA) bSA.addEventListener("click",()=>mvBatchSign(mvMineStat));
   const bB=$("#mvBatch"); if(bB) bB.addEventListener("click",mvBatchStatutory);
+  // Checklist recap: tick rows → see the running total + increase, and sign the ticked ones in place.
+  function mvRecalc(){
+    const boxes=$$("#page-movements .mvchk"), checked=boxes.filter(b=>b.checked);
+    let curSum=0,newSum=0,nSign=0;
+    checked.forEach(b=>{ curSum+=Number(b.dataset.cur)||0; newSum+=Number(b.dataset.new)||0; if(b.dataset.cansign==="1") nSign++; });
+    const rb=$("#mvRecap"); if(!rb) return;
+    const all=$("#mvChkAll"); if(all) all.checked=boxes.length>0&&checked.length===boxes.length;
+    if(!checked.length){ rb.style.display="none"; rb.innerHTML=""; return; }
+    rb.style.cssText="display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin:8px 0;padding:11px 15px;background:#eef7f0;border:1px solid #cfe6d6;border-radius:10px;";
+    rb.innerHTML=`<div style="font-weight:800;color:#12352a;">${checked.length} selected to increase</div>
+      <div style="color:#2c5b41;">New pay total <b>${mvPeso(newSum)}</b> <span class="note" style="display:inline;">(was ${mvPeso(curSum)})</span></div>
+      <div style="font-weight:800;color:#1f6b3a;">Increase +${mvPeso(newSum-curSum)}</div>
+      <div style="flex:1;"></div>
+      ${nSign?`<button class="btn" id="mvSignSel">✍ Sign the ${nSign} selected</button>`:`<span class="note" style="display:inline;">Nothing here needs your signature — you're not on these sign chains.</span>`}`;
+    const bss=$("#mvSignSel"); if(bss) bss.addEventListener("click",()=>{
+      const ids=new Set(checked.filter(b=>b.dataset.cansign==="1").map(b=>b.dataset.nid));
+      const list=(NPAS||[]).filter(r=>ids.has(String(r.id)));
+      if(list.length) mvBatchSign(list);
+    });
+  }
+  $$("#page-movements .mvchk").forEach(cb=>{ cb.addEventListener("click",e=>e.stopPropagation()); cb.addEventListener("change",mvRecalc); });
+  const chkAll=$("#mvChkAll");
+  if(chkAll){ chkAll.addEventListener("click",e=>e.stopPropagation());
+    chkAll.addEventListener("change",()=>{ $$("#page-movements .mvchk").forEach(cb=>{cb.checked=chkAll.checked;}); mvRecalc(); }); }
+  mvRecalc();
   const bU=$("#mvUpload"), fU=$("#mvUpFile");
   if(bU&&fU){ bU.addEventListener("click",()=>fU.click());
     fU.addEventListener("change",e=>{ const f=e.target.files&&e.target.files[0]; if(f) mvUploadBatch(f); e.target.value=""; }); }
@@ -4208,6 +4239,14 @@ function openMovementDrawer(r){
 }
 window.openMovementDrawer=openMovementDrawer;
 
+// Shared: turn an uploaded signature photo into a transparent-background PNG (white knocked out), PDF-style.
+function mvSigMakeTransparent(img){ const c=document.createElement("canvas"); const s2=Math.min(1,700/img.width); c.width=Math.round(img.width*s2); c.height=Math.round(img.height*s2); const xx=c.getContext("2d"); xx.drawImage(img,0,0,c.width,c.height); const dd=xx.getImageData(0,0,c.width,c.height), p=dd.data; for(let i=0;i<p.length;i+=4){ const lum=(p[i]+p[i+1]+p[i+2])/3; if(lum>205){ p[i+3]=0; } else if(lum>130){ p[i+3]=Math.round((205-lum)/75*255); } else { p[i]=18;p[i+1]=53;p[i+2]=31; } } xx.putImageData(dd,0,0); return c.toDataURL("image/png"); }
+// Shared: wire a "Upload signature" button + hidden file input to draw a knocked-out image onto a sign canvas.
+function mvWireSigUpload(cv,ctx,btn,file,onDone){ if(!btn||!file) return; btn.onclick=()=>file.click();
+  file.onchange=(ev)=>{ const f=ev.target.files&&ev.target.files[0]; if(!f) return; const rd=new FileReader();
+    rd.onload=()=>{ const img=new Image(); img.onload=()=>{ const ti=new Image(); ti.onload=()=>{ ctx.clearRect(0,0,cv.width,cv.height); const s3=Math.min(cv.width/ti.width, cv.height/ti.height); const dw=ti.width*s3, dh=ti.height*s3; ctx.drawImage(ti,(cv.width-dw)/2,(cv.height-dh)/2,dw,dh); onDone&&onDone(); }; ti.src=mvSigMakeTransparent(img); }; img.src=rd.result; };
+    rd.readAsDataURL(f); }; }
+
 // Sign one step of a discretionary NPA — reuses the canvas draw widget.
 function mvSignStep(r,step){
   if(!step) return;
@@ -4217,11 +4256,13 @@ function mvSignStep(r,step){
     <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#6B7785;">NOTICE OF PERSONNEL ACTION · ${esc(r.npa_id||"")}</div>
     <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 3px;">${esc(step.role)} — sign to advance</div>
     <div class="psub" style="margin-bottom:8px;">${esc(r.employee_name||"")} · ${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"")} · effective ${r.effective_date?fmtDate(r.effective_date):"—"}. Step ${step.seq} of ${mvChain(r).length}.</div>
-    <div style="font-size:12px;color:#6B7785;margin-bottom:6px;">Sign below — drawn with your finger or mouse. RA 8792 e-signature · timestamped + recorded against your account.</div>
+    <div style="font-size:12px;color:#6B7785;margin-bottom:6px;"><b>Upload your signature image</b> or draw it below. RA 8792 e-signature · timestamped + recorded against your account.</div>
     <canvas id="mvPad" width="480" height="150" style="width:100%;height:150px;border:1px dashed #b9c4cf;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
     <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+      <button class="btn ghost" id="mvSigUpload" type="button" style="flex:0 0 auto;">📷 Upload signature</button>
+      <input type="file" id="mvSigFile" accept="image/*" style="display:none;">
       <button class="btn ghost" id="mvSigClear" style="flex:0 0 auto;">Clear</button>
-      <span id="mvSigMsg" style="font-size:12.5px;color:#a4322a;flex:1;"></span>
+      <span id="mvSigMsg" style="font-size:12.5px;color:#a4322a;flex:1 1 100%;"></span>
     </div>
     <div style="display:flex;gap:10px;margin-top:14px;">
       <button class="btn ghost" id="mvSigCancel" style="margin-left:auto;">Cancel</button>
@@ -4238,9 +4279,10 @@ function mvSignStep(r,step){
   cv.addEventListener("mousedown",start); cv.addEventListener("mousemove",move); window.addEventListener("mouseup",end);
   cv.addEventListener("touchstart",start,{passive:false}); cv.addEventListener("touchmove",move,{passive:false}); cv.addEventListener("touchend",end);
   document.getElementById("mvSigClear").onclick=()=>{ ctx.clearRect(0,0,cv.width,cv.height); dirty=false; };
+  mvWireSigUpload(cv,ctx,document.getElementById("mvSigUpload"),document.getElementById("mvSigFile"),()=>{ dirty=true; document.getElementById("mvSigMsg").textContent=""; });
   document.getElementById("mvSigDo").onclick=async()=>{
     const msg=document.getElementById("mvSigMsg");
-    if(!dirty){ msg.textContent="Please draw your signature first."; return; }
+    if(!dirty){ msg.textContent="Add your signature first — upload an image or draw it."; return; }
     const btn=document.getElementById("mvSigDo"); btn.disabled=true; btn.textContent="Signing…";
     const now=new Date().toISOString(); const signer=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"Signed-in user";
     const chain=mvChain(r);
@@ -4267,11 +4309,13 @@ function mvBatchSign(list){
     <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#6B7785;">STATUTORY NPA · BATCH SIGN-OFF</div>
     <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 3px;">Sign all ${list.length} NPA${list.length>1?"s":""} as you</div>
     <div class="psub" style="margin-bottom:8px;">Your signature is applied to your own step on ${list.length} mandated (statutory) NPA${list.length>1?"s":""}, in any order. Any that become fully signed are marked Approved.</div>
-    <div style="font-size:12px;color:#6B7785;margin-bottom:6px;">Sign below — drawn with your finger or mouse. RA 8792 e-signature · timestamped + recorded against your account.</div>
+    <div style="font-size:12px;color:#6B7785;margin-bottom:6px;"><b>Upload your signature image</b> or draw it below — applied to all ${list.length}. RA 8792 e-signature · timestamped + recorded against your account.</div>
     <canvas id="mvBPad" width="480" height="150" style="width:100%;height:150px;border:1px dashed #b9c4cf;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
     <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+      <button class="btn ghost" id="mvBUpload" type="button" style="flex:0 0 auto;">📷 Upload signature</button>
+      <input type="file" id="mvBFile" accept="image/*" style="display:none;">
       <button class="btn ghost" id="mvBClear" style="flex:0 0 auto;">Clear</button>
-      <span id="mvBMsg" style="font-size:12.5px;color:#a4322a;flex:1;"></span>
+      <span id="mvBMsg" style="font-size:12.5px;color:#a4322a;flex:1 1 100%;"></span>
     </div>
     <div style="display:flex;gap:10px;margin-top:14px;">
       <button class="btn ghost" id="mvBCancel" style="margin-left:auto;">Cancel</button>
@@ -4288,9 +4332,10 @@ function mvBatchSign(list){
   cv.addEventListener("mousedown",start); cv.addEventListener("mousemove",move); window.addEventListener("mouseup",end);
   cv.addEventListener("touchstart",start,{passive:false}); cv.addEventListener("touchmove",move,{passive:false}); cv.addEventListener("touchend",end);
   document.getElementById("mvBClear").onclick=()=>{ ctx.clearRect(0,0,cv.width,cv.height); dirty=false; };
+  mvWireSigUpload(cv,ctx,document.getElementById("mvBUpload"),document.getElementById("mvBFile"),()=>{ dirty=true; document.getElementById("mvBMsg").textContent=""; });
   document.getElementById("mvBDo").onclick=async()=>{
     const msg=document.getElementById("mvBMsg");
-    if(!dirty){ msg.textContent="Please draw your signature first."; return; }
+    if(!dirty){ msg.textContent="Add your signature first — upload an image or draw it."; return; }
     const signer=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"Signed-in user";
     if(!confirm("Sign "+list.length+" NPA"+(list.length>1?"s":"")+" as "+signer+"?")) return;
     const btn=document.getElementById("mvBDo"); btn.disabled=true; btn.textContent="Signing…";
@@ -4683,11 +4728,13 @@ function polAckSign(p){
     <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#6B7785;">POLICY ACKNOWLEDGMENT${p.policy_no?" · "+esc(p.policy_no):""}</div>
     <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 3px;">${esc(p.title||"Policy")}</div>
     <div class="psub" style="margin-bottom:8px;">Version ${esc(p.version||"1")}. By signing, <b>${esc(id.name)}</b> confirms having read and understood this policy.</div>
-    <div style="font-size:12px;color:#6B7785;margin-bottom:6px;">Sign below — drawn with your finger or mouse. RA 8792 e-signature · timestamped + recorded against your account.</div>
+    <div style="font-size:12px;color:#6B7785;margin-bottom:6px;"><b>Upload your signature image</b> or draw it below. RA 8792 e-signature · timestamped + recorded against your account.</div>
     <canvas id="polPad" width="480" height="150" style="width:100%;height:150px;border:1px dashed #b9c4cf;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
     <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+      <button class="btn ghost" id="polSigUpload" type="button" style="flex:0 0 auto;">📷 Upload signature</button>
+      <input type="file" id="polSigFile" accept="image/*" style="display:none;">
       <button class="btn ghost" id="polSigClear" style="flex:0 0 auto;">Clear</button>
-      <span id="polSigMsg" style="font-size:12.5px;color:#a4322a;flex:1;"></span>
+      <span id="polSigMsg" style="font-size:12.5px;color:#a4322a;flex:1 1 100%;"></span>
     </div>
     <div style="display:flex;gap:10px;margin-top:14px;">
       <button class="btn ghost" id="polSigCancel" style="margin-left:auto;">Cancel</button>
@@ -4704,9 +4751,10 @@ function polAckSign(p){
   cv.addEventListener("mousedown",start); cv.addEventListener("mousemove",move); window.addEventListener("mouseup",end);
   cv.addEventListener("touchstart",start,{passive:false}); cv.addEventListener("touchmove",move,{passive:false}); cv.addEventListener("touchend",end);
   document.getElementById("polSigClear").onclick=()=>{ ctx.clearRect(0,0,cv.width,cv.height); dirty=false; };
+  mvWireSigUpload(cv,ctx,document.getElementById("polSigUpload"),document.getElementById("polSigFile"),()=>{ dirty=true; document.getElementById("polSigMsg").textContent=""; });
   document.getElementById("polSigDo").onclick=async()=>{
     const msg=document.getElementById("polSigMsg");
-    if(!dirty){ msg.textContent="Please draw your signature first."; return; }
+    if(!dirty){ msg.textContent="Add your signature first — upload an image or draw it."; return; }
     const btn=document.getElementById("polSigDo"); btn.disabled=true; btn.textContent="Signing…";
     const payload={ policy_id:p.id, policy_version:p.version||null, employee_id:id.empId, employee_name:id.name, employee_number:id.empNo, acknowledged_at:new Date().toISOString(), signature_data:cv.toDataURL("image/png") };
     const { error }=await sb.from("policy_acknowledgments").insert(payload);

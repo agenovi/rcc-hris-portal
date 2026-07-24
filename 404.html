@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784878813";
+window.APP_BUILD="1784879788";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784878813" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784879788" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -4030,6 +4030,9 @@ function renderMovements(){
   // Batch-wide split by group (Store/Promo Diser vs Head Office/Warehouse) across all pay movements.
   const mvCatCounts=(()=>{ const c={}; R.filter(r=>(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null)).forEach(r=>{ const k=mvCat(r); c[k]=(c[k]||0)+1; }); return c; })();
   const mvCatLine=Object.entries(mvCatCounts).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${esc(k)} <b>${v}</b>`).join(" &nbsp;·&nbsp; ");
+  // Email coverage — how many NPAs have a staff email on file (toward auto-emailing them).
+  const payN=R.filter(r=>r.status!=="cancelled"&&(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null));
+  const emailN=payN.filter(r=>String(r.notify_email||"").trim()).length;
   const nb=document.querySelector('.nav-item[data-page="movements"] .nav-badge'); if(nb){ nb.textContent=awaiting||""; nb.style.display=awaiting?"":"none"; }
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
@@ -4056,7 +4059,7 @@ function renderMovements(){
       <div class="psub" style="margin:6px 0 2px;"><b>${R.length}</b> total = <b>${awaiting}</b> awaiting sign-off · <b>${approvedAll}</b> approved${cancelledAll?` · <b>${cancelledAll}</b> cancelled`:""}${forMemo?` · <b>${forMemo}</b> memo`:""}</div>
       ${iCanSign.length?`<div class="note" style="margin:2px 0 6px;background:#fff8e6;border-color:#f0e2b8;color:#6b5a17;">✍ <b>${iCanSign.length}</b> NPA${iCanSign.length>1?"s":""} ${iCanSign.length>1?"are":"is"} waiting on <b>your</b> signature. Use <b>Tick all → Sign the selected</b>.</div>`
         :(iSignedWaiting.length?`<div class="note" style="margin:2px 0 6px;background:#eef7f0;border-color:#cfe6d6;color:#12352a;">✓ You've already signed your part on <b>${iSignedWaiting.length}</b> NPA${iSignedWaiting.length>1?"s":""}. Now waiting on ${nextSigners.length?"<b>"+nextSigners.join(", ")+"</b>":"the other signatory"} to countersign — then ${iSignedWaiting.length>1?"they become":"it becomes"} <b>Approved</b>. Nothing more for you to do here.</div>`:"")}
-      ${mvCatLine?`<div class="psub" style="margin:2px 0 6px;padding:8px 12px;background:#f4f7f5;border:1px solid #e2ebe5;border-radius:9px;"><b>By group:</b> ${mvCatLine} &nbsp;·&nbsp; <b>${Object.values(mvCatCounts).reduce((a,b)=>a+b,0)}</b> total</div>`:""}
+      ${mvCatLine?`<div class="psub" style="margin:2px 0 6px;padding:8px 12px;background:#f4f7f5;border:1px solid #e2ebe5;border-radius:9px;"><b>By group:</b> ${mvCatLine} &nbsp;·&nbsp; <b>${Object.values(mvCatCounts).reduce((a,b)=>a+b,0)}</b> total &nbsp;·&nbsp; 📧 <b>${emailN}</b>/${payN.length} have a staff email${emailN<payN.length?` <span style="color:#9a6a00;">(${payN.length-emailN} to add — open the NPA to enter it)</span>`:" — all set for auto-email"}</div>`:""}
       ${batchCardsHtml?`<div class="subhead" style="margin:10px 0 6px;">By increase — click a card to see just those people</div>${batchCardsHtml}`:""}
       ${MV_FILTER?`<div class="psub" style="margin:2px 0 6px;">Showing one batch below · <a href="#" id="mvClearFilter" style="color:#1f6b3a;font-weight:700;">↺ show all</a></div>`:""}
       <div id="mvRecap" style="display:none;"></div>
@@ -4340,7 +4343,15 @@ function openMovementDrawer(r){
           ${r.new_schedule?kv("New schedule",esc(r.new_schedule)):""}
         </div>
         ${r.remarks?`<div class="psub" style="margin-top:8px;"><b>Remarks:</b> ${esc(r.remarks)}</div>`:""}
-        ${r.notify_employee?`<div class="psub" style="margin-top:6px;">📧 <b>Employee to be notified:</b> ${esc(r.notify_email||"—")} ${r.notified_at?`· sent ${fmtDate(r.notified_at)}`:`· <span style="color:#9a6a00;">pending — email sends once notifications are switched on</span>`}</div>`:""}
+        <div style="margin-top:10px;padding:9px 11px;background:#f4f7f5;border:1px solid #e2ebe5;border-radius:9px;">
+          <div style="font-size:11px;font-weight:800;letter-spacing:.6px;color:#6B7785;margin-bottom:4px;">📧 STAFF EMAIL (for sending them this NPA)</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <input id="mvEmail" value="${esc(r.notify_email||"")}" placeholder="name@example.com" autocomplete="off" style="flex:1;min-width:190px;padding:7px 9px;border:1px solid #dfe5e1;border-radius:7px;font-size:13px;">
+            <button class="btn ghost" id="mvSaveEmail" style="padding:7px 12px;">Save email</button>
+            <span id="mvEmailMsg" class="note" style="display:inline;"></span>
+          </div>
+          <div class="note" style="display:inline;font-size:11.5px;margin-top:4px;">${r.notified_at?`✓ emailed ${fmtDate(r.notified_at)}`:"Not yet emailed — one-click auto-send to staff turns on once the email key is set."}</div>
+        </div>
         ${r.status==="cancelled"?`<div class="note" style="margin-top:8px;background:#fbf3e2;border-color:#f0e2b8;color:#6b5a17;">✖ <b>Cancelled</b>${r.cancel_reason?" — "+esc(r.cancel_reason):""}${r.cancelled_by?` · by ${esc(r.cancelled_by)}`:""}${r.cancelled_at?" · "+fmtDate(r.cancelled_at):""}. Not counted in the awaiting/sign lists. Use <b>Reopen</b> to restore it.</div>`:""}
       </div>
       ${payRows&&canSeePay()?`<div class="panel"><div class="subhead">Financial details <span class="sh-note">confidential</span></div>
@@ -4368,6 +4379,15 @@ function openMovementDrawer(r){
   m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
   document.getElementById("mvDrawerClose").onclick=()=>m.remove();
   document.getElementById("mvPrint").onclick=()=>printMovementNpa(r);
+  const mvSaveEmailBtn=document.getElementById("mvSaveEmail"); if(mvSaveEmailBtn) mvSaveEmailBtn.onclick=async()=>{
+    const val=((document.getElementById("mvEmail")||{}).value||"").trim();
+    const msg=document.getElementById("mvEmailMsg");
+    if(val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)){ msg.textContent="That doesn't look like an email."; msg.style.color="#c0392b"; return; }
+    mvSaveEmailBtn.disabled=true; mvSaveEmailBtn.textContent="Saving…";
+    const { error }=await sb.from("personnel_actions").update({ notify_email:val||null, notify_employee:!!val, updated_at:new Date().toISOString() }).eq("id",r.id);
+    if(error){ msg.textContent=error.message; msg.style.color="#c0392b"; mvSaveEmailBtn.disabled=false; mvSaveEmailBtn.textContent="Save email"; return; }
+    r.notify_email=val||null; r.notify_employee=!!val; msg.textContent="Saved ✓"; msg.style.color="#1f6b3a"; mvSaveEmailBtn.disabled=false; mvSaveEmailBtn.textContent="Save email";
+  };
   const mvCancelBtn=document.getElementById("mvCancel"); if(mvCancelBtn) mvCancelBtn.onclick=async()=>{
     const origLabel=mvCancelBtn.textContent;
     const reason=prompt((r.status==="approved"?"⚠ This NPA is already APPROVED. Voiding it marks it Cancelled (kept on record, reopenable).\n\n":"Cancel this NPA for "+(r.employee_name||"")+"?\n\n")+"Type a reason (e.g. \"Reached end of contract\", \"Duplicate\", \"Wrong rate\"). Who cancelled, when, and this reason are all logged.");

@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784876369";
+window.APP_BUILD="1784876601";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784876369" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784876601" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -3662,6 +3662,7 @@ function openRecord(e){
           <div class="em">${esc(e.position||"—")} · ${esc(e.department||"—")} · ${esc(e.group_name||"—")}${e.hire_source?(" · "+esc(e.hire_source)):""}</div></div>
         ${typePill(e)} ${statusPill(e.status)}
         ${canManageStores()?'<button class="btn ghost" id="recNpa" style="margin-left:6px;">Personnel Action</button>':''}
+        <button class="btn ghost" id="recDownload" style="margin-left:6px;">Download PDF</button>
         <button class="btn" id="recEdit" style="margin-left:6px;">Edit</button>
       </div>
       ${sec(1,"Identity &amp; Status",
@@ -3714,6 +3715,7 @@ function openRecord(e){
   window.go("employee");
   $("#recBack").addEventListener("click",()=>window.go("employees"));
   $("#recEdit").addEventListener("click",()=>openForm(e));
+  const _dl=$("#recDownload"); if(_dl) _dl.addEventListener("click",()=>printEmployeeRecord(e));
   const _npa=$("#recNpa"); if(_npa) _npa.addEventListener("click",()=>openNpaForm(e));
   $$("#page-employee .mv-npa-row").forEach(el=>el.addEventListener("click",()=>{ const r=(NPAS||[]).find(x=>String(x.id)===el.dataset.nid); if(r) openMovementDrawer(r); }));
   // ── Live attendance from PayPlus (keyed on the PayPlus ID) ──
@@ -3810,6 +3812,52 @@ function openNpaForm(e){
       relevant_date:eff, status:"Issued", created_by:(CURRENT_USER&&CURRENT_USER.email)||"HR" }); }catch(_){}
     printNpa(e,d,ref); m.remove(); await loadEmployees();
   });
+}
+// Downloadable / printable Employee Record — RCC-branded. Respects the same visibility gates as the on-screen record
+// (pay only if canSeePay, gov IDs + bank only if canSeeIds), so a download never exposes more than the person can already see.
+function printEmployeeRecord(e){
+  const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to download the record."); return; }
+  const E=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const D=v=>(v==null||v==="")?"—":E(v);
+  const dt=v=>v?fmtDate(v):"—";
+  const rows=arr=>arr.map(([k,v])=>`<tr><td class="k">${E(k)}</td><td class="v">${v}</td></tr>`).join("");
+  const sec=(t,body)=>`<h3>${E(t)}</h3><table class="rec">${body}</table>`;
+  const idRows=[["PayPlus ID",D(e.employee_id)],["Group",D(e.group_name)],["Hire source",D(e.hire_source)]];
+  if(e.agency_name) idRows.push(["Agency",D(e.agency_name)]);
+  idRows.push(["Status",D(e.status)]);
+  const payRows = canSeePay()
+    ? [["Contract type",D(e.contract_type)],["Daily rate", e.daily_rate?("₱"+Number(e.daily_rate).toLocaleString()):"—"],["Daily allowance", e.daily_allowance?("₱"+Number(e.daily_allowance).toLocaleString()):"—"],["Hire date",dt(e.hire_date)],["Regularization date",dt(e.regularization_date)],["End date",dt(e.end_date)],["End reason",D(e.end_reason)]]
+    : [["Contract type",D(e.contract_type)],["Pay","🔒 restricted — payroll only"],["Hire date",dt(e.hire_date)],["Regularization date",dt(e.regularization_date)],["End date",dt(e.end_date)]];
+  const ids = canSeeIds()
+    ? sec("Government Numbers", rows([["SSS",D(e.sss_number)],["PhilHealth",D(e.philhealth_number)],["Pag-IBIG",D(e.pagibig_number)],["TIN",D(e.tin_number)]]))
+      + sec("Bank", rows([["Bank name",D(e.bank_name)],["Account number",D(e.bank_account_number)]]))
+    : "";
+  const gen="Generated "+new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})+" · "+E((CURRENT_USER&&CURRENT_USER.email)||"RCC HRIS");
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${E(e.full_name||"Employee")} — Employee Record</title><style>
+    *{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#12241b;margin:32px;font-size:12.5px;}
+    .hdr{border-bottom:3px solid #1F6B52;padding-bottom:10px;margin-bottom:12px;}
+    .co{font-size:18px;font-weight:800;color:#12352a;}.sub{font-size:10.5px;color:#6b7785;letter-spacing:.6px;text-transform:uppercase;}
+    h2{font-size:16px;margin:8px 0 2px;}.meta{color:#6b7785;font-size:12px;margin-bottom:6px;}
+    h3{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#1F6B52;margin:16px 0 4px;border-bottom:1px solid #dbe4dd;padding-bottom:3px;}
+    table.rec{width:100%;border-collapse:collapse;}table.rec td{padding:5px 6px;border-bottom:1px solid #eef2ef;vertical-align:top;}
+    td.k{width:210px;color:#6b7785;font-weight:600;}td.v{color:#12241b;}
+    .foot{margin-top:22px;font-size:10px;color:#9aa4ac;border-top:1px solid #dbe4dd;padding-top:8px;}
+    @media print{body{margin:14mm;}}
+  </style></head><body>
+    <div class="hdr"><div class="co">Roshan Commercial Corporation</div><div class="sub">Human Resources — Employee Record</div></div>
+    <h2>${D(e.full_name)}</h2>
+    <div class="meta">${D(e.position)} · ${D(e.department)}${e.worksite?" · "+E(e.worksite):""} · ${D(e.status)}</div>
+    ${sec("Identity & Status", rows(idRows))}
+    ${sec("Personal Details", rows([["Email",D(e.email)],["Mobile",D(e.phone)],["Date of birth",dt(e.date_of_birth)],["Gender",D(e.gender)],["Civil status",D(e.civil_status)],["Permanent address",D(e.permanent_address)],["Current address",D(e.current_address)]]))}
+    ${sec("Emergency Contact", rows([["Name",D(e.emergency_contact_name)],["Relationship",D(e.emergency_contact_relation)],["Contact number",D(e.emergency_contact_number)]]))}
+    ${ids}
+    ${sec("Placement", rows([["Department",D(e.department)],["Position",D(e.position)],["Worksite",D(e.worksite)],["Supervisor",D(e.supervisor_name)],["Approver 2",D(e.approver2_name||e.approver2_email)]]))}
+    ${sec("Employment Terms, Pay & Dates", rows(payRows))}
+    ${e.notes?`<h3>Notes</h3><div style="white-space:pre-wrap;font-size:12.5px;padding:4px 2px;">${E(e.notes)}</div>`:""}
+    <div class="foot">${gen}. Sourced from the RCC HRIS; roster fields mirror PayPlus.${(canSeePay()||canSeeIds())?" Contains confidential data — handle accordingly.":""}</div>
+    <scr`+`ipt>window.onload=function(){setTimeout(function(){window.print();},150);}</scr`+`ipt>
+  </body></html>`;
+  w.document.write(html); w.document.close();
 }
 function printNpa(e,d,ref){
   const P=n=>(n==null||isNaN(n))?"":"₱"+Number(n).toLocaleString(undefined,{minimumFractionDigits:2});

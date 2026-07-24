@@ -3103,7 +3103,13 @@ window.renderGovRemit=renderGovRemit;
 
 /* ---------- WORKSITES (Branches page) — real store list from Branch Directory ---------- */
 const catPill=(c)=> c==="CN"?'<span class="pill cn">Concession</span>':(c==="CO"?'<span class="pill co">Boutique</span>':'<span class="pill ho">'+esc(c||"—")+'</span>');
-const statusBranchPill=(s)=> s==="Open"?'<span class="pill open">Open</span>':'<span class="pill closed">Closed</span>';
+const statusBranchPill=(s)=>{
+  if(s==="Open") return '<span class="pill open">Open</span>';
+  if(s==="Under Renovation") return '<span class="pill" style="background:#fff3e0;color:#8a5a12;border:1px solid #ecd9a6;">🏗️ Under Renovation</span>';
+  if(s==="No Manning") return '<span class="pill" style="background:#eef2f7;color:#5a6a7a;border:1px solid #cfd9e4;">No Manning</span>';
+  if(s==="Pending") return '<span class="pill" style="background:#fdf6e3;color:#7a5c12;border:1px solid #ecdca6;">Pending</span>';
+  return '<span class="pill closed">Closed</span>';
+};
 const disersAt=(store)=> DISERS.filter(d=>d.store===store && (d.status||"").toLowerCase().startsWith("active"));
 // Normalize PayPlus worksite labels that don't exactly match our store names (spelling/format only — same store).
 const WORKSITE_ALIAS={
@@ -3135,7 +3141,7 @@ function storeForm(b){
     ${fld("st_name","Store name *",b.name)}
     <div class="form-grid">${fld("st_city","City",b.city)}${fld("st_area","Area",b.area)}</div>
     ${fld("st_sc","Sales Coordinator",b.sc)}
-    <div class="form-grid">${sel("st_cat","Type",["CO","CN"],b.category||"CO")}${sel("st_status","Status",["Open","Closed","No Manning","Pending"],b.status||"Open")}</div>
+    <div class="form-grid">${sel("st_cat","Type",["CO","CN"],b.category||"CO")}${sel("st_status","Status",["Open","Closed","Under Renovation","No Manning","Pending"],b.status||"Open")}</div>
     <div class="form-grid">${fld("st_ahcs","Approved stationary",b.ahc_stationary??0,"number")}${fld("st_ahcr","Approved reliever",b.ahc_reliever??0,"number")}</div>
     <div class="psub" style="margin:2px 0 6px;">CO = Boutique · CN = Concession. Approved headcount = how many this store should have.</div>
     ${demoChk("st_isdemo",b.is_demo)}

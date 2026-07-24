@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784872877";
+window.APP_BUILD="1784873901";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784872877" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784873901" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -3952,8 +3952,9 @@ function renderMovements(){
           const curPay=(Number(r.current_daily_rate)||0)+(Number(r.current_allowance)||0)+(Number(r.meal_allowance)||0);
           const newPay=(Number(r.new_daily_rate!=null?r.new_daily_rate:r.current_daily_rate)||0)+(Number(r.new_allowance!=null?r.new_allowance:r.current_allowance)||0)+(Number(r.new_meal_allowance!=null?r.new_meal_allowance:r.meal_allowance)||0);
           const canSign=selectable&&!!mvCanSignNow(r);
+          const nextS=mvNextStep(r); const waitName=nextS?(nextS.name?nextS.name+(nextS.role?" ("+nextS.role+")":""):(nextS.role||"another signer")):"";
           return `<tr class="clickable" data-nid="${esc(String(r.id))}">
-          <td class="mvchk-cell" style="text-align:center;">${selectable?`<input type="checkbox" class="mvchk" data-nid="${esc(String(r.id))}" data-cur="${curPay}" data-new="${newPay}" data-cat="${esc(mvCat(r))}" data-cansign="${canSign?1:0}" ${canSign?"checked":""}>`:""}</td>
+          <td class="mvchk-cell" style="text-align:center;">${selectable?`<input type="checkbox" class="mvchk" data-nid="${esc(String(r.id))}" data-cur="${curPay}" data-new="${newPay}" data-cat="${esc(mvCat(r))}" data-waiting="${esc(waitName)}" data-cansign="${canSign?1:0}" ${canSign?"checked":""}>`:""}</td>
           <td><b>${esc(r.employee_name||"—")}</b><div class="esub">${esc(r.current_position||"")}${r.employee_number?" · "+esc(r.employee_number):""}</div></td>
           <td>${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"—")}<div class="esub">${esc(mvBasis(r))}</div></td>
           <td>${r.effective_date?fmtDate(r.effective_date):"—"}</td>
@@ -3981,7 +3982,7 @@ function renderMovements(){
       <div style="color:#2c5b41;">${lines}</div>
       ${g.length>1?`<div style="font-weight:800;color:#1f6b3a;">Total +${mvPeso(totalInc)}/day</div>`:""}
       <div style="flex:1;"></div>
-      ${nSign?`<button class="btn" id="mvSignSel">✍ Sign the ${nSign} selected</button>`:`<span class="note" style="display:inline;">Nothing here needs your signature — you're not on these sign chains.</span>`}`;
+      ${nSign?`<button class="btn" id="mvSignSel">✍ Sign the ${nSign} selected</button>`:(()=>{ const waits=[...new Set(checked.map(b=>b.dataset.waiting).filter(Boolean))]; return waits.length?`<span class="note" style="display:inline;">✓ Your signature is already in — now waiting on <b>${waits.join(", ")}</b> to sign.</span>`:`<span class="note" style="display:inline;">Nothing here needs your signature.</span>`; })()}`;
     const bss=$("#mvSignSel"); if(bss) bss.addEventListener("click",()=>{
       const ids=new Set(checked.filter(b=>b.dataset.cansign==="1").map(b=>b.dataset.nid));
       const list=(NPAS||[]).filter(r=>ids.has(String(r.id)));

@@ -1512,6 +1512,11 @@ function mvStatusPill(s){ const map={memo:["closed","Memo — Dept Head"],proces
   const m=map[s]||["closed",esc(s||"—")]; return `<span class="pill ${m[0]}">${m[1]}</span>`; }
 function mvPeso(n){ return (n==null||n==="")?"—":"₱"+Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
+// Categorise a movement into the two buckets anj tracks: Store/field vs Head Office/Warehouse.
+function mvCat(r){ const d=String(r.department||"").toUpperCase(), p=String(r.current_position||"").toUpperCase();
+  if(d.includes("DISER")||d.includes("STORE")||d.includes("RETAIL")||p.includes("DISER")||p.includes("ROVING")||p.includes("PROMO")||p.includes("MERCHAND")) return "Store / Promo Diser";
+  return "Head Office / Warehouse"; }
+
 function renderMovements(){
   const pg=$("#page-movements"); if(!pg||!canSeeMovements()) return;
   const R=NPAS||[];
@@ -1522,6 +1527,9 @@ function renderMovements(){
   // Statutory NPAs where the current user is still an unsigned signatory — drives the batch-sign button (order not enforced).
   const mvMineStat=R.filter(r=>mvBasis(r).toLowerCase()==="statutory" && r.status==="awaiting_signoff" && mvCanSignNow(r));
   const mvSelCount=R.filter(r=>r.status==="awaiting_signoff" && (r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null)).length;
+  // Batch-wide split by group (Store/Promo Diser vs Head Office/Warehouse) across all pay movements.
+  const mvCatCounts=(()=>{ const c={}; R.filter(r=>(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null)).forEach(r=>{ const k=mvCat(r); c[k]=(c[k]||0)+1; }); return c; })();
+  const mvCatLine=Object.entries(mvCatCounts).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${esc(k)} <b>${v}</b>`).join(" &nbsp;·&nbsp; ");
   const nb=document.querySelector('.nav-item[data-page="movements"] .nav-badge'); if(nb){ nb.textContent=awaiting||""; nb.style.display=awaiting?"":"none"; }
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
@@ -1543,6 +1551,7 @@ function renderMovements(){
         <div class="kpi"><div class="k-l">Approved this month</div><div class="k-n">${apprMonth}</div></div>
         <div class="kpi"><div class="k-l">For memo</div><div class="k-n">${forMemo}</div><div class="k-s">operational</div></div>
       </div>
+      ${mvCatLine?`<div class="psub" style="margin:2px 0 6px;padding:8px 12px;background:#f4f7f5;border:1px solid #e2ebe5;border-radius:9px;"><b>By group:</b> ${mvCatLine} &nbsp;·&nbsp; <b>${Object.values(mvCatCounts).reduce((a,b)=>a+b,0)}</b> total</div>`:""}
       <div id="mvRecap" style="display:none;"></div>
       ${R.length?`<table><thead><tr><th style="width:30px;text-align:center;"><input type="checkbox" id="mvChkAll" title="Tick all to increase"></th><th>Employee</th><th>Movement</th><th>Effective</th><th>Status</th><th>Sign chain</th></tr></thead><tbody>
         ${R.map(r=>{ const disc=r.status==="awaiting_signoff"||r.status==="approved"; const sc=mvSignedCount(r); const tot=mvChain(r).length;
@@ -1552,7 +1561,7 @@ function renderMovements(){
           const newPay=(Number(r.new_daily_rate!=null?r.new_daily_rate:r.current_daily_rate)||0)+(Number(r.new_allowance!=null?r.new_allowance:r.current_allowance)||0)+(Number(r.new_meal_allowance!=null?r.new_meal_allowance:r.meal_allowance)||0);
           const canSign=selectable&&!!mvCanSignNow(r);
           return `<tr class="clickable" data-nid="${esc(String(r.id))}">
-          <td class="mvchk-cell" style="text-align:center;">${selectable?`<input type="checkbox" class="mvchk" data-nid="${esc(String(r.id))}" data-cur="${curPay}" data-new="${newPay}" data-cansign="${canSign?1:0}" ${canSign?"checked":""}>`:""}</td>
+          <td class="mvchk-cell" style="text-align:center;">${selectable?`<input type="checkbox" class="mvchk" data-nid="${esc(String(r.id))}" data-cur="${curPay}" data-new="${newPay}" data-cat="${esc(mvCat(r))}" data-cansign="${canSign?1:0}" ${canSign?"checked":""}>`:""}</td>
           <td><b>${esc(r.employee_name||"—")}</b><div class="esub">${esc(r.current_position||"")}${r.employee_number?" · "+esc(r.employee_number):""}</div></td>
           <td>${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"—")}<div class="esub">${esc(mvBasis(r))}</div></td>
           <td>${r.effective_date?fmtDate(r.effective_date):"—"}</td>
@@ -1569,12 +1578,14 @@ function renderMovements(){
     const all=$("#mvChkAll"); if(all) all.checked=boxes.length>0&&checked.length===boxes.length;
     if(!checked.length){ rb.style.display="none"; rb.innerHTML=""; return; }
     // Group the ticked rows by their pay change (from → to) so the bar reads like the actual raise, not a meaningless sum.
-    const groups={}; let totalInc=0, nSign=0;
-    checked.forEach(b=>{ const cur=Number(b.dataset.cur)||0, nw=Number(b.dataset.new)||0; const k=cur+"|"+nw; (groups[k]=groups[k]||{cur,nw,n:0}).n++; totalInc+=(nw-cur); if(b.dataset.cansign==="1") nSign++; });
+    const groups={}, cats={}; let totalInc=0, nSign=0;
+    checked.forEach(b=>{ const cur=Number(b.dataset.cur)||0, nw=Number(b.dataset.new)||0; const k=cur+"|"+nw; (groups[k]=groups[k]||{cur,nw,n:0}).n++; totalInc+=(nw-cur); const c=b.dataset.cat||"Other"; cats[c]=(cats[c]||0)+1; if(b.dataset.cansign==="1") nSign++; });
     const g=Object.values(groups).sort((a,b)=>b.n-a.n);
     const lines=g.map(x=>`<span style="white-space:nowrap;"><b>${x.n}</b> ${x.n===1?"item":"items"} · ${mvPeso(x.cur)} → <b>${mvPeso(x.nw)}</b> <span style="color:#1f6b3a;">(+${mvPeso(x.nw-x.cur)}/day)</span></span>`).join(' &nbsp;·&nbsp; ');
+    const catLine=Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${esc(k)} <b>${v}</b>`).join(" &nbsp;·&nbsp; ");
     rb.style.cssText="display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin:8px 0;padding:11px 15px;background:#eef7f0;border:1px solid #cfe6d6;border-radius:10px;";
     rb.innerHTML=`<div style="font-weight:800;color:#12352a;">${checked.length} selected to increase</div>
+      <div style="flex:1 1 100%;color:#3a5a48;font-size:12.5px;">${catLine}</div>
       <div style="color:#2c5b41;">${lines}</div>
       ${g.length>1?`<div style="font-weight:800;color:#1f6b3a;">Total +${mvPeso(totalInc)}/day</div>`:""}
       <div style="flex:1;"></div>

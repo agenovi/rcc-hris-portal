@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784827574";
+window.APP_BUILD="1784857388";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784827574" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784857388" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -6106,7 +6106,7 @@ function renderConcerns(){
     <div class="panel" style="margin-top:0;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
         <div><h2 style="margin:0;">Concerns &amp; Cases</h2>
-          <div class="psub">Arbitration and ongoing legal/labor matters. Director/owner only.</div></div>
+          <div class="psub">Arbitration and ongoing legal/labor matters. For Anju Genomal, Juvy (HR Relations) and Rhel (HR Manager).</div></div>
         <button class="btn" id="cxNew">＋ New concern / case</button>
       </div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);margin-top:12px;">
@@ -6160,7 +6160,8 @@ function openConcern(c){
           ${kv("Handling counsel",esc(c.counsel||"—"))}
           ${kv("Exposure",c.exposure!=null&&c.exposure!==""?peso(Number(c.exposure)):"—")}
         </div>
-        ${c.doc_url?`<div style="margin-top:8px;"><a class="btn ghost" href="${esc(c.doc_url)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block;">Open case file ↗</a></div>`:""}
+        ${(Array.isArray(c.attachments)&&c.attachments.length)?`<div style="margin-top:10px;"><div class="subhead" style="margin-bottom:4px;">Case files <span class="count-tag">${c.attachments.length}</span></div>${c.attachments.map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📎 ${esc(a.name)}</span><button class="btn ghost" style="padding:3px 10px;font-size:12px;flex-shrink:0;" onclick="openLoanDoc('${esc(a.path)}',this)">View</button></div>`).join("")}</div>`:""}
+        ${c.doc_url?`<div style="margin-top:8px;"><a class="btn ghost" href="${esc(c.doc_url)}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block;">Open case file link ↗</a></div>`:""}
       </div>
       ${c.summary?`<div class="panel"><div class="subhead">Nature of the case</div><div style="white-space:pre-wrap;font-size:13.5px;line-height:1.55;color:#22302a;">${esc(c.summary)}</div></div>`:""}
       ${c.timeline?`<div class="panel"><div class="subhead">Timeline / notes</div><div style="white-space:pre-wrap;font-size:13.5px;line-height:1.55;color:#22302a;">${esc(c.timeline)}</div></div>`:""}
@@ -6210,7 +6211,10 @@ function openConcernForm(c){
     ${fld("Monetary exposure (₱)",inp("cxfExposure",c.exposure,"estimated claim / potential award","number"))}
     ${fld("Nature of the case",`<textarea id="cxfSummary" rows="3" placeholder="What the case is about" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;">${c.summary?esc(c.summary):""}</textarea>`)}
     ${fld("Timeline / notes",`<textarea id="cxfTimeline" rows="4" placeholder="Running log — conferences, submissions, orders received…" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;">${c.timeline?esc(c.timeline):""}</textarea>`)}
-    ${fld("Case file link (Drive/Dropbox)",inp("cxfDoc",c.doc_url,"optional URL"))}
+    ${fld("Upload case files (complaint, orders, submissions…)",`
+      <input type="file" id="cxfFile" multiple style="font-size:12.5px;">
+      <div id="cxfFileList" style="margin-top:6px;"></div>`)}
+    ${fld("Case file link (Drive/Dropbox) — optional",inp("cxfDoc",c.doc_url,"optional URL"))}
     <div id="cxfMsg" style="color:#a12;font-size:12.5px;min-height:16px;margin:2px 0;"></div>
     <div style="display:flex;gap:10px;margin-top:6px;">
       <button class="btn" id="cxfSave">${isNew?"Log case":"Save changes"}</button>
@@ -6219,11 +6223,33 @@ function openConcernForm(c){
   </div>`;
   m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
   document.getElementById("cxfCancel").onclick=()=>m.remove();
-  document.getElementById("cxfSave").onclick=()=>saveConcern(c,isNew);
+  // ── Case-file attachments — upload to the shared docs bucket, keep a jsonb list on the case ──
+  let cxAttach = Array.isArray(c.attachments)?c.attachments.slice():[];
+  const caseKey = c.id || ("new-"+Math.random().toString(36).slice(2,9));
+  const renderAttach=()=>{ const w=document.getElementById("cxfFileList"); if(!w) return;
+    w.innerHTML = cxAttach.length ? cxAttach.map((a,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px;"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📎 ${esc(a.name)}</span><button type="button" class="btn ghost" data-axr="${i}" style="padding:2px 8px;font-size:11.5px;flex-shrink:0;">Remove</button></div>`).join("") : `<div class="psub">No files attached yet.</div>`;
+    w.querySelectorAll("[data-axr]").forEach(b=>b.onclick=()=>{ cxAttach.splice(+b.dataset.axr,1); renderAttach(); });
+  };
+  renderAttach();
+  const fInput=document.getElementById("cxfFile");
+  if(fInput) fInput.onchange=async()=>{
+    const files=[...fInput.files]; if(!files.length) return;
+    const msg=document.getElementById("cxfMsg"); const setMsg=(t,c)=>{ if(msg){ msg.style.color=c||"#4a5560"; msg.textContent=t; } };
+    for(const f of files){
+      if(f.size>25*1024*1024){ setMsg(`“${f.name}” is over 25 MB — please attach a smaller file or a link.`, "#a12"); continue; }
+      setMsg("Uploading "+f.name+"…");
+      const path=`concerns/${caseKey}/${Date.now()}-${f.name.replace(/[^\w.\-]+/g,"_")}`;
+      const {error:upErr}=await sb.storage.from("loan-docs").upload(path,f,{upsert:true});
+      if(upErr){ setMsg("Upload failed: "+upErr.message, "#a12"); continue; }
+      cxAttach.push({name:f.name, path, uploaded_at:new Date().toISOString(), uploaded_by:(CURRENT_USER&&CURRENT_USER.email)||null});
+    }
+    setMsg(""); fInput.value=""; renderAttach();
+  };
+  document.getElementById("cxfSave").onclick=()=>saveConcern(c,isNew,cxAttach);
 }
 window.openConcernForm=openConcernForm;
 
-async function saveConcern(c,isNew){
+async function saveConcern(c,isNew,attachments){
   const val=id=>{ const el=document.getElementById(id); return el?el.value.trim():""; };
   const title=val("cxfTitle");
   const msg=document.getElementById("cxfMsg");
@@ -6244,6 +6270,7 @@ async function saveConcern(c,isNew){
     summary:val("cxfSummary")||null,
     timeline:val("cxfTimeline")||null,
     doc_url:val("cxfDoc")||null,
+    attachments:Array.isArray(attachments)?attachments:[],
     updated_at:new Date().toISOString(),
     updated_by:(CURRENT_USER&&CURRENT_USER.email)||null
   };

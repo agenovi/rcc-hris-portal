@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784873901";
+window.APP_BUILD="1784875776";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784873901" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784875776" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -3900,7 +3900,7 @@ function mvCanSignNow(r){ if(r.status!=="awaiting_signoff") return null;
   // Discretionary: strict sequential order — only the current first-unsigned e-signable step.
   const st=mvActiveStep(r); if(!st) return null;
   return (me===String(st.email||"").toLowerCase())?st:null; }
-function mvStatusPill(s){ const map={memo:["closed","Memo — Dept Head"],processing:["co","Processing (HR)"],awaiting_signoff:["cn","Awaiting sign-off"],approved:["active","Approved"],declined:["awol","Declined"]};
+function mvStatusPill(s){ const map={memo:["closed","Memo — Dept Head"],processing:["co","Processing (HR)"],awaiting_signoff:["cn","Awaiting sign-off"],approved:["active","Approved"],declined:["awol","Declined"],cancelled:["closed","Cancelled"]};
   const m=map[s]||["closed",esc(s||"—")]; return `<span class="pill ${m[0]}">${m[1]}</span>`; }
 function mvPeso(n){ return (n==null||n==="")?"—":"₱"+Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
@@ -3918,7 +3918,13 @@ function renderMovements(){
   const apprMonth=R.filter(r=>r.status==="approved" && (r.approval_date||"").slice(0,7)===ym).length;
   // Statutory NPAs where the current user is still an unsigned signatory — drives the batch-sign button (order not enforced).
   const mvMineStat=R.filter(r=>mvBasis(r).toLowerCase()==="statutory" && r.status==="awaiting_signoff" && mvCanSignNow(r));
-  const mvSelCount=R.filter(r=>r.status==="awaiting_signoff" && (r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null)).length;
+  // Where does the CURRENT user stand? Only show tick/sign chrome to whoever still has to sign.
+  const meEmail=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase();
+  const openRows=R.filter(r=>r.status==="awaiting_signoff");
+  const iCanSign=openRows.filter(r=>mvCanSignNow(r));                          // rows waiting on ME to sign
+  const iSignedWaiting=openRows.filter(r=>{ const mine=mvChain(r).find(s=>String(s.email||"").toLowerCase()===meEmail); return mine && r["sig"+mine.seq+"_data"] && !mvCanSignNow(r); }); // I signed, waiting on others
+  const nextSigners=[...new Set(iSignedWaiting.map(r=>{ const ns=mvNextStep(r); return ns?(ns.name?ns.name+(ns.role?" ("+ns.role+")":""):(ns.role||"another signer")):""; }).filter(Boolean))];
+  const mvSelCount=iCanSign.filter(r=>(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null)).length;
   // Batch-wide split by group (Store/Promo Diser vs Head Office/Warehouse) across all pay movements.
   const mvCatCounts=(()=>{ const c={}; R.filter(r=>(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null)).forEach(r=>{ const k=mvCat(r); c[k]=(c[k]||0)+1; }); return c; })();
   const mvCatLine=Object.entries(mvCatCounts).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${esc(k)} <b>${v}</b>`).join(" &nbsp;·&nbsp; ");
@@ -3935,7 +3941,9 @@ function renderMovements(){
         <button class="btn" id="mvNew">＋ New Movement</button>
         ${mvSelCount?`<button class="btn ghost" id="mvTickAll">✓ Tick all to increase · ${mvSelCount}</button>`:""}
         ${canSeePay()?`<button class="btn ghost" id="mvUpload">⬆ Upload batch (Excel)</button>`:""}
+        ${canSeePay()?`<a class="btn ghost" href="./NPA-batch-template.xlsx" download style="text-decoration:none;">⬇ Excel template</a>`:""}
         ${canSeePay()?`<button class="btn ghost" id="mvBatch">Batch statutory increase</button>`:""}
+        ${R.some(r=>r.status==="approved")?`<button class="btn ghost" id="mvDownloadAll">⬇ Download all approved (print)</button>`:""}
       </div>
       <input type="file" id="mvUpFile" accept=".xlsx,.xls,.csv" style="display:none;">
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
@@ -3943,9 +3951,11 @@ function renderMovements(){
         <div class="kpi"><div class="k-l">Approved this month</div><div class="k-n">${apprMonth}</div></div>
         <div class="kpi"><div class="k-l">For memo</div><div class="k-n">${forMemo}</div><div class="k-s">operational</div></div>
       </div>
+      ${iCanSign.length?`<div class="note" style="margin:2px 0 6px;background:#fff8e6;border-color:#f0e2b8;color:#6b5a17;">✍ <b>${iCanSign.length}</b> NPA${iCanSign.length>1?"s":""} ${iCanSign.length>1?"are":"is"} waiting on <b>your</b> signature. Use <b>Tick all → Sign the selected</b>.</div>`
+        :(iSignedWaiting.length?`<div class="note" style="margin:2px 0 6px;background:#eef7f0;border-color:#cfe6d6;color:#12352a;">✓ You've already signed your part on <b>${iSignedWaiting.length}</b> NPA${iSignedWaiting.length>1?"s":""}. Now waiting on ${nextSigners.length?"<b>"+nextSigners.join(", ")+"</b>":"the other signatory"} to countersign — then ${iSignedWaiting.length>1?"they become":"it becomes"} <b>Approved</b>. Nothing more for you to do here.</div>`:"")}
       ${mvCatLine?`<div class="psub" style="margin:2px 0 6px;padding:8px 12px;background:#f4f7f5;border:1px solid #e2ebe5;border-radius:9px;"><b>By group:</b> ${mvCatLine} &nbsp;·&nbsp; <b>${Object.values(mvCatCounts).reduce((a,b)=>a+b,0)}</b> total</div>`:""}
       <div id="mvRecap" style="display:none;"></div>
-      ${R.length?`<table><thead><tr><th style="width:30px;text-align:center;"><input type="checkbox" id="mvChkAll" title="Tick all to increase"></th><th>Employee</th><th>Movement</th><th>Effective</th><th>Status</th><th>Sign chain</th></tr></thead><tbody>
+      ${R.length?`<table><thead><tr><th style="width:30px;text-align:center;">${mvSelCount?'<input type="checkbox" id="mvChkAll" title="Tick all to increase">':""}</th><th>Employee</th><th>Movement</th><th>Effective</th><th>Status</th><th>Sign chain</th></tr></thead><tbody>
         ${R.map(r=>{ const disc=r.status==="awaiting_signoff"||r.status==="approved"; const sc=mvSignedCount(r); const tot=mvChain(r).length;
           const paychg=(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null);
           const selectable=r.status==="awaiting_signoff"&&paychg;
@@ -3954,7 +3964,7 @@ function renderMovements(){
           const canSign=selectable&&!!mvCanSignNow(r);
           const nextS=mvNextStep(r); const waitName=nextS?(nextS.name?nextS.name+(nextS.role?" ("+nextS.role+")":""):(nextS.role||"another signer")):"";
           return `<tr class="clickable" data-nid="${esc(String(r.id))}">
-          <td class="mvchk-cell" style="text-align:center;">${selectable?`<input type="checkbox" class="mvchk" data-nid="${esc(String(r.id))}" data-cur="${curPay}" data-new="${newPay}" data-cat="${esc(mvCat(r))}" data-waiting="${esc(waitName)}" data-cansign="${canSign?1:0}" ${canSign?"checked":""}>`:""}</td>
+          <td class="mvchk-cell" style="text-align:center;">${canSign?`<input type="checkbox" class="mvchk" data-nid="${esc(String(r.id))}" data-cur="${curPay}" data-new="${newPay}" data-cat="${esc(mvCat(r))}" data-waiting="${esc(waitName)}" data-cansign="1" checked>`:""}</td>
           <td><b>${esc(r.employee_name||"—")}</b><div class="esub">${esc(r.current_position||"")}${r.employee_number?" · "+esc(r.employee_number):""}</div></td>
           <td>${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"—")}<div class="esub">${esc(mvBasis(r))}</div></td>
           <td>${r.effective_date?fmtDate(r.effective_date):"—"}</td>
@@ -3964,6 +3974,7 @@ function renderMovements(){
     </div>`;
   const bN=$("#mvNew"); if(bN) bN.addEventListener("click",mvPickEmployee);
   const bB=$("#mvBatch"); if(bB) bB.addEventListener("click",mvBatchStatutory);
+  const bDA=$("#mvDownloadAll"); if(bDA) bDA.addEventListener("click",()=>mvDownloadAll(R.filter(r=>r.status==="approved")));
   // Checklist recap: tick rows → see the running total + increase, and sign the ticked ones in place.
   function mvRecalc(){
     const boxes=$$("#page-movements .mvchk"), checked=boxes.filter(b=>b.checked);
@@ -4222,6 +4233,7 @@ function openMovementDrawer(r){
         </div>
         ${r.remarks?`<div class="psub" style="margin-top:8px;"><b>Remarks:</b> ${esc(r.remarks)}</div>`:""}
         ${r.notify_employee?`<div class="psub" style="margin-top:6px;">📧 <b>Employee to be notified:</b> ${esc(r.notify_email||"—")} ${r.notified_at?`· sent ${fmtDate(r.notified_at)}`:`· <span style="color:#9a6a00;">pending — email sends once notifications are switched on</span>`}</div>`:""}
+        ${r.status==="cancelled"?`<div class="note" style="margin-top:8px;background:#fbf3e2;border-color:#f0e2b8;color:#6b5a17;">✖ <b>Cancelled</b>${r.cancel_reason?" — "+esc(r.cancel_reason):""}${r.cancelled_by?` · by ${esc(r.cancelled_by)}`:""}${r.cancelled_at?" · "+fmtDate(r.cancelled_at):""}. Not counted in the awaiting/sign lists. Use <b>Reopen</b> to restore it.</div>`:""}
       </div>
       ${payRows&&canSeePay()?`<div class="panel"><div class="subhead">Financial details <span class="sh-note">confidential</span></div>
         <table><thead><tr><th></th><th style="text-align:right;">Current</th><th style="text-align:right;">New</th></tr></thead><tbody>
@@ -4240,6 +4252,8 @@ function openMovementDrawer(r){
       <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
         <button class="btn ghost" id="mvPrint">Download / Print NPA</button>
         ${signable?`<button class="btn" id="mvSign">Sign this step (${esc(signable.role)})</button>`:""}
+        ${(isAdminUser()||canSeePay())&&r.status!=="cancelled"&&r.status!=="approved"?`<button class="btn ghost" id="mvCancel" style="color:#9a6a00;border-color:#f0e2b8;">✖ Cancel NPA (e.g. reached EOC)</button>`:""}
+        ${(isAdminUser()||canSeePay())&&r.status==="cancelled"?`<button class="btn ghost" id="mvReopen" style="color:#1f6b3a;border-color:#cfe6d6;">↩ Reopen NPA</button>`:""}
         ${isAdminUser()?`<button class="btn ghost" id="mvDelete" style="color:#c0392b;border-color:#f1c9c5;">🗑 Delete this record</button>`:""}
         <button class="btn ghost" id="mvDrawerClose" style="margin-left:auto;">Close</button>
       </div>
@@ -4247,6 +4261,24 @@ function openMovementDrawer(r){
   m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
   document.getElementById("mvDrawerClose").onclick=()=>m.remove();
   document.getElementById("mvPrint").onclick=()=>printMovementNpa(r);
+  const mvCancelBtn=document.getElementById("mvCancel"); if(mvCancelBtn) mvCancelBtn.onclick=async()=>{
+    const reason=prompt("Cancel this NPA for "+(r.employee_name||"")+"?\n\nType a reason (e.g. \"Reached end of contract\", \"Duplicate\", \"Wrong rate\"). It stays on record and can be reopened later.");
+    if(reason===null) return;
+    mvCancelBtn.disabled=true; mvCancelBtn.textContent="Cancelling…";
+    const em=(CURRENT_USER&&(CURRENT_USER.email||CURRENT_USER.name))||"HR";
+    const { error }=await sb.from("personnel_actions").update({ status:"cancelled", cancel_reason:(reason||"").trim()||null, cancelled_by:em, cancelled_at:new Date().toISOString(), updated_at:new Date().toISOString() }).eq("id",r.id);
+    if(error){ alert("Couldn't cancel: "+error.message); mvCancelBtn.disabled=false; mvCancelBtn.textContent="✖ Cancel NPA (e.g. reached EOC)"; return; }
+    await logChange("movement",null,r.employee_name,"NPA cancelled",(r.npa_id||"")+(reason?" — "+reason:""));
+    m.remove(); await loadEmployees(); window.go("movements");
+  };
+  const mvReopenBtn=document.getElementById("mvReopen"); if(mvReopenBtn) mvReopenBtn.onclick=async()=>{
+    mvReopenBtn.disabled=true; mvReopenBtn.textContent="Reopening…";
+    const back=mvSignedCount(r)>0?"awaiting_signoff":"awaiting_signoff";
+    const { error }=await sb.from("personnel_actions").update({ status:back, cancel_reason:null, cancelled_by:null, cancelled_at:null, updated_at:new Date().toISOString() }).eq("id",r.id);
+    if(error){ alert("Couldn't reopen: "+error.message); mvReopenBtn.disabled=false; mvReopenBtn.textContent="↩ Reopen NPA"; return; }
+    await logChange("movement",null,r.employee_name,"NPA reopened",r.npa_id||"");
+    m.remove(); await loadEmployees(); window.go("movements");
+  };
   const mvDel=document.getElementById("mvDelete"); if(mvDel) mvDel.onclick=async()=>{
     if(!confirm("Delete this record permanently?\n\n"+(r.employee_name||"")+" · "+(MV_ACTION_LABEL[r.action_type]||r.action_type||"")+(r.npa_id?" · "+r.npa_id:"")+"\n\nThis cannot be undone.")) return;
     mvDel.disabled=true; mvDel.textContent="Deleting…";
@@ -4388,7 +4420,25 @@ function mvBatchSign(list){
 
 // Read-only NPA form + print on RCC letterhead. Mirrors the official
 // "Notice of Personnel Action Form"; signatures are stamped where signed.
-function printMovementNpa(r){
+const MV_NPA_CSS=`
+    *{box-sizing:border-box;} body{font-family:Arial,Helvetica,sans-serif;color:#1F2A37;max-width:760px;margin:18px auto;padding:0 22px;font-size:9.5pt;line-height:1.35;}
+    .hd{display:flex;align-items:center;gap:12px;} .hd img{height:56px;}
+    .rule{border-bottom:3px solid #1B5E20;margin:6px 0 10px;}
+    .title{text-align:center;font-weight:800;font-size:13pt;letter-spacing:.5px;color:#12352a;margin:2px 0 12px;}
+    h3{font-size:9.5pt;color:#1B5E20;font-weight:800;border-bottom:1px solid #cfe0d5;padding-bottom:2px;margin:13px 0 6px;letter-spacing:.3px;}
+    table{width:100%;border-collapse:collapse;margin:4px 0;} td,th{border:1px solid #9fb0a6;padding:4px 7px;text-align:left;font-size:9pt;vertical-align:middle;}
+    th{background:#eef4ef;color:#12352a;font-size:8.5pt;text-transform:uppercase;letter-spacing:.3px;} .r{text-align:right;} .tot td{background:#f3f8f4;font-weight:700;}
+    .estat{margin:6px 0 2px;} .estat b{color:#12352a;} .chk{display:inline-block;margin:0 14px 3px 0;font-size:9pt;}
+    .reasons{columns:2;margin:4px 0;} .reasons .chk{display:block;}
+    .sc{height:48px;text-align:center;} .rmk{margin:6px 0;font-size:9pt;}
+    .conf{background:#fdf6e3;border:1px solid #ecdca6;padding:6px 9px;font-size:8.5pt;font-weight:700;color:#8a6a14;margin:8px 0;}
+    .conforme{margin:8px 0;font-size:9pt;} .dist{color:#667;font-size:8.5pt;margin-top:6px;}
+    .ft{display:flex;justify-content:space-between;align-items:flex-end;border-top:2px solid #1B5E20;margin-top:22px;padding-top:6px;}
+    .ft .tm{font-weight:800;color:#1B5E20;letter-spacing:.5px;font-size:10pt;} .ft .ad{text-align:right;color:#667;font-size:8pt;}
+    .npa-page{max-width:760px;margin:0 auto;} @media print{ body{margin:0 auto;} .npa-page{page-break-after:always;} .npa-page:last-child{page-break-after:auto;} }
+`;
+// Build the NPA body HTML (sections I–V on RCC letterhead). Shared by single-print and Download-all.
+function mvNpaBody(r){
   const pf=n=>(n==null||n==="")?"":"P"+Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
   const num=n=>(n==null||n==="")?null:Number(n);
   const basis=mvBasis(r);
@@ -4429,24 +4479,7 @@ function printMovementNpa(r){
   const nameRow=chain.map(st=>`<td>${esc(st.name||"")}</td>`).join("");
   const sigRow=chain.map(st=>{ const d=r["sig"+st.seq+"_data"]; return `<td class="sc">${d?`<img src="${d}" style="height:40px;">`:"&nbsp;"}</td>`; }).join("");
   const dateRow=chain.map(st=>{ const at=r["sig"+st.seq+"_at"]; return `<td>${at?fmtDate(at):"________________"}</td>`; }).join("");
-  const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to view/print the form."); return; }
-  w.document.write(`<!DOCTYPE html><html><head><title>${esc(r.npa_id||"NPA")} — Notice of Personnel Action Form</title><style>
-    *{box-sizing:border-box;} body{font-family:Arial,Helvetica,sans-serif;color:#1F2A37;max-width:760px;margin:18px auto;padding:0 22px;font-size:9.5pt;line-height:1.35;}
-    .hd{display:flex;align-items:center;gap:12px;} .hd img{height:56px;}
-    .rule{border-bottom:3px solid #1B5E20;margin:6px 0 10px;}
-    .title{text-align:center;font-weight:800;font-size:13pt;letter-spacing:.5px;color:#12352a;margin:2px 0 12px;}
-    h3{font-size:9.5pt;color:#1B5E20;font-weight:800;border-bottom:1px solid #cfe0d5;padding-bottom:2px;margin:13px 0 6px;letter-spacing:.3px;}
-    table{width:100%;border-collapse:collapse;margin:4px 0;} td,th{border:1px solid #9fb0a6;padding:4px 7px;text-align:left;font-size:9pt;vertical-align:middle;}
-    th{background:#eef4ef;color:#12352a;font-size:8.5pt;text-transform:uppercase;letter-spacing:.3px;} .r{text-align:right;} .tot td{background:#f3f8f4;font-weight:700;}
-    .estat{margin:6px 0 2px;} .estat b{color:#12352a;} .chk{display:inline-block;margin:0 14px 3px 0;font-size:9pt;}
-    .reasons{columns:2;margin:4px 0;} .reasons .chk{display:block;}
-    .sc{height:48px;text-align:center;} .rmk{margin:6px 0;font-size:9pt;}
-    .conf{background:#fdf6e3;border:1px solid #ecdca6;padding:6px 9px;font-size:8.5pt;font-weight:700;color:#8a6a14;margin:8px 0;}
-    .conforme{margin:8px 0;font-size:9pt;} .dist{color:#667;font-size:8.5pt;margin-top:6px;}
-    .ft{display:flex;justify-content:space-between;align-items:flex-end;border-top:2px solid #1B5E20;margin-top:22px;padding-top:6px;}
-    .ft .tm{font-weight:800;color:#1B5E20;letter-spacing:.5px;font-size:10pt;} .ft .ad{text-align:right;color:#667;font-size:8pt;}
-    @media print{ body{margin:0 auto;} }
-  </style></head><body>
+  return `
     <div class="hd"><img src="./rcc_logo.png" onerror="this.style.display='none'"><div style="font-weight:800;font-size:12pt;color:#1B5E20;">ROSHAN COMMERCIAL CORPORATION</div></div>
     <div class="rule"></div>
     <div class="title">NOTICE OF PERSONNEL ACTION FORM</div>
@@ -4472,8 +4505,19 @@ function printMovementNpa(r){
     <div class="conf">Important Note: SALARY data indicated in this form is strictly CONFIDENTIAL.</div>
     <div class="conforme"><b>EMPLOYEE CONFORME</b> &nbsp;·&nbsp; Employee Signature: ______________________ &nbsp;·&nbsp; Date Received: ______________</div>
     <div class="dist">Distribution: Original – HR 201 File, Duplicate – Employee Copy, Triplicate – Payroll.</div>
-    <div class="ft"><div class="tm">THE RIGHT MOVE</div><div class="ad">3rd Floor RCC Center, 104 Shaw Boulevard, Pasig, Manila, 1603, Philippines · +632 86386556</div></div>
-    <script>window.print();</` + `script></body></html>`);
+    <div class="ft"><div class="tm">THE RIGHT MOVE</div><div class="ad">3rd Floor RCC Center, 104 Shaw Boulevard, Pasig, Manila, 1603, Philippines · +632 86386556</div></div>`;
+}
+function printMovementNpa(r){
+  const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to view/print the form."); return; }
+  w.document.write(`<!DOCTYPE html><html><head><title>${esc(r.npa_id||"NPA")} — Notice of Personnel Action Form</title><style>${MV_NPA_CSS}</style></head><body>${mvNpaBody(r)}<scr`+`ipt>window.print();</scr`+`ipt></body></html>`);
+  w.document.close();
+}
+// Download/print ALL supplied NPAs in ONE document, one per page — for 201-file printing.
+function mvDownloadAll(list){
+  list=(list||[]).filter(Boolean); if(!list.length){ alert("No NPAs to download yet."); return; }
+  const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to print."); return; }
+  const pages=list.map(r=>`<div class="npa-page">${mvNpaBody(r)}</div>`).join("");
+  w.document.write(`<!DOCTYPE html><html><head><title>NPAs — ${list.length} record(s)</title><style>${MV_NPA_CSS}</style></head><body>${pages}<scr`+`ipt>window.print();</scr`+`ipt></body></html>`);
   w.document.close();
 }
 

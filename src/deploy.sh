@@ -45,6 +45,7 @@ echo "build stamp $BUILD"
 [ -f "$APP_DIR/exit.html" ] && cp "$APP_DIR/exit.html" "$SITE_DIR/exit.html"
 [ -f "$APP_DIR/transfer-request.html" ] && cp "$APP_DIR/transfer-request.html" "$SITE_DIR/transfer-request.html"
 [ -f "$APP_DIR/rcc_logo.png" ] && cp "$APP_DIR/rcc_logo.png" "$SITE_DIR/rcc_logo.png"
+[ -f "$APP_DIR/NPA-batch-template.xlsx" ] && cp "$APP_DIR/NPA-batch-template.xlsx" "$SITE_DIR/NPA-batch-template.xlsx"
 [ -f "$APP_DIR/sign-off.html" ] && cp "$APP_DIR/sign-off.html" "$SITE_DIR/sign-off.html"
 # App icons + PWA manifest (green R home-screen icon, full-screen launch)
 for f in icon-180.png icon-192.png icon-512.png manifest.webmanifest; do

@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784872581";
+window.APP_BUILD="1784872877";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784872581" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784872877" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -5592,17 +5592,15 @@ function renderStoremap(){
   let view="sc";  // "sc" | "loc"
   const open=BRANCHES.filter(b=>b.status==="Open");
   const scSet=new Set(BRANCHES.map(b=>(b.sc||"").trim()).filter(x=>x&&x!=="Unassigned"));
-  const vacantScs=[...scSet].filter(sc=>scVacancy(sc).vacant);
-  const unassignedStores=BRANCHES.filter(b=>{ const v=scVacancy(b.sc); return v.vacant; });
+  const noLead=BRANCHES.filter(b=>b.status==="Open" && !((b.sc||"").trim()) ).length;  // stores with no coordinator on file (a data gap)
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
       <h2>Store Mapping</h2>
-      <div class="psub">Every store mapped to its Store Coordinator (store lead). ${BRANCHES.length} stores · ${open.length} open · ${scSet.size} coordinators${vacantScs.length?` · <span style="color:#a12; font-weight:700;">${vacantScs.length} vacant</span>`:""}</div>
-      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
+      <div class="psub">Every store mapped to its Store Coordinator (store lead). ${BRANCHES.length} stores · ${open.length} open · ${scSet.size} coordinators</div>
+      <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
         <div class="kpi"><div class="k-l">Open Stores</div><div class="k-n">${open.length}</div></div>
         <div class="kpi"><div class="k-l">Store Coordinators</div><div class="k-n">${scSet.size}</div></div>
-        <div class="kpi ${vacantScs.length?"warn":""}"><div class="k-l">Vacant SC</div><div class="k-n">${vacantScs.length}</div><div class="k-s">stores needing a lead</div></div>
-        <div class="kpi"><div class="k-l">Stores w/o a lead</div><div class="k-n">${unassignedStores.filter(b=>b.status==="Open").length}</div></div>
+        <div class="kpi ${noLead?"warn":""}"><div class="k-l">Stores w/o a lead</div><div class="k-n">${noLead}</div><div class="k-s">no coordinator on file</div></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 4px;">
         <div class="toggle" id="smToggle" style="display:inline-flex;border:1px solid var(--line,#dbe4dd);border-radius:9px;overflow:hidden;">
@@ -5634,18 +5632,14 @@ function renderStoremap(){
       const groups={};
       BRANCHES.filter(match).forEach(b=>{ const k=((b.sc||"").trim())||"Unassigned"; (groups[k]=groups[k]||[]).push(b); });
       const keys=Object.keys(groups).sort((a,b)=>{
-        const va=scVacancy(a).vacant, vb=scVacancy(b).vacant;
-        if(va!==vb) return va?-1:1;             // vacant first
-        return a==="Unassigned"?-1:b==="Unassigned"?1:a.localeCompare(b);
+        return a==="Unassigned"?-1:b==="Unassigned"?1:a.localeCompare(b);  // Unassigned first, then A–Z
       });
       body.innerHTML = keys.length ? keys.map(k=>{
         const list=groups[k].slice().sort((a,b)=>(a.status===b.status?0:(a.status==="Open"?-1:1))||a.name.localeCompare(b.name));
-        const v=scVacancy(k);
         const totHC=list.reduce((s,b)=>s+branchHC(b),0);
         const openN=list.filter(b=>b.status==="Open").length;
-        const badge = v.vacant
-          ? `<span class="pill" style="background:#f7dcdc;color:#8a1c1c;border:1px solid #e9b9b9;">⚠ VACANT${v.note?" · "+esc(v.note):""}</span>`
-          : `<span class="pill active">Active lead</span>`;
+        // "Unassigned" = a store with no coordinator on file (a data gap) — mild note only. Coordinator RESIGNATIONS are not flagged here; they prompt on the dashboard.
+        const badge = k==="Unassigned" ? `<span class="pill" style="background:#fff3e0;color:#8a5a12;border:1px solid #ecd9a6;">No coordinator on file</span>` : "";
         const title = k==="Unassigned" ? `⚠ Unassigned` : `👤 ${esc(k)}`;
         return card(title, badge, `${list.length} store${list.length!==1?"s":""} · ${openN} open · ${totHC} approved heads`, list.map(storeRow).join(""));
       }).join("") : `<div class="psub">No stores match “${esc(q)}”.</div>`;
@@ -5654,8 +5648,8 @@ function renderStoremap(){
       const groups={};
       BRANCHES.filter(match).forEach(b=>{ const k=(b.city||"—").trim()||"—"; (groups[k]=groups[k]||[]).push(b); });
       const keys=Object.keys(groups).sort((a,b)=>a.localeCompare(b));
-      const locRow=b=>{ const v=scVacancy(b.sc); return `<tr class="clickable" data-bi="${BRANCHES.indexOf(b)}"><td><b>${esc(b.name)}</b></td>
-        <td>${b.sc&&!v.vacant?esc(b.sc):`<span style="color:#a12;font-weight:700;">${esc(b.sc||"Unassigned")} ⚠</span>`}</td>
+      const locRow=b=>{ return `<tr class="clickable" data-bi="${BRANCHES.indexOf(b)}"><td><b>${esc(b.name)}</b></td>
+        <td>${b.sc?esc(b.sc):`<span style="color:#8a5a12;">Unassigned</span>`}</td>
         <td>${catPill(b.category)}</td><td>${statusBranchPill(b.status)}</td><td><span class="pill di">${b.ahc_stationary||0}</span>${b.ahc_reliever?` · ${b.ahc_reliever} rlv`:""}</td></tr>`; };
       body.innerHTML = keys.length ? keys.map(k=>{
         const list=groups[k].slice().sort((a,b)=>(a.status===b.status?0:(a.status==="Open"?-1:1))||a.name.localeCompare(b.name));
@@ -7062,18 +7056,18 @@ function renderManning(){
       const ahc=stores.reduce((s,b)=>s+b.ahc_stationary+b.ahc_reliever,0);
       const chc=stores.reduce((s,b)=>s+chcFor(b.name),0);
       const def=Math.max(0,ahc-chc);
-      const st=scStatus(sc), gone=scIsGone(sc), snote=(SC_STATUS[sc]&&SC_STATUS[sc].note)||"";
-      return `<div class="panel" style="margin-top:14px;${gone?'border:1.5px solid #e5b4ae;background:#fdf4f2;':''}">
+      // Coordinator-departure is intentionally NOT flagged on this card (anj, 2026-07-25) — a resignation
+      // surfaces as a DASHBOARD prompt instead. Admins keep a discreet "SC status" control to record one.
+      return `<div class="panel" style="margin-top:14px;">
         <div class="sc-card">
-          <div class="sc-av"${gone?' style="background:var(--red);"':''}>${esc(sc[0])}</div>
-          <div style="flex:1;"><div class="sc-l">Sales Coordinator</div><div class="sc-n">${esc(sc)}${gone?` <span class="pill awol">${st==="Pending"?"Replacement pending":"Vacant — needs replacement"}</span>`:""}</div>${gone&&snote?`<div style="font-size:11.5px;color:var(--red);margin-top:2px;">${esc(snote)}</div>`:""}</div>
+          <div class="sc-av">${esc(sc[0])}</div>
+          <div style="flex:1;"><div class="sc-l">Sales Coordinator</div><div class="sc-n">${esc(sc)}</div></div>
           <div style="text-align:center;"><div class="sc-l">Stores</div><div class="sc-n">${stores.length}</div></div>
           <div style="text-align:center;"><div class="sc-l">Approved</div><div class="sc-n">${ahc}</div></div>
           <div style="text-align:center;"><div class="sc-l">Confirmed</div><div class="sc-n">${chc}</div></div>
           <div style="text-align:center;"><div class="sc-l">Shortfall</div><div class="sc-n" style="color:${def>0?'var(--red)':'var(--green-dark)'}">${def}</div></div>
-          ${canManageStores()?`<button class="btn ghost" data-scstatus="${esc(sc)}" style="flex-shrink:0;${gone?'color:var(--green-dark);':'color:var(--red);border-color:#f1c9c5;'}">${gone?"Mark filled":"Coordinator left"}</button>`:""}
+          ${canManageStores()?`<button class="btn ghost" data-scstatus="${esc(sc)}" style="flex-shrink:0;font-size:11px;color:var(--muted);border-color:var(--line,#dbe4dd);padding:4px 9px;">SC status</button>`:""}
         </div>
-        ${gone?`<div class="psub" style="margin:2px 0 8px;color:#8a3a30;">⚠ This coordinator has left — the ${stores.length} store${stores.length>1?'s':''} below currently have no active SC. Reassign or backfill.</div>`:""}
         <table>
           <thead><tr><th>Store</th><th>City · Area</th><th>Type</th><th>AHC</th><th>CHC</th><th>Shortfall</th><th>Store Sales</th><th>Attendance</th></tr></thead>
           <tbody>${stores.map(b=>{

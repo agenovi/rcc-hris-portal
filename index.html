@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784875776";
+window.APP_BUILD="1784876369";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784875776" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1784876369" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -3701,12 +3701,43 @@ function openRecord(e){
             <div class="ev">${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"—")}${payLine?" · "+payLine:""}${reason?` · <span class="note" style="display:inline;">${esc(reason)}</span>`:""} · ${mvStatusPill(r.status)} <span class="note" style="display:inline;padding:0 5px;">${sc}/${tot} signed</span></div></div>`; }).join("")
           :`<div class="efield"><div class="ev"><span class="note">No pay or personnel actions on file yet.</span></div></div>`;
         return sec(n,"Pay &amp; Personnel History (NPA)",rows); })()}
-    </div>`;
+    </div>
+    ${(()=>{ const nteN=(MEMOS||[]).filter(m=>/notice to explain/i.test(m.memo_type||"")&&mNorm(m.subject_name)===mNorm(e.full_name)).length;
+      return `<div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <h2 style="margin:0;">Attendance <span style="font-size:12px;font-weight:600;color:var(--muted);">— live from PayPlus (last 6 months)</span></h2>
+        <div class="psub" style="margin:0;">${nteN?`<b style="color:#a4322a;">${nteN}</b> NTE${nteN===1?"":"s"} on file`:"No NTEs on file"}</div>
+      </div>
+      <div class="psub">Present / absent / late are daily-timekeeping figures straight from PayPlus. Whether an absence was <b>authorized</b> (approved leave) isn't in the API — confirm against the DTR before acting.</div>
+      <div id="recAttendance" style="margin-top:10px;"><div class="psub">Loading attendance…</div></div>
+    </div>`; })()}`;
   window.go("employee");
   $("#recBack").addEventListener("click",()=>window.go("employees"));
   $("#recEdit").addEventListener("click",()=>openForm(e));
   const _npa=$("#recNpa"); if(_npa) _npa.addEventListener("click",()=>openNpaForm(e));
   $$("#page-employee .mv-npa-row").forEach(el=>el.addEventListener("click",()=>{ const r=(NPAS||[]).find(x=>String(x.id)===el.dataset.nid); if(r) openMovementDrawer(r); }));
+  // ── Live attendance from PayPlus (keyed on the PayPlus ID) ──
+  (async()=>{
+    const box=document.getElementById("recAttendance"); if(!box) return;
+    if(!e.employee_id){ box.innerHTML=`<div class="note" style="background:#fffaf0;border-color:#f0d9a6;">No PayPlus ID linked — attendance can't be pulled. (Agency merchandisers aren't enrolled in PayPlus timekeeping.)</div>`; return; }
+    const now=new Date(); let ey=now.getFullYear(), em=now.getMonth(); if(em===0){ em=12; ey--; } // last completed month (1-12)
+    let sy=ey, sm=em-5; while(sm<1){ sm+=12; sy--; } // 6-month window
+    try{
+      const { data:{ session } }=await sb.auth.getSession();
+      const url=`${SUPABASE_URL}/functions/v1/payplus-attendance?emp=${encodeURIComponent(e.employee_id)}&y1=${sy}&m1=${sm}&y2=${ey}&m2=${em}`;
+      const r=await fetch(url,{ headers:{ Authorization:`Bearer ${session.access_token}`, apikey:SUPABASE_ANON_KEY } });
+      const j=await r.json();
+      if(j.error){ box.innerHTML=`<div class="note">Couldn't pull attendance: ${esc(j.error)}</div>`; return; }
+      const ms=(j.months||[]).filter(x=>x.hasData);
+      if(!ms.length){ box.innerHTML=`<div class="note" style="background:#fffaf0;border-color:#f0d9a6;">No attendance found in the last 6 months — may be agency (not enrolled), on approved leave, or newly hired.</div>`; return; }
+      const totAbs=ms.reduce((s,x)=>s+Number(x.absent||0),0);
+      const totPres=ms.reduce((s,x)=>s+Number(x.present||0),0);
+      const totLate=ms.reduce((s,x)=>s+Number(x.lateMinutes||0),0);
+      const flag=totAbs>=6;
+      box.innerHTML=`<div style="overflow-x:auto;"><table style="width:100%;font-size:12.5px;border-collapse:collapse;"><thead><tr style="color:var(--muted);text-align:right;"><th style="text-align:left;">Month</th><th>Present</th><th>Absent</th><th>Late (min)</th><th>Undertime (min)</th></tr></thead><tbody>${ms.map(x=>`<tr style="text-align:right;"><td style="text-align:left;">${esc(x.month)}</td><td>${Number(x.present||0)}</td><td style="${Number(x.absent||0)>=3?'color:var(--red);font-weight:700;':''}">${x.absent||0}</td><td>${Number(x.lateMinutes||0).toFixed(0)}</td><td>${Number(x.undertimeMinutes||0).toFixed(0)}</td></tr>`).join("")}</tbody><tfoot><tr style="text-align:right;font-weight:700;border-top:1px solid var(--line);"><td style="text-align:left;">Total (6 mo)</td><td>${totPres}</td><td style="${flag?'color:var(--red);':''}">${totAbs}</td><td>${totLate.toFixed(0)}</td><td></td></tr></tfoot></table></div>
+        <div style="margin-top:8px;padding:9px 12px;border-radius:9px;font-size:13px;background:${flag?'#fbeee6':'#eef4ef'};border:1px solid ${flag?'#ecdca6':'#cfe0d4'};">${flag?`<b style="color:#b26a00;">⚠ ${totAbs} absences over 6 months</b> — review reliability; confirm which were unauthorized before any action.`:`${totAbs} absences over 6 months — attendance looks steady.`}</div>`;
+    }catch(err){ box.innerHTML=`<div class="note">Couldn't reach PayPlus: ${esc(String(err&&err.message||err))}</div>`; }
+  })();
 }
 
 // Standalone NPA entry: search who → opens the same NPA form (tick purpose → generate). No need to open the person first.
@@ -3916,6 +3947,8 @@ function renderMovements(){
   const awaiting=R.filter(r=>r.status==="awaiting_signoff").length;
   const forMemo=R.filter(r=>r.status==="memo").length;
   const apprMonth=R.filter(r=>r.status==="approved" && (r.approval_date||"").slice(0,7)===ym).length;
+  const approvedAll=R.filter(r=>r.status==="approved").length;
+  const cancelledAll=R.filter(r=>r.status==="cancelled").length;
   // Statutory NPAs where the current user is still an unsigned signatory — drives the batch-sign button (order not enforced).
   const mvMineStat=R.filter(r=>mvBasis(r).toLowerCase()==="statutory" && r.status==="awaiting_signoff" && mvCanSignNow(r));
   // Where does the CURRENT user stand? Only show tick/sign chrome to whoever still has to sign.
@@ -3951,6 +3984,7 @@ function renderMovements(){
         <div class="kpi"><div class="k-l">Approved this month</div><div class="k-n">${apprMonth}</div></div>
         <div class="kpi"><div class="k-l">For memo</div><div class="k-n">${forMemo}</div><div class="k-s">operational</div></div>
       </div>
+      <div class="psub" style="margin:6px 0 2px;"><b>${R.length}</b> total = <b>${awaiting}</b> awaiting sign-off · <b>${approvedAll}</b> approved${cancelledAll?` · <b>${cancelledAll}</b> cancelled`:""}${forMemo?` · <b>${forMemo}</b> memo`:""}</div>
       ${iCanSign.length?`<div class="note" style="margin:2px 0 6px;background:#fff8e6;border-color:#f0e2b8;color:#6b5a17;">✍ <b>${iCanSign.length}</b> NPA${iCanSign.length>1?"s":""} ${iCanSign.length>1?"are":"is"} waiting on <b>your</b> signature. Use <b>Tick all → Sign the selected</b>.</div>`
         :(iSignedWaiting.length?`<div class="note" style="margin:2px 0 6px;background:#eef7f0;border-color:#cfe6d6;color:#12352a;">✓ You've already signed your part on <b>${iSignedWaiting.length}</b> NPA${iSignedWaiting.length>1?"s":""}. Now waiting on ${nextSigners.length?"<b>"+nextSigners.join(", ")+"</b>":"the other signatory"} to countersign — then ${iSignedWaiting.length>1?"they become":"it becomes"} <b>Approved</b>. Nothing more for you to do here.</div>`:"")}
       ${mvCatLine?`<div class="psub" style="margin:2px 0 6px;padding:8px 12px;background:#f4f7f5;border:1px solid #e2ebe5;border-radius:9px;"><b>By group:</b> ${mvCatLine} &nbsp;·&nbsp; <b>${Object.values(mvCatCounts).reduce((a,b)=>a+b,0)}</b> total</div>`:""}

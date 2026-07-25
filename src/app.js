@@ -1202,6 +1202,7 @@ function renderEmployeesPage(){
       <div class="kpi"><div class="k-l">Retail</div><div class="k-n">${rt}</div></div>
       <div class="kpi"><div class="k-l">On Probation</div><div class="k-n">${prob}</div></div>
     </div>
+    <div id="sepReviewBox"></div>
     <div class="filterbar" id="empChips">
       ${["All","Head Office","Warehouse","Retail","Agency"].map(c=>`<div class="chip${c===empFilter?' active':''}" data-f="${c}">${c}</div>`).join("")}
     </div>
@@ -1216,6 +1217,48 @@ function renderEmployeesPage(){
   $$("#empChips .chip").forEach(c=>c.addEventListener("click",()=>{ empFilter=c.dataset.f; renderEmployeesPage(); }));
   $("#empSearch").addEventListener("input",paintEmpRows);
   paintEmpRows();
+  renderSepReview();
+}
+/* ===== Separation Review — portal-active people no longer in PayPlus's live list. Manual review (never auto-separated). ===== */
+let SEPARATION_REVIEW=[];
+async function loadSepReview(){ try{ const {data}=await sb.from("separation_review").select("*").eq("resolution","pending").order("hire_source"); SEPARATION_REVIEW=data||[]; }catch(_){ SEPARATION_REVIEW=[]; } }
+async function renderSepReview(){
+  const box=document.getElementById("sepReviewBox"); if(!box) return;
+  if(!canManageStores()){ box.innerHTML=""; return; }   // Anj / Grazel / Rhel only
+  await loadSepReview();
+  const list=SEPARATION_REVIEW;
+  if(!list.length){ box.innerHTML=""; return; }
+  const bySrc={}; list.forEach(r=>{ const s=r.hire_source||"Direct"; bySrc[s]=(bySrc[s]||0)+1; });
+  box.innerHTML=`<div class="panel" style="margin-top:0;border:1px solid #ecd9a6;background:#fffaf0;">
+    <div><h2 style="margin:0;">⚠ Separation review <span class="count-tag">${list.length}</span></h2>
+      <div class="psub" style="margin:2px 0 6px;">These are <b>Active here but no longer in PayPlus's live list</b> (${Object.entries(bySrc).map(([s,n])=>esc(s)+" "+n).join(" · ")}). PayPlus dropped them — usually a resignation, but on-leave/suspended staff also drop off. Confirm each: <b>resigned → Separate</b> (corrects the headcount) or <b>on-leave → keep</b>. Nothing is auto-separated.</div></div>
+    <div style="overflow-x:auto;"><table style="margin-top:2px;"><thead><tr><th>Name</th><th>Source</th><th>Last worksite</th><th style="text-align:right;">Action</th></tr></thead><tbody>
+    ${list.map(r=>`<tr>
+      <td><b>${esc(r.full_name||"")}</b>${r.employee_id?`<div class="esub">${esc(r.employee_id)}</div>`:'<div class="esub" style="color:#a4322a;">no PayPlus ID</div>'}</td>
+      <td>${esc(r.hire_source||"—")}</td>
+      <td>${esc(r.worksite||"—")}</td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="btn ghost" data-sep-keep="${r.id}" style="padding:4px 9px;font-size:12px;">On leave — keep</button>
+        <button class="btn" data-sep-go="${r.id}" style="padding:4px 9px;font-size:12px;">Confirm resigned → Separate</button>
+      </td></tr>`).join("")}
+    </tbody></table></div></div>`;
+  box.querySelectorAll("[data-sep-go]").forEach(b=>b.addEventListener("click",()=>sepReviewResolve(b.dataset.sepGo,"separated")));
+  box.querySelectorAll("[data-sep-keep]").forEach(b=>b.addEventListener("click",()=>sepReviewResolve(b.dataset.sepKeep,"kept")));
+}
+async function sepReviewResolve(id,res){
+  const r=SEPARATION_REVIEW.find(x=>String(x.id)===String(id)); if(!r) return;
+  if(res==="separated"){
+    if(!confirm(`Confirm ${r.full_name} has resigned / left?\n\nThey'll be marked Separated (this corrects the headcount to match PayPlus). Reversible if it turns out they were on leave.`)) return;
+    if(r.employee_id){
+      const {error}=await sb.from("employees").update({status:"Separated", end_date:new Date().toISOString().slice(0,10), end_reason:"Resigned — no longer in PayPlus", updated_at:new Date().toISOString()}).eq("employee_id", r.employee_id);
+      if(error){ alert("Couldn't update status: "+error.message); return; }
+    }
+  } else {
+    if(!confirm(`Keep ${r.full_name} Active — on leave / not a separation?`)) return;
+  }
+  await sb.from("separation_review").update({resolution:res, resolved_by:(CURRENT_USER&&CURRENT_USER.email)||null, resolved_at:new Date().toISOString()}).eq("id", r.id);
+  try{ await logChange("separation", r.employee_id||null, r.full_name, res==="separated"?"Confirmed separated (PayPlus removed)":"Kept active (on leave)", r.hire_source||""); }catch(_){}
+  await loadEmployees();
 }
 function empMatchesFilter(e){
   if(empFilter==="All") return true;

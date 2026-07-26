@@ -7909,7 +7909,7 @@ async function createExitCase(emp){
   if(error){ alert(error.message); return; }
   await loadEmployees(); window.go("exit"); openExitCase(data.id);
 }
-function exNumField(id,label,val){ return `<div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px;">${label}</label><input id="${id}" type="number" step="0.01" value="${val??""}" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;"></div>`; }
+function exNumField(id,label,val){ return `<div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px;">${label}</label><input id="${id}" type="text" inputmode="decimal" value="${val??""}" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;"></div>`; }
 // Earned lines that split into Basic salary + Allowance (mirrors Juvelyn's Excel).
 const FP_SPLIT=new Set(["last_payroll","thirteenth_month","leave_incentive"]);
 // A split line: two boxes side by side (Basic | Allowance) + note; line total shown live.
@@ -8046,7 +8046,7 @@ function openExitCase(id){
             <div style="flex:1;min-width:0;"><div class="tt">${s.label}</div><div class="td">${s.items||''}</div>${signer}</div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
               <select data-stage="${s.s}" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;background:#fff;">${opt(EXIT_STATUSES,x[s.s]||"Pending")}</select>
-              ${s.c?`<input data-charge="${s.c}" type="number" step="0.01" placeholder="₱" value="${x[s.c]??""}" style="width:84px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;">`:''}
+              ${s.c?`<input data-charge="${s.c}" type="text" inputmode="decimal" placeholder="₱" value="${x[s.c]??""}" style="width:84px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;">`:''}
             </div>
           </div>`;}).join(""); })()}
       </div>
@@ -8205,7 +8205,7 @@ function openExitInterview(x){
 }
 function collectExit(x){
   const m=document.getElementById("exModal");
-  const num=(id)=>{ const e=m.querySelector("#"+id); return e&&e.value.trim()!==""?Number(e.value):0; };
+  const num=(id)=>{ const e=m.querySelector("#"+id); if(!e||e.value.trim()==="") return 0; const v=Number(String(e.value).replace(/[^0-9.\-]/g,"")); return isNaN(v)?0:v; };
   const o={ last_working_day:m.querySelector("#ex_lwd").value||null, separation_type:m.querySelector("#ex_septype").value,
     outstanding_salary:num("ex_outstanding_salary"), sil_payment:num("ex_sil_payment"), thirteenth_month:num("ex_thirteenth_month"),
     tax_refund:num("ex_tax_refund"), pending_commission:num("ex_pending_commission"),
@@ -8217,7 +8217,7 @@ function collectExit(x){
   const otherEl=m.querySelector("#ex_other_return"); if(otherEl) ret.other=otherEl.value.trim();
   o.hr_returns=ret;
   m.querySelectorAll("[data-stage]").forEach(el=>{ o[el.dataset.stage]=el.value; });
-  m.querySelectorAll("[data-charge]").forEach(el=>{ o[el.dataset.charge]=el.value.trim()!==""?Number(el.value):0; });
+  m.querySelectorAll("[data-charge]").forEach(el=>{ const v=Number(String(el.value).replace(/[^0-9.\-]/g,"")); o[el.dataset.charge]=(el.value.trim()!==""&&!isNaN(v))?v:0; });
   // per-department "Cleared by" — record the name + auto-stamp the date on first entry
   const prevBy=x.signoff_by||{}; const by={};
   m.querySelectorAll("[data-signoffby]").forEach(el=>{ const k=el.dataset.signoffby; const nm=el.value.trim();

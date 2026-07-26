@@ -71,11 +71,18 @@
     <div class="hint">Attach your bus/jeep pass, ride receipt, or LBC receipt.</div>
 
     <div class="sec">Where to send your money</div>
+    <div class="hint" style="margin-bottom:8px;">We can only pay out via <b>GCash</b> or <b>UnionBank</b>. Please choose one.</div>
     <label class="req">Account holder name</label>
-    <input id="account_holder" placeholder="Name on the bank account">
+    <input id="account_holder" placeholder="Name on the account">
     <div class="row2">
-      <div><label class="req">Bank</label><input id="bank_name" placeholder="e.g. BDO, GCash"></div>
-      <div><label class="req">Account number</label><input id="bank_account_no" inputmode="numeric" placeholder="Account / GCash no."></div>
+      <div><label class="req">Pay me via</label>
+        <select id="bank_name">
+          <option value="">Choose…</option>
+          <option value="GCash">GCash</option>
+          <option value="UnionBank">UnionBank</option>
+        </select>
+      </div>
+      <div><label class="req" id="acctLabel">Number</label><input id="bank_account_no" inputmode="numeric" placeholder="Choose a method first"></div>
     </div>
 
     <div id="selfieBlock" style="display:none;">
@@ -126,6 +133,14 @@ function bindFile(inputId, thumbId, set){
 bindFile("ride_pass","ride_thumb",(d,t)=>{ridePassData=d;ridePassType=t;});
 bindFile("selfie","selfie_thumb",(d,t)=>{selfieData=d;selfieType=t;});
 
+// Payout method drives the number label + placeholder (GCash mobile vs UnionBank account)
+$("bank_name").addEventListener("change", e=>{
+  const m=e.target.value, lab=$("acctLabel"), inp=$("bank_account_no");
+  if(m==="GCash"){ lab.textContent="GCash mobile number"; inp.placeholder="09XXXXXXXXX"; }
+  else if(m==="UnionBank"){ lab.textContent="UnionBank account number"; inp.placeholder="12-digit account no."; }
+  else { lab.textContent="Number"; inp.placeholder="Choose a method first"; }
+});
+
 async function init(){
   try{
     const r=await fetch(FN,{ headers:H });
@@ -144,7 +159,11 @@ $("submit").addEventListener("click", async ()=>{
   const msg=$("msg"); msg.className="msg"; msg.style.display="none";
   const req=(id,l)=>{ const v=$(id).value.trim(); if(!v){ msg.className="msg err"; msg.textContent=l+" is required."; msg.style.display="block"; throw 0; } return v; };
   let name,holder,bank,acct;
-  try{ name=req("name","Full name"); holder=req("account_holder","Account holder name"); bank=req("bank_name","Bank"); acct=req("bank_account_no","Account number"); }catch(e){ return; }
+  try{ name=req("name","Full name"); holder=req("account_holder","Account holder name"); bank=req("bank_name","Payout method (GCash or UnionBank)"); acct=req("bank_account_no","Account / GCash number"); }catch(e){ return; }
+  acct=acct.replace(/[^0-9]/g,""); // digits only
+  const bad=(t)=>{ msg.className="msg err"; msg.textContent=t; msg.style.display="block"; };
+  if(bank==="GCash" && !/^09\d{9}$/.test(acct)){ bad("GCash number must be 11 digits starting with 09 (e.g. 09171234567)."); return; }
+  if(bank==="UnionBank" && acct.length<10){ bad("Please enter your full UnionBank account number."); return; }
   const btn=$("submit"); btn.disabled=true; btn.textContent="Signing in…";
   const payload={
     name, emp_no:$("emp_no").value.trim(), store:$("store").value.trim(),

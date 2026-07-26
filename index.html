@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1784993269";
+window.APP_BUILD="1785043047";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1784993269" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785043047" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -2575,7 +2575,7 @@ $("#loginForm").addEventListener("submit", async (e)=>{
 });
 async function showApp(user){
   CURRENT_USER=user; $("#login").style.display="none";
-  try{ sb.rpc("touch_presence"); }catch(e){}  // stamp real last-active (updates even on a resumed session, unlike last_sign_in_at)
+  try{ sb.rpc("touch_presence").then(()=>{},()=>{}); }catch(e){}  // stamp real last-active (updates even on a resumed session, unlike last_sign_in_at) — MUST attach .then() or supabase-js never fires the request
   patchSidebarFoot(user);
   applyRoleUI();
   await loadEmployees();
@@ -3647,6 +3647,49 @@ async function sepReviewResolve(id,res){
   try{ await logChange("separation", r.employee_id||null, r.full_name, res==="separated"?"Confirmed separated (PayPlus removed)":"Kept active (on leave)", r.hire_source||""); }catch(_){}
   await loadEmployees();
 }
+/* ===== Reliever coverage — a person covering >1 store is a reliever (auto-badge). Tag by adding the store(s) they relieve. ===== */
+async function loadRelieverCoverage(empId){ if(!empId) return []; try{ const {data}=await sb.from("reliever_coverage").select("*").eq("employee_id", String(empId)).order("from_date",{ascending:false}); return data||[]; }catch(_){ return []; } }
+function relieverIsActive(r){ const t=new Date().toISOString().slice(0,10); return !r.to_date || r.to_date>=t; }
+async function renderRelieverBox(e){
+  const box=document.getElementById("relieverBox"); const badge=document.getElementById("relieverBadge");
+  if(!box) return;
+  const rows=await loadRelieverCoverage(e.employee_id);
+  const act=rows.filter(relieverIsActive);
+  if(badge) badge.innerHTML = act.length ? `<span class="pill" style="background:#efe7fb;color:#5b3a9e;border:1px solid #d8c8f0;margin-left:6px;">🔁 Reliever · ${act.length} store${act.length>1?"s":""}</span>` : "";
+  const canEdit=canManageStores();
+  const stores=[...new Set((BRANCHES||[]).filter(b=>b.status==="Open").map(b=>b.name))].sort();
+  const today=new Date().toISOString().slice(0,10);
+  const rowHtml=rows.map(r=>{ const ended=r.to_date && r.to_date<today;
+    return `<div class="efield"><div class="el">${esc(r.cover_store)}</div><div class="ev">${r.from_date?fmtDate(r.from_date):"—"} → ${r.to_date?fmtDate(r.to_date):"ongoing"}${ended?' <span class="note" style="display:inline;">ended</span>':""}${r.created_by?` <span class="note" style="display:inline;">added by ${esc(r.created_by)}</span>`:""}${canEdit?` <a href="#" data-rc-del="${r.id}" style="color:#a12;margin-left:8px;">remove</a>`:""}</div></div>`; }).join("");
+  box.innerHTML=`<div class="panel">
+    <div><h2 style="margin:0;">🔁 Reliever coverage</h2>
+      <div class="psub" style="margin:2px 0 4px;">Someone covering more than their home store is a <b>reliever</b>. Tag them by adding the store(s) they relieve — the badge is automatic. Home store <b>${esc(e.worksite||"—")}</b> follows PayPlus and stays. Every add/remove is logged.</div></div>
+    ${rows.length?rowHtml:`<div class="psub" style="margin-top:4px;">Not a reliever — single store.${canEdit?" Add a covering store below to tag as reliever.":""}</div>`}
+    ${canEdit?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;">
+      <div style="flex:2;min-width:150px;"><label style="font-size:11px;color:#6a766f;font-weight:700;display:block;">Covering store</label><input list="rcStores" id="rc_store" placeholder="Store…" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:8px;font-size:13px;"><datalist id="rcStores">${stores.map(s=>`<option value="${esc(s)}"></option>`).join("")}</datalist></div>
+      <div><label style="font-size:11px;color:#6a766f;font-weight:700;display:block;">From</label><input type="date" id="rc_from" style="padding:7px 9px;border:1px solid #e2e7e4;border-radius:8px;font-size:13px;"></div>
+      <div><label style="font-size:11px;color:#6a766f;font-weight:700;display:block;">To (blank=ongoing)</label><input type="date" id="rc_to" style="padding:7px 9px;border:1px solid #e2e7e4;border-radius:8px;font-size:13px;"></div>
+      <button class="btn" id="rc_add">＋ Add store</button>
+    </div>`:""}</div>`;
+  const addBtn=document.getElementById("rc_add"); if(addBtn) addBtn.addEventListener("click",()=>relieverAdd(e));
+  box.querySelectorAll("[data-rc-del]").forEach(a=>a.addEventListener("click",(ev)=>{ ev.preventDefault(); relieverDel(a.dataset.rcDel, e); }));
+}
+async function relieverAdd(e){
+  const store=(document.getElementById("rc_store").value||"").trim(); if(!store){ alert("Pick the covering store."); return; }
+  if((e.worksite||"").trim()===store){ alert("That's the home store — add a DIFFERENT store they cover."); return; }
+  const from=document.getElementById("rc_from").value||null, to=document.getElementById("rc_to").value||null;
+  const {error}=await sb.from("reliever_coverage").insert({ employee_id:e.employee_id||null, employee_name:e.full_name, home_store:e.worksite||null, cover_store:store, from_date:from, to_date:to, created_by:(CURRENT_USER&&CURRENT_USER.email)||null });
+  if(error){ alert("Couldn't add: "+error.message); return; }
+  try{ await logChange("reliever", e.employee_id||null, e.full_name, "Reliever store added", store+(from?(" from "+from):"")+(to?(" to "+to):"")); }catch(_){}
+  renderRelieverBox(e);
+}
+async function relieverDel(id,e){
+  if(!confirm("Remove this covering store?")) return;
+  const {error}=await sb.from("reliever_coverage").delete().eq("id", id);
+  if(error){ alert(error.message); return; }
+  try{ await logChange("reliever", e.employee_id||null, e.full_name, "Reliever store removed", ""); }catch(_){}
+  renderRelieverBox(e);
+}
 function empMatchesFilter(e){
   if(empFilter==="All") return true;
   if(empFilter==="Agency") return e.hire_source&&e.hire_source!=="Direct";
@@ -3698,7 +3741,7 @@ function openRecord(e){
         <div class="emp-av">${esc(initials)}</div>
         <div style="flex:1;"><div class="en">${esc(e.full_name)}</div>
           <div class="em">${esc(e.position||"—")} · ${esc(e.department||"—")} · ${esc(e.group_name||"—")}${e.hire_source?(" · "+esc(e.hire_source)):""}</div></div>
-        ${typePill(e)} ${statusPill(e.status)}
+        ${typePill(e)} ${statusPill(e.status)}<span id="relieverBadge"></span>
         ${canManageStores()?'<button class="btn ghost" id="recNpa" style="margin-left:6px;">Personnel Action</button>':''}
         <button class="btn ghost" id="recDownload" style="margin-left:6px;">Download PDF</button>
         <button class="btn" id="recEdit" style="margin-left:6px;">Edit</button>
@@ -3741,6 +3784,7 @@ function openRecord(e){
           :`<div class="efield"><div class="ev"><span class="note">No pay or personnel actions on file yet.</span></div></div>`;
         return sec(n,"Pay &amp; Personnel History (NPA)",rows); })()}
     </div>
+    <div id="relieverBox"></div>
     ${(()=>{ const nteN=(MEMOS||[]).filter(m=>/notice to explain/i.test(m.memo_type||"")&&mNorm(m.subject_name)===mNorm(e.full_name)).length;
       return `<div class="panel">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
@@ -3755,6 +3799,7 @@ function openRecord(e){
   $("#recEdit").addEventListener("click",()=>openForm(e));
   const _dl=$("#recDownload"); if(_dl) _dl.addEventListener("click",()=>printEmployeeRecord(e));
   const _npa=$("#recNpa"); if(_npa) _npa.addEventListener("click",()=>openNpaForm(e));
+  renderRelieverBox(e);
   $$("#page-employee .mv-npa-row").forEach(el=>el.addEventListener("click",()=>{ const r=(NPAS||[]).find(x=>String(x.id)===el.dataset.nid); if(r) openMovementDrawer(r); }));
   // ── Live attendance from PayPlus (keyed on the PayPlus ID) ──
   (async()=>{

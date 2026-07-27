@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Director's Desk — RCC</title>
+<style>
+  :root{
+    --red:#2f6b3f; --red-d:#245730; --ink:#1c2430; --muted:#6b7480;
+    --line:#e7e9ee; --bg:#f4f6f9; --card:#ffffff;
+    --amber:#b7791f; --amber-bg:#fdf3e2; --over:#b3261e; --over-bg:#fdeceb;
+    --ok:#1f7a44; --ok-bg:#eaf6ef; --hi:#b3261e; --hi-bg:#fdeceb;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); -webkit-text-size-adjust:100%;}
+  .wrap{max-width:860px; margin:0 auto; padding:0 14px 70px;}
+  header.bar{position:sticky; top:0; z-index:10; background:var(--card); border-bottom:1px solid var(--line);
+    margin:0 -14px; padding:12px 14px;}
+  .brand{display:flex; align-items:center; gap:11px;}
+  .brand .logo{width:32px;height:32px;border-radius:8px;background:var(--red);color:#fff;font-weight:800;
+    display:flex;align-items:center;justify-content:center;font-size:14px;letter-spacing:.5px;}
+  .brand h1{font-size:17px; margin:0; font-weight:750;}
+  .brand .who{font-size:12.5px; color:var(--muted); margin-top:1px;}
+  .sub{display:flex; align-items:center; gap:10px; margin-top:11px; flex-wrap:wrap;}
+  .stat{font-size:13px; color:var(--muted);}
+  .stat b{color:var(--ink); font-size:15px;}
+  .stat .over{color:var(--over);}
+  .stat .amber{color:var(--amber);}
+  .spacer{flex:1;}
+  .btn{appearance:none; border:0; border-radius:9px; font-weight:700; font-size:14px; padding:10px 15px;
+    cursor:pointer; color:#fff; background:var(--red);}
+  .btn:disabled{background:#c9ccd3; cursor:default;}
+  .btn.sm{padding:7px 12px; font-size:13px;}
+  .btn.ghost{background:#fff;color:var(--red);border:1px solid #cfe3d5;}
+  .btn.danger{background:#fff;color:var(--over);border:1px solid #f0cfcd;}
+  main{padding-top:16px;}
+  .filters{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;}
+  .fpill{font-size:12.5px; font-weight:650; padding:6px 12px; border-radius:999px; cursor:pointer;
+    background:#fff; border:1px solid var(--line); color:#59616c;}
+  .fpill.on{background:var(--red); color:#fff; border-color:var(--red);}
+  .catsec{margin-bottom:22px;}
+  .cathead{display:flex; align-items:center; gap:8px; margin:0 2px 10px;}
+  .cathead .dot{width:10px;height:10px;border-radius:3px;}
+  .cathead h2{font-size:14px; margin:0; font-weight:750; letter-spacing:.2px;}
+  .cathead .n{font-size:12px; color:var(--muted); font-weight:600;}
+  .item{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 13px;
+    display:flex; gap:11px; align-items:flex-start; margin-bottom:9px; border-left:4px solid var(--line);}
+  .item.hi{border-left-color:var(--hi);}
+  .item.due{border-left-color:var(--amber);}
+  .item.od{border-left-color:var(--over);}
+  .body{flex:1; min-width:0;}
+  .ttl{font-size:14.5px; font-weight:650; line-height:1.3;}
+  .meta{margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;}
+  .chip{font-size:11.5px; font-weight:700; padding:2px 9px; border-radius:999px; white-space:nowrap;}
+  .chip.grey{background:#eef1f5;color:#59616c;}
+  .chip.amber{background:var(--amber-bg);color:var(--amber);}
+  .chip.over{background:var(--over-bg);color:var(--over);}
+  .chip.hi{background:var(--hi-bg);color:var(--hi);}
+  .det{margin-top:7px; font-size:12.5px; color:var(--muted); line-height:1.45; white-space:pre-wrap;}
+  .acts{margin-top:9px; display:flex; gap:6px; flex-wrap:wrap;}
+  .acts a{font-size:12.5px; font-weight:650; color:var(--red); cursor:pointer; text-decoration:none;
+    border:1px solid #cfe3d5; padding:4px 10px; border-radius:8px; background:#fff;}
+  .acts a.del{color:var(--over); border-color:#f0cfcd;}
+  .acts a.grey{color:#59616c; border-color:var(--line);}
+  .sechead{font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted);
+    margin:26px 2px 10px; font-weight:700;}
+  .done .ttl{color:var(--muted); text-decoration:line-through;}
+  .done{opacity:.85; border-left-color:var(--ok)!important;}
+  .empty{text-align:center; color:var(--muted); padding:40px 10px; font-size:14px;}
+  .empty .big{font-size:36px; margin-bottom:6px;}
+  .catempty{color:#9aa2ad; font-size:12.5px; padding:2px 4px 6px; font-style:italic;}
+  .toast{position:fixed; left:50%; bottom:22px; transform:translateX(-50%); background:#12331f; color:#fff;
+    padding:11px 16px; border-radius:10px; font-size:13.5px; font-weight:600; opacity:0; transition:.25s;
+    box-shadow:0 6px 24px rgba(0,0,0,.25); z-index:40; max-width:90%;}
+  .toast.show{opacity:1;}
+  /* modal add/edit */
+  .scrim{position:fixed; inset:0; background:rgba(20,30,25,.42); display:none; z-index:50; align-items:flex-start; justify-content:center; padding:30px 14px;}
+  .scrim.on{display:flex;}
+  .modal{background:#fff; border-radius:14px; width:100%; max-width:480px; padding:18px; box-shadow:0 20px 60px rgba(0,0,0,.3);}
+  .modal h3{margin:0 0 12px; font-size:16px;}
+  .modal label{font-size:12px; color:var(--muted); font-weight:650; display:block; margin-top:11px;}
+  .modal input,.modal select,.modal textarea{width:100%; padding:9px 10px; border:1px solid var(--line);
+    border-radius:8px; font-size:14px; margin-top:5px; font-family:inherit;}
+  .row2{display:flex; gap:9px;} .row2>div{flex:1;}
+  .mfoot{margin-top:16px; display:flex; gap:8px; justify-content:flex-end;}
+  .foot{text-align:center; color:#aab; font-size:11px; margin-top:30px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="bar">
+    <div class="brand">
+      <div class="logo">RCC</div>
+      <div>
+        <h1>Director's Desk</h1>
+        <div class="who" id="who">Loading…</div>
+      </div>
+    </div>
+    <div class="sub">
+      <div class="stat"><b id="s_open">–</b> open</div>
+      <div class="stat over" id="s_over" style="display:none"></div>
+      <div class="stat amber" id="s_due" style="display:none"></div>
+      <div class="spacer"></div>
+      <button class="btn sm" id="addBtn" onclick="openAdd()" style="display:none">＋ Add item</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="empty"><div class="big">⏳</div>Loading your desk…</div>
+  </main>
+
+  <div class="foot">RCC Director's Desk · private · updates instantly · non-HR items only</div>
+</div>
+
+<div class="scrim" id="scrim"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const FN = "https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/director-desk";
+const TOKEN = new URLSearchParams(location.search).get("t") || "";
+const CATS = [
+  {key:"corp",     label:"Corporate compliance", hint:"SEC / GIS, board resolutions, sec certs, permits", color:"#2f6b3f"},
+  {key:"property", label:"Property & RPT",        hint:"Real property tax, titles/deeds, lease renewals",  color:"#8a5a2b"},
+  {key:"legal",    label:"Contracts & legal",     hint:"Contracts to sign/review, cases (non-HR)",         color:"#3454a3"},
+  {key:"finance",  label:"Finance & admin",       hint:"Payables, FX, commission approvals, bank/bond",    color:"#7a3aa0"},
+  {key:"other",    label:"Other",                 hint:"Anything else you need to resolve",                color:"#5a636e"},
+];
+const CATMAP = Object.fromEntries(CATS.map(c=>[c.key,c]));
+let STATE = { items:[] };
+let FILTER = "all";
+
+function api(action, body){
+  const opts = body
+    ? { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(Object.assign({action, t:TOKEN}, body)) }
+    : { method:"GET" };
+  const url = body ? FN : `${FN}?action=${action}&t=${encodeURIComponent(TOKEN)}`;
+  return fetch(url, opts).then(r=>r.json());
+}
+function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2600); }
+function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function daysUntil(d){ if(!d) return null; const now=new Date(); now.setHours(0,0,0,0); return Math.round((new Date(d+"T00:00:00")-now)/86400000); }
+function deadlineChip(d){
+  const n=daysUntil(d);
+  if(n===null) return '<span class="chip grey">no deadline</span>';
+  if(n<0) return `<span class="chip over">⚠ overdue ${-n} day${-n===1?'':'s'}</span>`;
+  if(n===0) return '<span class="chip over">due today</span>';
+  if(n<=7) return `<span class="chip amber">due in ${n} day${n===1?'':'s'}</span>`;
+  const dt=new Date(d+"T00:00:00").toLocaleDateString(undefined,{month:'short',day:'numeric'});
+  return `<span class="chip grey">due ${dt}</span>`;
+}
+function urgencyClass(it){ const n=daysUntil(it.deadline); if(n!==null&&n<0) return 'od'; if(n!==null&&n<=7) return 'due'; if(it.priority==='high') return 'hi'; return ''; }
+
+function load(){
+  if(!TOKEN){ document.getElementById("main").innerHTML='<div class="empty"><div class="big">🔗</div>This link is missing its code.<br>Open it from your bookmarked link.</div>'; return; }
+  api("list").then(d=>{
+    if(d.error){ document.getElementById("main").innerHTML='<div class="empty"><div class="big">🔒</div>'+esc(d.error)+'</div>'; document.getElementById("who").textContent=""; return; }
+    STATE.items=d.items||[];
+    document.getElementById("who").textContent = (d.person?.name||"")+" · private, non-HR items";
+    document.getElementById("addBtn").style.display="";
+    render();
+  }).catch(()=>{ document.getElementById("main").innerHTML='<div class="empty"><div class="big">📶</div>Couldn\'t load. Check your connection and refresh.</div>'; });
+}
+
+function render(){
+  const open = STATE.items.filter(i=>i.status==="open");
+  const done = STATE.items.filter(i=>i.status==="done").sort((a,b)=>(b.done_at||"").localeCompare(a.done_at||"")).slice(0,30);
+  const over = open.filter(i=>{const n=daysUntil(i.deadline); return n!==null&&n<0;}).length;
+  const due  = open.filter(i=>{const n=daysUntil(i.deadline); return n!==null&&n>=0&&n<=7;}).length;
+
+  document.getElementById("s_open").textContent = open.length;
+  const so=document.getElementById("s_over"), sd=document.getElementById("s_due");
+  if(over){ so.style.display=""; so.innerHTML=`· <b class="over">${over}</b> overdue`; } else so.style.display="none";
+  if(due){ sd.style.display=""; sd.innerHTML=`· <b class="amber">${due}</b> due this week`; } else sd.style.display="none";
+
+  let html = `<div class="filters">
+    <span class="fpill ${FILTER==='all'?'on':''}" onclick="setFilter('all')">All</span>
+    <span class="fpill ${FILTER==='urgent'?'on':''}" onclick="setFilter('urgent')">⚠ Urgent</span>`;
+  CATS.forEach(c=> html += `<span class="fpill ${FILTER===c.key?'on':''}" onclick="setFilter('${c.key}')">${esc(c.label)}</span>`);
+  html += `</div>`;
+
+  const cats = FILTER==='all'||FILTER==='urgent' ? CATS : CATS.filter(c=>c.key===FILTER);
+  let shown=0;
+  cats.forEach(c=>{
+    let list = open.filter(i=>i.category===c.key);
+    if(FILTER==='urgent') list = list.filter(i=>{const n=daysUntil(i.deadline); return (n!==null&&n<=7)||i.priority==='high';});
+    if(FILTER!=='all' && FILTER!=='urgent' && !list.length && FILTER!==c.key) return;
+    html += `<div class="catsec"><div class="cathead"><span class="dot" style="background:${c.color}"></span>
+      <h2>${esc(c.label)}</h2><span class="n">${list.length}</span></div>`;
+    if(!list.length){ html += `<div class="catempty">Nothing open here.</div>`; }
+    list.forEach(it=>{ shown++;
+      html += `<div class="item ${urgencyClass(it)}">
+        <div class="body">
+          <div class="ttl">${esc(it.title)}</div>
+          <div class="meta">${deadlineChip(it.deadline)}${it.priority==='high'?'<span class="chip hi">high priority</span>':''}</div>
+          ${it.details?`<div class="det">${esc(it.details)}</div>`:''}
+          <div class="acts">
+            <a onclick="markDone(${it.id})">✓ Resolve</a>
+            <a class="grey" onclick="openEdit(${it.id})">Edit</a>
+            <a class="del" onclick="del(${it.id})">Delete</a>
+          </div>
+        </div></div>`;
+    });
+    html += `</div>`;
+  });
+
+  if(open.length===0){ html += `<div class="empty"><div class="big">✅</div>Nothing outstanding. Your desk is clear.</div>`; }
+  else if(shown===0 && FILTER==='urgent'){ html += `<div class="empty"><div class="big">👍</div>Nothing urgent right now.</div>`; }
+
+  if(done.length && (FILTER==='all')){
+    html += `<div class="sechead">Resolved recently</div>`;
+    done.forEach(it=>{
+      const when = it.done_at ? new Date(it.done_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}) : '';
+      const c = CATMAP[it.category]||CATMAP.other;
+      html += `<div class="item done"><div class="body">
+        <div class="ttl">${esc(it.title)}</div>
+        <div class="meta"><span class="chip grey">${esc(c.label)}</span><span class="chip grey">resolved ${when}</span></div>
+        ${it.done_note?`<div class="det">${esc(it.done_note)}</div>`:''}
+        <div class="acts"><a class="grey" onclick="reopen(${it.id})">Reopen</a></div>
+      </div></div>`;
+    });
+  }
+  document.getElementById("main").innerHTML = html;
+}
+
+function setFilter(f){ FILTER=f; render(); }
+
+function markDone(id){
+  const note = prompt("Resolve this item — add a closing note (optional):", "");
+  if(note===null) return; // cancelled
+  api("done",{ids:[id], note:note.trim()||null}).then(()=>{ toast("Resolved ✓"); load(); });
+}
+function reopen(id){ api("reopen",{ids:[id]}).then(()=>{ toast("Reopened"); load(); }); }
+function del(id){ if(!confirm("Delete this item permanently?")) return; api("delete",{id}).then(()=>{ toast("Deleted"); load(); }); }
+
+// ---- add / edit modal ----
+function catOptions(sel){ return CATS.map(c=>`<option value="${c.key}" ${c.key===sel?'selected':''}>${esc(c.label)}</option>`).join(""); }
+function openAdd(){ drawModal({}); }
+function openEdit(id){ const it=STATE.items.find(x=>x.id===id); if(it) drawModal(it); }
+function drawModal(it){
+  const isEdit = !!it.id;
+  document.getElementById("modal").innerHTML = `
+    <h3>${isEdit?'Edit item':'Add an item'}</h3>
+    <label>What needs resolving</label>
+    <input id="m_title" placeholder="e.g. File 2026 GIS with SEC" value="${esc(it.title||'')}">
+    <div class="row2">
+      <div><label>Category</label><select id="m_cat">${catOptions(it.category||(FILTER!=='all'&&FILTER!=='urgent'?FILTER:'corp'))}</select></div>
+      <div><label>Deadline (optional)</label><input id="m_dl" type="date" value="${it.deadline||''}"></div>
+    </div>
+    <div class="row2">
+      <div><label>Priority</label><select id="m_pri">
+        <option value="normal" ${it.priority!=='high'&&it.priority!=='low'?'selected':''}>Normal</option>
+        <option value="high" ${it.priority==='high'?'selected':''}>High</option>
+        <option value="low" ${it.priority==='low'?'selected':''}>Low</option>
+      </select></div>
+      <div></div>
+    </div>
+    <label>Notes (amount, contact, reference…)</label>
+    <textarea id="m_det" rows="3" placeholder="Optional detail">${esc(it.details||'')}</textarea>
+    <div class="mfoot">
+      <button class="btn ghost sm" onclick="closeModal()">Cancel</button>
+      <button class="btn sm" onclick="saveModal(${it.id||0})">${isEdit?'Save changes':'Add item'}</button>
+    </div>`;
+  document.getElementById("scrim").classList.add("on");
+}
+function closeModal(){ document.getElementById("scrim").classList.remove("on"); }
+function saveModal(id){
+  const title=document.getElementById("m_title").value.trim();
+  if(!title){ toast("Type what needs resolving"); return; }
+  const body={ title, category:document.getElementById("m_cat").value,
+    deadline:document.getElementById("m_dl").value||null, priority:document.getElementById("m_pri").value,
+    details:document.getElementById("m_det").value.trim()||null };
+  if(id) body.id=id;
+  api(id?"edit":"add", body).then(res=>{ if(res.error){toast(res.error);return;} closeModal(); toast(id?"Saved":"Added"); load(); });
+}
+document.getElementById("scrim").addEventListener("click",e=>{ if(e.target.id==="scrim") closeModal(); });
+
+load();
+</script>
+</body>
+</html>

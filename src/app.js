@@ -7877,18 +7877,26 @@ function renderExit(){
   }
 }
 function pickEmployeeForExit(){
-  const active=EMPLOYEES.filter(e=>e.status==="Active").slice().sort((a,b)=>a.full_name.localeCompare(b.full_name));
+  // Exit paperwork is often done AFTER someone is already Separated — so include everyone (flag non-active),
+  // but hide anyone who already has an exit case so we don't create duplicates.
+  const withCase=new Set((EXITCASES||[]).map(x=>String(x.employee_id)));
+  const pool=EMPLOYEES.filter(e=>!withCase.has(String(e.id))).slice().sort((a,b)=>{
+    const aa=(a.status==="Active")?0:1, bb=(b.status==="Active")?0:1;
+    return aa!==bb ? aa-bb : (a.full_name||"").localeCompare(b.full_name||"");
+  });
   let m=document.getElementById("exPick"); if(!m){ m=document.createElement("div"); m.id="exPick"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;max-height:80vh;overflow-y:auto;padding:22px;">
     <h2 style="color:var(--green-dark);font-size:17px;">Start exit clearance</h2>
-    <div class="psub">Search and pick the separating employee:</div>
+    <div class="psub">Search and pick the separating employee — <b>includes already-separated staff</b>, since the clearance and final pay often come after separation. People who already have an exit case aren't listed.</div>
     <input id="exPickSearch" class="search" style="width:100%;margin:10px 0;" placeholder="Search name…">
     <div id="exPickList"></div>
     <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button class="btn ghost" id="exPickClose">Close</button></div>
   </div>`;
+  const sepPill=(s)=> s==="Active" ? "" : ` · <span style="color:#a4322a;font-weight:700;">${esc(s||"—")}</span>`;
   const paint=()=>{ const q=($("#exPickSearch").value||"").toLowerCase();
-    $("#exPickList").innerHTML=active.filter(e=>e.full_name.toLowerCase().includes(q)).slice(0,40).map(e=>`<div class="task clickable" data-id="${e.id}"><div class="dot a"></div><div><div class="tt">${esc(e.full_name)}</div><div class="td">${esc(e.position||"—")} · ${esc(e.group_name||"—")}</div></div></div>`).join("");
+    const rows=pool.filter(e=>(e.full_name||"").toLowerCase().includes(q)).slice(0,40);
+    $("#exPickList").innerHTML=rows.length?rows.map(e=>`<div class="task clickable" data-id="${e.id}"><div class="dot ${e.status==="Active"?"a":"r"}"></div><div><div class="tt">${esc(e.full_name)}</div><div class="td">${esc(e.position||"—")} · ${esc(e.group_name||e.department||"—")}${sepPill(e.status)}</div></div></div>`).join("") : `<div class="psub">No match${q?` for “${esc(q)}”`:""}. If they already have an exit case, find it in the list behind this dialog.</div>`;
     $$("#exPickList .task.clickable").forEach(el=>el.addEventListener("click",()=>{ m.remove(); createExitCase(EMPLOYEES.find(e=>e.id===el.dataset.id)); }));
   };
   $("#exPickSearch").addEventListener("input",paint); paint();

@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785215717";
+window.APP_BUILD="1785222615";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785215717" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785222615" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -7081,10 +7081,16 @@ function newMemo(){
    Structured (not free-typed) + DOLE-compliant: NO wage deduction without a written explanation evaluated first
    and the employee's written authorization (Labor Code Art. 113–116). Logs to Memos, routes to Signatures. ===== */
 const CHARGE_TYPES=["Excess SIM / phone charge","Inventory shortage","Cash shortage / unliquidated advance","Company property loss or damage","Other charge"];
-function chargeBody(name,type,amount,ref,date,days){
+function chargeBody(name,type,amount,ref,date,days,installments){
   const raw=Number(String(amount==null?"":amount).replace(/[^0-9.]/g,""));
   const amt = (amount && !isNaN(raw)) ? "₱"+raw.toLocaleString(undefined,{minimumFractionDigits:2}) : "[amount]";
-  return `NOTICE TO EXPLAIN\n\nTo: ${name||"[employee]"}\n\nThis concerns the following charge flagged for your accounting and explanation:\n  • Nature: ${type||"[charge]"}\n  • Amount: ${amt}\n  • Details / reference: ${ref||"[details]"}\n  • Date / period: ${date||"[date]"}\n\nYou are directed to submit a WRITTEN EXPLANATION within ${days||5} day(s) of receipt regarding the above — including any facts, authorization, or circumstances we should consider.\n\nIMPORTANT: No amount will be deducted from your wages or final pay on the basis of this notice. Under the Labor Code (Art. 113–116), a deduction requires your written explanation to be evaluated first and, where a deduction is found warranted, your written authorization. Your explanation will be considered fairly before any decision is made. You may request a conference and be assisted by a representative of your choice.\n\nThis is a request to be heard — not a finding or a penalty.`;
+  const inst=Math.max(1, parseInt(installments||"1")||1);
+  let splitLine="";
+  if(inst>1 && !isNaN(raw) && raw>0){
+    const per=raw/inst;
+    splitLine=`\n\nSHOULD a deduction be found warranted AND you give your written consent, it may be spread over ${inst} pay periods at approximately ₱${per.toLocaleString(undefined,{minimumFractionDigits:2})} per cutoff — never in a single lump — so your take-home pay stays above the minimum wage, in line with DOLE rules on wage deductions.`;
+  }
+  return `NOTICE TO EXPLAIN\n\nTo: ${name||"[employee]"}\n\nThis concerns the following charge flagged for your accounting and explanation:\n  • Nature: ${type||"[charge]"}\n  • Amount: ${amt}${inst>1?" (proposed over "+inst+" installments)":""}\n  • Details / reference: ${ref||"[details]"}\n  • Date / period: ${date||"[date]"}\n\nYou are directed to submit a WRITTEN EXPLANATION within ${days||5} day(s) of receipt regarding the above — including any facts, authorization, or circumstances we should consider.\n\nIMPORTANT: No amount will be deducted from your wages or final pay on the basis of this notice. Under the Labor Code (Art. 113–116), a deduction requires your written explanation to be evaluated first and, where a deduction is found warranted, your written authorization.${splitLine}\n\nYour explanation will be considered fairly before any decision is made. You may request a conference and be assisted by a representative of your choice. This is a request to be heard — not a finding or a penalty.`;
 }
 function chargeNotice(){
   let m=document.getElementById("chgModal"); if(!m){ m=document.createElement("div"); m.id="chgModal"; document.body.appendChild(m); }
@@ -7099,6 +7105,7 @@ function chargeNotice(){
         <div style="margin:8px 0;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Amount (₱)</label><input id="chg_amount" inputmode="decimal" placeholder="e.g. 2,219.62" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"></div>
         <div style="margin:8px 0;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Details / reference</label><input id="chg_ref" placeholder="e.g. SIM 0917-8324732 · Aug billing" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"></div>
         <div class="form-grid">${fld("chg_date","Date / period","","date")}<div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Days to respond</label><input id="chg_days" inputmode="numeric" value="5" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"></div></div>
+        <div style="margin:8px 0;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Split into installments <span style="font-weight:400;text-transform:none;">(optional — spreads the deduction so take-home stays lawful)</span></label><input id="chg_installments" inputmode="numeric" value="1" placeholder="1 = full amount" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"><div id="chg_perCut" class="psub" style="margin-top:3px;"></div></div>
         <button class="btn ghost" id="chg_gen">↻ Generate notice text</button>
       </div>
       <div class="panel"><div class="subhead">Notice (renders on RCC letterhead) — editable</div>
@@ -7109,8 +7116,10 @@ function chargeNotice(){
     </div></div>`;
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   document.getElementById("chg_cancel").onclick=()=>m.remove();
-  const gen=()=>{ document.getElementById("chg_body").value=chargeBody(v("chg_emp")||"", v("chg_type")||"", v("chg_amount")||"", v("chg_ref")||"", v("chg_date")||"", v("chg_days")||"5"); document.getElementById("chgMsg").textContent=""; };
+  const gen=()=>{ document.getElementById("chg_body").value=chargeBody(v("chg_emp")||"", v("chg_type")||"", v("chg_amount")||"", v("chg_ref")||"", v("chg_date")||"", v("chg_days")||"5", v("chg_installments")||"1"); document.getElementById("chgMsg").textContent=""; };
   document.getElementById("chg_gen").onclick=gen;
+  const perCut=()=>{ const raw=Number(String(v("chg_amount")||"").replace(/[^0-9.]/g,"")); const n=Math.max(1,parseInt(v("chg_installments")||"1")||1); const el=document.getElementById("chg_perCut"); if(!el) return; el.textContent=(n>1&&raw>0)?`≈ ₱${(raw/n).toLocaleString(undefined,{minimumFractionDigits:2})} per cutoff × ${n} cutoffs`:""; };
+  ["chg_amount","chg_installments"].forEach(id=>{ const e=document.getElementById(id); if(e) e.addEventListener("input",perCut); });
   const save=async(issue)=>{
     if(!v("chg_emp")){ document.getElementById("chgMsg").textContent="Pick the employee."; return; }
     if(!v("chg_type")){ document.getElementById("chgMsg").textContent="Pick the charge type."; return; }

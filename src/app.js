@@ -4633,7 +4633,7 @@ function renderMemos(){
     <div class="panel" style="margin-top:0;">
       <h2>Memos &amp; Notices</h2>
       <div class="psub">The 7 standard HR letters + a custom memo — generated on RCC letterhead, routed through Signatures, and logged. DOLE twin-notice flow: <b>NTE → (employee explains) → Notice of Decision</b>.</div>
-      <div class="actionbar"><button class="btn" id="memoNew">+ New memo</button>${canManageStores()?' <button class="btn ghost" id="npaNew">+ New NPA</button>':''}</div>
+      <div class="actionbar"><button class="btn" id="memoNew">+ New memo</button> <button class="btn ghost" id="chargeNew">+ Charge notice</button>${canManageStores()?' <button class="btn ghost" id="npaNew">+ New NPA</button>':''}</div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
         <div class="kpi"><div class="k-l">Drafts</div><div class="k-n">${drafts.length}</div></div>
         <div class="kpi warn"><div class="k-l">Awaiting signature</div><div class="k-n">${issued.length}</div></div>
@@ -4647,6 +4647,7 @@ function renderMemos(){
         `</tbody></table>`:'<div class="psub">No memos yet — click “New memo”.</div>'}
     </div>`;
   $("#memoNew").addEventListener("click",()=>newMemo());
+  const chgBtn=$("#chargeNew"); if(chgBtn) chgBtn.addEventListener("click",()=>chargeNotice());
   const npaBtn=$("#npaNew"); if(npaBtn) npaBtn.addEventListener("click",()=>newNpa());
   $$('#page-memos [data-memoview]').forEach(b=>b.addEventListener("click",()=>viewMemo(b.dataset.memoview)));
   $$('#page-memos [data-memoissue]').forEach(b=>b.addEventListener("click",()=>issueMemo(b.dataset.memoissue)));
@@ -4688,6 +4689,55 @@ function newMemo(){
   };
   document.getElementById("mm_draft").onclick=()=>save(false);
   document.getElementById("mm_issue").onclick=()=>save(true);
+}
+/* ===== Charge — Notice to Explain (reusable): SIM excess, inventory short, cash shortage, property loss, etc.
+   Structured (not free-typed) + DOLE-compliant: NO wage deduction without a written explanation evaluated first
+   and the employee's written authorization (Labor Code Art. 113–116). Logs to Memos, routes to Signatures. ===== */
+const CHARGE_TYPES=["Excess SIM / phone charge","Inventory shortage","Cash shortage / unliquidated advance","Company property loss or damage","Other charge"];
+function chargeBody(name,type,amount,ref,date,days){
+  const raw=Number(String(amount==null?"":amount).replace(/[^0-9.]/g,""));
+  const amt = (amount && !isNaN(raw)) ? "₱"+raw.toLocaleString(undefined,{minimumFractionDigits:2}) : "[amount]";
+  return `NOTICE TO EXPLAIN\n\nTo: ${name||"[employee]"}\n\nThis concerns the following charge flagged for your accounting and explanation:\n  • Nature: ${type||"[charge]"}\n  • Amount: ${amt}\n  • Details / reference: ${ref||"[details]"}\n  • Date / period: ${date||"[date]"}\n\nYou are directed to submit a WRITTEN EXPLANATION within ${days||5} day(s) of receipt regarding the above — including any facts, authorization, or circumstances we should consider.\n\nIMPORTANT: No amount will be deducted from your wages or final pay on the basis of this notice. Under the Labor Code (Art. 113–116), a deduction requires your written explanation to be evaluated first and, where a deduction is found warranted, your written authorization. Your explanation will be considered fairly before any decision is made. You may request a conference and be assisted by a representative of your choice.\n\nThis is a request to be heard — not a finding or a penalty.`;
+}
+function chargeNotice(){
+  let m=document.getElementById("chgModal"); if(!m){ m=document.createElement("div"); m.id="chgModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,30,50,.5);display:flex;justify-content:flex-end;";
+  const names=[...new Set(EMPLOYEES.map(e=>e.full_name).filter(Boolean))].sort();
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">Charge — Notice to Explain</div><div style="font-size:12.5px;opacity:.85;">For SIM excess, inventory short, cash shortage, property loss. DOLE due process — asks the employee to explain; no deduction without their written consent.</div></div>
+    <div style="padding:18px 22px;">
+      <div class="panel" style="margin-top:0;">
+        ${sel("chg_emp","Employee",names,"")}
+        ${sel("chg_type","Charge type",CHARGE_TYPES,"")}
+        <div style="margin:8px 0;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Amount (₱)</label><input id="chg_amount" inputmode="decimal" placeholder="e.g. 2,219.62" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"></div>
+        <div style="margin:8px 0;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Details / reference</label><input id="chg_ref" placeholder="e.g. SIM 0917-8324732 · Aug billing" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"></div>
+        <div class="form-grid">${fld("chg_date","Date / period","","date")}<div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Days to respond</label><input id="chg_days" inputmode="numeric" value="5" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"></div></div>
+        <button class="btn ghost" id="chg_gen">↻ Generate notice text</button>
+      </div>
+      <div class="panel"><div class="subhead">Notice (renders on RCC letterhead) — editable</div>
+        <textarea id="chg_body" rows="15" style="width:100%;padding:10px 12px;border:1px solid #e2e7e4;border-radius:8px;font-size:13px;line-height:1.5;font-family:ui-monospace,Menlo,monospace;"></textarea>
+      </div>
+      <div id="chgMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
+      <div style="display:flex;gap:10px;"><button class="btn ghost" id="chg_cancel" style="flex:1;">Cancel</button><button class="btn ghost" id="chg_draft" style="flex:1;">Save draft</button><button class="btn" id="chg_issue" style="flex:1;">Issue for acknowledgment</button></div>
+    </div></div>`;
+  m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("chg_cancel").onclick=()=>m.remove();
+  const gen=()=>{ document.getElementById("chg_body").value=chargeBody(v("chg_emp")||"", v("chg_type")||"", v("chg_amount")||"", v("chg_ref")||"", v("chg_date")||"", v("chg_days")||"5"); document.getElementById("chgMsg").textContent=""; };
+  document.getElementById("chg_gen").onclick=gen;
+  const save=async(issue)=>{
+    if(!v("chg_emp")){ document.getElementById("chgMsg").textContent="Pick the employee."; return; }
+    if(!v("chg_type")){ document.getElementById("chgMsg").textContent="Pick the charge type."; return; }
+    let body=document.getElementById("chg_body").value.trim(); if(!body){ gen(); body=document.getElementById("chg_body").value.trim(); }
+    const stamp=new Date().toISOString().slice(0,10).replace(/-/g,"");
+    const ref="CHG-"+stamp+"-"+String(Math.abs((v("chg_emp")||"x").split("").reduce((a,c)=>a*31+c.charCodeAt(0),9))%1000).padStart(3,"0");
+    const row={ ref_no:ref, memo_type:"Notice to Explain — Charge", subject_name:v("chg_emp"), title:"Charge NTE — "+(v("chg_type")||""), body, relevant_date:v("chg_date")||null, status:"Draft", is_demo:EMPLOYEES.some(x=>x.full_name===v("chg_emp")&&x.is_demo), created_by:(CURRENT_USER&&CURRENT_USER.email)||"HR" };
+    const { data, error }=await sb.from("memos").insert(row).select().single();
+    if(error){ document.getElementById("chgMsg").textContent=error.message; return; }
+    m.remove();
+    if(issue){ await issueMemo(data.id, true); } else { await loadEmployees(); window.go("memos"); }
+  };
+  document.getElementById("chg_draft").onclick=()=>save(false);
+  document.getElementById("chg_issue").onclick=()=>save(true);
 }
 async function issueMemo(id, skipConfirm){
   const m=(MEMOS.find(x=>String(x.id)===String(id)))||(await sb.from("memos").select("*").eq("id",id).single()).data;

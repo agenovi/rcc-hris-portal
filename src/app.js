@@ -4694,16 +4694,27 @@ function newMemo(){
    Structured (not free-typed) + DOLE-compliant: NO wage deduction without a written explanation evaluated first
    and the employee's written authorization (Labor Code Art. 113–116). Logs to Memos, routes to Signatures. ===== */
 const CHARGE_TYPES=["Excess SIM / phone charge","Inventory shortage","Cash shortage / unliquidated advance","Company property loss or damage","Other charge"];
-function chargeBody(name,type,amount,ref,date,days,installments){
+const CHARGE_SOURCES=["Wages (spread over pay periods)","Incentives / commission","Final pay (on separation)","Cash payment"];
+function chargeBody(name,type,amount,ref,date,days,installments,source){
   const raw=Number(String(amount==null?"":amount).replace(/[^0-9.]/g,""));
   const amt = (amount && !isNaN(raw)) ? "₱"+raw.toLocaleString(undefined,{minimumFractionDigits:2}) : "[amount]";
   const inst=Math.max(1, parseInt(installments||"1")||1);
-  let splitLine="";
-  if(inst>1 && !isNaN(raw) && raw>0){
-    const per=raw/inst;
-    splitLine=`\n\nSHOULD a deduction be found warranted AND you give your written consent, it may be spread over ${inst} pay periods at approximately ₱${per.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} per cutoff — never in a single lump — so your take-home pay stays above the minimum wage, in line with DOLE rules on wage deductions.`;
+  const perTxt = (!isNaN(raw)&&raw>0) ? "₱"+(raw/inst).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : "[per installment]";
+  const instClause = inst>1 ? ` in ${inst} installments of approximately ${perTxt} each` : "";
+  const src = source||"Wages (spread over pay periods)";
+  let settleLine="";
+  if(src==="Incentives / commission"){
+    settleLine=`\n\nSHOULD a deduction be found warranted AND you give your written consent, it may be deducted from your incentives / commission${instClause}. (Incentive pay is over and above your basic wage, so this does not reduce your minimum-wage take-home.)`;
+  } else if(src==="Final pay (on separation)"){
+    settleLine=`\n\nSHOULD a deduction be found warranted AND you give your written consent, it may be applied against your final pay upon separation${inst>1?` (or ${instClause} while employed)`:""}.`;
+  } else if(src==="Cash payment"){
+    settleLine=`\n\nSHOULD a liability be established, you may settle it in cash${instClause}.`;
+  } else { // Wages
+    settleLine = inst>1
+      ? `\n\nSHOULD a deduction be found warranted AND you give your written consent, it may be spread over ${inst} pay periods at approximately ${perTxt} per cutoff — never in a single lump — so your take-home pay stays above the minimum wage, in line with DOLE rules on wage deductions.`
+      : `\n\nSHOULD a deduction from wages be found warranted, it requires your written consent and may not drop your take-home pay below the minimum wage.`;
   }
-  return `NOTICE TO EXPLAIN\n\nTo: ${name||"[employee]"}\n\nThis concerns the following charge flagged for your accounting and explanation:\n  • Nature: ${type||"[charge]"}\n  • Amount: ${amt}${inst>1?" (proposed over "+inst+" installments)":""}\n  • Details / reference: ${ref||"[details]"}\n  • Date / period: ${date||"[date]"}\n\nYou are directed to submit a WRITTEN EXPLANATION within ${days||5} day(s) of receipt regarding the above — including any facts, authorization, or circumstances we should consider.\n\nIMPORTANT: No amount will be deducted from your wages or final pay on the basis of this notice. Under the Labor Code (Art. 113–116), a deduction requires your written explanation to be evaluated first and, where a deduction is found warranted, your written authorization.${splitLine}\n\nYour explanation will be considered fairly before any decision is made. You may request a conference and be assisted by a representative of your choice. This is a request to be heard — not a finding or a penalty.`;
+  return `NOTICE TO EXPLAIN\n\nTo: ${name||"[employee]"}\n\nThis concerns the following charge flagged for your accounting and explanation:\n  • Nature: ${type||"[charge]"}\n  • Amount: ${amt}${inst>1?" (proposed over "+inst+" installments)":""}\n  • Details / reference: ${ref||"[details]"}\n  • Date / period: ${date||"[date]"}\n  • Proposed settlement: ${src}\n\nYou are directed to submit a WRITTEN EXPLANATION within ${days||5} day(s) of receipt regarding the above — including any facts, authorization, or circumstances we should consider.\n\nIMPORTANT: No amount will be deducted on the basis of this notice. Under the Labor Code (Art. 113–116), a deduction requires your written explanation to be evaluated first and, where a deduction is found warranted, your written authorization.${settleLine}\n\nYour explanation will be considered fairly before any decision is made. You may request a conference and be assisted by a representative of your choice. This is a request to be heard — not a finding or a penalty.`;
 }
 function chargeNotice(){
   let m=document.getElementById("chgModal"); if(!m){ m=document.createElement("div"); m.id="chgModal"; document.body.appendChild(m); }
@@ -4718,6 +4729,7 @@ function chargeNotice(){
         <div style="margin:8px 0;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Amount (₱)</label><input id="chg_amount" inputmode="decimal" placeholder="e.g. 2,219.62" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"></div>
         <div style="margin:8px 0;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Details / reference</label><input id="chg_ref" placeholder="e.g. SIM 0917-8324732 · Aug billing" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"></div>
         <div class="form-grid">${fld("chg_date","Date / period","","date")}<div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Days to respond</label><input id="chg_days" inputmode="numeric" value="5" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"></div></div>
+        ${sel("chg_source","Settle from",CHARGE_SOURCES,"Wages (spread over pay periods)")}
         <div style="margin:8px 0;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Split into installments <span style="font-weight:400;text-transform:none;">(optional — spreads the deduction so take-home stays lawful)</span></label><input id="chg_installments" inputmode="numeric" value="1" placeholder="1 = full amount" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"><div id="chg_perCut" class="psub" style="margin-top:3px;"></div></div>
         <button class="btn ghost" id="chg_gen">↻ Generate notice text</button>
       </div>
@@ -4729,7 +4741,7 @@ function chargeNotice(){
     </div></div>`;
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   document.getElementById("chg_cancel").onclick=()=>m.remove();
-  const gen=()=>{ document.getElementById("chg_body").value=chargeBody(v("chg_emp")||"", v("chg_type")||"", v("chg_amount")||"", v("chg_ref")||"", v("chg_date")||"", v("chg_days")||"5", v("chg_installments")||"1"); document.getElementById("chgMsg").textContent=""; };
+  const gen=()=>{ document.getElementById("chg_body").value=chargeBody(v("chg_emp")||"", v("chg_type")||"", v("chg_amount")||"", v("chg_ref")||"", v("chg_date")||"", v("chg_days")||"5", v("chg_installments")||"1", v("chg_source")||""); document.getElementById("chgMsg").textContent=""; };
   document.getElementById("chg_gen").onclick=gen;
   const perCut=()=>{ const raw=Number(String(v("chg_amount")||"").replace(/[^0-9.]/g,"")); const n=Math.max(1,parseInt(v("chg_installments")||"1")||1); const el=document.getElementById("chg_perCut"); if(!el) return; el.textContent=(n>1&&raw>0)?`≈ ₱${(raw/n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} per cutoff × ${n} cutoffs`:""; };
   ["chg_amount","chg_installments"].forEach(id=>{ const e=document.getElementById(id); if(e) e.addEventListener("input",perCut); });

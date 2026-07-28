@@ -86,6 +86,21 @@
   .row2{display:flex; gap:9px;} .row2>div{flex:1;}
   .mfoot{margin-top:16px; display:flex; gap:8px; justify-content:flex-end;}
   .foot{text-align:center; color:#aab; font-size:11px; margin-top:30px;}
+  /* directory */
+  .dirbar{display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap;}
+  .dirbar input{flex:1; min-width:200px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; font-size:14px; font-family:inherit;}
+  .dircount{font-size:12.5px; color:var(--muted); font-weight:600;}
+  .drow{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 12px; margin-bottom:7px;
+    display:flex; gap:10px; align-items:center;}
+  .drow.term{opacity:.66;}
+  .dmain{flex:1; min-width:0;}
+  .dwho{font-size:14px; font-weight:650; line-height:1.25;}
+  .dlab{color:var(--muted); font-weight:500; font-size:12.5px;}
+  .dsub{font-size:12px; color:var(--muted); margin-top:2px; line-height:1.35;}
+  .dnote{color:var(--amber); font-weight:600;}
+  .dnum{flex:0 0 auto; text-align:right;}
+  .num{font-size:14.5px; font-weight:700; color:var(--red); text-decoration:none; white-space:nowrap;}
+  .num.muted2{color:#c2c7ce; font-weight:500;}
 </style>
 </head>
 <body>
@@ -128,8 +143,9 @@ const CATS = [
   {key:"other",    label:"Other",                 hint:"Anything else you need to resolve",                color:"#5a636e"},
 ];
 const CATMAP = Object.fromEntries(CATS.map(c=>[c.key,c]));
-let STATE = { items:[] };
+let STATE = { items:[], directory:null };
 let FILTER = "all";
+let DIRSEARCH = "";
 
 function api(action, body){
   const opts = body
@@ -178,7 +194,10 @@ function render(){
     <span class="fpill ${FILTER==='all'?'on':''}" onclick="setFilter('all')">All</span>
     <span class="fpill ${FILTER==='urgent'?'on':''}" onclick="setFilter('urgent')">⚠ Urgent</span>`;
   CATS.forEach(c=> html += `<span class="fpill ${FILTER===c.key?'on':''}" onclick="setFilter('${c.key}')">${esc(c.label)}</span>`);
+  html += `<span class="fpill ${FILTER==='directory'?'on':''}" onclick="setFilter('directory')">📇 Directory</span>`;
   html += `</div>`;
+
+  if(FILTER==='directory'){ document.getElementById("main").innerHTML = html + renderDirectory(); return; }
 
   const cats = FILTER==='all'||FILTER==='urgent' ? CATS : CATS.filter(c=>c.key===FILTER);
   let shown=0;
@@ -224,7 +243,70 @@ function render(){
   document.getElementById("main").innerHTML = html;
 }
 
-function setFilter(f){ FILTER=f; render(); }
+function setFilter(f){
+  FILTER=f;
+  if(f==='directory' && STATE.directory===null){
+    document.getElementById("main").innerHTML='<div class="empty"><div class="big">⏳</div>Loading directory…</div>';
+    api("directory").then(d=>{ STATE.directory=d.directory||[]; render(); }).catch(()=>{ STATE.directory=[]; render(); });
+    return;
+  }
+  render();
+}
+
+function normNum(s){ return (s||"").replace(/[^0-9]/g,""); }
+function renderDirectory(){
+  const rows = STATE.directory||[];
+  const q = DIRSEARCH.trim().toLowerCase();
+  const match = r => !q || [r.provider,r.label,r.holder,r.number,r.account_no,r.plan,r.details,r.note].some(v=>(v||"").toLowerCase().includes(q)) || normNum(r.number).includes(normNum(q));
+  const active = rows.filter(r=>r.status==='active' && match(r));
+  const term   = rows.filter(r=>r.status==='terminated' && match(r));
+  const groups = [
+    {sec:'mobile',   prov:'GLOBE',   label:'📱 Mobile — Globe'},
+    {sec:'mobile',   prov:'SMART',   label:'📱 Mobile — Smart'},
+    {sec:'internet', prov:'PHILCOM', label:'🌐 Internet — Philcom'},
+    {sec:'internet', prov:'INNOVE',  label:'🌐 Internet — Innove'},
+    {sec:'internet', prov:'PLDT',    label:'🌐 Internet / landline — PLDT'},
+  ];
+  let h = `<div class="dirbar">
+      <input id="dirq" placeholder="🔎 Search name, number, store, plan…" value="${esc(DIRSEARCH)}" oninput="dirSearch(this.value)" autocomplete="off">
+      <span class="dircount">${active.length} active${term.length?` · ${term.length} terminated`:''}</span>
+    </div>`;
+  function rowHtml(r){
+    const num = r.number ? `<a class="num" href="tel:${esc(normNum(r.number))}">${esc(r.number)}</a>` : '<span class="num muted2">—</span>';
+    return `<div class="drow ${r.status==='terminated'?'term':''}">
+      <div class="dmain">
+        <div class="dwho">${esc(r.holder||r.label||'')}${r.label&&r.holder?` <span class="dlab">· ${esc(r.label)}</span>`:''}</div>
+        <div class="dsub">${r.plan?esc(r.plan):''}${r.details?` · ${esc(r.details)}`:''}${r.account_no?` · acct ${esc(r.account_no)}`:''}${r.note?`<span class="dnote"> · ${esc(r.note)}</span>`:''}</div>
+      </div>
+      <div class="dnum">${num}</div>
+    </div>`;
+  }
+  let any=false;
+  groups.forEach(g=>{
+    const list = active.filter(r=>r.section===g.sec && (r.provider||'')===g.prov);
+    if(!list.length) return; any=true;
+    h += `<div class="catsec"><div class="cathead"><span class="dot" style="background:${g.sec==='mobile'?'#2f6b3f':'#3454a3'}"></span><h2>${g.label}</h2><span class="n">${list.length}</span></div>`;
+    list.forEach(r=> h+=rowHtml(r));
+    h += `</div>`;
+  });
+  if(!any) h += `<div class="empty"><div class="big">🔎</div>No matches.</div>`;
+  if(term.length){
+    h += `<div class="sechead">Terminated / inactive</div>`;
+    term.forEach(r=> h+=rowHtml(r));
+  }
+  h += `<div style="text-align:center;color:#aab;font-size:11px;margin-top:18px">Company telecom directory · reference only</div>`;
+  return h;
+}
+function dirSearch(v){
+  DIRSEARCH=v;
+  const main=document.getElementById("main");
+  const scrollY=window.scrollY;
+  // re-render only the directory body to keep the input focused
+  render();
+  const inp=document.getElementById("dirq");
+  if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); }
+  window.scrollTo(0,scrollY);
+}
 
 function markDone(id){
   const note = prompt("Resolve this item — add a closing note (optional):", "");

@@ -5295,7 +5295,7 @@ const STATUSES=["Active","On Leave","AWOL","Suspended","Separated"];
 const CONTRACT_TYPES=["Probationary","Regular","Project-Based","Seasonal/Fixed-Term","Casual","Agency"];
 const HIRE_SOURCES=["Direct","Jell-on","M&G"];
 const GENDERS=["Male","Female"]; const CIVIL=["Single","Married","Widowed","Separated","Annulled"];
-const RELATIONS=["Spouse","Parent","Sibling","Child","Relative","Friend"];
+const RELATIONS=["Spouse / Partner","Live-in partner","Parent","Sibling","Child","Relative","Friend"];
 const END_REASONS=["Resigned","Terminated","End of Contract","AWOL","Retired","Deceased","Other"];
 const deriveGroup=(d)=> !d?"":(["Warehouse Solaris","Warehouse"].includes(d)?"Warehouse":(d==="Sales"?"Retail":"Head Office"));
 const deriveBank=(g)=> g==="Retail"?"Union Bank":((g==="Head Office"||g==="Warehouse")?"China Bank":"");

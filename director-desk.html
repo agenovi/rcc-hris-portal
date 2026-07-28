@@ -257,7 +257,8 @@ function normNum(s){ return (s||"").replace(/[^0-9]/g,""); }
 function renderDirectory(){
   const rows = STATE.directory||[];
   const q = DIRSEARCH.trim().toLowerCase();
-  const match = r => !q || [r.provider,r.label,r.holder,r.number,r.account_no,r.plan,r.details,r.note].some(v=>(v||"").toLowerCase().includes(q)) || normNum(r.number).includes(normNum(q));
+  const qn = normNum(q);
+  const match = r => !q || [r.provider,r.label,r.holder,r.number,r.account_no,r.plan,r.details,r.note].some(v=>(v||"").toLowerCase().includes(q)) || (qn && normNum(r.number).includes(qn));
   const active = rows.filter(r=>r.status==='active' && match(r));
   const term   = rows.filter(r=>r.status==='terminated' && match(r));
   const groups = [

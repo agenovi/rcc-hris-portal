@@ -5279,6 +5279,7 @@ async function deskDeleteNote(id){ if(!confirm("Delete this note?")) return; awa
 /* ideas */
 async function deskSendIdea(){ const t=document.getElementById("ideaTitle"), d=document.getElementById("ideaDetail"); const title=(t.value||"").trim(); if(!title){ t.focus(); return; } await sb.from("hr_ideas").insert({from_email:myEmail(), from_name:myName(), title, detail:(d.value||"").trim()||null}); t.value=""; d.value=""; await reloadDesk(); }
 async function deskIdeaStatus(id,status){ await sb.from("hr_ideas").update({status}).eq("id",id); await reloadDesk(); }
+async function deskIdeaComment(id){ const el=document.getElementById("ideacmt_"+id); const txt=el?el.value.trim():""; await sb.from("hr_ideas").update({admin_comment:txt||null, admin_comment_by:myEmail(), admin_comment_at:new Date().toISOString()}).eq("id",id); await reloadDesk(); }
 /* tasks */
 async function deskAddTask(){ const el=id=>document.getElementById(id); const title=(el("taskTitle").value||"").trim(); if(!title){ el("taskTitle").focus(); return; } const assignee=el("taskAssignee").value||null; await sb.from("hr_tasks").insert({ title, detail:(el("taskDetail").value||"").trim()||null, assignee_email:assignee, assignee_name:assignee?nameForEmail(assignee):null, assigned_by:myEmail(), assigned_by_name:myName(), due_date:el("taskDue").value||null, ongoing:el("taskOngoing").checked, status:"Open" }); el("taskTitle").value=""; el("taskDetail").value=""; el("taskDue").value=""; el("taskOngoing").checked=false; await reloadDesk(); }
 async function deskTaskDone(id){ await sb.from("hr_tasks").update({status:"Done", completed_at:new Date().toISOString(), completed_by:myName()}).eq("id",id); await reloadDesk(); }
@@ -5322,8 +5323,14 @@ function renderDesk(){
   </div>`;
 
   const ideaInbox=admin?`<div style="margin-top:12px;"><div class="subhead">Ideas inbox <span class="count-tag">${HR_IDEAS.length}</span></div>
-    ${HR_IDEAS.length?HR_IDEAS.map(i=>`<div class="task" style="align-items:flex-start;"><div class="dot ${i.status==='New'?'a':'g'}"></div><div style="flex:1;"><div class="tt">${esc(i.title)} <span style="font-size:11px;color:#8a938c;">· ${esc(i.status)}</span></div><div class="td">from ${esc(i.from_name||i.from_email)}${i.detail?(' · '+esc(i.detail)):''}</div></div><div style="display:flex;gap:6px;">${i.status!=='Reviewed'?`<button ${DMINI} data-ideastatus="Reviewed" data-idea="${i.id}">Reviewed</button>`:''}${i.status!=='Actioned'?`<button ${DMINI} data-ideastatus="Actioned" data-idea="${i.id}">Actioned</button>`:''}${i.status!=='Archived'?`<button ${DMINI} data-ideastatus="Archived" data-idea="${i.id}">Archive</button>`:''}</div></div>`).join(""):`<div class="psub">No ideas submitted yet.</div>`}</div>`
-    :`<div style="margin-top:12px;"><div class="subhead">Your suggestions</div>${ideasList.length?ideasList.map(i=>`<div class="task"><div class="dot ${i.status==='New'?'a':'g'}"></div><div><div class="tt">${esc(i.title)}</div><div class="td">${esc(i.status)}${i.detail?(' · '+esc(i.detail)):''}</div></div></div>`).join(""):`<div class="psub">You haven’t sent any yet.</div>`}</div>`;
+    ${HR_IDEAS.length?HR_IDEAS.map(i=>`<div class="task" style="align-items:flex-start;flex-wrap:wrap;"><div class="dot ${i.status==='New'?'a':'g'}"></div><div style="flex:1;min-width:200px;"><div class="tt">${esc(i.title)} <span style="font-size:11px;color:#8a938c;">· ${esc(i.status)}</span></div><div class="td">from ${esc(i.from_name||i.from_email)}${i.detail?(' · '+esc(i.detail)):''}</div>
+      ${i.admin_comment?`<div style="margin-top:5px;background:#eef4ef;border:1px solid #cfe0d4;border-radius:8px;padding:6px 9px;font-size:12px;"><b>anj:</b> ${esc(i.admin_comment)}${i.admin_comment_at?` <span style="color:#8a938c;">· ${fmtDate(i.admin_comment_at)}</span>`:''}</div>`:''}
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <input id="ideacmt_${i.id}" placeholder="${i.admin_comment?'Edit your reply…':'Reply / comment to the sender…'}" value="${esc(i.admin_comment||'')}" style="flex:1;padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;">
+        <button ${DMINI} data-ideacomment="${i.id}">Save reply</button>
+      </div></div>
+      <div style="display:flex;gap:6px;">${i.status!=='Reviewed'?`<button ${DMINI} data-ideastatus="Reviewed" data-idea="${i.id}">Reviewed</button>`:''}${i.status!=='Actioned'?`<button ${DMINI} data-ideastatus="Actioned" data-idea="${i.id}">Actioned</button>`:''}${i.status!=='Archived'?`<button ${DMINI} data-ideastatus="Archived" data-idea="${i.id}">Archive</button>`:''}</div></div>`).join(""):`<div class="psub">No ideas submitted yet.</div>`}</div>`
+    :`<div style="margin-top:12px;"><div class="subhead">Your suggestions</div>${ideasList.length?ideasList.map(i=>`<div class="task"><div class="dot ${i.status==='New'?'a':'g'}"></div><div style="flex:1;"><div class="tt">${esc(i.title)}</div><div class="td">${esc(i.status)}${i.detail?(' · '+esc(i.detail)):''}</div>${i.admin_comment?`<div style="margin-top:4px;background:#eef4ef;border:1px solid #cfe0d4;border-radius:8px;padding:6px 9px;font-size:12px;"><b>anj replied:</b> ${esc(i.admin_comment)}</div>`:''}</div></div>`).join(""):`<div class="psub">You haven’t sent any yet.</div>`}</div>`;
 
   const ideasHtml=`<div class="panel">
     <h2 style="margin:0 0 2px;">💡 Ideas &amp; suggestions</h2>
@@ -5367,6 +5374,7 @@ function renderDesk(){
   q('[data-notedel]').forEach(b=>b.onclick=()=>deskDeleteNote(+b.dataset.notedel));
   const isend=document.getElementById("ideaSend"); if(isend) isend.onclick=deskSendIdea;
   q('[data-ideastatus]').forEach(b=>b.onclick=()=>deskIdeaStatus(+b.dataset.idea, b.dataset.ideastatus));
+  q('[data-ideacomment]').forEach(b=>b.onclick=()=>deskIdeaComment(+b.dataset.ideacomment));
   const tadd=document.getElementById("taskAdd"); if(tadd) tadd.onclick=deskAddTask;
   q('[data-taskdone]').forEach(b=>b.onclick=()=>deskTaskDone(+b.dataset.taskdone));
   q('[data-taskreopen]').forEach(b=>b.onclick=()=>deskTaskReopen(+b.dataset.taskreopen));

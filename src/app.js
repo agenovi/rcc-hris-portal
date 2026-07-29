@@ -7977,9 +7977,15 @@ const peso=(n)=>"₱"+Number(n||0).toLocaleString(undefined,{minimumFractionDigi
 
 function renderExit(){
   const pg=$("#page-exit"); if(!pg) return;
-  const open=EXITCASES.filter(x=>x.overall_status!=="Complete");
-  const done=EXITCASES.filter(x=>x.overall_status==="Complete").length;
-  const charges=EXITCASES.filter(x=>EXIT_STAGES.some(s=>x[s.s]==="With Charges")).length;
+  const cases=EXITCASES.filter(x=>x.overall_status!=="Cancelled");   // cancelled cases drop off the board
+  const open=cases.filter(x=>x.overall_status!=="Complete");
+  const done=cases.filter(x=>x.overall_status==="Complete").length;
+  const charges=cases.filter(x=>EXIT_STAGES.some(s=>x[s.s]==="With Charges")).length;
+  // Turnover this year — by separation type (for annual reporting), based on last day / created date.
+  const yr=new Date().getFullYear();
+  const thisYr=cases.filter(x=>{ const d=x.last_working_day||x.created_at; return d && new Date(d).getFullYear()===yr; });
+  const tt=(re)=>thisYr.filter(x=>re.test(x.separation_type||"")).length;
+  const resigned=tt(/resign/i), eoc=tt(/end of contract|contract|seasonal/i), terminated=tt(/terminat/i), awol=tt(/awol/i);
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
       <h2>Exit Clearance</h2>
@@ -7990,6 +7996,15 @@ function renderExit(){
         <div class="kpi warn"><div class="k-l">With Charges</div><div class="k-n">${charges}</div><div class="k-s">a dept flagged a charge</div></div>
         <div class="kpi"><div class="k-l">Completed</div><div class="k-n">${done}</div></div>
       </div>
+      <div style="margin-top:10px;padding:10px 12px;background:#f5f7f6;border:1px solid var(--line);border-radius:10px;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Turnover ${yr}</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+          <div style="text-align:center;"><div style="font-size:20px;font-weight:800;">${resigned}</div><div class="psub" style="margin:0;">Resigned</div></div>
+          <div style="text-align:center;"><div style="font-size:20px;font-weight:800;">${eoc}</div><div class="psub" style="margin:0;">End of Contract</div></div>
+          <div style="text-align:center;"><div style="font-size:20px;font-weight:800;">${terminated}</div><div class="psub" style="margin:0;">Terminated</div></div>
+          <div style="text-align:center;"><div style="font-size:20px;font-weight:800;">${awol}</div><div class="psub" style="margin:0;">AWOL</div></div>
+        </div>
+      </div>
       ${EXITCASES.length? `<table><thead><tr><th>Employee</th><th>Last day · Tenure</th><th>Separation</th><th>Sign-offs</th><th>Net pay</th><th>Status</th></tr></thead>
         <tbody id="exRows"></tbody></table>`
         : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1E3A5F" stroke-width="2"><path d="M14 3H5v18h9"/><path d="M10 12h11M17 8l4 4-4 4"/></svg></div><h2>No exit clearances yet</h2><p>Click “New exit clearance” to start an employee's offboarding.</p></div>`}
@@ -7997,7 +8012,7 @@ function renderExit(){
   $("#exNew").addEventListener("click",pickEmployeeForExit);
   const rows=$("#exRows");
   if(rows){
-    rows.innerHTML=EXITCASES.map(x=>{ const dn=exitStagesDone(x); const t=x.tenure_months;
+    rows.innerHTML=cases.map(x=>{ const dn=exitStagesDone(x); const t=x.tenure_months;
       const age=(x.overall_status!=="Complete" && x.created_at)?Math.floor((Date.now()-new Date(x.created_at).getTime())/86400000):null;
       const ageTag=age!=null?` <span style="font-size:11px;font-weight:700;color:${age>30?'var(--red)':'var(--muted)'};">· ${age}d open${age>30?' ⚠':''}</span>`:"";
       return `<tr class="clickable" data-id="${x.id}"><td><b>${esc(x.employee_name)}</b><div class="esub">${esc(x.position||"")}</div></td>
@@ -8005,7 +8020,7 @@ function renderExit(){
         <td>${esc(x.separation_type||"—")}</td>
         <td><div class="barrow"><div class="bartrack"><div class="bar${dn===8?'':' def'}" style="width:${Math.round(dn/8*100)}%"></div></div><span style="font-size:11.5px;color:var(--muted);">${dn}/8</span></div></td>
         <td><b>${peso(exitNet(x))}</b></td>
-        <td>${x.overall_status==="Complete"?'<span class="pill closed">Separated</span>':(x.separation_status==="Submitted"?'<span class="pill cn">Awaiting approval</span>':'<span class="pill probation">In Progress</span>')+ageTag}</td></tr>`;
+        <td>${x.overall_status==="Complete"?'<span class="pill closed">Completed</span>'+(x.released?' <span class="pill active" style="font-size:10px;">released</span>':''):(x.separation_status==="Submitted"?'<span class="pill cn">Awaiting approval</span>':'<span class="pill probation">In Progress</span>')+ageTag}</td></tr>`;
     }).join("");
     $$("#exRows tr").forEach(tr=>tr.addEventListener("click",()=>openExitCase(tr.dataset.id)));
   }
@@ -8161,6 +8176,7 @@ function openExitCase(id){
         <div class="form-grid">
           <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Last working day</label><input id="ex_lwd" type="date" value="${esc(x.last_working_day||"")}" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"></div>
           <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Separation type</label><select id="ex_septype" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;background:#fff;">${opt(SEPARATION_TYPES,x.separation_type)}</select></div>
+          <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Employment status</label><select id="ex_empstatus" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;background:#fff;"><option value="">—</option>${["Regular","Probationary","Contractual","Seasonal","Project-based"].map(s=>`<option value="${s}"${(x.employment_status||_emp&&_emp.contract_type)===s?" selected":""}>${s}</option>`).join("")}</select></div>
         </div>
         <div class="psub">Tenure: <b>${t!=null?t+" months":"—"}</b>${under6?' · <span style="color:var(--red);font-weight:700;">under 6 months</span>':""}</div>
       </div>
@@ -8238,7 +8254,7 @@ function openExitCase(id){
       <div class="panel"><h2>Closeout</h2>
         <div class="task" style="align-items:center;"><div class="dot ${x.exit_interview_done?'g':'a'}"></div>
           <div style="flex:1;"><div class="tt">Exit interview</div><div class="td">${x.exit_interview_done?(x.exit_interview_by==='employee'?'Submitted by employee ✓'+(x.exit_interview_at?' · '+fmtDate(x.exit_interview_at):''):'Completed ✓'):'6-question RCC exit interview'}</div></div>
-          <button class="btn ghost" id="ex_interview_btn" style="flex-shrink:0;">${x.exit_interview_done?'View / edit':'Conduct interview'}</button></div>
+          <button class="btn ghost" id="ex_interview_btn" style="flex-shrink:0;">${x.exit_interview_done?'View / edit':'Conduct interview'}</button>${x.exit_interview_done?'<button class="btn ghost" id="ex_interview_dl" style="flex-shrink:0;" title="Download the exit interview">⬇ PDF</button>':''}</div>
         <div style="border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;background:#f7faf8;">
           <div style="font-weight:700;font-size:13.5px;">Let the employee fill it themselves</div>
           <div class="td" style="margin:3px 0 8px;">This is <b>${esc(x.employee_name||"this employee")}'s own private link</b> (unique to them) — they open it on their phone (no login), see the items they must return, and complete the exit interview. It comes straight back here.${x.emp_ack_at?` <span style="color:var(--green-dark);">· Employee acknowledged deliverables ${fmtDate(x.emp_ack_at)}</span>`:""}</div>
@@ -8258,6 +8274,7 @@ function openExitCase(id){
         </div>
         <label style="display:block;font-size:13px;margin:5px 0;"><input type="checkbox" id="ex_coe" ${x.coe_issued?"checked":""}> Certificate of Employment issued <span style="color:var(--muted);">(DOLE: within 3 days of request)</span></label>
         <label style="display:block;font-size:13px;margin:5px 0;"><input type="checkbox" id="ex_quitclaim" ${x.quitclaim_signed?"checked":""}> Quitclaim / release &amp; waiver signed by employee <span style="color:var(--muted);">(on receipt of final pay — keep their signed copy)</span></label>
+        <label style="display:block;font-size:13px;margin:5px 0;font-weight:600;"><input type="checkbox" id="ex_released" ${x.released?"checked":""}> ✅ Final pay / claims <b>RELEASED</b> to the employee ${x.released_at?`<span style="color:var(--green-dark);font-weight:400;">· ${fmtDate(x.released_at)}${x.released_by?" by "+esc(x.released_by):""}</span>`:'<span style="color:var(--muted);font-weight:400;">— tick when paid out; then use “Released → Completed”</span>'}</label>
       </div>
 
       <div id="exMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
@@ -8275,6 +8292,9 @@ function openExitCase(id){
             ? '<span class="pill cn">Awaiting Anju Genomal’s approval</span>'
             : '<button class="btn blue" id="exSubmitSep">Submit separation for approval</button>';
         })()}
+        ${(()=>{ if(x.overall_status==="Complete") return ""; const sep=!_emp || (_emp.status||"").toLowerCase().startsWith("separat");
+          return (sep||isAdminUser()) ? '<button class="btn" id="exReleaseComplete" style="background:#1F6B52;color:#fff;">✓ Released → Completed</button>' : ""; })()}
+        ${x.overall_status!=="Complete"?'<button class="btn ghost" id="exCancel" style="color:var(--red);border-color:#f1c9c5;">Cancel exit</button>':''}
         <button class="btn ghost" id="exClose" style="margin-left:auto;">Close</button>
       </div>
     </div></div>`;
@@ -8292,6 +8312,9 @@ function openExitCase(id){
   wireDeptSignoffs(x, m);
   const cmp=document.getElementById("exComplete"); if(cmp) cmp.addEventListener("click",()=>{ if(confirm("Approve this separation for "+(x.employee_name||"this employee")+"?\n\nTheir status will flip to Separated.")) saveExitCase(x,m,true); });
   const subSep=document.getElementById("exSubmitSep"); if(subSep) subSep.addEventListener("click",()=>{ if(confirm("Submit "+(x.employee_name||"this employee")+"'s separation to Anju Genomal for approval?\n\nThey stay Active until Anju Genomal approves.")) saveExitCase(x,m,"submit"); });
+  const relC=document.getElementById("exReleaseComplete"); if(relC) relC.addEventListener("click",()=>{ if(confirm("Mark "+(x.employee_name||"this employee")+" as RELEASED and move the exit to Completed?\n\nThis records the final pay / claims as released, closes the clearance, and sets the employee Separated (if not already). Use it for cleared or already-disconnected employees.")) saveExitCase(x,m,"release"); });
+  const canc=document.getElementById("exCancel"); if(canc) canc.addEventListener("click",()=>cancelExitCase(x,m));
+  const idl=document.getElementById("ex_interview_dl"); if(idl) idl.addEventListener("click",()=>printExitInterview(x));
   const sendFP=document.getElementById("exSendFP"); if(sendFP) sendFP.addEventListener("click",()=>sendFinalPayForSignoff(x,m));
   const viewFP=document.getElementById("exViewFP"); if(viewFP) viewFP.addEventListener("click",()=>printQuitclaim(x));
   document.getElementById("ex_interview_btn").addEventListener("click",()=>openExitInterview(x));
@@ -8357,7 +8380,10 @@ function collectExit(x){
     uniform_deduction:num("ex_uniform_deduction"),
     uniform_auth_on_file:!!(m.querySelector("#ex_uniform_auth")&&m.querySelector("#ex_uniform_auth").checked),
     hmo_cancelled:!!(m.querySelector("#ex_hmo")&&m.querySelector("#ex_hmo").checked), coe_issued:m.querySelector("#ex_coe").checked,
-    quitclaim_signed:!!(m.querySelector("#ex_quitclaim")&&m.querySelector("#ex_quitclaim").checked) };
+    quitclaim_signed:!!(m.querySelector("#ex_quitclaim")&&m.querySelector("#ex_quitclaim").checked),
+    employment_status:(m.querySelector("#ex_empstatus")&&m.querySelector("#ex_empstatus").value)||null,
+    released:!!(m.querySelector("#ex_released")&&m.querySelector("#ex_released").checked),
+    accounting_tax_amount:num("ex_accounting_tax") };
   const ret={}; m.querySelectorAll("[data-return]").forEach(el=>{ ret[el.dataset.return]=el.checked; });
   const otherEl=m.querySelector("#ex_other_return"); if(otherEl) ret.other=otherEl.value.trim();
   o.hr_returns=ret;
@@ -8377,6 +8403,7 @@ function collectExit(x){
 async function saveExitCase(x,modal,mode){
   const complete=(mode===true||mode==="approve");
   const submit=(mode==="submit");
+  const release=(mode==="release");
   const o=collectExit(x);
   // fairness guard: uniform deduction needs signed authorization
   if(Number(o.uniform_deduction||0)>0 && !o.uniform_auth_on_file){
@@ -8398,18 +8425,56 @@ async function saveExitCase(x,modal,mode){
     o.separation_status="Approved"; o.separation_approved_by=(CURRENT_USER&&CURRENT_USER.email)||"Director"; o.separation_approved_at=now;
   }
   if(submit){ o.separation_status="Submitted"; o.separation_submitted_by=(CURRENT_USER&&CURRENT_USER.email)||"HR"; o.separation_submitted_at=now; }
+  if(release){
+    const who=(CURRENT_USER&&CURRENT_USER.email)||"HR";
+    o.released=true; o.released_at=now; o.released_by=who;
+    o.overall_status="Complete"; o.completion_date=now;
+    if(o.separation_status!=="Approved"){ o.separation_status="Approved"; o.separation_approved_by=who; o.separation_approved_at=now; }
+  }
   const { error } = await sb.from("exit_clearance").update(o).eq("id",x.id);
   if(error){ document.getElementById("exMsg").textContent=error.message; return; }
-  if(complete && x.employee_id){
+  if((complete||release) && x.employee_id){
     const er=o.separation_type==="AWOL"?"AWOL":(o.separation_type==="Termination"?"Terminated":(o.separation_type==="End of Contract"?"End of Contract":(o.separation_type==="Retirement"?"Retired":"Resigned")));
     await sb.from("employees").update({status:"Separated", end_date:o.last_working_day, end_reason:er}).eq("id",x.employee_id);
-    await logChange("exit",x.id,x.employee_name,"Separated (approved by Director)",er+" · last day "+(o.last_working_day||"—")+" · net pay "+peso(o.net_payable||0)+" · prepared by "+(x.separation_submitted_by||"—"));
+    await logChange("exit",x.id,x.employee_name, release?"Released & Completed (final pay released)":"Separated (approved by Director)", er+" · last day "+(o.last_working_day||"—")+" · net pay "+peso(o.net_payable||0)+(release?" · released by "+((CURRENT_USER&&CURRENT_USER.email)||"HR"):" · prepared by "+(x.separation_submitted_by||"—")));
   }
   if(submit){ await logChange("exit",x.id,x.employee_name,"Separation submitted for approval","by "+((CURRENT_USER&&CURRENT_USER.email)||"HR")); }
   if(modal) modal.remove();
   await loadEmployees(); window.go("exit");
 }
 
+// Cancel a mistaken / test exit case — soft (status Cancelled), drops off the board, employee untouched.
+async function cancelExitCase(x,modal){
+  if(!confirm("Cancel this exit clearance for "+(x.employee_name||"this employee")+"?\n\nUse it for a mistaken or test case — it drops off the board and the employee's record is NOT changed.")) return;
+  const {error}=await sb.from("exit_clearance").update({overall_status:"Cancelled", updated_at:new Date().toISOString()}).eq("id",x.id);
+  if(error){ alert(error.message); return; }
+  try{ await logChange("exit",x.id,x.employee_name,"Exit clearance cancelled","by "+((CURRENT_USER&&CURRENT_USER.email)||"HR")); }catch(_){}
+  if(modal) modal.remove(); await loadEmployees(); window.go("exit");
+}
+// Downloadable exit interview (RCC letterhead).
+function printExitInterview(x){
+  const ei=x.exit_interview||{}; const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to download."); return; }
+  const E=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const qa=EXIT_INTERVIEW_Q.map((q,i)=>`<div class="qa"><div class="q">${i+1}. ${E(q)}</div><div class="a">${E(ei["q"+i]||"—")}</div></div>`).join("");
+  const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Exit Interview — ${E(x.employee_name||"")}</title><style>
+    body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;font-size:12.5px;line-height:1.55;margin:30px;}
+    .lh{text-align:center;border-bottom:2px solid #1E3A5F;padding-bottom:8px;margin-bottom:6px;}.co{font-size:16px;font-weight:800;color:#1E3A5F;}.addr{font-size:10px;color:#666;}
+    h1{font-size:14px;text-align:center;letter-spacing:1px;text-transform:uppercase;margin:12px 0 2px;}
+    .meta{color:#555;font-size:11.5px;text-align:center;margin-bottom:12px;}
+    .qa{margin:12px 0;}.q{font-weight:700;color:#1E3A5F;}.a{margin-top:3px;white-space:pre-wrap;border-bottom:1px dotted #cfcfcf;padding-bottom:8px;}
+    .foot{margin-top:22px;border-top:1px solid #cfcfcf;padding-top:6px;font-size:9.5px;color:#888;text-align:center;}
+    @media print{body{margin:14mm;}}
+  </style></head><body>
+    <div class="lh"><div class="co">ROSHAN COMMERCIAL CORPORATION</div><div class="addr">104 Shaw Blvd, Pasig City</div></div>
+    <h1>Exit Interview</h1>
+    <div class="meta">${E(x.employee_name||"—")} · ${E(x.position||"—")} · ${E(x.department||"—")} · last day ${x.last_working_day?fmtDate(x.last_working_day):"—"}${x.exit_interview_by==="employee"?" · submitted by employee":""}</div>
+    ${qa}
+    <div class="foot">Generated ${today} from the RCC HRIS.</div>
+    <scr`+`ipt>window.onload=function(){setTimeout(function(){window.print();},150);}</scr`+`ipt>
+  </body></html>`;
+  w.document.write(html); w.document.close();
+}
 /* ---------- SEND THE QUITCLAIM TO THE DIRECTOR'S SIGNATURES INBOX ----------
    Persists the breakdown on the exit case, then drops one "claim" item into the
    Director's sign-this inbox with the FULL figures in its body — so review + sign
@@ -8472,7 +8537,8 @@ function printQuitclaim(x){
     <table><tr class="meta"><td><b>Employee:</b> ${esc(x.employee_name)}</td><td><b>ID:</b> ${esc(emp.employee_id||"—")}</td></tr>
       <tr class="meta"><td><b>Position:</b> ${esc(x.position||emp.position||"—")}</td><td><b>Branch:</b> ${esc(emp.worksite||x.department||"—")}</td></tr>
       <tr class="meta"><td><b>Date hired:</b> ${x.hire_date?fmtDate(x.hire_date):"—"}</td><td><b>Last day:</b> ${x.last_working_day?fmtDate(x.last_working_day):"—"}</td></tr>
-      <tr class="meta"><td><b>Separation:</b> ${esc(x.separation_type||"—")}</td><td><b>Status:</b> ${esc(x.quitclaim_status||"—")}</td></tr></table>
+      <tr class="meta"><td><b>Separation:</b> ${esc(x.separation_type||"—")}</td><td><b>Employment status:</b> ${esc(x.employment_status||emp.contract_type||"—")}</td></tr>
+      <tr class="meta"><td><b>Sign-off:</b> ${esc(x.quitclaim_status||"—")}</td><td></td></tr></table>
     <h3>Claims — owed to employee</h3>
     <table>${rowsC||'<tr><td colspan="3">—</td></tr>'}<tr class="tot"><td>Total claims</td><td class="n">${P(fpClaims(fp))}</td><td></td></tr></table>
     <h3>Less: deductions</h3>

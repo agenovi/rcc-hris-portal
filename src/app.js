@@ -8028,8 +8028,11 @@ function pickEmployeeForExit(){
     <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button class="btn ghost" id="exPickClose">Close</button></div>
   </div>`;
   const sepPill=(s)=> s==="Active" ? "" : ` · <span style="color:#a4322a;font-weight:700;">${esc(s||"—")}</span>`;
-  const paint=()=>{ const q=($("#exPickSearch").value||"").toLowerCase();
-    const rows=pool.filter(e=>(e.full_name||"").toLowerCase().includes(q)).slice(0,40);
+  const paint=()=>{ const q=($("#exPickSearch").value||"").toLowerCase().trim();
+    // Match each typed word anywhere in the name, in any order — so "mark joseph bello"
+    // still finds a record stored as "Bello, Mark Joseph" (Last, First).
+    const terms=q.split(/[\s,]+/).filter(Boolean);
+    const rows=pool.filter(e=>{ const n=(e.full_name||"").toLowerCase(); return terms.every(t=>n.includes(t)); }).slice(0,40);
     $("#exPickList").innerHTML=rows.length?rows.map(e=>`<div class="task clickable" data-id="${e.id}"><div class="dot ${e.status==="Active"?"a":"r"}"></div><div><div class="tt">${esc(e.full_name)}</div><div class="td">${esc(e.position||"—")} · ${esc(e.group_name||e.department||"—")}${sepPill(e.status)}</div></div></div>`).join("") : `<div class="psub">No match${q?` for “${esc(q)}”`:""}. If they already have an exit case, find it in the list behind this dialog.</div>`;
     $$("#exPickList .task.clickable").forEach(el=>el.addEventListener("click",()=>{ m.remove(); createExitCase(EMPLOYEES.find(e=>e.id===el.dataset.id)); }));
   };

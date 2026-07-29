@@ -8137,6 +8137,7 @@ function finalPayBody(x,fp){ const emp=(EMPLOYEES||[]).find(e=>e.id===x.employee
 function openExitCase(id){
   const x=EXITCASES.find(v=>String(v.id)===String(id)); if(!x) return;
   const t=x.tenure_months; const under6=t!=null&&t<6;
+  const _lemp=linkedEmployeeForCase(x);   // linked employee (top-level scope for the whole modal)
   // Seed the quitclaim form: use the saved breakdown if present, else pre-fill from any legacy final-pay fields so nothing is lost.
   const fp = hasFinalPay(x) ? x.final_pay : {
     last_payroll:x.outstanding_salary||"", thirteenth_month:x.thirteenth_month||"", leave_incentive:x.sil_payment||"",
@@ -8176,7 +8177,7 @@ function openExitCase(id){
         <div class="form-grid">
           <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Last working day</label><input id="ex_lwd" type="date" value="${esc(x.last_working_day||"")}" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"></div>
           <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Separation type</label><select id="ex_septype" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;background:#fff;">${opt(SEPARATION_TYPES,x.separation_type)}</select></div>
-          <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Employment status</label><select id="ex_empstatus" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;background:#fff;"><option value="">—</option>${["Regular","Probationary","Contractual","Seasonal","Project-based"].map(s=>`<option value="${s}"${(x.employment_status||_emp&&_emp.contract_type)===s?" selected":""}>${s}</option>`).join("")}</select></div>
+          <div style="margin-bottom:8px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Employment status</label><select id="ex_empstatus" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;background:#fff;"><option value="">—</option>${["Regular","Probationary","Contractual","Seasonal","Project-based"].map(s=>`<option value="${s}"${(x.employment_status||(_lemp&&_lemp.contract_type))===s?" selected":""}>${s}</option>`).join("")}</select></div>
         </div>
         <div class="psub">Tenure: <b>${t!=null?t+" months":"—"}</b>${under6?' · <span style="color:var(--red);font-weight:700;">under 6 months</span>':""}</div>
       </div>
@@ -8292,7 +8293,7 @@ function openExitCase(id){
             ? '<span class="pill cn">Awaiting Anju Genomal’s approval</span>'
             : '<button class="btn blue" id="exSubmitSep">Submit separation for approval</button>';
         })()}
-        ${(()=>{ if(x.overall_status==="Complete") return ""; const sep=!_emp || (_emp.status||"").toLowerCase().startsWith("separat");
+        ${(()=>{ if(x.overall_status==="Complete") return ""; const sep=!_lemp || (_lemp.status||"").toLowerCase().startsWith("separat");
           return (sep||isAdminUser()) ? '<button class="btn" id="exReleaseComplete" style="background:#1F6B52;color:#fff;">✓ Released → Completed</button>' : ""; })()}
         ${x.overall_status!=="Complete"?'<button class="btn ghost" id="exCancel" style="color:var(--red);border-color:#f1c9c5;">Cancel exit</button>':''}
         <button class="btn ghost" id="exClose" style="margin-left:auto;">Close</button>

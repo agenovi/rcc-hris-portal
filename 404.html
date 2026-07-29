@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785335796";
+window.APP_BUILD="1785336113";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785335796" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785336113" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -10448,7 +10448,7 @@ function renderExit(){
         <td>${esc(x.separation_type||"—")}</td>
         <td><div class="barrow"><div class="bartrack"><div class="bar${dn===8?'':' def'}" style="width:${Math.round(dn/8*100)}%"></div></div><span style="font-size:11.5px;color:var(--muted);">${dn}/8</span></div></td>
         <td><b>${peso(exitNet(x))}</b></td>
-        <td>${x.overall_status==="Complete"?'<span class="pill closed">Completed</span>'+(x.released?' <span class="pill active" style="font-size:10px;">released</span>':''):(x.separation_status==="Submitted"?'<span class="pill cn">Awaiting approval</span>':'<span class="pill probation">In Progress</span>')+ageTag}</td></tr>`;
+        <td>${x.overall_status==="Complete"?'<span class="pill closed">Completed</span>'+(x.released?' <span class="pill active" style="font-size:10px;">released</span>':''):(x.separation_status==="Submitted"?'<span class="pill cn">Awaiting approval</span>':(x.quitclaim_status==="Approved"&&!x.released?'<span class="pill cn">Awaiting payout</span>':'<span class="pill probation">In Progress</span>'))+ageTag}</td></tr>`;
     }).join("");
     $$("#exRows tr").forEach(tr=>tr.addEventListener("click",()=>openExitCase(tr.dataset.id)));
   }
@@ -10662,7 +10662,7 @@ function openExitCase(id){
       <div class="panel"><h2>Final pay — quitclaim computation ${x.quitclaim_status?qcPill(x.quitclaim_status):""}</h2>
         <div class="psub">This is exactly what the Director reviews and signs. Enter each line as on the quitclaim — the net updates live and travels with the signature request, so no one hunts the email later.</div>
         ${x.quitclaim_status==="Awaiting Sign-off"?`<div class="note" style="background:#fffaf0;border-color:#f0c14b;">✉️ Sent to the Director${x.quitclaim_sent_at?" on "+fmtDate(x.quitclaim_sent_at):""} — now in their Signatures inbox, awaiting signature. Editing here and re-sending will replace it.</div>`:""}
-        ${x.quitclaim_status==="Approved"?`<div class="note" style="background:var(--green-light);border-color:var(--green);">✓ Approved &amp; e-signed by the Director${x.quitclaim_date?" on "+fmtDate(x.quitclaim_date):""}. Safe to release.</div>`:""}
+        ${x.quitclaim_status==="Approved"?`<div class="note" style="background:var(--green-light);border-color:var(--green);">✓ Approved &amp; e-signed by the Director${x.quitclaim_date?" on "+fmtDate(x.quitclaim_date):""} — authorised for Accounting to process. HR: print, then record the release (check no. + proof) in Closeout below.</div>`:""}
         <div style="font-weight:800;color:var(--green-dark);font-size:11.5px;letter-spacing:.4px;text-transform:uppercase;margin:10px 0 4px;">Claims — owed to employee</div>
         <div class="form-grid">
           ${FP_CLAIMS.map(([k,l,h])=>FP_SPLIT.has(k)?fpSplitField(k,l,h,fp):fpField(k,l,h,fp)).join("")}
@@ -10705,7 +10705,32 @@ function openExitCase(id){
         </div>
         <label style="display:block;font-size:13px;margin:5px 0;"><input type="checkbox" id="ex_coe" ${x.coe_issued?"checked":""}> Certificate of Employment issued <span style="color:var(--muted);">(DOLE: within 3 days of request)</span></label>
         <label style="display:block;font-size:13px;margin:5px 0;"><input type="checkbox" id="ex_quitclaim" ${x.quitclaim_signed?"checked":""}> Quitclaim / release &amp; waiver signed by employee <span style="color:var(--muted);">(on receipt of final pay — keep their signed copy)</span></label>
-        <label style="display:block;font-size:13px;margin:5px 0;font-weight:600;"><input type="checkbox" id="ex_released" ${x.released?"checked":""}> ✅ Final pay / claims <b>RELEASED</b> to the employee ${x.released_at?`<span style="color:var(--green-dark);font-weight:400;">· ${fmtDate(x.released_at)}${x.released_by?" by "+esc(x.released_by):""}</span>`:'<span style="color:var(--muted);font-weight:400;">— tick when paid out; then use “Released → Completed”</span>'}</label>
+        ${(()=>{
+          const approved = x.quitclaim_status==="Approved";
+          const canRel = canReleaseFinalPay();
+          const proof = Array.isArray(x.release_proof)?x.release_proof:[];
+          if(x.released){
+            return `<div style="border:1px solid var(--green);border-radius:9px;padding:11px 13px;margin:8px 0;background:var(--green-light);">
+              <div style="font-weight:700;font-size:13.5px;color:var(--green-dark);">✅ Final pay RELEASED${x.release_check_no?` · Check / ref no. <b>${esc(x.release_check_no)}</b>`:""}</div>
+              <div class="td" style="margin-top:3px;">Released${x.released_at?" on "+fmtDate(x.released_at):""}${x.released_by?" by "+esc(x.released_by):""}. Cycle closed.</div>
+              ${proof.length?`<div style="margin-top:7px;">${proof.map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12.5px;"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📎 ${esc(a.name)}</span><button type="button" class="btn ghost" style="padding:2px 9px;font-size:11.5px;flex-shrink:0;" onclick="openLoanDoc('${esc(a.path)}',this)">View proof</button></div>`).join("")}</div>`:`<div class="psub" style="margin-top:6px;">⚠ No proof file on record for this release.</div>`}
+            </div>`;
+          }
+          return `<div style="border:1px solid ${approved?'#f0c14b':'var(--line)'};border-radius:9px;padding:11px 13px;margin:8px 0;background:${approved?'#fffaf0':'#f7faf8'};">
+            <div style="font-weight:700;font-size:13.5px;">Final pay release ${approved?'<span style="color:#9a6a00;">— awaiting payout (with Accounting)</span>':'<span style="color:var(--muted);">— not authorised yet</span>'}</div>
+            <div class="td" style="margin:3px 0 8px;">${approved
+              ? `✓ Amount approved &amp; signed by the Director${x.quitclaim_date?" on "+fmtDate(x.quitclaim_date):""} — <b>authorised for Accounting to process</b>. Print the signed quitclaim (button above), hand it to Accounting, then record the <b>check / reference no.</b> and upload the <b>proof of claim</b> here to close the cycle.`
+              : `⏳ The Director must sign the quitclaim above first — <b>that signature is what authorises Accounting to process</b> the payment. The release can't be recorded until then.`}</div>
+            ${approved && canRel ? `
+              <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px;">Check / reference no.</label>
+              <input id="ex_release_check_no" value="${esc(x.release_check_no||"")}" placeholder="e.g. Cheque 0012345 / bank transfer ref" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;margin-bottom:9px;">
+              <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px;">Proof of claim / payment <span style="color:var(--muted);font-weight:400;text-transform:none;">— voucher, cheque copy, or transfer screenshot</span></label>
+              <input type="file" id="exReleaseFile" multiple style="font-size:12.5px;margin-bottom:5px;">
+              <div id="exReleaseFileList"></div>
+              <div id="exReleaseMsg" style="font-size:12px;margin-top:4px;"></div>`
+              : (approved && !canRel ? `<div class="psub" style="margin:0;">This is with <b>Accounting to process</b>. Only <b>HR (Juvy)</b> records the release (check no. + proof).</div>` : "")}
+          </div>`;
+        })()}
       </div>
 
       <div id="exMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
@@ -10723,8 +10748,8 @@ function openExitCase(id){
             ? '<span class="pill cn">Awaiting Anju Genomal’s approval</span>'
             : '<button class="btn blue" id="exSubmitSep">Submit separation for approval</button>';
         })()}
-        ${(()=>{ if(x.overall_status==="Complete") return ""; const sep=!_lemp || (_lemp.status||"").toLowerCase().startsWith("separat");
-          return (sep||isAdminUser()) ? '<button class="btn" id="exReleaseComplete" style="background:#1F6B52;color:#fff;">✓ Released → Completed</button>' : ""; })()}
+        ${(()=>{ if(x.overall_status==="Complete") return ""; if(!canReleaseFinalPay()) return "";
+          return '<button class="btn" id="exReleaseComplete" style="background:#1F6B52;color:#fff;">✓ Record release → close cycle</button>'; })()}
         ${x.overall_status!=="Complete"?'<button class="btn ghost" id="exCancel" style="color:var(--red);border-color:#f1c9c5;">Cancel exit</button>':''}
         <button class="btn ghost" id="exClose" style="margin-left:auto;">Close</button>
       </div>
@@ -10743,7 +10768,8 @@ function openExitCase(id){
   wireDeptSignoffs(x, m);
   const cmp=document.getElementById("exComplete"); if(cmp) cmp.addEventListener("click",()=>{ if(confirm("Approve this separation for "+(x.employee_name||"this employee")+"?\n\nTheir status will flip to Separated.")) saveExitCase(x,m,true); });
   const subSep=document.getElementById("exSubmitSep"); if(subSep) subSep.addEventListener("click",()=>{ if(confirm("Submit "+(x.employee_name||"this employee")+"'s separation to Anju Genomal for approval?\n\nThey stay Active until Anju Genomal approves.")) saveExitCase(x,m,"submit"); });
-  const relC=document.getElementById("exReleaseComplete"); if(relC) relC.addEventListener("click",()=>{ if(confirm("Mark "+(x.employee_name||"this employee")+" as RELEASED and move the exit to Completed?\n\nThis records the final pay / claims as released, closes the clearance, and sets the employee Separated (if not already). Use it for cleared or already-disconnected employees.")) saveExitCase(x,m,"release"); });
+  const relC=document.getElementById("exReleaseComplete"); if(relC) relC.addEventListener("click",()=>{ if(confirm("Record the final-pay release for "+(x.employee_name||"this employee")+" and close the cycle?\n\nThis logs the check / reference no. and the proof you attached, marks the final pay RELEASED, and completes the clearance (employee set Separated if not already).")) saveExitCase(x,m,"release"); });
+  wireExitReleaseUpload(x);
   const canc=document.getElementById("exCancel"); if(canc) canc.addEventListener("click",()=>cancelExitCase(x,m));
   const idl=document.getElementById("ex_interview_dl"); if(idl) idl.addEventListener("click",()=>printExitInterview(x));
   const sendFP=document.getElementById("exSendFP"); if(sendFP) sendFP.addEventListener("click",()=>sendFinalPayForSignoff(x,m));
@@ -10802,6 +10828,31 @@ function openExitInterview(x){
     await loadEmployees(); window.go("exit");
   });
 }
+// Proof-of-claim upload for the final-pay release — reuses the shared loan-docs bucket + jsonb list pattern.
+function wireExitReleaseUpload(x){
+  const listEl=document.getElementById("exReleaseFileList");
+  const fInput=document.getElementById("exReleaseFile");
+  if(!listEl && !fInput) return;
+  const caseKey = x.id || ("case-"+Date.now());
+  const render=()=>{ if(!listEl) return;
+    listEl.innerHTML=_exReleaseProof.length ? _exReleaseProof.map((a,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px;"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📎 ${esc(a.name)}</span>${a.path?`<button type="button" class="btn ghost" style="padding:2px 8px;font-size:11.5px;flex-shrink:0;" onclick="openLoanDoc('${esc(a.path)}',this)">View</button>`:""}<button type="button" class="btn ghost" data-rxr="${i}" style="padding:2px 8px;font-size:11.5px;flex-shrink:0;">Remove</button></div>`).join("") : `<div class="psub" style="margin:2px 0;">No proof attached yet.</div>`;
+    listEl.querySelectorAll("[data-rxr]").forEach(b=>b.onclick=()=>{ _exReleaseProof.splice(+b.dataset.rxr,1); render(); });
+  };
+  render();
+  if(fInput) fInput.onchange=async()=>{
+    const files=[...fInput.files]; if(!files.length) return;
+    const msg=document.getElementById("exReleaseMsg"); const setMsg=(t,c)=>{ if(msg){ msg.style.color=c||"#4a5560"; msg.textContent=t; } };
+    for(const f of files){
+      if(f.size>25*1024*1024){ setMsg(`“${f.name}” is over 25 MB — attach a smaller file.`, "#a12"); continue; }
+      setMsg("Uploading "+f.name+"…");
+      const path=`exit/${caseKey}/${Date.now()}-${f.name.replace(/[^\w.\-]+/g,"_")}`;
+      const {error:upErr}=await sb.storage.from("loan-docs").upload(path,f,{upsert:true});
+      if(upErr){ setMsg("Upload failed: "+upErr.message, "#a12"); continue; }
+      _exReleaseProof.push({name:f.name, path, uploaded_at:new Date().toISOString(), uploaded_by:(CURRENT_USER&&CURRENT_USER.email)||null});
+    }
+    setMsg(""); fInput.value=""; render();
+  };
+}
 function collectExit(x){
   const m=document.getElementById("exModal");
   const num=(id)=>{ const e=m.querySelector("#"+id); if(!e||e.value.trim()==="") return 0; const v=Number(String(e.value).replace(/[^0-9.\-]/g,"")); return isNaN(v)?0:v; };
@@ -10813,8 +10864,8 @@ function collectExit(x){
     hmo_cancelled:!!(m.querySelector("#ex_hmo")&&m.querySelector("#ex_hmo").checked), coe_issued:m.querySelector("#ex_coe").checked,
     quitclaim_signed:!!(m.querySelector("#ex_quitclaim")&&m.querySelector("#ex_quitclaim").checked),
     employment_status:(m.querySelector("#ex_empstatus")&&m.querySelector("#ex_empstatus").value)||null,
-    released:!!(m.querySelector("#ex_released")&&m.querySelector("#ex_released").checked),
     accounting_tax_amount:num("ex_accounting_tax") };
+  { const cn=m.querySelector("#ex_release_check_no"); if(cn) o.release_check_no=cn.value.trim(); }
   const ret={}; m.querySelectorAll("[data-return]").forEach(el=>{ ret[el.dataset.return]=el.checked; });
   const otherEl=m.querySelector("#ex_other_return"); if(otherEl) ret.other=otherEl.value.trim();
   o.hr_returns=ret;
@@ -10857,8 +10908,19 @@ async function saveExitCase(x,modal,mode){
   }
   if(submit){ o.separation_status="Submitted"; o.separation_submitted_by=(CURRENT_USER&&CURRENT_USER.email)||"HR"; o.separation_submitted_at=now; }
   if(release){
+    // Separation of duties: the person who APPROVES the amount (Director) is not the releaser. Juvy (HR Relations) records it.
+    if(!canReleaseFinalPay()){ document.getElementById("exMsg").textContent="Only HR (Juvy) or the Director can record the final-pay release."; return; }
+    const netDue=Number(o.net_payable||0);
+    // When there's money to pay out, enforce the full evidence chain. A ₱0 case (nothing owed) can just close.
+    if(netDue>0){
+      // Gate 1 — the amount must be Director-approved first: her signature is what authorises Accounting to process.
+      if(x.quitclaim_status!=="Approved"){ document.getElementById("exMsg").textContent="The quitclaim isn't signed by the Director yet — that signature authorises Accounting to process. Send it for sign-off first."; return; }
+      // Gate 2 — a release must carry proof: check / reference no. AND at least one uploaded proof file. Closes the cycle honestly.
+      if(!(o.release_check_no||"").trim()){ document.getElementById("exMsg").textContent="Enter the check / reference no. before recording the release."; return; }
+      if(!(Array.isArray(_exReleaseProof)&&_exReleaseProof.length)){ document.getElementById("exMsg").textContent="Attach the proof of claim / payment before recording the release."; return; }
+    }
     const who=(CURRENT_USER&&CURRENT_USER.email)||"HR";
-    o.released=true; o.released_at=now; o.released_by=who;
+    o.released=true; o.released_at=now; o.released_by=who; o.release_proof=_exReleaseProof.slice(); o.final_pay_release_date=now;
     o.overall_status="Complete"; o.completion_date=now;
     if(o.separation_status!=="Approved"){ o.separation_status="Approved"; o.separation_approved_by=who; o.separation_approved_at=now; }
   }

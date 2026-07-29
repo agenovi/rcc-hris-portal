@@ -104,6 +104,8 @@ function canSeeMovements(){ const r=userRole(); return r==="admin"||r==="payroll
 function canSeeConcerns(){ const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return isAdminUser()||e==="hr@hassarams.com"||e==="hr4@hassarams.com"; }
 // Org Chart editing = admins + Rhel (HR Manager, hr4@). Reporting lines / dept heads are HRIS-owned org structure (NOT the PayPlus roster), so they're safe to edit here. Everyone else = read-only.
 function canEditOrg(){ return isAdminUser() || ((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()==="hr4@hassarams.com"; }
+// Final-pay RELEASE = Juvy (HR Relations, hr@) owns it — she records the check no. + uploads proof to close the cycle. Director can override. Separation of duties: the person who APPROVES the amount (Director) is not the one who releases.
+function canReleaseFinalPay(){ const r=userRole(); return r==="admin"||r==="relations"; }
 const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding","reports"];
 // HR Relations (Juvy) — employee-relations desk: onboarding→exit lifecycle, discipline/compliance, notices, loans/benefits. NO salary, NO recruiting funnel.
 const RELATIONS_PAGES=["dashboard","onboarding","evaluations","exit","compliance","memos","signatures","loans","timekeeping"];
@@ -3132,7 +3134,14 @@ async function tkHandleFile(file){
     TK_RESULT=tkParse(wb, null);
     if(status) status.textContent="✓ "+file.name+" — "+TK_MONTH_FULL[TK_RESULT.MON]+" "+TK_YEAR;
     tkRenderResults();
+    // Persist so it survives reloads — Juvy shouldn't have to re-upload each time.
+    try{ await sb.from("timekeeping_uploads").upsert({ month:TK_RESULT.MON, year:TK_YEAR, result:TK_RESULT, uploaded_by:(typeof myEmail==="function"?myEmail():((CURRENT_USER&&CURRENT_USER.email)||null)), uploaded_at:new Date().toISOString() }, { onConflict:"month,year" }); if(status) status.textContent="✓ "+TK_MONTH_FULL[TK_RESULT.MON]+" "+TK_YEAR+" — saved (stays loaded)"; }catch(_){}
   }catch(e){ if(status){ status.textContent="⚠ "+(e&&e.message||e); status.style.color="#a4322a"; } }
+}
+async function tkLoadSaved(){
+  try{ const {data}=await sb.from("timekeeping_uploads").select("*").order("uploaded_at",{ascending:false}).limit(1);
+    if(data&&data[0]&&data[0].result){ TK_RESULT=data[0].result; const st=document.getElementById("tkStatus"); if(st) st.textContent="✓ "+TK_MONTH_FULL[TK_RESULT.MON]+" "+TK_YEAR+" (saved · re-upload to refresh)"; tkRenderResults(); }
+  }catch(_){}
 }
 
 function renderTimekeeping(){
@@ -3152,6 +3161,7 @@ function renderTimekeeping(){
   const fi=pg.querySelector("#tkFile");
   if(fi) fi.addEventListener("change",e=>{ const f=e.target.files&&e.target.files[0]; if(f) tkHandleFile(f); });
   if(TK_RESULT){ const st=document.getElementById("tkStatus"); if(st) st.textContent="✓ "+TK_MONTH_FULL[TK_RESULT.MON]+" "+TK_YEAR+" (loaded)"; tkRenderResults(); }
+  else { tkLoadSaved(); }   // no in-memory result → restore the last saved upload from the DB
 }
 window.renderTimekeeping=renderTimekeeping;
 
@@ -4842,11 +4852,34 @@ function viewMemo(id){
     <div class="psub">${esc(m.ref_no||"")} · ${esc(m.status)}${m.created_at?" · "+fmtDate(m.created_at):""}</div>
     <div style="background:#fff;border:1px solid #E3E8EF;border-radius:10px;padding:16px 18px;margin:12px 0;white-space:pre-wrap;font-size:13.5px;line-height:1.6;">${esc(m.body||"")}</div>
     <div class="note">↳ This renders on RCC letterhead when printed/served. Twin-notice flow + counsel review apply for real disciplinary use.</div>
-    <div style="display:flex;gap:10px;margin-top:14px;">${m.status==="Draft"?`<button class="btn" id="mvIssue">Issue for signature</button>`:""}<button class="btn ghost" id="mvClose" style="margin-left:auto;">Close</button></div>
+    <div style="display:flex;gap:10px;margin-top:14px;">${m.status==="Draft"?`<button class="btn" id="mvIssue">Issue for signature</button>`:""}<button class="btn ghost" id="mvDownload">⬇ Download PDF</button><button class="btn ghost" id="mvClose" style="margin-left:auto;">Close</button></div>
   </div>`;
   el.addEventListener("click",e=>{ if(e.target===el) el.remove(); });
   document.getElementById("mvClose").onclick=()=>el.remove();
   const iv=document.getElementById("mvIssue"); if(iv) iv.onclick=()=>{ el.remove(); issueMemo(m.id); };
+  document.getElementById("mvDownload").onclick=()=>printMemo(m);
+}
+// Download / print a memo or notice on RCC letterhead.
+function printMemo(m){
+  const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to download."); return; }
+  const E=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${E(m.ref_no||m.memo_type||"Notice")}</title><style>
+    body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;font-size:13px;line-height:1.6;margin:32px;}
+    .lh{text-align:center;border-bottom:2px solid #1E3A5F;padding-bottom:8px;margin-bottom:6px;}.co{font-size:16px;font-weight:800;color:#1E3A5F;}.addr{font-size:10px;color:#666;}
+    .ref{font-size:11px;color:#666;margin:10px 0 2px;}.date{font-size:11px;color:#666;text-align:right;}
+    .body{white-space:pre-wrap;margin-top:14px;}
+    .foot{margin-top:26px;border-top:1px solid #cfcfcf;padding-top:6px;font-size:9.5px;color:#888;text-align:center;}
+    @media print{body{margin:16mm;}}
+  </style></head><body>
+    <div class="lh"><div class="co">ROSHAN COMMERCIAL CORPORATION</div><div class="addr">104 Shaw Blvd, Pasig City · +632 8638 6556</div></div>
+    <div class="date">${today}</div>
+    <div class="ref"><b>Ref:</b> ${E(m.ref_no||"—")} · ${E(m.memo_type||"")}${m.subject_name?" · "+E(m.subject_name):""}</div>
+    <div class="body">${E(m.body||"")}</div>
+    <div class="foot">Generated from the RCC HRIS · ${E(m.status||"")}. This is an official RCC communication.</div>
+    <scr`+`ipt>window.onload=function(){setTimeout(function(){window.print();},150);}</scr`+`ipt>
+  </body></html>`;
+  w.document.write(html); w.document.close();
 }
 /* ---------- STORE TRANSFERS / DEPLOYMENTS ----------
    SC raises → store head confirms BEFORE (agrees to receive) → in effect →
@@ -8142,8 +8175,10 @@ function finalPayBody(x,fp){ const emp=(EMPLOYEES||[]).find(e=>e.id===x.employee
   L.push("Approving: Anju C. Genomal — Director, Admin & Finance");
   L.push("","Your signature below approves this final-pay computation for release (RA 8792).");
   return L.join("\n"); }
+let _exReleaseProof=[];   // proof-of-claim files staged for the open exit case's final-pay release
 function openExitCase(id){
   const x=EXITCASES.find(v=>String(v.id)===String(id)); if(!x) return;
+  _exReleaseProof = Array.isArray(x.release_proof) ? x.release_proof.slice() : [];
   const t=x.tenure_months; const under6=t!=null&&t<6;
   const _lemp=linkedEmployeeForCase(x);   // linked employee (top-level scope for the whole modal)
   // Seed the quitclaim form: use the saved breakdown if present, else pre-fill from any legacy final-pay fields so nothing is lost.

@@ -240,6 +240,19 @@ function openChangePassword(){
 }
 
 /* ---------- DATA ---------- */
+// Floating nav count badges — so you can jump straight to whatever module needs attention (like Signatures).
+function navBadgeSet(page,count){ const nb=document.querySelector('.nav-item[data-page="'+page+'"] .nav-badge'); if(!nb||nb.classList.contains('tbd')) return; nb.textContent=count||""; nb.style.display=count?"":"none"; }
+function updateNavBadges(){
+  try{
+    navBadgeSet("signatures",(typeof SIGNATURES!=="undefined"?SIGNATURES:[]).filter(s=>s.status==="pending"&&s.awaiting==="you"&&(typeof canSignItem!=="function"||canSignItem(s))).length);
+    navBadgeSet("loans",(typeof LOANS!=="undefined"?LOANS:[]).filter(l=>!["Released","Rejected"].includes(l.status)).length);
+    navBadgeSet("exit",(typeof EXITCASES!=="undefined"?EXITCASES:[]).filter(x=>x.overall_status!=="Complete"&&x.overall_status!=="Cancelled").length);
+    navBadgeSet("prehire",(typeof PREHIRE!=="undefined"?PREHIRE:[]).filter(p=>p.phase==="HR_SIGNOFF").length);
+    navBadgeSet("onboarding",(typeof ONBOARDING!=="undefined"?ONBOARDING:[]).filter(c=>c.status!=="Complete").length);
+    try{ navBadgeSet("evaluations", evDueList().filter(x=>x.bucket==="due"||x.bucket==="overdue").length); }catch(_){}
+    if(typeof canSeeConcerns==="function"&&canSeeConcerns()){ navBadgeSet("concerns",(typeof CONCERNS!=="undefined"?CONCERNS:[]).filter(c=>{ const n=(typeof daysUntil==="function")?daysUntil(c.next_hearing):null; return n!=null&&n<=14&&(c.status==="Open"||c.status==="Ongoing"); }).length); } else navBadgeSet("concerns",0);
+  }catch(_){}
+}
 async function loadEmployees(){
   const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh, ppf] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
@@ -348,6 +361,7 @@ async function loadEmployees(){
   renderDesk();
   tagPreviewPages();
   wireGlobalSearch();
+  updateNavBadges();
   if(!landed){ landed=true;
     // Deep link from the approval email: ?sign=<id> opens that item straight on the sign screen.
     let deep=null; try{ deep=new URLSearchParams(location.search).get("sign"); }catch(_){}

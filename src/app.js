@@ -5375,7 +5375,8 @@ async function deskDeleteNote(id){ if(!confirm("Delete this note?")) return; awa
 /* ideas */
 async function deskSendIdea(){ const t=document.getElementById("ideaTitle"), d=document.getElementById("ideaDetail"); const title=(t.value||"").trim(); if(!title){ t.focus(); return; } await sb.from("hr_ideas").insert({from_email:myEmail(), from_name:myName(), title, detail:(d.value||"").trim()||null}); t.value=""; d.value=""; await reloadDesk(); }
 async function deskIdeaStatus(id,status){ await sb.from("hr_ideas").update({status}).eq("id",id); await reloadDesk(); }
-async function deskIdeaComment(id){ const el=document.getElementById("ideacmt_"+id); const txt=el?el.value.trim():""; await sb.from("hr_ideas").update({admin_comment:txt||null, admin_comment_by:myEmail(), admin_comment_at:new Date().toISOString()}).eq("id",id); await reloadDesk(); }
+async function deskIdeaComment(id){ const el=document.getElementById("ideacmt_"+id); const txt=el?el.value.trim():""; await sb.from("hr_ideas").update({admin_comment:txt||null, admin_comment_by:myEmail(), admin_comment_at:new Date().toISOString(), reply_seen:!txt}).eq("id",id); await reloadDesk(); }
+async function deskIdeaSeen(id){ await sb.from("hr_ideas").update({reply_seen:true}).eq("id",id); await reloadDesk(); }
 /* tasks */
 async function deskAddTask(){ const el=id=>document.getElementById(id); const title=(el("taskTitle").value||"").trim(); if(!title){ el("taskTitle").focus(); return; } const assignee=el("taskAssignee").value||null; await sb.from("hr_tasks").insert({ title, detail:(el("taskDetail").value||"").trim()||null, assignee_email:assignee, assignee_name:assignee?nameForEmail(assignee):null, assigned_by:myEmail(), assigned_by_name:myName(), due_date:el("taskDue").value||null, ongoing:el("taskOngoing").checked, status:"Open" }); el("taskTitle").value=""; el("taskDetail").value=""; el("taskDue").value=""; el("taskOngoing").checked=false; await reloadDesk(); }
 async function deskTaskDone(id){ await sb.from("hr_tasks").update({status:"Done", completed_at:new Date().toISOString(), completed_by:myName()}).eq("id",id); await reloadDesk(); }
@@ -5405,7 +5406,7 @@ function renderDesk(){
   const ideasList=admin?HR_IDEAS:HR_IDEAS.filter(i=>i.from_email===me);
 
   const badge=document.getElementById("deskBadge");
-  if(badge){ const c=mineTasks.filter(t=>deskOverdue(t)||(t.due_date&&deskDueChip(t.due_date).includes("today"))).length + (admin?newIdeas:0); badge.textContent=c||""; badge.style.display=c?"":"none"; }
+  if(badge){ const myUnseenReplies=HR_IDEAS.filter(i=>i.from_email===me && i.admin_comment && i.reply_seen===false).length; const c=mineTasks.filter(t=>deskOverdue(t)||(t.due_date&&deskDueChip(t.due_date,t.ongoing).includes("today"))).length + (admin?newIdeas:myUnseenReplies); badge.textContent=c||""; badge.style.display=c?"":"none"; }
 
   const notesHtml=`<div class="panel" style="margin-top:0;">
     <div style="display:flex;justify-content:space-between;align-items:center;"><h2 style="margin:0;">My notes</h2><button ${DMINI} id="deskAddNote">+ Add note</button></div>
@@ -5426,7 +5427,7 @@ function renderDesk(){
         <button ${DMINI} data-ideacomment="${i.id}">Save reply</button>
       </div></div>
       <div style="display:flex;gap:6px;">${i.status!=='Reviewed'?`<button ${DMINI} data-ideastatus="Reviewed" data-idea="${i.id}">Reviewed</button>`:''}${i.status!=='Actioned'?`<button ${DMINI} data-ideastatus="Actioned" data-idea="${i.id}">Actioned</button>`:''}${i.status!=='Archived'?`<button ${DMINI} data-ideastatus="Archived" data-idea="${i.id}">Archive</button>`:''}</div></div>`).join(""):`<div class="psub">No ideas submitted yet.</div>`}</div>`
-    :`<div style="margin-top:12px;"><div class="subhead">Your suggestions</div>${ideasList.length?ideasList.map(i=>`<div class="task"><div class="dot ${i.status==='New'?'a':'g'}"></div><div style="flex:1;"><div class="tt">${esc(i.title)}</div><div class="td">${esc(i.status)}${i.detail?(' · '+esc(i.detail)):''}</div>${i.admin_comment?`<div style="margin-top:4px;background:#eef4ef;border:1px solid #cfe0d4;border-radius:8px;padding:6px 9px;font-size:12px;"><b>anj replied:</b> ${esc(i.admin_comment)}</div>`:''}</div></div>`).join(""):`<div class="psub">You haven’t sent any yet.</div>`}</div>`;
+    :`<div style="margin-top:12px;"><div class="subhead">Your suggestions</div>${ideasList.length?ideasList.map(i=>{ const newReply=i.admin_comment && i.reply_seen===false; return `<div class="task"${newReply?' style="background:#fff8e6;border-radius:8px;"':''}><div class="dot ${newReply?'a':(i.status==='New'?'a':'g')}"></div><div style="flex:1;"><div class="tt">${esc(i.title)}${newReply?' <span style="color:#a4322a;font-size:11px;font-weight:700;">● New reply</span>':''}</div><div class="td">${esc(i.status)}${i.detail?(' · '+esc(i.detail)):''}</div>${i.admin_comment?`<div style="margin-top:4px;background:#eef4ef;border:1px solid #cfe0d4;border-radius:8px;padding:6px 9px;font-size:12px;"><b>anj replied:</b> ${esc(i.admin_comment)}</div>`:''}</div>${newReply?`<button ${DMINI} data-ideaseen="${i.id}">✓ Got it</button>`:''}</div>`; }).join(""):`<div class="psub">You haven’t sent any yet.</div>`}</div>`;
 
   const ideasHtml=`<div class="panel">
     <h2 style="margin:0 0 2px;">💡 Ideas &amp; suggestions</h2>
@@ -5471,6 +5472,7 @@ function renderDesk(){
   const isend=document.getElementById("ideaSend"); if(isend) isend.onclick=deskSendIdea;
   q('[data-ideastatus]').forEach(b=>b.onclick=()=>deskIdeaStatus(+b.dataset.idea, b.dataset.ideastatus));
   q('[data-ideacomment]').forEach(b=>b.onclick=()=>deskIdeaComment(+b.dataset.ideacomment));
+  q('[data-ideaseen]').forEach(b=>b.onclick=()=>deskIdeaSeen(+b.dataset.ideaseen));
   const tadd=document.getElementById("taskAdd"); if(tadd) tadd.onclick=deskAddTask;
   q('[data-taskdone]').forEach(b=>b.onclick=()=>deskTaskDone(+b.dataset.taskdone));
   q('[data-taskreopen]').forEach(b=>b.onclick=()=>deskTaskReopen(+b.dataset.taskreopen));

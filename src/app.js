@@ -5298,11 +5298,15 @@ function wireGlobalSearch(){
 /* ============================ HR DESK — notes · ideas · pending tasks ============================ */
 const DMINI='style="font-size:11.5px;padding:4px 9px;border:1px solid #cfe0d5;background:#fff;border-radius:7px;cursor:pointer;white-space:nowrap;"';
 function deskTodayMid(){ const n=new Date(); n.setHours(0,0,0,0); return n; }
-function deskOverdue(t){ if(!t.due_date) return false; return new Date(t.due_date+"T00:00:00")<deskTodayMid(); }
-function deskDueChip(due){
-  if(!due) return '';
+// Ongoing tasks are open-ended — they're never "overdue" (no hard deadline).
+function deskOverdue(t){ if(t.ongoing||!t.due_date) return false; return new Date(t.due_date+"T00:00:00")<deskTodayMid(); }
+function deskDueChip(due, ongoing){
+  if(!due){ return ongoing?`<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;background:#eef1f5;color:#5a6470;">no deadline</span>`:''; }
   const d=new Date(due+"T00:00:00"), days=Math.round((d-deskTodayMid())/86400000);
-  let bg='#e8f3ec',fg='#0f6e56',txt="in "+days+"d";
+  if(ongoing){ // has a target date but is open-ended → show it, never flag overdue
+    return `<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;background:#eef1f5;color:#5a6470;">target ${fmtDate(due)}</span>`;
+  }
+  let bg='#e8f3ec',fg='#0f6e56',txt="due in "+days+"d";
   if(days<0){ bg='#fbe9e7'; fg='#a4322a'; txt=(-days)+"d overdue"; }
   else if(days===0){ bg='#fef3d9'; fg='#8a5a00'; txt="due today"; }
   else if(days<=3){ bg='#fef3d9'; fg='#8a5a00'; }
@@ -5339,8 +5343,8 @@ function deskTaskRow(t){
   const del=(isAdminUser()||t.assigned_by===myEmail());
   return `<div class="task" style="align-items:flex-start;">
     <div class="dot ${t.ongoing?'a':(deskOverdue(t)?'r':'g')}"></div>
-    <div style="flex:1;"><div class="tt">${esc(t.title)} ${deskDueChip(t.due_date)}</div>
-      <div class="td">${t.assignee_name?('→ '+esc(t.assignee_name)):'unassigned'}${t.assigned_by_name?(' · by '+esc(t.assigned_by_name)):''}${t.detail?(' · '+esc(t.detail)):''}</div></div>
+    <div style="flex:1;"><div class="tt">${esc(t.title)} ${deskDueChip(t.due_date, t.ongoing)}</div>
+      <div class="td">${t.assignee_name?('→ '+esc(t.assignee_name)):'unassigned'}${t.assigned_by_name?(' · by '+esc(t.assigned_by_name)):''}${t.created_at?(' · assigned '+fmtDate(t.created_at)):''}${t.detail?(' · '+esc(t.detail)):''}</div></div>
     <div style="display:flex;gap:6px;">${canMarkTask(t)?`<button ${DMINI} data-taskdone="${t.id}">Mark done</button>`:''}${del?`<button ${DMINI} data-taskdel="${t.id}">✕</button>`:''}</div>
   </div>`;
 }

@@ -81,7 +81,9 @@ async function logChange(entity,id,name,action,detail){
 //   payroll  (Grazel) = recruiting view + Employees + sees pay/bank/government
 //   recruiter(others) = recruiting only, pay hidden
 const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "sanjay@hassarams.com":"admin", "hr3@hassarams.com":"payroll", "hr4@hassarams.com":"manager", "hr@hassarams.com":"relations", "richard@hassarams.com":"manager", "pervin@hassarams.com":"manager", "claude.test@hassarams.com":"admin" };  // hr3@=Grazel(payroll) · hr4@=Rhel(HR Manager) · hr@=Juvy(HR Relations) · richard@=IT reviewer · pervin@=AVP Admin & Logistics (warehouse NTE/NPA approver)
-function userRole(){ return ROLE_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()] || "recruiter"; }
+let USER_ROLES={};  // DB overlay from the User Access page — takes precedence over the hardcoded defaults below
+async function loadUserRoles(){ try{ const {data}=await sb.from("user_roles").select("email,role"); const m={}; (data||[]).forEach(r=>{ if(r.email&&r.role) m[String(r.email).toLowerCase()]=r.role; }); USER_ROLES=m; }catch(_){} }
+function userRole(){ const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return USER_ROLES[e] || ROLE_BY_EMAIL[e] || "recruiter"; }
 function isAdminUser(){ return userRole()==="admin"; }
 function canSeePay(){ const r=userRole(); return r==="admin"||r==="payroll"; }
 // Gov IDs (SSS/PhilHealth/Pag-IBIG/TIN) + bank: VIEWABLE by all logged-in HR, but ENTERED/EDITED by ONE person only — Vina (anj call, 2026-07-17), so there's a single source of truth for these numbers. Owners retain override. Salary stays payroll-only via canSeePay().
@@ -254,6 +256,7 @@ function updateNavBadges(){
   }catch(_){}
 }
 async function loadEmployees(){
+  await loadUserRoles();   // role overlay first — so all access gating below reflects the latest User Access settings
   const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh, ppf] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
@@ -5391,6 +5394,7 @@ async function deskSendIdea(){ const t=document.getElementById("ideaTitle"), d=d
 async function deskIdeaStatus(id,status){ await sb.from("hr_ideas").update({status}).eq("id",id); await reloadDesk(); }
 async function deskIdeaComment(id){ const el=document.getElementById("ideacmt_"+id); const txt=el?el.value.trim():""; await sb.from("hr_ideas").update({admin_comment:txt||null, admin_comment_by:myEmail(), admin_comment_at:new Date().toISOString(), reply_seen:!txt}).eq("id",id); await reloadDesk(); }
 async function deskIdeaSeen(id){ await sb.from("hr_ideas").update({reply_seen:true}).eq("id",id); await reloadDesk(); }
+async function deskIdeaWithdraw(id){ if(!confirm("Withdraw this suggestion? It moves to Withdrawn — the sender can no longer act on it, but it stays on record.")) return; await sb.from("hr_ideas").update({status:"Withdrawn"}).eq("id",id); await reloadDesk(); }
 /* tasks */
 async function deskAddTask(){ const el=id=>document.getElementById(id); const title=(el("taskTitle").value||"").trim(); if(!title){ el("taskTitle").focus(); return; } const assignee=el("taskAssignee").value||null; await sb.from("hr_tasks").insert({ title, detail:(el("taskDetail").value||"").trim()||null, assignee_email:assignee, assignee_name:assignee?nameForEmail(assignee):null, assigned_by:myEmail(), assigned_by_name:myName(), due_date:el("taskDue").value||null, ongoing:el("taskOngoing").checked, status:"Open" }); el("taskTitle").value=""; el("taskDetail").value=""; el("taskDue").value=""; el("taskOngoing").checked=false; await reloadDesk(); }
 async function deskTaskDone(id){ await sb.from("hr_tasks").update({status:"Done", completed_at:new Date().toISOString(), completed_by:myName()}).eq("id",id); await reloadDesk(); }
@@ -5441,7 +5445,7 @@ function renderDesk(){
         <button ${DMINI} data-ideacomment="${i.id}">Save reply</button>
       </div></div>
       <div style="display:flex;gap:6px;">${i.status!=='Reviewed'?`<button ${DMINI} data-ideastatus="Reviewed" data-idea="${i.id}">Reviewed</button>`:''}${i.status!=='Actioned'?`<button ${DMINI} data-ideastatus="Actioned" data-idea="${i.id}">Actioned</button>`:''}${i.status!=='Archived'?`<button ${DMINI} data-ideastatus="Archived" data-idea="${i.id}">Archive</button>`:''}</div></div>`).join(""):`<div class="psub">No ideas submitted yet.</div>`}</div>`
-    :`<div style="margin-top:12px;"><div class="subhead">Your suggestions</div>${ideasList.length?ideasList.map(i=>{ const newReply=i.admin_comment && i.reply_seen===false; return `<div class="task"${newReply?' style="background:#fff8e6;border-radius:8px;"':''}><div class="dot ${newReply?'a':(i.status==='New'?'a':'g')}"></div><div style="flex:1;"><div class="tt">${esc(i.title)}${newReply?' <span style="color:#a4322a;font-size:11px;font-weight:700;">● New reply</span>':''}</div><div class="td">${esc(i.status)}${i.detail?(' · '+esc(i.detail)):''}</div>${i.admin_comment?`<div style="margin-top:4px;background:#eef4ef;border:1px solid #cfe0d4;border-radius:8px;padding:6px 9px;font-size:12px;"><b>anj replied:</b> ${esc(i.admin_comment)}</div>`:''}</div>${newReply?`<button ${DMINI} data-ideaseen="${i.id}">✓ Got it</button>`:''}</div>`; }).join(""):`<div class="psub">You haven’t sent any yet.</div>`}</div>`;
+    :`<div style="margin-top:12px;"><div class="subhead">Your suggestions</div>${ideasList.length?ideasList.map(i=>{ const newReply=i.admin_comment && i.reply_seen===false; return `<div class="task"${newReply?' style="background:#fff8e6;border-radius:8px;"':''}><div class="dot ${newReply?'a':(i.status==='New'?'a':'g')}"></div><div style="flex:1;"><div class="tt">${esc(i.title)}${newReply?' <span style="color:#a4322a;font-size:11px;font-weight:700;">● New reply</span>':''}</div><div class="td">${esc(i.status)}${i.detail?(' · '+esc(i.detail)):''}</div>${i.admin_comment?`<div style="margin-top:4px;background:#eef4ef;border:1px solid #cfe0d4;border-radius:8px;padding:6px 9px;font-size:12px;"><b>anj replied:</b> ${esc(i.admin_comment)}</div>`:''}</div><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">${newReply?`<button ${DMINI} data-ideaseen="${i.id}">✓ Got it</button>`:''}${(i.status==='New'||i.status==='Reviewed')?`<button ${DMINI} data-ideawithdraw="${i.id}" style="color:#a12;">Withdraw</button>`:''}</div></div>`; }).join(""):`<div class="psub">You haven’t sent any yet.</div>`}</div>`;
 
   const ideasHtml=`<div class="panel">
     <h2 style="margin:0 0 2px;">💡 Ideas &amp; suggestions</h2>
@@ -5487,6 +5491,7 @@ function renderDesk(){
   q('[data-ideastatus]').forEach(b=>b.onclick=()=>deskIdeaStatus(+b.dataset.idea, b.dataset.ideastatus));
   q('[data-ideacomment]').forEach(b=>b.onclick=()=>deskIdeaComment(+b.dataset.ideacomment));
   q('[data-ideaseen]').forEach(b=>b.onclick=()=>deskIdeaSeen(+b.dataset.ideaseen));
+  q('[data-ideawithdraw]').forEach(b=>b.onclick=()=>deskIdeaWithdraw(+b.dataset.ideawithdraw));
   const tadd=document.getElementById("taskAdd"); if(tadd) tadd.onclick=deskAddTask;
   q('[data-taskdone]').forEach(b=>b.onclick=()=>deskTaskDone(+b.dataset.taskdone));
   q('[data-taskreopen]').forEach(b=>b.onclick=()=>deskTaskReopen(+b.dataset.taskreopen));
@@ -5793,8 +5798,27 @@ function recruitmentScorecard(){
 const PERSON_BY_EMAIL={ "anj@hassarams.com":"Anj", "sanjay@hassarams.com":"Sanjay", "hr@hassarams.com":"Juvy", "hr2@hassarams.com":"Vina", "hr3@hassarams.com":"Grazel", "hr4@hassarams.com":"Rhel" };
 const ROLE_LABEL={ admin:"Full admin", manager:"HR Manager", payroll:"Payroll / HR officer", relations:"HR Relations", recruiter:"Recruiter" };
 function whoName(email){ const e=(email||"").toLowerCase(); return PERSON_BY_EMAIL[e]||(e.split("@")[0]||"—"); }
+const ACCESS_ROLE_OPTS=["admin","manager","payroll","relations","recruiter"];
+async function accessSetRole(email, role){
+  const e=(email||"").trim().toLowerCase(); if(!e) return;
+  const {error}=await sb.from("user_roles").upsert({email:e, role, updated_by:(CURRENT_USER&&CURRENT_USER.email)||null, updated_at:new Date().toISOString()}, {onConflict:"email"});
+  if(error){ alert(error.message); return; }
+  try{ await logChange("access", null, e, "Access changed", "role → "+role); }catch(_){}
+  await loadUserRoles(); applyRoleUI(); renderActivity();
+}
+async function accessAddUser(){
+  const e=(document.getElementById("acc_email").value||"").trim().toLowerCase();
+  const role=document.getElementById("acc_role").value, name=(document.getElementById("acc_name").value||"").trim();
+  if(!e||!/@/.test(e)){ document.getElementById("accMsg").textContent="Enter a valid email."; return; }
+  const {error}=await sb.from("user_roles").upsert({email:e, role, name:name||null, updated_by:(CURRENT_USER&&CURRENT_USER.email)||null, updated_at:new Date().toISOString()}, {onConflict:"email"});
+  if(error){ document.getElementById("accMsg").textContent=error.message; return; }
+  try{ await logChange("access", null, e, "Access set", role); }catch(_){}
+  await loadUserRoles(); applyRoleUI(); renderActivity();
+}
+async function accessRemove(email){ if(!confirm("Remove this access override for "+email+"?\n\nThey revert to the built-in default (or 'recruiter' if none).")) return; await sb.from("user_roles").delete().eq("email",email); await loadUserRoles(); applyRoleUI(); renderActivity(); }
 async function renderActivity(){
   const pg=$("#page-activity"); if(!pg||!isAdminUser()) return;
+  let urData=[]; try{ urData=(await sb.from("user_roles").select("*")).data||[]; }catch(_){}
   // Build the role matrix from the live config
   const allEmails=["anj@hassarams.com","sanjay@hassarams.com","hr4@hassarams.com","hr3@hassarams.com","hr@hassarams.com","hr2@hassarams.com"];
   const roleFor=e=>ROLE_BY_EMAIL[e]||"recruiter";
@@ -5833,6 +5857,22 @@ async function renderActivity(){
       <div class="psub" style="margin-top:9px;">🔓 Government IDs (SSS/PhilHealth/Pag-IBIG/TIN) &amp; bank details are <b>viewable by all HR</b> — needed for onboarding &amp; enrolment — but <b>entered/edited by Vina</b> (backup: Grazel; you &amp; Sanjay can override). Everyone else sees them read-only. <b>Salary</b> stays restricted to you, Sanjay &amp; Grazel. Every bank/gov edit is logged below.</div>
     </div>
     <div class="panel">
+      <h2>Manage user access <span class="count-tag">editable</span></h2>
+      <div class="psub">Change what each person can do — <b>takes effect immediately</b>. <b>admin</b>=everything · <b>manager</b>=all HR (no settings) · <b>payroll</b>=recruiting+employees+salary · <b>relations</b>=onboarding/exit/evals/memos/loans · <b>recruiter</b>=recruiting. <i>This sets what an existing login can access — the login account itself is still created in Supabase.</i></div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;"><thead><tr style="text-align:left;color:var(--muted);"><th style="padding:6px 9px;font-weight:600;">Person</th><th style="padding:6px 9px;font-weight:600;">Access</th><th></th></tr></thead>
+        <tbody>${urData.slice().sort((a,b)=>(a.email||"").localeCompare(b.email||"")).map(u=>`<tr>
+          <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);"><b>${esc(u.name||whoName(u.email))}</b><div class="esub">${esc(u.email)}</div></td>
+          <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);"><select data-accrole="${esc(u.email)}" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;">${ACCESS_ROLE_OPTS.map(r=>`<option value="${r}"${u.role===r?" selected":""}>${esc(ROLE_LABEL[r]||r)}</option>`).join("")}</select></td>
+          <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);text-align:right;">${(u.email||"").toLowerCase()==="anj@hassarams.com"?'<span class="note">owner</span>':`<button class="btn ghost" data-accdel="${esc(u.email)}" style="color:#a12;font-size:11.5px;padding:3px 9px;">Remove</button>`}</td></tr>`).join("")}</tbody></table>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:12px;border-top:1px solid var(--line);padding-top:10px;">
+        <div style="flex:2;min-width:170px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Email</label><input id="acc_email" placeholder="name@hassarams.com" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;"></div>
+        <div style="flex:1;min-width:110px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Name</label><input id="acc_name" placeholder="optional" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;"></div>
+        <div><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Role</label><select id="acc_role" style="padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:#fff;">${ACCESS_ROLE_OPTS.map(r=>`<option value="${r}">${esc(ROLE_LABEL[r]||r)}</option>`).join("")}</select></div>
+        <button class="btn" id="acc_add">Add / update</button>
+      </div>
+      <div id="accMsg" style="font-size:12.5px;color:#a4322a;margin-top:6px;"></div>
+    </div>
+    <div class="panel">
       <h2>Sign-in history</h2>
       <div class="psub"><b>Last active</b> is the real signal — it updates every time someone opens the portal, even on a saved session. <b>Password sign-in</b> only changes when they re-type their password, so it lags (that's why yours showed an old date while you were logged in).</div>
       <table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="text-align:left;color:var(--muted);">
@@ -5844,6 +5884,10 @@ async function renderActivity(){
       <div class="psub">Every change made in the portal — stores, salary/bank edits, loans, exits, evaluations, ID corrections — with who and when.</div>
       ${feed||'<div class="psub" style="margin-top:8px;">No changes logged yet.</div>'}
     </div>`;
+  // Manage-access wiring
+  $$('#page-activity [data-accrole]').forEach(sel=>sel.addEventListener("change",()=>accessSetRole(sel.dataset.accrole, sel.value)));
+  $$('#page-activity [data-accdel]').forEach(b=>b.addEventListener("click",()=>accessRemove(b.dataset.accdel)));
+  const _accAdd=document.getElementById("acc_add"); if(_accAdd) _accAdd.addEventListener("click",accessAddUser);
   // fill login history via owner-only RPC
   sb.rpc("login_history").then(({data,error})=>{
     const el=document.getElementById("loginRows"); if(!el) return;

@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785406265";
+window.APP_BUILD="1785406729";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785406265" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785406729" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -2467,7 +2467,7 @@ async function logChange(entity,id,name,action,detail){
 //   admin    (anj)    = everything
 //   payroll  (Grazel) = recruiting view + Employees + sees pay/bank/government
 //   recruiter(others) = recruiting only, pay hidden
-const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "sanjay@hassarams.com":"admin", "hr3@hassarams.com":"payroll", "hr4@hassarams.com":"manager", "hr@hassarams.com":"relations", "richard@hassarams.com":"manager", "claude.test@hassarams.com":"admin" };  // hr3@=Grazel(payroll) · hr4@=Rhel(HR Manager) · hr@=Juvy(HR Relations) · richard@=IT reviewer (manager view, salary masked)
+const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "sanjay@hassarams.com":"admin", "hr3@hassarams.com":"payroll", "hr4@hassarams.com":"manager", "hr@hassarams.com":"relations", "richard@hassarams.com":"manager", "pervin@hassarams.com":"manager", "claude.test@hassarams.com":"admin" };  // hr3@=Grazel(payroll) · hr4@=Rhel(HR Manager) · hr@=Juvy(HR Relations) · richard@=IT reviewer · pervin@=AVP Admin & Logistics (warehouse NTE/NPA approver)
 function userRole(){ return ROLE_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()] || "recruiter"; }
 function isAdminUser(){ return userRole()==="admin"; }
 function canSeePay(){ const r=userRole(); return r==="admin"||r==="payroll"; }

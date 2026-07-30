@@ -629,6 +629,12 @@ function buildLoanAgreement(l,approver){
 }
 const loanStatusPill=(s)=>{ const m={"Submitted":"a","HR Review":"a","Supervisor":"a","Management":"a","Approved":"g","Released":"g","Rejected":"r"}; return `<span class="pill ${({a:'probation',g:'active',r:'closed'})[m[s]||'a']}">${esc(s)}</span>`; };
 // Downloadable Loan Computation + Agreement (flat-rate, RCC letterhead). Reuses buildLoanAgreement's DOLE-clean clauses.
+function pesosInWords(n){ n=Math.round(n||0); if(n===0) return "Zero Pesos";
+  const o=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+  const t=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+  const th=x=>{let s="";if(x>=100){s+=o[Math.floor(x/100)]+" Hundred";x%=100;if(x)s+=" ";}if(x>=20){s+=t[Math.floor(x/10)];x%=10;if(x)s+="-"+o[x];}else if(x>0)s+=o[x];return s;};
+  const sc=["","Thousand","Million","Billion"];let p=[],i=0,x=n;
+  while(x>0){const c=x%1000;if(c)p.unshift(th(c)+(sc[i]?" "+sc[i]:""));x=Math.floor(x/1000);i++;} return p.join(" ")+" Pesos"; }
 function loanCompute(l){
   const rate=(typeof LOAN_RATES!=="undefined"?LOAN_RATES[l.loan_type]:null)??12, term=Number(l.term_months||0), amt=Number(l.amount||0);
   const interest=amt*(rate/100)*(term/12), total=amt+interest, monthly=term?total/term:0;
@@ -664,26 +670,36 @@ function printLoanAgreement(l){
     <div class="lh"><div class="co">ROSHAN COMMERCIAL CORPORATION</div><div class="addr">104 Shaw Blvd, Pasig City</div></div>
     <div class="title">${moto?"Vehicle Loan Agreement":"Employee Loan Agreement &amp; Computation"}</div>
     <div class="ref">${E(l.loan_ref||"")} · ${today}</div>
-    <div class="sec">Borrower &amp; Loan</div>
-    ${kv("Borrower",E(l.applicant_name||"—"))}${kv("Employee ID",E(l.employee_id||"—"))}${kv("Department / position",E(l.department||"—"))}
+    <div class="sec">Application &amp; Loan</div>
+    ${kv("Application date",today)}${kv("Borrower",E(l.applicant_name||"—"))}${kv("Employee ID",E(l.employee_id||"—"))}${kv("Department / position",E(l.department||"—"))}
     ${kv("Loan type",E(loanTypeLabel(l.loan_type)))}${kv("Purpose",E(l.purpose||"—"))}
+    ${kv("Loan amount",P(c.amt)+" &nbsp; <span style='font-weight:400;'>("+E(pesosInWords(c.amt))+")</span>")}
+    ${kv("Type of release","☐ Rush &nbsp;&nbsp; ☐ Cut-off 15th &nbsp;&nbsp; ☐ Cut-off 30th")}
+    ${kv("Payment instruction",E(l.payment_instruction||"________________________"))}
     <div class="sec">Computation</div>
     <table><tbody>
       <tr><td>Principal (loan amount)</td><td class="num">${P(c.amt)}</td></tr>
-      <tr><td>Interest rate</td><td class="num">${c.rate}% p.a. (flat)</td></tr>
+      <tr><td>Interest rate</td><td class="num">${c.rate}% per annum (flat)</td></tr>
       <tr><td>Term</td><td class="num">${c.term} month(s)</td></tr>
-      <tr><td>Total interest</td><td class="num">${P(c.interest)}</td></tr>
+      <tr><td>Amount of interest</td><td class="num">${P(c.interest)}</td></tr>
       <tr><td><b>Total amount payable</b></td><td class="num"><b>${P(c.total)}</b></td></tr>
-      <tr><td><b>Monthly amortization</b></td><td class="num"><b>${P(c.monthly)}</b></td></tr>
-      <tr><td>Per-cutoff (÷2)</td><td class="num">${P(c.perCutoff)}</td></tr>
+      <tr><td><b>Monthly amortization</b></td><td class="num"><b>${P(c.monthly)}</b> (${P(c.perCutoff)} / cut-off)</td></tr>
     </tbody></table>
+    ${kv("Date of first payment","________________")}${kv("Date of last payment","________________")}
     <div class="sec">Amortization schedule</div>
     <table><thead><tr><th>#</th><th class="num">Payment</th><th class="num">Principal</th><th class="num">Interest</th><th class="num">Balance</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="sec">Terms</div>
+    <div class="sec">Terms &amp; Conditions</div>
     <div class="terms">${E(agreementText)}</div>
-    <div class="sig"><div class="sigbox"><div class="sigline"></div><div class="signame">${E(l.applicant_name||"")}</div><div class="sigcap">Borrower · Date: __________</div></div>
-      <div class="sigbox"><div class="sigline"></div><div class="signame">${E((typeof loanApprover==="function")?loanApprover(l):"")}</div><div class="sigcap">Approved for the Company · Date: __________</div></div></div>
-    <div class="foot">Generated ${today} from the RCC HRIS. Salary-deduction authorization is subject to Art. 113, Labor Code — deductions may not drop take-home below minimum wage.</div>
+    <div class="sec">Signatures</div>
+    <div class="sig">
+      <div class="sigbox"><div class="sigline"></div><div class="signame">${E(l.applicant_name||"")}</div><div class="sigcap">Borrower — signature over printed name · Date: __________</div></div>
+      <div class="sigbox"><div class="sigline"></div><div class="signame">ANJU GENOMAL</div><div class="sigcap">Authorized Signatory, Roshan Commercial Corporation · Date: __________</div></div>
+    </div>
+    <div class="sig">
+      <div class="sigbox"><div class="sigline"></div><div class="signame">GRAZEL LYN AGULTO</div><div class="sigcap">HR Officer · Date: __________</div></div>
+      <div class="sigbox"><div class="sigline"></div><div class="signame">MARGIE ALIANGAN</div><div class="sigcap">Accounting Officer · Date: __________</div></div>
+    </div>
+    <div class="foot"><b>THE RIGHT MOVE</b> · 3rd Floor RCC Center, 104 Shaw Blvd, Pasig City 1603 · +632 8638 6556<br>Generated ${today} from the RCC HRIS. Salary-deduction authorization is subject to Art. 113, Labor Code — deductions may not drop take-home below minimum wage.</div>
     <scr`+`ipt>window.onload=function(){setTimeout(function(){window.print();},150);}</scr`+`ipt>
   </body></html>`;
   w.document.write(html); w.document.close();

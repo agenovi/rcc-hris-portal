@@ -8260,7 +8260,9 @@ function openExitCase(id){
           } else if(so && so.status==='Declined'){
             signer=`<div style="margin-top:5px;font-size:12px;color:var(--red);">Declined by ${esc(so.signer_name)}${so.decline_reason?` — “${esc(so.decline_reason)}”`:""} <button class="btn ghost" data-sodel="${so.id}" type="button" style="font-size:11px;padding:3px 8px;">Remove</button></div>`;
           } else if(so){
-            signer=`<div style="margin-top:5px;font-size:12px;"><span class="pill awol">Awaiting ${esc(so.signer_name)}</span> <button class="btn ghost" data-socopy="${esc(so.token)}" type="button" style="font-size:11px;padding:3px 8px;">🔗 Copy link</button> <button class="btn ghost" data-sodel="${so.id}" type="button" style="font-size:11px;padding:3px 8px;">Remove</button></div>`;
+            signer=(()=>{ const sent=so.created_at?Math.floor((Date.now()-new Date(so.created_at).getTime())/86400000):null; const nudge=sent!=null&&sent>=3;
+              const sentTxt=so.created_at?`<span style="color:${nudge?'#a4322a':'var(--muted)'};font-weight:${nudge?'700':'400'};"> · link sent ${fmtDate(so.created_at)}${sent!=null?` (${sent}d ago${nudge?' — nudge to sign':''})`:''}</span>`:"";
+              return `<div style="margin-top:5px;font-size:12px;"><span class="pill awol">Awaiting ${esc(so.signer_name)}</span>${sentTxt} <button class="btn ghost" data-socopy="${esc(so.token)}" type="button" style="font-size:11px;padding:3px 8px;">🔗 Copy link</button> <button class="btn ghost" data-sodel="${so.id}" type="button" style="font-size:11px;padding:3px 8px;">Remove</button></div>`; })();
           } else {
             signer=`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:5px;">
               <input data-signoffby="${s.key}" id="cbnm_${s.key}" value="${esc(by.name||"")}" placeholder="Cleared by / signer name" style="flex:1;min-width:140px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;">

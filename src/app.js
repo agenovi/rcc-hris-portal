@@ -7837,7 +7837,8 @@ const EXIT_STAGES=[
   {key:"finance_disbursement",label:"Finance — Payables / Disbursement",s:"finance_disbursement_status",c:"finance_disbursement_charges",items:"Outstanding cash advances / liquidation · other damages"},
   {key:"finance_inventory",label:"Finance — Inventory",s:"finance_inventory_status",c:"finance_inventory_charges",items:"Inventory losses"},
   {key:"finance_payroll",label:"Finance — Payroll",s:"finance_payroll_status",c:"finance_payroll_charges",items:"Office / salary / bike / educational loan balances · pending deductions"},
-  {key:"accounting",label:"Accounting",s:"accounting_status",c:null,items:"Taxes / tax refund computation"},
+  {key:"accounting",label:"Accounting — Taxes",s:"accounting_status",c:null,items:"Taxes / tax refund computation",amt:"accounting_tax_amount",amtLabel:"Tax refund ₱"},
+  {key:"accounting_comm",label:"Accounting — Commissions (Margie)",s:"accounting_comm_status",c:null,items:"Incentives / commissions to release together with the final pay (disers)",amt:"accounting_comm_amount",amtLabel:"Commission ₱"},
   {key:"hr",label:"Human Resources",s:"hr_status",c:"hr_charges",items:"Company ID · HMO / health card · locker key · uniform · staff handbook · breach / 30-day notice"}
 ];
 const HR_RETURN_ITEMS=[["id","Company ID"],["hmo_card","HMO / Health card"],["locker","Locker / cabinet keys"],["handbook","Staff handbook"],["laptop","Laptop / desktop"],["cellphone","Cellphone + charger"],["camera","Camera / devices"],["broadband","Broadband stick"],["vehicle","Company vehicle + keys"],["cards","Business cards"]];
@@ -8059,7 +8060,7 @@ function renderExit(){
       return `<tr class="clickable" data-id="${x.id}"><td><b>${esc(x.employee_name)}</b><div class="esub">${esc(x.position||"")}</div></td>
         <td>${x.last_working_day?fmtDate(x.last_working_day):"—"}${t!=null?` · ${t} mo`:""}</td>
         <td>${esc(x.separation_type||"—")}</td>
-        <td><div class="barrow"><div class="bartrack"><div class="bar${dn===8?'':' def'}" style="width:${Math.round(dn/8*100)}%"></div></div><span style="font-size:11.5px;color:var(--muted);">${dn}/8</span></div></td>
+        <td><div class="barrow"><div class="bartrack"><div class="bar${dn===EXIT_STAGES.length?'':' def'}" style="width:${Math.round(dn/EXIT_STAGES.length*100)}%"></div></div><span style="font-size:11.5px;color:var(--muted);">${dn}/${EXIT_STAGES.length}</span></div></td>
         <td><b>${peso(exitNet(x))}</b></td>
         <td>${x.overall_status==="Complete"?'<span class="pill closed">Completed</span>'+(x.released?' <span class="pill active" style="font-size:10px;">released</span>':''):(x.separation_status==="Submitted"?'<span class="pill cn">Awaiting approval</span>':(x.quitclaim_status==="Approved"&&!x.released?'<span class="pill cn">Awaiting payout</span>':'<span class="pill probation">In Progress</span>'))+ageTag}</td></tr>`;
     }).join("");
@@ -8225,7 +8226,7 @@ function openExitCase(id){
         <div class="psub">Tenure: <b>${t!=null?t+" months":"—"}</b>${under6?' · <span style="color:var(--red);font-weight:700;">under 6 months</span>':""}</div>
       </div>
 
-      <div class="panel"><h2>Department sign-offs <span class="count-tag">${exitStagesDone(x)}/8 cleared</span></h2>
+      <div class="panel"><h2>Department sign-offs <span class="count-tag">${exitStagesDone(x)}/${EXIT_STAGES.length} cleared</span></h2>
         <div class="psub">Each department clears its items. Enter who cleared it, or <b>send that person a private sign-off link</b> (they upload their real signature on their phone, no login) — signing <b>auto-clears</b> that department.</div>
         ${(()=>{ const emp0=(EMPLOYEES||[]).find(e=>e.id===x.employee_id)||{}; return EXIT_STAGES.map(s=>{
           const by=(x.signoff_by||{})[s.key]||{};
@@ -8252,6 +8253,7 @@ function openExitCase(id){
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
               <select data-stage="${s.s}" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;background:#fff;">${opt(EXIT_STATUSES,x[s.s]||"Pending")}</select>
               ${s.c?`<input data-charge="${s.c}" type="text" inputmode="decimal" placeholder="₱" value="${x[s.c]??""}" style="width:84px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;">`:''}
+              ${s.amt?`<input data-amt="${s.amt}" type="text" inputmode="decimal" placeholder="${esc(s.amtLabel||'₱')}" title="${esc(s.amtLabel||'')}" value="${x[s.amt]??""}" style="width:110px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;">`:''}
             </div>
           </div>`;}).join(""); })()}
       </div>
@@ -8476,14 +8478,14 @@ function collectExit(x){
     uniform_auth_on_file:!!(m.querySelector("#ex_uniform_auth")&&m.querySelector("#ex_uniform_auth").checked),
     hmo_cancelled:!!(m.querySelector("#ex_hmo")&&m.querySelector("#ex_hmo").checked), coe_issued:m.querySelector("#ex_coe").checked,
     quitclaim_signed:!!(m.querySelector("#ex_quitclaim")&&m.querySelector("#ex_quitclaim").checked),
-    employment_status:(m.querySelector("#ex_empstatus")&&m.querySelector("#ex_empstatus").value)||null,
-    accounting_tax_amount:num("ex_accounting_tax") };
+    employment_status:(m.querySelector("#ex_empstatus")&&m.querySelector("#ex_empstatus").value)||null };
   { const cn=m.querySelector("#ex_release_check_no"); if(cn) o.release_check_no=cn.value.trim(); }
   const ret={}; m.querySelectorAll("[data-return]").forEach(el=>{ ret[el.dataset.return]=el.checked; });
   const otherEl=m.querySelector("#ex_other_return"); if(otherEl) ret.other=otherEl.value.trim();
   o.hr_returns=ret;
   m.querySelectorAll("[data-stage]").forEach(el=>{ o[el.dataset.stage]=el.value; });
   m.querySelectorAll("[data-charge]").forEach(el=>{ const v=Number(String(el.value).replace(/[^0-9.\-]/g,"")); o[el.dataset.charge]=(el.value.trim()!==""&&!isNaN(v))?v:0; });
+  m.querySelectorAll("[data-amt]").forEach(el=>{ const v=Number(String(el.value).replace(/[^0-9.\-]/g,"")); o[el.dataset.amt]=(el.value.trim()!==""&&!isNaN(v))?v:null; });  // Accounting tax + Margie commission amounts
   // per-department "Cleared by" — record the name + auto-stamp the date on first entry
   const prevBy=x.signoff_by||{}; const by={};
   m.querySelectorAll("[data-signoffby]").forEach(el=>{ const k=el.dataset.signoffby; const nm=el.value.trim();

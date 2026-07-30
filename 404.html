@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785392347";
+window.APP_BUILD="1785392519";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785392347" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785392519" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -11052,14 +11052,20 @@ function printQuitclaim(x){
   const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to print the quitclaim."); return; }
   const emp=(EMPLOYEES||[]).find(e=>e.id===x.employee_id)||{};
   const P=n=>"₱"+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
-  const rowsC=FP_CLAIMS.filter(([k])=>Number(fp[k]||0)!==0||fp[k+"_note"]).map(([k,l])=>`<tr><td>${esc(l)}</td><td class="n">${P(fp[k])}</td><td class="rm">${esc(fp[k+"_note"]||"")}</td></tr>`).join("");
-  const rowsD=FP_DEDUCTIONS.filter(([k])=>Number(fp[k]||0)!==0||fp[k+"_note"]).map(([k,l])=>`<tr><td>${esc(l)}</td><td class="n">${P(fp[k])}</td><td class="rm">${esc(fp[k+"_note"]||"")}</td></tr>`).join("");
+  // Claims: split lines (last payroll / 13th / SIL) break out Basic + Allowance, with the combined total on the right.
+  const claimRow=([k,l])=>{ const note=esc(fp[k+"_note"]||"");
+    if(FP_SPLIT.has(k)){ const b=Number(fp[k+"_basic"]||0), a=Number(fp[k+"_allowance"]||0); const has=(b||a);
+      return `<tr><td>${esc(l)}</td><td class="n sub">${has?P(b):""}</td><td class="n sub">${has?P(a):""}</td><td class="n">${P(fp[k])}</td><td class="rm">${note}</td></tr>`; }
+    return `<tr><td>${esc(l)}</td><td class="n"></td><td class="n"></td><td class="n">${P(fp[k])}</td><td class="rm">${note}</td></tr>`; };
+  const rowsC=FP_CLAIMS.filter(([k])=>Number(fp[k]||0)!==0||fp[k+"_note"]).map(claimRow).join("");
+  const rowsD=FP_DEDUCTIONS.filter(([k])=>Number(fp[k]||0)!==0||fp[k+"_note"]).map(([k,l])=>`<tr><td>${esc(l)}</td><td class="n"></td><td class="n"></td><td class="n">${P(fp[k])}</td><td class="rm">${esc(fp[k+"_note"]||"")}</td></tr>`).join("");
   w.document.write(`<!DOCTYPE html><html><head><title>Quitclaim — ${esc(x.employee_name)}</title><style>
     body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#1F2A37;max-width:720px;margin:24px auto;padding:0 24px;font-size:13px;}
     .lh{text-align:center;border-bottom:2.5px solid #1E3A5F;padding-bottom:8px;margin-bottom:14px;}
     .lh b{font-size:17px;color:#1E3A5F;} .lh div{font-size:11px;color:#667;}
     h2{text-align:center;font-size:15px;margin:10px 0 6px;} h3{font-size:12px;color:#1E3A5F;margin:14px 0 4px;}
     table{width:100%;border-collapse:collapse;} td,th{border:1px solid #ccd;padding:5px 8px;} td.n{text-align:right;white-space:nowrap;} td.rm{color:#667;font-size:11px;}
+    .hd td{font-weight:700;background:#eef2f7;color:#1E3A5F;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;} td.sub{color:#667;font-size:11.5px;}
     .tot td{font-weight:800;background:#f4f7fb;} .net td{font-weight:800;background:#eaf4ec;font-size:14px;}
     .meta td{border:none;padding:2px 4px;font-size:12px;} .sig{margin-top:34px;display:flex;justify-content:space-between;gap:30px;} .sig div{flex:1;text-align:center;} .sl{border-top:1px solid #333;margin-top:34px;padding-top:4px;font-size:11.5px;}
   </style></head><body>
@@ -11071,9 +11077,11 @@ function printQuitclaim(x){
       <tr class="meta"><td><b>Separation:</b> ${esc(x.separation_type||"—")}</td><td><b>Employment status:</b> ${esc(x.employment_status||emp.contract_type||"—")}</td></tr>
       <tr class="meta"><td><b>Sign-off:</b> ${esc(x.quitclaim_status||"—")}</td><td></td></tr></table>
     <h3>Claims — owed to employee</h3>
-    <table>${rowsC||'<tr><td colspan="3">—</td></tr>'}<tr class="tot"><td>Total claims</td><td class="n">${P(fpClaims(fp))}</td><td></td></tr></table>
+    <table><tr class="hd"><td>Item</td><td class="n">Basic</td><td class="n">Allowance</td><td class="n">Amount</td><td>Remarks</td></tr>
+      ${rowsC||'<tr><td colspan="5">—</td></tr>'}<tr class="tot"><td>Total claims</td><td></td><td></td><td class="n">${P(fpClaims(fp))}</td><td></td></tr></table>
     <h3>Less: deductions</h3>
-    <table>${rowsD||'<tr><td colspan="3">—</td></tr>'}<tr class="tot"><td>Total deductions</td><td class="n">${P(fpDeductions(fp))}</td><td></td></tr></table>
+    <table><tr class="hd"><td>Item</td><td class="n">Basic</td><td class="n">Allowance</td><td class="n">Amount</td><td>Remarks</td></tr>
+      ${rowsD||'<tr><td colspan="5">—</td></tr>'}<tr class="tot"><td>Total deductions</td><td></td><td></td><td class="n">${P(fpDeductions(fp))}</td><td></td></tr></table>
     <table style="margin-top:8px;"><tr class="net"><td>NET PAID TO EMPLOYEE</td><td class="n">${P(fpNet(fp))}</td></tr></table>
     ${(fp.payment_instruction||fp.bank_account)?`<div style="margin-top:8px;font-size:12px;"><b>Payment:</b> ${esc([fp.payment_instruction,fp.bank_account].filter(Boolean).join(" · "))}</div>`:""}
     <div class="sig"><div><div class="sl">Juvelyn M. Belvistre<br><span style="color:#667;">HR Officer — Prepared by</span></div></div>

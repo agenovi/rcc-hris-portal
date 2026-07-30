@@ -2216,6 +2216,49 @@ function mvWireSigUpload(cv,ctx,btn,file,onDone){ if(!btn||!file) return; btn.on
     rd.onload=()=>{ const img=new Image(); img.onload=()=>{ const ti=new Image(); ti.onload=()=>{ ctx.clearRect(0,0,cv.width,cv.height); const s3=Math.min(cv.width/ti.width, cv.height/ti.height); const dw=ti.width*s3, dh=ti.height*s3; ctx.drawImage(ti,(cv.width-dw)/2,(cv.height-dh)/2,dw,dh); onDone&&onDone(); }; ti.src=mvSigMakeTransparent(img); }; img.src=rd.result; };
     rd.readAsDataURL(f); }; }
 
+// Generic signature-capture modal (draw / upload / saved-signature) → returns a transparent PNG data URL via opts.onSign.
+function captureSignatureModal(opts){
+  opts=opts||{};
+  const savedSig=(typeof getSavedSig==='function')?getSavedSig():null;
+  let m=document.getElementById("capSigModal"); if(!m){ m=document.createElement("div"); m.id="capSigModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10002;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
+    <div style="font-size:18px;font-weight:800;color:#12352a;margin-bottom:3px;">${esc(opts.title||"Sign")}</div>
+    <div class="psub" style="margin-bottom:8px;">${esc(opts.subtitle||"")}</div>
+    ${savedSig?`<div style="display:flex;align-items:center;gap:10px;background:#eef6f0;border:1px solid #cfe6d8;border-radius:9px;padding:8px 12px;margin-bottom:10px;">
+      <img src="${savedSig}" style="height:34px;background:#fff;border-radius:4px;padding:2px 4px;border:1px solid #e2e7e4;">
+      <div style="flex:1;font-size:12.5px;color:#12352a;">Your saved signature — one tap.</div>
+      <button class="btn" id="capSaved" type="button">Use this</button></div>
+    <div style="font-size:12px;color:#6B7785;margin-bottom:6px;">…or draw / upload a new one:</div>`
+    :`<div style="font-size:12px;color:#6B7785;margin-bottom:6px;"><b>Upload your signature image</b> or draw it below. RA 8792 e-signature · timestamped + recorded against your account.</div>`}
+    <canvas id="capPad" width="480" height="150" style="width:100%;height:150px;border:1px dashed #b9c4cf;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+      <button class="btn ghost" id="capUpload" type="button" style="flex:0 0 auto;">📷 Upload signature</button>
+      <input type="file" id="capFile" accept="image/*" style="display:none;">
+      <button class="btn ghost" id="capClear" type="button" style="flex:0 0 auto;">Clear</button>
+      <label style="font-size:12px;color:#6B7785;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="capRemember" ${savedSig?"":"checked"}> Remember on this device</label>
+      <span id="capMsg" style="font-size:12.5px;color:#a4322a;flex:1 1 100%;"></span>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px;">
+      <button class="btn ghost" id="capCancel" type="button" style="margin-left:auto;">Cancel</button>
+      <button class="btn" id="capDo" type="button">${esc(opts.cta||"Sign")}</button>
+    </div></div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("capCancel").onclick=()=>m.remove();
+  const cv=document.getElementById("capPad"), ctx=cv.getContext("2d"); let drawing=false, dirty=false;
+  ctx.lineWidth=2.2; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.strokeStyle="#13243b";
+  const pos=e=>{ const rc=cv.getBoundingClientRect(), t=e.touches&&e.touches[0]?e.touches[0]:e; return {x:(t.clientX-rc.left)*(cv.width/rc.width), y:(t.clientY-rc.top)*(cv.height/rc.height)}; };
+  const start=e=>{ drawing=true; dirty=true; const p=pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); e.preventDefault(); };
+  const move=e=>{ if(!drawing) return; const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); e.preventDefault(); };
+  const end=()=>{ drawing=false; };
+  cv.addEventListener("mousedown",start); cv.addEventListener("mousemove",move); window.addEventListener("mouseup",end);
+  cv.addEventListener("touchstart",start,{passive:false}); cv.addEventListener("touchmove",move,{passive:false}); cv.addEventListener("touchend",end);
+  document.getElementById("capClear").onclick=()=>{ ctx.clearRect(0,0,cv.width,cv.height); dirty=false; };
+  mvWireSigUpload(cv,ctx,document.getElementById("capUpload"),document.getElementById("capFile"),()=>{ dirty=true; document.getElementById("capMsg").textContent=""; });
+  const done=(data)=>{ m.remove(); opts.onSign&&opts.onSign(data); };
+  const sv=document.getElementById("capSaved"); if(sv) sv.onclick=()=>done(savedSig);
+  document.getElementById("capDo").onclick=()=>{ if(!dirty){ document.getElementById("capMsg").textContent="Add your signature first — upload or draw it."; return; } const data=cv.toDataURL("image/png"); const rem=document.getElementById("capRemember"); if(rem&&rem.checked&&typeof saveSavedSig==='function') saveSavedSig(data); done(data); };
+}
 // Sign one step of a discretionary NPA — reuses the canvas draw widget.
 function mvSignStep(r,step){
   if(!step) return;
@@ -8197,9 +8240,11 @@ function finalPayBody(x,fp){ const emp=(EMPLOYEES||[]).find(e=>e.id===x.employee
   L.push("","Your signature below approves this final-pay computation for release (RA 8792).");
   return L.join("\n"); }
 let _exReleaseProof=[];   // proof-of-claim files staged for the open exit case's final-pay release
+let _exReleaseSig=null;   // Juvy's e-signature captured at release (transparent PNG data URL)
 function openExitCase(id){
   const x=EXITCASES.find(v=>String(v.id)===String(id)); if(!x) return;
   _exReleaseProof = Array.isArray(x.release_proof) ? x.release_proof.slice() : [];
+  _exReleaseSig = x.release_signature || null;
   const t=x.tenure_months; const under6=t!=null&&t<6;
   const _lemp=linkedEmployeeForCase(x);   // linked employee (top-level scope for the whole modal)
   // Seed the quitclaim form: use the saved breakdown if present, else pre-fill from any legacy final-pay fields so nothing is lost.
@@ -8356,6 +8401,7 @@ function openExitCase(id){
             return `<div style="border:1px solid var(--green);border-radius:9px;padding:11px 13px;margin:8px 0;background:var(--green-light);">
               <div style="font-weight:700;font-size:13.5px;color:var(--green-dark);">✅ Final pay RELEASED${x.release_check_no?` · Check / ref no. <b>${esc(x.release_check_no)}</b>`:""}</div>
               <div class="td" style="margin-top:3px;">Released${x.released_at?" on "+fmtDate(x.released_at):""}${x.released_by?" by "+esc(x.released_by):""}. Cycle closed.</div>
+              ${x.release_signature?`<img src="${x.release_signature}" style="height:32px;background:#fff;border:1px solid #d7e6db;border-radius:5px;padding:2px 5px;margin-top:5px;" title="Release e-signature">`:""}
               ${proof.length?`<div style="margin-top:7px;">${proof.map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12.5px;"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📎 ${esc(a.name)}</span><button type="button" class="btn ghost" style="padding:2px 9px;font-size:11.5px;flex-shrink:0;" onclick="openLoanDoc('${esc(a.path)}',this)">View proof</button></div>`).join("")}</div>`:`<div class="psub" style="margin-top:6px;">⚠ No proof file on record for this release.</div>`}
             </div>`;
           }
@@ -8411,7 +8457,20 @@ function openExitCase(id){
   wireDeptSignoffs(x, m);
   const cmp=document.getElementById("exComplete"); if(cmp) cmp.addEventListener("click",()=>{ if(confirm("Approve this separation for "+(x.employee_name||"this employee")+"?\n\nTheir status will flip to Separated.")) saveExitCase(x,m,true); });
   const subSep=document.getElementById("exSubmitSep"); if(subSep) subSep.addEventListener("click",()=>{ if(confirm("Submit "+(x.employee_name||"this employee")+"'s separation to Anju Genomal for approval?\n\nThey stay Active until Anju Genomal approves.")) saveExitCase(x,m,"submit"); });
-  const relC=document.getElementById("exReleaseComplete"); if(relC) relC.addEventListener("click",()=>{ if(confirm("Record the final-pay release for "+(x.employee_name||"this employee")+" and close the cycle?\n\nThis logs the check / reference no. and the proof you attached, marks the final pay RELEASED, and completes the clearance (employee set Separated if not already).")) saveExitCase(x,m,"release"); });
+  const relC=document.getElementById("exReleaseComplete"); if(relC) relC.addEventListener("click",()=>{
+    const setMsg=t=>{ const e=document.getElementById("exMsg"); if(e) e.textContent=t; };
+    const netDue=fpNet(collectFinalPay());
+    if(netDue>0){
+      const cn=(document.getElementById("ex_release_check_no")||{}).value||"";
+      if(x.quitclaim_status!=="Approved"){ setMsg("The quitclaim isn't signed by the Director yet — that signature authorises Accounting to process. Send it for sign-off first."); return; }
+      if(!cn.trim()){ setMsg("Enter the check / reference no. before recording the release."); return; }
+      if(!_exReleaseProof.length){ setMsg("Attach the proof of claim / payment before recording the release."); return; }
+    }
+    if(!confirm("Record the final-pay release for "+(x.employee_name||"this employee")+" and close the cycle?\n\nThis logs the check / reference no. and the proof you attached, marks the final pay RELEASED, and completes the clearance (employee set Separated if not already).")) return;
+    if(netDue>0){
+      captureSignatureModal({ title:"Sign the release", subtitle:"Your e-signature confirms you released this final pay to "+(x.employee_name||"the employee")+". RA 8792 · timestamped against your account.", cta:"Sign & record release", onSign:(data)=>{ _exReleaseSig=data; saveExitCase(x,m,"release"); } });
+    } else { saveExitCase(x,m,"release"); }
+  });
   wireExitReleaseUpload(x);
   const canc=document.getElementById("exCancel"); if(canc) canc.addEventListener("click",()=>cancelExitCase(x,m));
   const idl=document.getElementById("ex_interview_dl"); if(idl) idl.addEventListener("click",()=>printExitInterview(x));
@@ -8569,9 +8628,10 @@ async function saveExitCase(x,modal,mode){
       // Gate 2 — a release must carry proof: check / reference no. AND at least one uploaded proof file. Closes the cycle honestly.
       if(!(o.release_check_no||"").trim()){ document.getElementById("exMsg").textContent="Enter the check / reference no. before recording the release."; return; }
       if(!(Array.isArray(_exReleaseProof)&&_exReleaseProof.length)){ document.getElementById("exMsg").textContent="Attach the proof of claim / payment before recording the release."; return; }
+      if(!_exReleaseSig){ document.getElementById("exMsg").textContent="Sign the release before recording it."; return; }
     }
     const who=(CURRENT_USER&&CURRENT_USER.email)||"HR";
-    o.released=true; o.released_at=now; o.released_by=who; o.release_proof=_exReleaseProof.slice(); o.final_pay_release_date=now;
+    o.released=true; o.released_at=now; o.released_by=who; o.release_proof=_exReleaseProof.slice(); o.release_signature=_exReleaseSig||null; o.final_pay_release_date=now;
     o.overall_status="Complete"; o.completion_date=now;
     if(o.separation_status!=="Approved"){ o.separation_status="Approved"; o.separation_approved_by=who; o.separation_approved_at=now; }
   }
@@ -8699,6 +8759,7 @@ function printQuitclaim(x){
     ${(fp.payment_instruction||fp.bank_account)?`<div style="margin-top:8px;font-size:12px;"><b>Payment:</b> ${esc([fp.payment_instruction,fp.bank_account].filter(Boolean).join(" · "))}</div>`:""}
     <div class="sig"><div><div class="sl">Juvelyn M. Belvistre<br><span style="color:#667;">HR Officer — Prepared by</span></div></div>
       <div><div class="sl">Anju Genomal<br><span style="color:#667;">Director, Admin &amp; Finance — Approved${x.quitclaim_date?" "+fmtDate(x.quitclaim_date):""}</span></div></div></div>
+    ${x.released?`<div class="sig"><div>${x.release_signature?`<img src="${x.release_signature}" style="height:42px;display:block;margin:6px auto -4px;">`:""}<div class="sl">${esc(((hrDisplayName(x.released_by)||"").split(" — ")[0])||x.released_by||"HR")}<br><span style="color:#667;">Final pay released${x.released_at?" "+fmtDate(x.released_at):""}${x.release_check_no?" · Check / ref "+esc(x.release_check_no):""}</span></div></div></div>`:""}
     <div class="sig"><div><div class="sl">${esc(x.employee_name)}<br><span style="color:#667;">Received &amp; conforme / Date</span></div></div></div>
     <script>window.print();</`+`script></body></html>`);
   w.document.close();

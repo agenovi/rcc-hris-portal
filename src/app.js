@@ -247,7 +247,7 @@ function navBadgeSet(page,count){ const nb=document.querySelector('.nav-item[dat
 function updateNavBadges(){
   try{
     navBadgeSet("signatures",(typeof SIGNATURES!=="undefined"?SIGNATURES:[]).filter(s=>s.status==="pending"&&s.awaiting==="you"&&(typeof canSignItem!=="function"||canSignItem(s))).length);
-    navBadgeSet("loans",(typeof LOANS!=="undefined"?LOANS:[]).filter(l=>!["Released","Rejected"].includes(l.status)).length);
+    navBadgeSet("loans",(typeof LOANS!=="undefined"&&typeof loanIsMine==="function"&&typeof CURRENT_USER!=="undefined"&&CURRENT_USER?LOANS.filter(loanIsMine):[]).length);
     navBadgeSet("exit",(typeof EXITCASES!=="undefined"?EXITCASES:[]).filter(x=>x.overall_status!=="Complete"&&x.overall_status!=="Cancelled").length);
     navBadgeSet("prehire",(typeof PREHIRE!=="undefined"?PREHIRE:[]).filter(p=>p.phase==="HR_SIGNOFF").length);
     navBadgeSet("onboarding",(typeof ONBOARDING!=="undefined"?ONBOARDING:[]).filter(c=>c.status!=="Complete").length);
@@ -562,8 +562,18 @@ function renderCompliance(){
 }
 
 /* ---------- LOANS — HR review queue (employees apply via the public link) ---------- */
+/* Loan-review overhaul (2026-07-31, additive):
+   1  stage-aware routing — Supervisor dropped as a blocking stage; Submitted→HR Review→Management→Approved→Released.
+      loanIsMine() drives the nav badge + "Waiting on you" tile so each person only sees loans at THEIR step.
+   2  HR-staff self-application = RED segregation-of-duties flag (routed straight to Director).
+   3  loan-history split into Active RCC (blocks) vs Government deductions (disclosure only).
+   4  richer history rows (Given date · term · recurrence tag).
+   5  Approve = sign — Director signs with saved signature (captureSignatureModal) in one action → mgmt_signature.
+   6  clickable KPI tiles filter the list (LOAN_FILTER).
+   8  Supervisor = FYI acknowledgment (non-blocking): supervisor_name/email/status/performance/note/ack_at.
+   10 open-exit / separating flag (cross-check EXITCASES + SEPARATION_REVIEW). */
 const LOAN_APPLY_URL="https://agenovi.github.io/rcc-hris-portal/loan-apply.html";
-const LOAN_STAGES=["Submitted","HR Review","Supervisor","Management","Approved","Released","Rejected"];
+const LOAN_STAGES=["Submitted","HR Review","Management","Approved","Released","Rejected"];
 const loanTypeLabel=(t)=>({discretionary:"Discretionary",emergency:"Emergency",educational:"Educational",moto:"Motorcycle"}[t]||t||"—");
 async function openLoanDoc(path,btn){
   if(btn){ btn.disabled=true; btn.textContent="Opening…"; }
@@ -594,9 +604,54 @@ const LOAN_RATES={discretionary:12,emergency:12,educational:0,moto:6};
 function loanApprover(l){ const t=((l.department||"")+" "+(l.position||"")).toLowerCase(); return /warehouse|store/.test(t)?"Kaira":"Anj"; }
 // NCR daily minimum wage (2026 order). Monthly floor ≈ daily × 26. Regional rates vary — HR confirms.
 const NCR_MIN_DAILY=755, MIN_WAGE_MONTHLY_EST=Math.round(755*26);
+// Loan-type classification — government (SSS/Pag-IBIG/PhilHealth) loans are disclosure-only, never RCC company loans.
+const GOVT_LOAN_TYPES=["sss","pagibig","pag-ibig","philhealth","hdmf"];
+const isGovtLoan=(t)=>GOVT_LOAN_TYPES.includes(String(t||"").toLowerCase());
+// Stage-aware routing: whose turn is it?  Admin owns "Management"; HR team owns "Submitted"/"HR Review".
+// A named supervisor with a pending FYI also has this loan "on their desk" (non-blocking).
+function loanIsMine(l){
+  if(!l||typeof CURRENT_USER==="undefined"||!CURRENT_USER) return false;
+  if(l.supervisor_email && String(l.supervisor_email).toLowerCase()===myEmail() && l.supervisor_status==="pending") return true;
+  if(isAdminUser()) return l.status==="Management";
+  return l.status==="Submitted"||l.status==="HR Review";
+}
+// Stage owner for the Advance action + the read-only "waiting on…" line.
+function loanStageOwner(l){
+  if(l.status==="Submitted"||l.status==="HR Review") return {label:"HR", canAct:!!(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)};
+  if(l.status==="Management") return {label:"Management (Director)", canAct:isAdminUser()};
+  return {label:"", canAct:false};
+}
+// HR-staff self-application — segregation of duties (Item 2). HR cannot review its own loan.
+function loanIsHrSelfApp(l){
+  const em=String(l.email||"").toLowerCase();
+  if(em && (typeof HR_TEAM!=="undefined") && HR_TEAM.some(x=>x.email===em)) return true;
+  if(/\bhr\b|human resource/i.test(String(l.department||""))) return true;
+  const e=(typeof EMPLOYEES!=="undefined"?EMPLOYEES:[]).find(x=>String(x.employee_id)===String(l.employee_id));
+  if(e && /\bhr\b|human resource/i.test((String(e.department||"")+" "+String(e.position||"")))) return true;
+  return false;
+}
 // Eligibility snapshot for the loan review — reads the linked roster record + open loans.
 function loanEligibilityHtml(l){
-  if(!l.employee_id) return `<div class="note">No Employee ID linked yet — link the PayPlus ID to see tenure, status and second-loan checks.</div>`;
+  const redFlags=[];
+  // Item 2 — HR-staff self-application (segregation of duties)
+  if(loanIsHrSelfApp(l)) redFlags.push(`⛔ <b>HR-staff self-application</b> — segregation of duties. HR cannot review its own loan; this must be decided by Management (Director).`);
+  // Item 10 — open exit / separating employee (EXITCASES + SEPARATION_REVIEW are already in memory)
+  if(l.employee_id){
+    // Loans carry the PayPlus id; exit_clearance links by the employee's internal UUID (employees.id).
+    // Bridge through the EMPLOYEES roster, with a name-order-agnostic fallback.
+    const _empRec=(typeof EMPLOYEES!=="undefined"?EMPLOYEES:[]).find(x=>String(x.employee_id)===String(l.employee_id));
+    const _empUuid=_empRec&&_empRec.id;
+    const _nk=(s)=>String(s||"").toLowerCase().replace(/[^a-z\s,]/g," ").replace(/,/g," ").split(/\s+/).filter(Boolean).sort().join(" ");
+    const _appNk=_nk(l.applicant_name);
+    const _matchExit=(x)=>(_empUuid&&String(x.employee_id)===String(_empUuid))||(_appNk&&_nk(x.employee_name)===_appNk);
+    const ex=(typeof EXITCASES!=="undefined"?EXITCASES:[]);
+    const openExit=ex.find(x=>_matchExit(x) && x.overall_status!=="Complete" && x.overall_status!=="Cancelled");
+    const sepSub=ex.find(x=>_matchExit(x) && x.separation_status==="Submitted");
+    const sepRev=(typeof SEPARATION_REVIEW!=="undefined"?SEPARATION_REVIEW:[]).find(x=>String(x.employee_id)===String(l.employee_id)||(_appNk&&_nk(x.full_name)===_appNk));
+    if(openExit||sepSub||sepRev) redFlags.push(`⚠ <b>This employee has an open exit / is separating</b> — a new loan may only be recoverable from final pay. Confirm before granting.`);
+  }
+  const redHtml=redFlags.length?`<div style="margin-bottom:10px;display:flex;flex-direction:column;gap:6px;">${redFlags.map(f=>`<div style="padding:8px 11px;border-radius:9px;background:#fdecea;border:1px solid #f1c9c5;color:#a12622;font-size:13px;">${f}</div>`).join("")}</div>`:"";
+  if(!l.employee_id) return `${redHtml}<div class="note">No Employee ID linked yet — link the PayPlus ID to see tenure, status and second-loan checks.</div>`;
   const e=EMPLOYEES.find(x=>String(x.employee_id)===String(l.employee_id));
   const flags=[];
   let tenureTxt="—", ct="—", stTxt="—", src="—";
@@ -614,7 +669,7 @@ function loanEligibilityHtml(l){
   // Second active loan (clear-first rule): any OTHER portal loan for this ID not Rejected/Released…
   const others=(typeof LOANS!=="undefined"?LOANS:[]).filter(x=>String(x.employee_id)===String(l.employee_id) && String(x.id)!==String(l.id) && !["Rejected","Released"].includes(x.status));
   if(others.length) flags.push(`⚠ <b>${others.length} other open loan application(s)</b> in the portal (${esc(others.map(o=>o.loan_ref).join(", "))}) — clear-first rule.`);
-  return `${phRow("Tenure",tenureTxt)}${phRow("Contract type",ct)}${phRow("Roster status",stTxt)}${phRow("Source",src)}
+  return `${redHtml}${phRow("Tenure",tenureTxt)}${phRow("Contract type",ct)}${phRow("Roster status",stTxt)}${phRow("Source",src)}
     ${flags.length
       ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">${flags.map(f=>`<div style="padding:8px 11px;border-radius:9px;background:#fbeee6;border:1px solid #ecdca6;font-size:13px;">${f}</div>`).join("")}</div>`
       : `<div style="margin-top:10px;padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;"><b style="color:var(--green);">✓ No eligibility flags</b> — active, and no other open loan.</div>`}`;
@@ -722,11 +777,40 @@ function printLoanAgreement(l){
   w.document.write(html); w.document.close();
 }
 window.printLoanAgreement=printLoanAgreement;
+// Clickable-KPI list filter (Item 6). Module-level so setLoanFilter can re-render #loanRows without reloading data.
+let LOAN_FILTER=null;
+function loanFilterMatch(l){
+  switch(LOAN_FILTER){
+    case "mine": return (typeof loanIsMine==="function")&&loanIsMine(l);
+    case "new": return l.status==="Submitted";
+    case "open": return !["Released","Rejected"].includes(l.status);
+    case "approved": return ["Approved","Released"].includes(l.status);
+    default: return true; // "all" or null
+  }
+}
+function renderLoanRows(){
+  const rows=$("#loanRows"); if(!rows) return;
+  const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+  const list=LOANS.filter(loanFilterMatch);
+  rows.innerHTML=list.length?list.map(l=>`<tr class="clickable" data-id="${l.id}">
+      <td><b>${esc(l.loan_ref)}</b></td>
+      <td>${esc(l.applicant_name)}${l.department?`<div class="esub">${esc(l.department)}</div>`:""}</td>
+      <td>${esc(loanTypeLabel(l.loan_type))}</td>
+      <td>${peso(l.amount)}</td>
+      <td>${peso(l.monthly_estimate)}</td>
+      <td>${loanStatusPill(l.status)}</td></tr>`).join("")
+    :`<tr><td colspan="6" class="psub" style="padding:14px;">No applications match this filter.</td></tr>`;
+  $$("#loanRows tr").forEach(tr=>{ if(tr.dataset.id) tr.addEventListener("click",()=>openLoan(tr.dataset.id)); });
+  $$("#page-loans .kpi[data-lf]").forEach(t=>{ t.style.cursor="pointer"; t.style.outline=(t.dataset.lf===LOAN_FILTER)?"2px solid var(--green-dark)":""; t.style.outlineOffset="1px"; });
+}
+function setLoanFilter(k){ LOAN_FILTER=(LOAN_FILTER===k?null:k); renderLoanRows(); }
+window.setLoanFilter=setLoanFilter;
 function renderLoans(){
   const pg=$("#page-loans"); if(!pg) return;
   const open=LOANS.filter(l=>!["Released","Rejected"].includes(l.status));
   const newCt=LOANS.filter(l=>l.status==="Submitted").length;
   const approved=LOANS.filter(l=>["Approved","Released"].includes(l.status)).length;
+  const mineCt=LOANS.filter(loanIsMine).length;
   const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
@@ -736,32 +820,24 @@ function renderLoans(){
         <button class="btn" onclick="navigator.clipboard&&navigator.clipboard.writeText('${LOAN_APPLY_URL}');this.textContent='Link copied ✓'">Copy employee application link</button>
         <a class="btn blue" href="${LOAN_APPLY_URL}" target="_blank" style="text-decoration:none;">Open the form ↗</a>
       </div>
-      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
-        <div class="kpi ${newCt?'warn':''}"><div class="k-l">New</div><div class="k-n">${newCt}</div><div class="k-s">just submitted</div></div>
-        <div class="kpi"><div class="k-l">In Progress</div><div class="k-n">${open.length}</div><div class="k-s">under review</div></div>
-        <div class="kpi"><div class="k-l">Approved / Released</div><div class="k-n">${approved}</div></div>
-        <div class="kpi"><div class="k-l">Total Applications</div><div class="k-n">${LOANS.length}</div></div>
+      <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
+        <div class="kpi ${mineCt?'warn':''}" data-lf="mine" style="cursor:pointer;" onclick="setLoanFilter('mine')"><div class="k-l">Waiting on you</div><div class="k-n">${mineCt}</div><div class="k-s">your step</div></div>
+        <div class="kpi ${newCt?'warn':''}" data-lf="new" style="cursor:pointer;" onclick="setLoanFilter('new')"><div class="k-l">New</div><div class="k-n">${newCt}</div><div class="k-s">just submitted</div></div>
+        <div class="kpi" data-lf="open" style="cursor:pointer;" onclick="setLoanFilter('open')"><div class="k-l">In Progress</div><div class="k-n">${open.length}</div><div class="k-s">under review</div></div>
+        <div class="kpi" data-lf="approved" style="cursor:pointer;" onclick="setLoanFilter('approved')"><div class="k-l">Approved / Released</div><div class="k-n">${approved}</div></div>
+        <div class="kpi" data-lf="all" style="cursor:pointer;" onclick="setLoanFilter('all')"><div class="k-l">Total Applications</div><div class="k-n">${LOANS.length}</div></div>
       </div>
       ${LOANS.length?`<table><thead><tr><th>Ref</th><th>Applicant</th><th>Type</th><th>Amount</th><th>Monthly (est.)</th><th>Status</th></tr></thead>
         <tbody id="loanRows"></tbody></table>`
         : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1E3A5F" stroke-width="2"><path d="M12 1v22M5 8h9a3 3 0 010 6H7"/></svg></div><h2>No applications yet</h2><p>Share the employee application link above. Submissions appear here automatically.</p></div>`}
     </div>`;
-  const rows=$("#loanRows");
-  if(rows){
-    rows.innerHTML=LOANS.map(l=>`<tr class="clickable" data-id="${l.id}">
-      <td><b>${esc(l.loan_ref)}</b></td>
-      <td>${esc(l.applicant_name)}${l.department?`<div class="esub">${esc(l.department)}</div>`:""}</td>
-      <td>${esc(loanTypeLabel(l.loan_type))}</td>
-      <td>${peso(l.amount)}</td>
-      <td>${peso(l.monthly_estimate)}</td>
-      <td>${loanStatusPill(l.status)}</td></tr>`).join("");
-    $$("#loanRows tr").forEach(tr=>tr.addEventListener("click",()=>openLoan(tr.dataset.id)));
-  }
+  renderLoanRows();
 }
 function openLoan(id){
   const l=LOANS.find(x=>String(x.id)===String(id)); if(!l) return;
   const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
-  const idx=LOAN_STAGES.indexOf(l.status); const next=idx>=0&&idx<4?LOAN_STAGES[idx+1]:null;
+  const idx=LOAN_STAGES.indexOf(l.status); const next=idx>=0&&idx<3?LOAN_STAGES[idx+1]:null;
+  const stage=loanStageOwner(l);   // whose turn: {label, canAct}
   let m=document.getElementById("loanModal"); if(!m){ m=document.createElement("div"); m.id="loanModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:540px;height:100%;overflow-y:auto;">
@@ -851,17 +927,43 @@ function openLoan(id){
                     <div class="psub" style="margin-top:6px;">They read &amp; sign on their phone (RA 8792). Once signed, release unlocks.</div>`}`}
       </div>`:""}
       <div class="panel">
+        <h2>Supervisor <span style="font-size:12px;font-weight:600;color:var(--muted);">— FYI acknowledgment (non-blocking)</span></h2>
+        ${(()=>{
+          if(!l.supervisor_name && !l.supervisor_email) return `<div class="psub">— none named. HR names a supervisor when sending the loan up to Management. It never blocks approval.</div>`;
+          const who=esc(l.supervisor_name||l.supervisor_email||"");
+          if(l.supervisor_status==="acknowledged") return `<div style="padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;"><b>${who}</b> — <span style="color:var(--green);font-weight:700;">✓ acknowledged</span>${l.supervisor_performance?(" · "+esc(l.supervisor_performance)):""}${l.supervisor_ack_at?(" · "+fmtDate(l.supervisor_ack_at)):""}${l.supervisor_note?`<div class="esub" style="margin-top:4px;">${esc(l.supervisor_note)}</div>`:""}</div>`;
+          return `<div style="padding:9px 12px;border-radius:9px;background:#fbeee6;border:1px solid #ecdca6;font-size:13px;"><b>${who}</b> — ⏳ awaiting acknowledgment${l.supervisor_email?(` · ${esc(l.supervisor_email)}`):""}</div>`;
+        })()}
+        ${(l.supervisor_status==="pending" && (myEmail()===String(l.supervisor_email||"").toLowerCase() || isAdminUser()))?`
+          <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
+            <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">Acknowledge (FYI)${isAdminUser()&&myEmail()!==String(l.supervisor_email||"").toLowerCase()?" — recording on the supervisor's behalf":""}</label>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13.5px;margin-bottom:8px;">
+              <label style="display:flex;gap:5px;align-items:center;cursor:pointer;"><input type="radio" name="supPerf" value="Good" checked> Good</label>
+              <label style="display:flex;gap:5px;align-items:center;cursor:pointer;"><input type="radio" name="supPerf" value="Satisfactory"> Satisfactory</label>
+              <label style="display:flex;gap:5px;align-items:center;cursor:pointer;"><input type="radio" name="supPerf" value="Needs Improvement"> Needs Improvement</label>
+            </div>
+            <textarea id="supNote" rows="2" placeholder="Optional note…" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;"></textarea>
+            <button class="btn" id="supAck" style="margin-top:8px;">Acknowledge</button>
+          </div>`:""}
+      </div>
+      <div class="panel">
         <h2>Status</h2>
         <div class="psub">Current: ${loanStatusPill(l.status)}</div>
+        ${l.mgmt_signature?`<div style="margin-top:8px;padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;"><b style="color:var(--green);">Approved &amp; signed</b> by ${esc(l.mgmt_signer||"")}${l.mgmt_signed_at?(" · "+fmtDate(l.mgmt_signed_at)):""}<br><img src="${esc(l.mgmt_signature)}" alt="signature" style="max-height:70px;margin-top:6px;border:1px solid var(--line);border-radius:6px;background:#fff;"></div>`:""}
         <textarea id="loanNotes" rows="2" placeholder="HR notes…" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin-top:8px;">${esc(l.hr_notes||"")}</textarea>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          ${next?`<button class="btn" id="loanAdv">Advance → ${esc(next)}</button>`:""}
+          ${next?(stage.canAct
+            ? `<button class="btn" id="loanAdv">${l.status==="HR Review"?"Send up → Management":l.status==="Management"?"Approve &amp; Sign →":"Advance → "+esc(next)}</button>`
+            : `<div style="flex:1 1 100%;padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;">⏳ Waiting on <b>${esc(stage.label)}</b> — you can review but it's not your turn.</div>`)
+            :""}
           ${(l.status!=="Submitted"&&l.status!=="Rejected"&&l.status!=="Released")?`<button class="btn ghost" id="loanBack" style="color:#8a5a00;border-color:#ecdca6;">↩ Send back to HR</button>`:""}
           ${l.status!=="Rejected"&&l.status!=="Released"?`<button class="btn ghost" id="loanRej" style="color:var(--red);border-color:#f1c9c5;">Reject</button>`:""}
           ${l.status==="Approved"?`<button class="btn" id="loanRel">Mark Released</button>`:""}
+          ${l.status==="Rejected"?`<button class="btn ghost" id="loanUndoRej" style="color:#1f6b3a;border-color:#cfe6d6;">↩ Undo reject → HR Review</button>`:""}
           ${(l.amount&&l.term_months)?`<button class="btn ghost" id="loanAgree" style="color:#1E3A5F;">📄 Computation + Agreement (PDF)</button>`:""}
           <button class="btn ghost" id="loanClose" style="margin-left:auto;">Close</button>
         </div>
+        ${(next&&stage.canAct&&loanIsHrSelfApp(l)&&l.status==="HR Review")?`<div class="psub" style="margin-top:8px;color:#a12622;">HR review skipped — routed to Director (SOP).</div>`:""}
       </div>
     </div></div>`;
   $("#loanClose").addEventListener("click",()=>m.remove());
@@ -871,34 +973,48 @@ function openLoan(id){
     const body=document.getElementById("loanHistBody"); if(!body) return;
     if(!l.employee_id){ body.innerHTML=`<div class="note">No Employee ID on this application yet — link the PayPlus ID first, then history can be attached to the person.</div>`; return; }
     if(!rows||!rows.length){ body.innerHTML=`<div class="psub">No previous loans recorded yet. If you know this person has running loans (SSS, Pag-IBIG, company), add them below so the take-home check is accurate.</div>`; return; }
-    const activeOut=rows.filter(r=>r.status==="Active").reduce((s,r)=>s+Number(r.outstanding||0),0);
-    const activeMon=rows.filter(r=>r.status==="Active").reduce((s,r)=>s+Number(r.monthly_deduction||0),0);
+    // Item 3 — split active RCC company loans (blocks a new loan) vs government deductions (disclosure only)
+    const rccRows=rows.filter(r=>r.status==="Active"&&!isGovtLoan(r.loan_type));
+    const govtRows=rows.filter(r=>r.status==="Active"&&isGovtLoan(r.loan_type));
+    const rccOut=rccRows.reduce((s,r)=>s+Number(r.outstanding||0),0);
+    const rccMon=rccRows.reduce((s,r)=>s+Number(r.monthly_deduction||0),0);
+    const govtOut=govtRows.reduce((s,r)=>s+Number(r.outstanding||0),0);
+    const govtMon=govtRows.reduce((s,r)=>s+Number(r.monthly_deduction||0),0);
+    // Item 4 — recurrence signal: a previous row of the same loan_type + overlapping purpose/note as THIS request
+    const _norm=s=>String(s||"").toLowerCase();
+    const reqPurpose=_norm(l.purpose);
+    const isRecur=(r)=>{ if(r.loan_type!==l.loan_type) return false; if(!reqPurpose) return true;
+      const hay=_norm(r.note)+" "+_norm(r.source); return reqPurpose.split(/\W+/).filter(w=>w.length>3).some(w=>hay.includes(w)); };
     body.innerHTML=`
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-        <div style="flex:1;min-width:130px;background:#eef4ef;border-radius:10px;padding:8px 12px;"><div class="esub">Active outstanding</div><div style="font-weight:800;font-size:16px;">${peso(activeOut)}</div></div>
-        <div style="flex:1;min-width:130px;background:#eef4ef;border-radius:10px;padding:8px 12px;"><div class="esub">Monthly deductions now</div><div style="font-weight:800;font-size:16px;">${peso(activeMon)}</div></div>
+        <div style="flex:1;min-width:150px;background:${rccOut>0?'#fdecea':'#eef4ef'};border:1px solid ${rccOut>0?'#f1c9c5':'#cfe0d4'};border-radius:10px;padding:8px 12px;"><div class="esub">Active RCC loans (company)</div><div style="font-weight:800;font-size:16px;${rccOut>0?'color:#a12622;':''}">${peso(rccOut)}</div><div class="esub" style="margin-top:2px;">${peso(rccMon)}/mo · blocks a new loan</div></div>
+        <div style="flex:1;min-width:150px;background:#eef4ef;border:1px solid #cfe0d4;border-radius:10px;padding:8px 12px;"><div class="esub">Government deductions (Pag-IBIG/SSS)</div><div style="font-weight:800;font-size:16px;">${peso(govtOut)}</div><div class="esub" style="margin-top:2px;">${peso(govtMon)}/mo · disclosure only, doesn't block</div></div>
       </div>
+      ${rccOut>0?`<div style="margin-bottom:8px;padding:8px 11px;border-radius:9px;background:#fdecea;border:1px solid #f1c9c5;color:#a12622;font-size:13px;">⛔ <b>Clear the existing RCC loan first</b> — ${peso(rccOut)} outstanding on a company loan. Government deductions never trigger this.</div>`:""}
       ${rows.map(r=>`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);">
         <div>
-          <div style="font-weight:700;">${esc(loanTypeLabel(r.loan_type))} · ${peso(r.amount)} <span class="pill ${r.status==="Active"?"active":"closed"}" style="margin-left:4px;">${esc(r.status||"")}</span></div>
-          <div class="esub">${r.date_granted?("Granted "+fmtDate(r.date_granted)+" · "):""}Outstanding ${peso(r.outstanding)} · ${peso(r.monthly_deduction)}/mo${r.source?(" · "+esc(r.source)):""}${r.note?(" · "+esc(r.note)):""}</div>
+          <div style="font-weight:700;">${esc(loanTypeLabel(r.loan_type))}${isGovtLoan(r.loan_type)?` <span class="esub" style="font-weight:600;">· Gov't</span>`:""} · ${peso(r.amount)} <span class="pill ${r.status==="Active"?"active":"closed"}" style="margin-left:4px;">${esc(r.status||"")}</span></div>
+          <div class="esub">Given ${r.date_granted?fmtDate(r.date_granted):"—"}${(r.term_months||r.term)?(" · "+(r.term_months||r.term)+" mo"):""} · Outstanding ${peso(r.outstanding)} · ${peso(r.monthly_deduction)}/mo${r.source?(" · "+esc(r.source)):""}${r.note?(" · "+esc(r.note)):""}</div>
+          ${isRecur(r)?`<div style="margin-top:3px;display:inline-block;padding:2px 8px;border-radius:8px;background:#fbeee6;border:1px solid #ecdca6;font-size:11.5px;color:#8a5a00;">↻ same purpose as this request</div>`:""}
         </div>
         <button class="btn ghost" style="flex:none;padding:4px 10px;font-size:12px;color:var(--red);border-color:#f1c9c5;" onclick="delLoanHist('${r.id}','${esc(l.id)}')">Remove</button>
       </div>`).join("")}`;
   };
-  const renderAfford=(activeMon)=>{
+  const renderAfford=(rccMon, govtMon)=>{
     const box=document.getElementById("loanAfford"); if(!box) return;
+    rccMon=Number(rccMon||0); govtMon=Number(govtMon||0); const activeMon=rccMon+govtMon;
     const disposable=Number(l.net_pay||0);
     const guide=disposable*0.15;
     const thisMon=Number(l.monthly_estimate||0);
-    const combined=thisMon+Number(activeMon||0);
+    const combined=thisMon+activeMon;
     if(!disposable){ box.innerHTML=`<div class="note">No pay figure captured with this application — HR must check the 15% rule against the payslip manually.</div>`; return; }
     const ok=combined<=guide;
+    const nf=n=>Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
     box.innerHTML=`
       ${phRow("Pay available for repayment","₱"+disposable.toLocaleString())}
       ${phRow("15% guide (max monthly)","₱"+guide.toLocaleString(undefined,{maximumFractionDigits:0}))}
       ${phRow("This loan — monthly","₱"+thisMon.toLocaleString(undefined,{maximumFractionDigits:0}))}
-      ${activeMon?phRow("Existing loan deductions (from history)","₱"+Number(activeMon).toLocaleString(undefined,{maximumFractionDigits:0})):""}
+      ${activeMon?phRow("Existing loan deductions (from history)","RCC loans ₱"+nf(rccMon)+"/mo + Gov't ₱"+nf(govtMon)+"/mo"):""}
       ${phRow("Combined monthly","₱"+combined.toLocaleString(undefined,{maximumFractionDigits:0}))}
       <div style="margin-top:10px;padding:11px 13px;border-radius:10px;font-size:13.5px;background:${ok?'#e6f4ea':'#fbeee6'};border:1px solid ${ok?'#bfe0c8':'#ecdca6'};">
         ${ok?`<b style="color:var(--green);">✓ Within the 15% guide.</b> Combined ₱${combined.toLocaleString(undefined,{maximumFractionDigits:0})} fits under ₱${guide.toLocaleString(undefined,{maximumFractionDigits:0})}.`
@@ -910,7 +1026,7 @@ function openLoan(id){
           ${below?` <span style="color:#b26a00;font-weight:700;">⚠ Below the floor — deductions may not lawfully reduce take-home below minimum wage.</span>`:` <span style="color:var(--green);font-weight:700;">✓ Stays above the floor.</span>`}</div>`; })()}
       <div class="psub" style="margin-top:8px;">Pay figure was declared on the application. Confirm against the latest payslip before approving. The 15% guide applies <b>after</b> government (SSS/PhilHealth/Pag-IBIG/tax) deductions. Min-wage floor is an NCR estimate — adjust for the employee's region.</div>`;
   };
-  renderAfford(0);
+  renderAfford(0,0);
   // ── Recent attendance (last 3 completed months from PayPlus) ──
   (async()=>{
     const box=document.getElementById("loanAtt"); if(!box) return;
@@ -932,11 +1048,13 @@ function openLoan(id){
     }catch(e){ box.innerHTML=`<div class="note">Couldn't reach PayPlus: ${esc(String(e&&e.message||e))}</div>`; }
   })();
   (async()=>{
-    if(!l.employee_id){ renderLoanHist(null); renderAfford(0); return; }
+    if(!l.employee_id){ renderLoanHist(null); renderAfford(0,0); return; }
     const {data}=await sb.from("loan_history").select("*").eq("employee_id",l.employee_id).order("date_granted",{ascending:false,nullsFirst:false});
     renderLoanHist(data||[]);
-    const activeMon=(data||[]).filter(r=>r.status==="Active").reduce((s,r)=>s+Number(r.monthly_deduction||0),0);
-    renderAfford(activeMon);
+    const active=(data||[]).filter(r=>r.status==="Active");
+    const rccMon=active.filter(r=>!isGovtLoan(r.loan_type)).reduce((s,r)=>s+Number(r.monthly_deduction||0),0);
+    const govtMon=active.filter(r=>isGovtLoan(r.loan_type)).reduce((s,r)=>s+Number(r.monthly_deduction||0),0);
+    renderAfford(rccMon,govtMon);
   })();
   const lhAdd=document.getElementById("lhAdd"); if(lhAdd) lhAdd.addEventListener("click",async()=>{
     if(!l.employee_id){ alert("Link this application's Employee ID first — history is attached to the person's PayPlus ID."); return; }
@@ -995,10 +1113,58 @@ function openLoan(id){
     return false;
   };
   const approvePatch=()=>{ const approver=loanApprover(l); return { status:"Approved", mgmt_approver:approver, agreement_body:buildLoanAgreement(l,approver), agreement_token:newLoanToken(), agreement_status:"awaiting" }; };
+  // Item 8 — send up to Management: name a supervisor for an FYI acknowledgment (non-blocking).
+  const loanSendUp=()=>{
+    const isSelf=loanIsHrSelfApp(l);
+    let mm=document.getElementById("loanSendUpModal"); if(!mm){ mm=document.createElement("div"); mm.id="loanSendUpModal"; document.body.appendChild(mm); }
+    mm.style.cssText="position:fixed;inset:0;z-index:10003;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+    const empOpts=(typeof EMPLOYEES!=="undefined"?EMPLOYEES:[]).slice(0,800).map(e=>`<option value="${esc(e.full_name||"")}">`).join("");
+    mm.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:22px;">
+      <div style="font-size:18px;font-weight:800;color:#12352a;margin-bottom:3px;">Send up to Management</div>
+      <div class="psub" style="margin-bottom:10px;">Name the employee's supervisor for an FYI acknowledgment. This does <b>not</b> block approval — Management can approve regardless.</div>
+      ${isSelf?`<div style="padding:8px 11px;border-radius:9px;background:#fdecea;border:1px solid #f1c9c5;color:#a12622;font-size:13px;margin-bottom:10px;">HR review skipped — routed to Director (SOP).</div>`:""}
+      <input id="suName" list="suEmpList" placeholder="Supervisor name (optional)" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;" value="${esc(l.supervisor_name||"")}">
+      <datalist id="suEmpList">${empOpts}</datalist>
+      <input id="suEmail" type="email" placeholder="Supervisor email (optional — for their FYI)" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;" value="${esc(l.supervisor_email||"")}">
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button class="btn ghost" id="suCancel" style="margin-left:auto;">Cancel</button>
+        <button class="btn" id="suSend">Send to Management</button>
+      </div></div>`;
+    mm.addEventListener("click",ev=>{ if(ev.target===mm) mm.remove(); });
+    document.getElementById("suCancel").onclick=()=>mm.remove();
+    document.getElementById("suSend").onclick=()=>{
+      const nm=(document.getElementById("suName").value||"").trim();
+      const em2=(document.getElementById("suEmail").value||"").trim().toLowerCase();
+      const patch={ status:"Management", supervisor_name:nm||null, supervisor_email:em2||null, supervisor_status:(nm||em2)?"pending":null };
+      if(isSelf){ const ta=document.getElementById("loanNotes"); if(ta){ const stamp=`[HR review skipped — HR-staff self-application routed to Director (SOP) · ${fmtDate(new Date().toISOString())}]`; ta.value=(ta.value?ta.value+"\n":"")+stamp; } }
+      mm.remove();
+      setLoan(patch);   // setLoan reads loanNotes into hr_notes, so the SOP stamp is persisted
+    };
+  };
+  // Item 5 — approve = sign: Director signs (saved / draw / upload) in one action → mgmt_signature.
+  const loanApproveSign=()=>{
+    captureSignatureModal({
+      title:"Approve & sign this loan",
+      subtitle:`${l.applicant_name} · ${loanTypeLabel(l.loan_type)} · ${peso(l.amount)}`,
+      cta:"Approve & Sign",
+      onSign:(dataUrl)=>{ if(!dataUrl) return; const patch=approvePatch(); patch.mgmt_signature=dataUrl; patch.mgmt_signer=myName(); patch.mgmt_signed_at=new Date().toISOString(); setLoan(patch); }
+    });
+  };
   const adv=document.getElementById("loanAdv"); if(adv) adv.addEventListener("click",()=>{
-    if(next==="Approved"){ setLoan(approvePatch()); return; }
-    if(next==="Released"&&(waiverBlocked()||agreementBlocked())) return;
-    setLoan({status:next});
+    if(!stage.canAct) return;                       // read-only for non-owners
+    if(l.status==="HR Review"){ loanSendUp(); return; }        // → Management + supervisor FYI
+    if(l.status==="Management"){ loanApproveSign(); return; }   // → Approved (admin signs)
+    setLoan({status:next});                          // Submitted → HR Review
+  });
+  // Supervisor FYI acknowledgment (non-blocking) — visible to the named supervisor or an admin recording on their behalf.
+  const supAck=document.getElementById("supAck"); if(supAck) supAck.addEventListener("click",async()=>{
+    const perf=(document.querySelector('input[name="supPerf"]:checked')||{}).value||"Good";
+    const note=((document.getElementById("supNote")||{}).value||"").trim()||null;
+    supAck.disabled=true; supAck.textContent="Saving…";
+    const {error}=await sb.from("loans").update({supervisor_status:"acknowledged",supervisor_performance:perf,supervisor_note:note,supervisor_ack_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",l.id);
+    if(error){ alert(error.message); supAck.disabled=false; supAck.textContent="Acknowledge"; return; }
+    await logChange("loan",l.id,l.applicant_name,"Supervisor acknowledged (FYI)",perf);
+    await loadEmployees(); m.remove(); openLoan(l.id);
   });
   const rel=document.getElementById("loanRel"); if(rel) rel.addEventListener("click",()=>{ if(waiverBlocked()||agreementBlocked()) return; setLoan({status:"Released"}); });
   const genAgr=document.getElementById("loanGenAgr"); if(genAgr) genAgr.addEventListener("click",()=>{ const approver=loanApprover(l); setLoan({mgmt_approver:approver,agreement_body:buildLoanAgreement(l,approver),agreement_token:newLoanToken(),agreement_status:"awaiting"}); });
@@ -1022,6 +1188,17 @@ function openLoan(id){
     await loadEmployees(); m.remove();
   });
   const rej=document.getElementById("loanRej"); if(rej) rej.addEventListener("click",()=>setLoan({status:"Rejected"}));
+  const undoRej=document.getElementById("loanUndoRej"); if(undoRej) undoRej.addEventListener("click",async()=>{
+    if(!confirm("Undo the rejection and send this loan back to HR Review?")) return;
+    undoRej.disabled=true; undoRej.textContent="Reopening…";
+    const stamp=`[Reject undone → HR Review by ${myName()||myEmail()||"reviewer"} · ${fmtDate(new Date().toISOString())}]`;
+    const prev=document.getElementById("loanNotes").value;
+    const merged=(prev?prev+"\n":"")+stamp;
+    const {error}=await sb.from("loans").update({status:"HR Review",hr_notes:merged,updated_at:new Date().toISOString()}).eq("id",l.id);
+    if(error){ alert(error.message); undoRej.disabled=false; undoRej.textContent="↩ Undo reject → HR Review"; return; }
+    await logChange("loan",l.id,l.applicant_name,"Reject undone → HR Review",l.loan_ref);
+    await loadEmployees(); m.remove();
+  });
   const back=document.getElementById("loanBack"); if(back) back.addEventListener("click",async()=>{
     const c=prompt("Send back to HR — what should they add or check?\n(e.g. \"attach latest payslip\", \"confirm existing SSS loan balance\", \"missing valid ID\")");
     if(c==null) return;

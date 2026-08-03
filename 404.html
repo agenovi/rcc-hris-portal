@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785742676";
+window.APP_BUILD="1785753320";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785742676" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785753320" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -3000,6 +3000,46 @@ const LOAN_SIGN_BASE="https://agenovi.github.io/rcc-hris-portal/loan-sign.html";
 const LOAN_RATES={discretionary:12,emergency:12,educational:0,moto:6};
 // Per-department approver routing (Anj 2026-06-18): Head Office → Anj, Store/Warehouse → Kaira.
 function loanApprover(l){ const t=((l.department||"")+" "+(l.position||"")).toLowerCase(); return /warehouse|store/.test(t)?"Kaira":"Anj"; }
+// Loan co-signing chain (anj): after the Director approves + signs, Juvy forwards it and Grazel (payroll) +
+// Margie (accounting) each e-sign the agreement. Reuses the external-signoff infra — Grazel signs in-portal,
+// Margie (not a portal user) signs via her private sign-off.html link. external_signoffs is the source of truth.
+const LOAN_COSIGNERS=[
+  {role:"HR / Payroll", name:"Grazel Lyn Agulto", email:"hr3@hassarams.com"},
+  {role:"Accounting",   name:"Margie Aliangan",   email:"maliangan@hassarams.com"},
+];
+function loanCoSigners(l){ return (EXT_SIGNOFFS||[]).filter(s=>s.context_type==="loan" && String(s.context_id)===String(l&&l.id)); }
+// Status is case-insensitive: Margie's link is signed via the `signoff` edge fn (writes "Signed"),
+// while an in-portal "Co-sign now" writes "signed" per spec — both must read as signed.
+function loanCoSignerSigned(s){ return String((s&&s.status)||"").toLowerCase()==="signed"; }
+function loanCoSignerDeclined(s){ return String((s&&s.status)||"").toLowerCase()==="declined"; }
+function loanCoSignPanelHtml(l){
+  const list=loanCoSigners(l);
+  if(!list.length) return "";
+  const allSigned=list.every(loanCoSignerSigned);
+  const chip=s=>loanCoSignerSigned(s)?`<span class="pill active">Signed ✓</span>`:(loanCoSignerDeclined(s)?`<span class="pill closed">Declined</span>`:`<span class="pill probation">Awaiting signature</span>`);
+  const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+  const rows=list.map(s=>{
+    const signed=loanCoSignerSigned(s), declined=loanCoSignerDeclined(s);
+    const canSignNow=!signed && !declined && (myEmail()===String(s.signer_email||"").toLowerCase() || isAdminUser());
+    return `<div class="task" style="align-items:flex-start;">
+      <div class="dot ${signed?'g':(declined?'r':'a')}" style="margin-top:5px;"></div>
+      <div style="flex:1;min-width:0;">
+        <div class="tt"><b>${esc(s.signer_role||"")}</b> — ${esc(s.signer_name||"")} ${chip(s)}</div>
+        ${signed?`<div class="td" style="color:var(--green);">✓ Signed by ${esc(s.signed_name||s.signer_name||"")}${s.signed_at?" · "+fmtDate(s.signed_at):""}</div>${s.signature_data?`<img src="${esc(s.signature_data)}" alt="signature" style="max-height:64px;margin-top:6px;border:1px solid var(--line);border-radius:6px;background:#fff;">`:""}`:""}
+        ${declined&&s.decline_reason?`<div class="td" style="color:var(--red);">Declined: “${esc(s.decline_reason)}”</div>`:""}
+        ${(!signed&&!declined)?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+          <button class="btn ghost" data-lcscopy="${esc(s.token)}" type="button" style="font-size:12px;padding:5px 10px;">🔗 Copy link</button>
+          ${canSignNow?`<button class="btn" data-lcssign="${s.id}" type="button" style="font-size:12px;padding:5px 10px;">✍ Co-sign now</button>`:""}
+        </div>`:""}
+      </div></div>`;
+  }).join("");
+  return `<div class="panel" id="loanCoSignPanel"><h2>Co-signatories <span class="count-tag">${list.filter(loanCoSignerSigned).length}/${list.length} signed</span></h2>
+    ${allSigned?`<div style="margin-bottom:10px;padding:9px 12px;border-radius:9px;background:#e6f4ea;border:1px solid #bfe0c8;color:var(--green);font-weight:700;font-size:13px;">✓ Fully executed — Director + Payroll + Accounting signed</div>`:""}
+    <div class="psub">Once the Director has approved &amp; signed, Grazel (payroll) &amp; Margie (accounting) each e-sign the agreement. Grazel signs in the portal; Margie signs via her private link (🔗 Copy link → send her the link).</div>
+    ${l.forwarded_by?`<div class="psub" style="margin-top:4px;">Forwarded by <b>${esc(l.forwarded_by)}</b>${l.forwarded_at?" · "+fmtDate(l.forwarded_at):""}.</div>`:""}
+    <div style="margin-top:10px;">${rows}</div>
+  </div>`;
+}
 // NCR daily minimum wage (2026 order). Monthly floor ≈ daily × 26. Regional rates vary — HR confirms.
 const NCR_MIN_DAILY=755, MIN_WAGE_MONTHLY_EST=Math.round(755*26);
 // Loan-type classification — government (SSS/Pag-IBIG/PhilHealth) loans are disclosure-only, never RCC company loans.
@@ -3193,6 +3233,12 @@ function printLoanAgreement(l){
   const kv=(k,v)=>`<div class="agr-row"><div class="agr-k">${E(k)}</div><div class="agr-v">${v}</div></div>`;
   const agreementText=(typeof buildLoanAgreement==="function")?buildLoanAgreement(l):"";
   const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  // Captured e-signatures (only those that actually exist): Director + Borrower + co-signers.
+  const capSigs=[];
+  if(l.mgmt_signature) capSigs.push({img:l.mgmt_signature, name:(l.mgmt_signer||l.mgmt_approver||(typeof loanApprover==="function"?loanApprover(l):"")), role:"Approved for the Company — Director", date:l.mgmt_signed_at});
+  if(l.agreement_signature) capSigs.push({img:l.agreement_signature, name:(l.agreement_signer||l.applicant_name), role:"Borrower", date:l.agreement_signed_at});
+  (typeof loanCoSigners==="function"?loanCoSigners(l):[]).filter(s=>String((s&&s.status)||"").toLowerCase()==="signed").forEach(s=>{ if(s.signature_data) capSigs.push({img:s.signature_data, name:(s.signed_name||s.signer_name), role:s.signer_role, date:s.signed_at}); });
+  const capSigHtml = capSigs.length ? `<div class="sec">Captured e-signatures (RA 8792)</div><div class="sig">${capSigs.map(sg=>`<div class="sigbox"><img src="${sg.img}" style="max-height:60px;max-width:100%;border-bottom:1px solid #333;background:#fff;"><div class="signame">${E(sg.name||"")}</div><div class="sigcap">${E(sg.role||"")}${sg.date?" · "+E(fmtDate(sg.date)):""}</div></div>`).join("")}</div>` : "";
   const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${E(l.loan_ref||"Loan")} — Loan Agreement</title><style>
     *{box-sizing:border-box}body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1a1a1a;font-size:12.5px;line-height:1.5;margin:28px;}
     .lh{text-align:center;border-bottom:2px solid #1E3A5F;padding-bottom:8px;margin-bottom:4px;}
@@ -3239,6 +3285,7 @@ function printLoanAgreement(l){
       <div class="sigbox"><div class="sigline"></div><div class="signame">GRAZEL LYN AGULTO</div><div class="sigcap">HR Officer · Date: __________</div></div>
       <div class="sigbox"><div class="sigline"></div><div class="signame">MARGIE ALIANGAN</div><div class="sigcap">Accounting Officer · Date: __________</div></div>
     </div>
+    ${capSigHtml}
     <div class="foot"><b>THE RIGHT MOVE</b> · 3rd Floor RCC Center, 104 Shaw Blvd, Pasig City 1603 · +632 8638 6556<br>Generated ${today} from the RCC HRIS. Salary-deduction authorization is subject to Art. 113, Labor Code — deductions may not drop take-home below minimum wage.</div>
     <scr`+`ipt>window.onload=function(){setTimeout(function(){window.print();},150);}</scr`+`ipt>
   </body></html>`;
@@ -3491,10 +3538,12 @@ function openLoan(id){
           ${l.status==="Approved"?`<button class="btn" id="loanRel">Mark Released</button>`:""}
           ${l.status==="Rejected"?`<button class="btn ghost" id="loanUndoRej" style="color:#1f6b3a;border-color:#cfe6d6;">↩ Undo reject → HR Review</button>`:""}
           ${(l.amount&&l.term_months)?`<button class="btn ghost" id="loanAgree" style="color:#1E3A5F;">📄 Computation + Agreement (PDF)</button>`:""}
+          ${(l.status==="Approved" && l.mgmt_signature && loanCoSigners(l).length===0 && (isAdminUser()||["relations","payroll","manager"].includes(userRole())))?`<button class="btn" id="loanFwdCosign">Forward for co-signing (Juvy sends)</button>`:""}
           <button class="btn ghost" id="loanClose" style="margin-left:auto;">Close</button>
         </div>
         ${(next&&stage.canAct&&loanIsHrSelfApp(l)&&l.status==="HR Review")?`<div class="psub" style="margin-top:8px;color:#a12622;">HR review skipped — routed to Director (SOP).</div>`:""}
       </div>
+      ${loanCoSignPanelHtml(l)}
     </div></div>`;
   $("#loanClose").addEventListener("click",()=>m.remove());
   const _agr=$("#loanAgree"); if(_agr) _agr.addEventListener("click",()=>printLoanAgreement(l));
@@ -3860,6 +3909,38 @@ function openLoan(id){
     };
   };
   const decl=document.getElementById("loanDecline"); if(decl) decl.addEventListener("click",loanDeclineModal);
+  // ── Loan co-signing chain (forward → Grazel in-portal / Margie via link) ──
+  const fwd=document.getElementById("loanFwdCosign");
+  if(fwd) fwd.addEventListener("click",async()=>{
+    if(!(l.status==="Approved" && l.mgmt_signature)){ alert("Forward for co-signing is available once the Director has approved & signed this loan."); return; }
+    if(loanCoSigners(l).length){ alert("This loan has already been forwarded for co-signing."); return; }
+    if(!confirm("Forward this approved loan to Grazel (payroll) and Margie (accounting) for their signatures?")) return;
+    fwd.disabled=true; fwd.textContent="Forwarding…";
+    const docHtml="<pre style='white-space:pre-wrap;font-family:sans-serif;font-size:13px;line-height:1.6;'>"+esc(buildLoanAgreement(l,l.mgmt_approver||loanApprover(l)))+"</pre>";
+    const rows=LOAN_COSIGNERS.map(cs=>({
+      token:newSignoffToken(), context_type:"loan", context_id:String(l.id),
+      context_label:`Loan ${l.loan_ref} · ${l.applicant_name} · ${peso(l.amount)}`,
+      signer_name:cs.name, signer_role:cs.role, signer_email:cs.email,
+      document_html:docHtml, status:"pending", created_by:myEmail() }));
+    const {error}=await sb.from("external_signoffs").insert(rows);
+    if(error){ alert(error.message); fwd.disabled=false; fwd.textContent="Forward for co-signing (Juvy sends)"; return; }
+    await sb.from("loans").update({ forwarded_by: myName()||myEmail(), forwarded_at: new Date().toISOString() }).eq("id",l.id);
+    await logChange("loan",l.id,l.applicant_name,"Forwarded for co-signing",l.loan_ref);
+    // TODO email Grazel + Margie once Resend key is set
+    await loadEmployees(); m.remove(); openLoan(l.id);
+  });
+  m.querySelectorAll("[data-lcscopy]").forEach(b=>b.addEventListener("click",async()=>{
+    const url=signoffUrl(b.dataset.lcscopy);
+    try{ await navigator.clipboard.writeText(url); b.textContent="✓ Copied"; setTimeout(()=>b.textContent="🔗 Copy link",1600); }catch(_){ prompt("Copy the co-signing link:", url); }
+  }));
+  m.querySelectorAll("[data-lcssign]").forEach(b=>b.addEventListener("click",()=>{
+    const row=(EXT_SIGNOFFS||[]).find(s=>String(s.id)===String(b.dataset.lcssign)); if(!row) return;
+    captureSignatureModal({ title:"Co-sign this loan",
+      subtitle:`${row.signer_role||""} — ${row.signer_name||""} · ${l.loan_ref} ${peso(l.amount)}`, cta:"Sign",
+      onSign:(data)=>{ if(!data) return;
+        sb.from("external_signoffs").update({status:"Signed", signature_data:data, signed_name:myName()||row.signer_name, signed_at:new Date().toISOString()}).eq("id", row.id).then(async({error})=>{ if(error){ alert(error.message); return; } await loadEmployees(); m.remove(); openLoan(l.id); }); }
+    });
+  }));
 }
 const isActive=(e)=>e.status==="Active";
 // "Store / Concession" classification, derived (display-only) from the worksite.

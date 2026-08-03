@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785753320";
+window.APP_BUILD="1785761078";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785753320" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785761078" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -2467,7 +2467,7 @@ async function logChange(entity,id,name,action,detail){
 //   admin    (anj)    = everything
 //   payroll  (Grazel) = recruiting view + Employees + sees pay/bank/government
 //   recruiter(others) = recruiting only, pay hidden
-const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "sanjay@hassarams.com":"admin", "hr3@hassarams.com":"payroll", "hr4@hassarams.com":"manager", "hr@hassarams.com":"relations", "richard@hassarams.com":"manager", "pervin@hassarams.com":"manager", "claude.test@hassarams.com":"admin" };  // hr3@=Grazel(payroll) · hr4@=Rhel(HR Manager) · hr@=Juvy(HR Relations) · richard@=IT reviewer · pervin@=AVP Admin & Logistics (warehouse NTE/NPA approver)
+const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "sanjay@hassarams.com":"admin", "hr3@hassarams.com":"payroll", "hr4@hassarams.com":"manager", "hr@hassarams.com":"relations", "richard@hassarams.com":"manager", "pervin@hassarams.com":"manager", "maliangan@hassarams.com":"cosigner", "claude.test@hassarams.com":"admin" };  // hr3@=Grazel(payroll) · hr4@=Rhel(HR Manager) · hr@=Juvy(HR Relations) · richard@=IT reviewer · pervin@=AVP Admin & Logistics (warehouse NTE/NPA approver) · maliangan@=Margie (Accounting) — SCOPED co-signer: sees ONLY the Documents to Sign page (her loan co-sign queue), nothing else
 let USER_ROLES={};  // DB overlay from the User Access page — takes precedence over the hardcoded defaults below
 async function loadUserRoles(){ try{ const {data}=await sb.from("user_roles").select("email,role"); const m={}; (data||[]).forEach(r=>{ if(r.email&&r.role) m[String(r.email).toLowerCase()]=r.role; }); USER_ROLES=m; }catch(_){} }
 function userRole(){ const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return USER_ROLES[e] || ROLE_BY_EMAIL[e] || "recruiter"; }
@@ -2507,14 +2507,24 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   if(r==="manager") base = MANAGER_PAGES.slice();
   else if(r==="payroll") base = RECRUITER_PAGES.concat(["employees","timekeeping"]);
   else if(r==="relations") base = RELATIONS_PAGES.slice();
+  else if(r==="cosigner") base = ["cosign"];  // scoped co-signer (Margie) — ONLY the Documents to Sign page
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='cosign') return !!CURRENT_USER; if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
 function applyRoleUI(){
+  // Scoped co-signer (Margie): sees EXACTLY one nav item — "Documents to Sign". Hide every other
+  // nav item (incl. the always-on policies/desk/links/etc.), all section headers, and the top search.
+  if(userRole()==="cosigner"){
+    ensureCosignDom();
+    document.querySelectorAll('.nav-item[data-page]').forEach(n=>{ n.style.display=(n.getAttribute('data-page')==='cosign')?'':'none'; });
+    document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display='none'; });
+    const ts=document.querySelector('.topbar .search'); if(ts) ts.style.display='none';
+    return;
+  }
   const allow=allowedPages(), limited=isLimitedUser();
   document.querySelectorAll('.nav-item[data-page]').forEach(n=>{
     const pg=n.getAttribute('data-page');
@@ -2592,6 +2602,7 @@ async function showApp(user){
   CURRENT_USER=user; $("#login").style.display="none";
   try{ sb.rpc("touch_presence").then(()=>{},()=>{}); }catch(e){}  // stamp real last-active (updates even on a resumed session, unlike last_sign_in_at) — MUST attach .then() or supabase-js never fires the request
   patchSidebarFoot(user);
+  ensureCosignDom();  // inject the "Documents to Sign" nav item + page container BEFORE role gating, so applyRoleUI hides/shows it correctly for every role
   applyRoleUI();
   await loadEmployees();
 }
@@ -2760,13 +2771,17 @@ async function loadEmployees(){
   renderTimekeeping();
   renderGovRemit();
   renderDesk();
+  renderCosign();
   tagPreviewPages();
   wireGlobalSearch();
   updateNavBadges();
   if(!landed){ landed=true;
     // Deep link from the approval email: ?sign=<id> opens that item straight on the sign screen.
     let deep=null; try{ deep=new URLSearchParams(location.search).get("sign"); }catch(_){}
-    if(deep && (SIGNATURES||[]).some(s=>String(s.id)===String(deep))){
+    if(userRole()==="cosigner"){
+      // Scoped co-signer lands straight on their Documents to Sign queue — no dashboard.
+      if(typeof window.go==="function") window.go("cosign");
+    } else if(deep && (SIGNATURES||[]).some(s=>String(s.id)===String(deep))){
       if(typeof window.go==="function") window.go("signatures");
       setTimeout(()=>{ try{ openSignDoc(deep); }catch(_){} history.replaceState(null,"",location.pathname); }, 60);
     } else if(typeof window.go==="function") window.go("dashboard");
@@ -2794,7 +2809,7 @@ async function ppSyncFetch(params){
 
 // Honesty pass: every screen NOT backed by live data gets a visible "Preview" ribbon,
 // so HR never mistakes an illustrative mock-up for real data. Real pages are listed here.
-const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity","maternity","timekeeping","meetings","govremit","movements","policies","processes","orgchart","storemap","concerns","links","positions"]);
+const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity","maternity","timekeeping","meetings","govremit","movements","policies","processes","orgchart","storemap","concerns","links","positions","cosign"]);
 function tagPreviewPages(){
   document.querySelectorAll('section.page').forEach(sec=>{
     const id=(sec.id||"").replace("page-","");
@@ -7454,6 +7469,111 @@ function renderLinks(){
   });
 }
 window.renderLinks=renderLinks;
+
+/* ===================================================================
+   DOCUMENTS TO SIGN — scoped co-signer page (Margie / Accounting)
+   A non-admin "cosigner" logs in and sees ONLY the documents awaiting
+   HER signature — the loan co-sign rows routed to her in external_signoffs.
+   She opens a document, reviews the agreement, then uploads or draws her
+   signature (captureSignatureModal already handles upload + draw + knockout).
+   Additive: reuses EXT_SIGNOFFS + external_signoffs, no new tables.
+   =================================================================== */
+// Inject the nav item + page container from JS so app.js stays the only file touched.
+// Idempotent — safe to call repeatedly; runs BEFORE applyRoleUI so role gating sees the item.
+function ensureCosignDom(){
+  try{ if(window.TITLES && !window.TITLES.cosign) window.TITLES.cosign="Documents to Sign"; }catch(_){}
+  if(!document.getElementById("page-cosign")){
+    const anchor=document.getElementById("page-links")||document.querySelector("section.page");
+    if(anchor && anchor.parentNode){
+      const sec=document.createElement("section"); sec.className="page"; sec.id="page-cosign";
+      anchor.parentNode.insertBefore(sec, anchor.nextSibling);
+    }
+  }
+  if(!document.querySelector('.nav-item[data-page="cosign"]')){
+    const ref=document.querySelector('.nav-item[data-page="links"]')||document.querySelector('.nav-item[data-page]');
+    if(ref && ref.parentNode){
+      const nav=document.createElement("div"); nav.className="nav-item"; nav.setAttribute("data-page","cosign");
+      nav.setAttribute("onclick","go('cosign')");
+      nav.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Documents to Sign`;
+      ref.parentNode.insertBefore(nav, ref.nextSibling);
+    }
+  }
+}
+function renderCosign(){
+  ensureCosignDom();
+  const pg=$("#page-cosign"); if(!pg) return;
+  const me=(myEmail()||"").toLowerCase();
+  const mine=(EXT_SIGNOFFS||[]).filter(s=> ((s.signer_email||"").toLowerCase())===me && me);
+  const pending=mine.filter(s=> String(s.status||"").toLowerCase()==="pending");
+  const signed=mine.filter(s=> String(s.status||"").toLowerCase()==="signed")
+    .sort((a,b)=> String(b.signed_at||b.created_at||"").localeCompare(String(a.signed_at||a.created_at||"")));
+  const pendCard=(s)=>`
+    <div class="lk-row" style="display:flex;align-items:center;gap:12px;border-top:1px solid var(--line,#e4eae6);padding:11px 0;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;color:#12352a;">${esc(s.context_label||"Document")}</div>
+        ${s.signer_role?`<div class="psub" style="margin:2px 0 0;">Signing as ${esc(s.signer_role)}</div>`:""}
+      </div>
+      <button class="btn" data-cosign="${esc(s.id)}" style="flex-shrink:0;">Review &amp; sign</button>
+    </div>`;
+  const signedCard=(s)=>`
+    <div class="lk-row" style="display:flex;align-items:center;gap:12px;border-top:1px solid var(--line,#e4eae6);padding:11px 0;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;color:#12352a;">${esc(s.context_label||"Document")}</div>
+        <div class="psub" style="margin:2px 0 0;color:var(--green);">✓ Signed${s.signed_at?" "+fmtDate(s.signed_at):""}</div>
+      </div>
+      ${s.signature_data?`<img src="${s.signature_data}" alt="signature" style="height:34px;flex-shrink:0;background:#fff;border:1px solid #e2e7e4;border-radius:4px;padding:2px 4px;">`:""}
+    </div>`;
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <h2>Documents awaiting your signature</h2>
+      <div class="psub">Review each document and add your signature. You can upload a photo of your signature or draw it.</div>
+    </div>
+    <div class="panel">
+      <h2 style="font-size:15px;">To sign${pending.length?` · ${pending.length}`:""}</h2>
+      ${pending.length ? pending.map(pendCard).join("")
+        : `<div class="psub" style="border-top:1px solid var(--line,#e4eae6);padding-top:10px;">Nothing waiting for your signature right now.</div>`}
+    </div>
+    ${signed.length?`<div class="panel">
+      <h2 style="font-size:15px;">Signed recently</h2>
+      ${signed.map(signedCard).join("")}
+    </div>`:""}`;
+  $$('#page-cosign [data-cosign]').forEach(b=>b.addEventListener("click",()=>openCosignDoc(b.dataset.cosign)));
+}
+window.renderCosign=renderCosign;
+// Review-and-sign modal for one co-sign document.
+function openCosignDoc(id){
+  const row=(EXT_SIGNOFFS||[]).find(s=>String(s.id)===String(id)); if(!row) return;
+  let m=document.getElementById("cosignDocModal"); if(!m){ m=document.createElement("div"); m.id="cosignDocModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:720px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="padding:18px 22px 8px;">
+      <div style="font-size:18px;font-weight:800;color:#12352a;">Review &amp; sign</div>
+      <div class="psub" style="margin:2px 0 0;">${esc(row.context_label||"Document")}${row.signer_role?" · "+esc(row.signer_role):""}</div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:0 22px 4px;">
+      <div style="border:1px solid var(--line,#e4eae6);border-radius:10px;padding:14px;background:#fff;">${row.document_html||'<div class="psub">No document content on file.</div>'}</div>
+    </div>
+    <div style="display:flex;gap:10px;padding:14px 22px;border-top:1px solid var(--line,#e4eae6);">
+      <button class="btn ghost" id="cosignClose" type="button" style="margin-left:auto;">Close</button>
+      <button class="btn" id="cosignSign" type="button">Add your signature</button>
+    </div></div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("cosignClose").onclick=()=>m.remove();
+  document.getElementById("cosignSign").onclick=()=>{
+    captureSignatureModal({ title:"Sign this document", subtitle:row.context_label||"", cta:"Sign & submit",
+      onSign:(data)=>{ if(!data) return;
+        sb.from("external_signoffs").update({ status:"Signed", signature_data:data, signed_name:(myName()||row.signer_name||null), signed_at:new Date().toISOString() }).eq("id", row.id).then(async ({error})=>{
+          if(error){ alert(error.message); return; }
+          await loadEmployees();
+          const dm=document.getElementById("cosignDocModal"); if(dm) dm.remove();
+          renderCosign();
+        });
+      }
+    });
+  };
+}
+window.openCosignDoc=openCosignDoc;
+
 async function createScLinkForHub(sc){
   const token=(crypto&&crypto.randomUUID?crypto.randomUUID():String(Math.random())).replace(/-/g,"");
   const { error }=await sb.from("sc_links").insert({ sc_name:sc, token });

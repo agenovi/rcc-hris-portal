@@ -167,6 +167,17 @@ async function init(){
   if(session) showResumeGate(session.user); else $("#login").style.display="flex";
   sb.auth.onAuthStateChange((_e,s)=>{ if(_e==='SIGNED_OUT'){ location.reload(); } });
 }
+// Bulletproof sign-out for SHARED devices: local scope (no network dependency),
+// defensively wipe the persisted Supabase token so a stale session can't resurrect,
+// then ALWAYS reload to a clean login — even if the auth call errors. Fixes the
+// "Not you? Switch account" button appearing to do nothing (stuck on prior user).
+async function hardSignOut(){
+  try{ await sb.auth.signOut({ scope:"local" }); }catch(_){}
+  try{ Object.keys(localStorage).forEach(k=>{ if(/^sb-.*-auth-token$/.test(k)||/supabase\.auth\.token/.test(k)) localStorage.removeItem(k); }); }catch(_){}
+  try{ sessionStorage.clear(); }catch(_){}
+  location.reload();
+}
+window.hardSignOut=hardSignOut;
 // When a saved session exists (shared device), confirm identity before entering —
 // prevents landing in / signing documents under the wrong person's account.
 function showResumeGate(user){
@@ -180,7 +191,7 @@ function showResumeGate(user){
   $("#resumeName").textContent=name;
   $("#resumeEmail").textContent=email;
   $("#resumeContinue").onclick=()=>{ rc.style.display="none"; showApp(user); };
-  $("#resumeSwitch").onclick=async ()=>{ await sb.auth.signOut(); };  // SIGNED_OUT → reload → login form
+  $("#resumeSwitch").onclick=()=>hardSignOut();  // clean, reliable reset to the login form
 }
 $("#loginForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
@@ -207,7 +218,7 @@ function patchSidebarFoot(user){
       <div style="opacity:.55;font-size:11px;">Signed in</div></div>
     <button id="chgPw" title="Change password" style="background:rgba(255,255,255,.14);color:#fff;border:none;padding:6px 9px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;margin-right:6px;">🔑</button>
     <button id="signOut" style="background:rgba(255,255,255,.14);color:#fff;border:none;padding:6px 10px;border-radius:7px;font-size:11.5px;font-weight:600;cursor:pointer;">Sign out</button>`;
-  $("#signOut").addEventListener("click", async ()=>{ await sb.auth.signOut(); });
+  $("#signOut").addEventListener("click", ()=>hardSignOut());
   $("#chgPw").addEventListener("click", openChangePassword);
 }
 function openChangePassword(){
@@ -1340,7 +1351,7 @@ function openLoan(id){
     captureSignatureModal({
       title:"Approve & sign this loan",
       subtitle:`${l.applicant_name} · ${loanTypeLabel(l.loan_type)} · ${useTerm} mo`,
-      editField:{ label:"Approved amount (₱) — edit to counter-offer", value:startAmt, hint:`Requested ${peso(l.amount)}. Whatever you enter here is what gets approved &amp; put on the agreement.` },
+      editField:{ label:"Approved amount (₱) — edit to counter-offer", value:startAmt, hint:`Requested ${peso(l.amount)}. Whatever you enter here is what gets approved & put on the agreement.` },
       cta:"Approve & Sign",
       onSign:(dataUrl, extra)=>{ if(!dataUrl) return; const finalAmt=(extra&&extra.amount>0)?extra.amount:startAmt; const patch=approvePatch(finalAmt,useTerm); patch.mgmt_signature=dataUrl; patch.mgmt_signer=myName(); patch.mgmt_signed_at=new Date().toISOString(); setLoan(patch); }
     });

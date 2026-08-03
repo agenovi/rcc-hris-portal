@@ -1156,20 +1156,21 @@ function openLoan(id){
     }
     return false;
   };
-  const approvePatch=()=>{ const approver=loanApprover(l);
+  const approvePatch=(ovrAmt,ovrTerm)=>{ const approver=loanApprover(l);
     const patch={ status:"Approved", mgmt_approver:approver, agreement_token:newLoanToken(), agreement_status:"awaiting" };
-    // Counter-offer: if the Director adjusted the amount/term, approve at those figures (the borrower
-    // then consents to the adjusted amount when signing the agreement).
+    // Counter-offer: approve at the Director's adjusted amount/term. The figures are captured BEFORE the
+    // signature modal opens and passed in explicitly (so approval never falls back to the requested amount).
     const aI=document.getElementById("loanAdjAmt"), tI=document.getElementById("loanAdjTerm");
-    const adjAmt=aI?parseFloat(aI.value||""):NaN, adjTerm=tI?parseInt(tI.value||""):NaN;
-    const changed=aI && !isNaN(adjAmt) && adjAmt>0 && (adjAmt!==Number(l.amount) || (!isNaN(adjTerm)&&adjTerm!==Number(l.term_months)));
+    const domAmt=aI?parseFloat(aI.value||""):NaN, domTerm=tI?parseInt(tI.value||""):NaN;
+    const amt=(ovrAmt!=null&&!isNaN(Number(ovrAmt))&&Number(ovrAmt)>0)?Number(ovrAmt):(!isNaN(domAmt)&&domAmt>0?domAmt:Number(l.amount||0));
+    const term=(ovrTerm!=null&&!isNaN(Number(ovrTerm))&&Number(ovrTerm)>0)?Number(ovrTerm):(!isNaN(domTerm)&&domTerm>0?domTerm:Number(l.term_months||12));
+    const changed=(amt!==Number(l.amount)) || (term!==Number(l.term_months));
     if(changed){
-      const term=(!isNaN(adjTerm)&&adjTerm>0)?adjTerm:(l.term_months||12);
-      const r=loanRateOf(); patch.amount=adjAmt; patch.term_months=term;
-      patch.monthly_estimate=term?(adjAmt+adjAmt*(r/100)*(term/12))/term:0;
+      const r=loanRateOf(); patch.amount=amt; patch.term_months=term;
+      patch.monthly_estimate=term?(amt+amt*(r/100)*(term/12))/term:0;
       const ta=document.getElementById("loanNotes");
-      if(ta){ ta.value=(ta.value?ta.value+"\n":"")+`[Approved at ${peso(adjAmt)} · ${term} mo — requested ${peso(l.amount)} (${l.term_months||"?"} mo) · adjusted by ${myName()||"Director"} · ${fmtDate(new Date().toISOString())}]`; }
-      patch.agreement_body=buildLoanAgreement(Object.assign({},l,{amount:adjAmt,term_months:term}),approver);
+      if(ta){ ta.value=(ta.value?ta.value+"\n":"")+`[Approved at ${peso(amt)} · ${term} mo — requested ${peso(l.amount)} (${l.term_months||"?"} mo) · adjusted by ${myName()||"Director"} · ${fmtDate(new Date().toISOString())}]`; }
+      patch.agreement_body=buildLoanAgreement(Object.assign({},l,{amount:amt,term_months:term}),approver);
     } else {
       patch.agreement_body=buildLoanAgreement(l,approver);
     }
@@ -1205,11 +1206,17 @@ function openLoan(id){
   };
   // Item 5 — approve = sign: Director signs (saved / draw / upload) in one action → mgmt_signature.
   const loanApproveSign=()=>{
+    // Capture the (possibly adjusted) amount/term NOW, before the signature modal opens.
+    const aI=document.getElementById("loanAdjAmt"), tI=document.getElementById("loanAdjTerm");
+    const dA=aI?parseFloat(aI.value||""):NaN, dT=tI?parseInt(tI.value||""):NaN;
+    const useAmt=(!isNaN(dA)&&dA>0)?dA:Number(l.amount||0);
+    const useTerm=(!isNaN(dT)&&dT>0)?dT:Number(l.term_months||12);
+    const adj=useAmt!==Number(l.amount)||useTerm!==Number(l.term_months);
     captureSignatureModal({
       title:"Approve & sign this loan",
-      subtitle:`${l.applicant_name} · ${loanTypeLabel(l.loan_type)} · ${peso(l.amount)}`,
+      subtitle:`${l.applicant_name} · ${loanTypeLabel(l.loan_type)} · ${peso(useAmt)}${adj?` — approving at this amount (requested ${peso(l.amount)})`:""}`,
       cta:"Approve & Sign",
-      onSign:(dataUrl)=>{ if(!dataUrl) return; const patch=approvePatch(); patch.mgmt_signature=dataUrl; patch.mgmt_signer=myName(); patch.mgmt_signed_at=new Date().toISOString(); setLoan(patch); }
+      onSign:(dataUrl)=>{ if(!dataUrl) return; const patch=approvePatch(useAmt,useTerm); patch.mgmt_signature=dataUrl; patch.mgmt_signer=myName(); patch.mgmt_signed_at=new Date().toISOString(); setLoan(patch); }
     });
   };
   const adv=document.getElementById("loanAdv"); if(adv) adv.addEventListener("click",()=>{
@@ -1420,6 +1427,7 @@ function renderDashboard(){
         ${(()=>{ if(!canSeePay()) return ''; const fpAwait=(SIGNATURES||[]).filter(s=>s.doc_type==="claim"&&s.awaiting==="you"&&s.status==="pending"); return fpAwait.length?`<div class="task" style="cursor:pointer;" onclick="go('signatures')"><div class="dot r"></div><div><div class="tt">${fpAwait.length} final-pay quitclaim(s) awaiting your sign-off</div><div class="td">Full figures are on the sign screen — review &amp; e-sign in one place${fpAwait[0]?` · e.g. ${esc(fpAwait[0].subject_name||"")} ${fpAwait[0].amount!=null?"("+peso(fpAwait[0].amount)+")":""}`:""}</div></div><div class="due r">sign-off</div></div>`:''; })()}
         ${(()=>{ if(!canSeeMovements()) return ''; const mine=(NPAS||[]).filter(r=>{ const st=mvCanSignNow(r); return st!=null; }); return mine.length?`<div class="task" style="cursor:pointer;" onclick="go('movements')"><div class="dot r"></div><div><div class="tt">${mine.length} personnel movement(s) awaiting your sign-off</div><div class="td">Notice of Personnel Action — review the figures &amp; e-sign${mine[0]?" · e.g. "+esc(mine[0].employee_name||""):""}</div></div><div class="due r">sign-off</div></div>`:''; })()}
         ${(()=>{ if(!isAdminUser()) return ''; const sep=(EXITCASES||[]).filter(e=>e.separation_status==="Submitted"&&e.overall_status!=="Complete"); return sep.length?`<div class="task" style="cursor:pointer;" onclick="go('exit')"><div class="dot r"></div><div><div class="tt">${sep.length} separation(s) awaiting your approval</div><div class="td">HR prepared these — approve to flip the employee to Separated${sep[0]?" · e.g. "+esc(sep[0].employee_name||""):""}</div></div><div class="due r">approve</div></div>`:''; })()}
+        ${(()=>{ const _al=(typeof allowedPages==="function"?allowedPages():null); if(_al && _al.indexOf("loans")===-1) return ''; const mine=(typeof LOANS!=="undefined"?LOANS:[]).filter(l=>typeof loanIsMine==="function"&&loanIsMine(l)); if(!mine.length) return ''; const isAdm=isAdminUser(); return `<div class="task" style="cursor:pointer;" onclick="go('loans')"><div class="dot r"></div><div><div class="tt">${mine.length} loan${mine.length!==1?"s":""} waiting on you</div><div class="td">${isAdm?"At Management — review, adjust the amount if needed &amp; Approve &amp; Sign":"At HR review — check &amp; send up to Management"}${mine[0]?" · e.g. "+esc(mine[0].applicant_name||"")+" "+peso(mine[0].amount):""}</div></div><div class="due r">${isAdm?"approve":"review"}</div></div>`; })()}
         ${(()=>{ if(!canSeeConcerns()) return ''; const hs=(CONCERNS||[]).filter(c=>{ const n=daysUntil(c.next_hearing); return n!=null&&n<=14&&(c.status==="Open"||c.status==="Ongoing"); }).sort((a,b)=>daysUntil(a.next_hearing)-daysUntil(b.next_hearing)); if(!hs.length) return ''; const c0=hs[0]; const n0=daysUntil(c0.next_hearing); const when=n0<0?`overdue ${-n0}d`:n0===0?"today":`in ${n0}d`; return `<div class="task" style="cursor:pointer;" onclick="go('concerns')"><div class="dot r"></div><div><div class="tt">${hs.length} case hearing${hs.length!==1?"s":""} within 14 days</div><div class="td">${esc(c0.title||"Case")} — ${when}${c0.forum?" · "+esc(c0.forum):""}</div></div><div class="due r">hearing</div></div>`; })()}
         ${phReady?`<div class="task" style="cursor:pointer;" onclick="go('prehire')"><div class="dot r"></div><div><div class="tt">${phReady} candidate(s) ready for contract / onboarding</div><div class="td">Move them into an onboarding case</div></div><div class="due r">hiring</div></div>`:''}
         ${onbTasksOpen?`<div class="task" style="cursor:pointer;" onclick="go('onboarding')"><div class="dot a"></div><div><div class="tt">${onbTasksOpen} open onboarding task(s)</div><div class="td">${onbOpen} case(s) in progress — bank, uniform, gov forms, Employee ID</div></div><div class="due a">onboarding</div></div>`:''}

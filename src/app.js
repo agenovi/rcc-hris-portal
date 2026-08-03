@@ -630,12 +630,31 @@ function loanIsHrSelfApp(l){
   if(e && /\bhr\b|human resource/i.test((String(e.department||"")+" "+String(e.position||"")))) return true;
   return false;
 }
-// Eligibility snapshot for the loan review — reads the linked roster record + open loans.
-function loanEligibilityHtml(l){
-  const redFlags=[];
+// Employee-facing improvement guidance per flag code (Item 1 — decline with guidance).
+const LOAN_DECLINE_GUIDE={
+  attendance:"Keep regular attendance — no unauthorized absences or excessive tardiness — for the next 3 months.",
+  probation:"Reach regular status / the required length of service, then reapply.",
+  tenure_moto:"A motorcycle loan needs at least 2 years of service — reach the required tenure, then reapply.",
+  agency:"Company loans are for direct hires.",
+  status_inactive:"Your employment record must be Active.",
+  active_rcc_loan:"Fully settle your current company loan first (one loan at a time).",
+  over_15pct:"Your current monthly obligations are high. Reduce existing deductions or apply for a smaller amount / longer term.",
+  docs:"Complete the required documents (payslip, valid ID, and proof for your loan type).",
+  no_roster:"Complete the required documents (payslip, valid ID, and proof for your loan type).",
+  hr_self:"This application must be reviewed by Management (Director), not HR.",
+  open_exit:"There is an open exit / clearance on file — this is settled through your final pay, not a new loan.",
+  cooldown:"You were recently advised to reapply later — please wait until the advised date.",
+  purpose:"This purpose may fall outside what company loans cover — please discuss it with HR first."
+};
+// Single source of truth for the loan review's flags. Returns structured red/amber flags
+// ({code,label,html,guidance}) reused by the eligibility box, the verdict badge (Item 3) and
+// the decline-with-guidance modal (Item 1). Synchronous only — attendance/15% are folded in later.
+function loanFlagSummary(l){
+  const red=[], amber=[];
+  const push=(arr,code,html,label,guidance)=>arr.push({code,html,label,guidance:guidance||LOAN_DECLINE_GUIDE[code]||label});
   // Item 2 — HR-staff self-application (segregation of duties)
-  if(loanIsHrSelfApp(l)) redFlags.push(`⛔ <b>HR-staff self-application</b> — segregation of duties. HR cannot review its own loan; this must be decided by Management (Director).`);
-  // Item 10 — open exit / separating employee (EXITCASES + SEPARATION_REVIEW are already in memory)
+  if(loanIsHrSelfApp(l)) push(red,"hr_self",`⛔ <b>HR-staff self-application</b> — segregation of duties. HR cannot review its own loan; this must be decided by Management (Director).`,"HR-staff self-application (segregation of duties)");
+  let e=null, tenureTxt="—", ct="—", stTxt="—", src="—", ty=null;
   if(l.employee_id){
     // Loans carry the PayPlus id; exit_clearance links by the employee's internal UUID (employees.id).
     // Bridge through the EMPLOYEES roster, with a name-order-agnostic fallback.
@@ -648,32 +667,83 @@ function loanEligibilityHtml(l){
     const openExit=ex.find(x=>_matchExit(x) && x.overall_status!=="Complete" && x.overall_status!=="Cancelled");
     const sepSub=ex.find(x=>_matchExit(x) && x.separation_status==="Submitted");
     const sepRev=(typeof SEPARATION_REVIEW!=="undefined"?SEPARATION_REVIEW:[]).find(x=>String(x.employee_id)===String(l.employee_id)||(_appNk&&_nk(x.full_name)===_appNk));
-    if(openExit||sepSub||sepRev) redFlags.push(`⚠ <b>This employee has an open exit / is separating</b> — a new loan may only be recoverable from final pay. Confirm before granting.`);
+    // Item 10 — open exit / separating employee
+    if(openExit||sepSub||sepRev) push(red,"open_exit",`⚠ <b>This employee has an open exit / is separating</b> — a new loan may only be recoverable from final pay. Confirm before granting.`,"Open exit / separating employee");
+    // Item 1 — 3-month cooldown: any prior loan for this ID declined with a future reapply_after date.
+    const today=new Date().toISOString().slice(0,10);
+    const cd=(typeof LOANS!=="undefined"?LOANS:[]).filter(x=>String(x.employee_id)===String(l.employee_id) && String(x.id)!==String(l.id) && x.reapply_after && String(x.reapply_after).slice(0,10)>today)
+      .sort((a,b)=>String(b.reapply_after).localeCompare(String(a.reapply_after)))[0];
+    if(cd) push(red,"cooldown",`⛔ <b>Declined ${cd.declined_at?fmtDate(cd.declined_at):"previously"}</b> — advised to reapply after <b>${fmtDate(cd.reapply_after)}</b>. Cooldown not yet met.`,`Cooldown not met — reapply after ${fmtDate(cd.reapply_after)}`);
+    e=(typeof EMPLOYEES!=="undefined"?EMPLOYEES:[]).find(x=>String(x.employee_id)===String(l.employee_id));
+    if(e){
+      ty=tenureYears(e.hire_date);
+      tenureTxt=ty!=null?(ty<1?Math.round(ty*12)+" months":ty.toFixed(1)+" years")+(e.hire_date?` (since ${fmtDate(e.hire_date)})`:""):"no hire date on file";
+      ct=e.contract_type||"—"; stTxt=e.status||"—"; src=e.hire_source||e.group_name||"Direct";
+      if((e.status||"")!=="Active") push(amber,"status_inactive",`⚠ Roster status is <b>${esc(e.status||"unknown")}</b> — loans are for active employees.`,`Roster status is ${e.status||"unknown"} — loans are for active employees`);
+      if(/probation/i.test(ct)) push(amber,"probation",`⚠ <b>Probationary</b> — moto & discretionary loans need regular status / minimum tenure.`,"Probationary — moto & discretionary loans need regular status / minimum tenure");
+      if(ty!=null && ty<2 && l.loan_type==="moto") push(amber,"tenure_moto",`⚠ Motorcycle loan needs <b>2+ years</b> tenure (currently ${ty.toFixed(1)}y).`,`Motorcycle loan needs 2+ years tenure (currently ${ty.toFixed(1)}y)`);
+      if(/jell|m&g|^mg|agency/i.test(src)) push(amber,"agency",`⚠ Appears <b>agency-placed</b> (${esc(src)}) — company loans are for direct hires; confirm.`,`Appears agency-placed (${src}) — company loans are for direct hires`);
+    } else {
+      push(amber,"no_roster",`⚠ No roster record found for ID ${esc(l.employee_id)} — verify the employee exists in PayPlus.`,`No roster record found for ID ${l.employee_id}`);
+    }
+    // Second active loan (clear-first rule): any OTHER portal loan for this ID not Rejected/Released…
+    const others=(typeof LOANS!=="undefined"?LOANS:[]).filter(x=>String(x.employee_id)===String(l.employee_id) && String(x.id)!==String(l.id) && !["Rejected","Released"].includes(x.status));
+    if(others.length) push(amber,"active_rcc_loan",`⚠ <b>${others.length} other open loan application(s)</b> in the portal (${esc(others.map(o=>o.loan_ref).join(", "))}) — clear-first rule.`,`${others.length} other open loan application(s) in the portal — clear-first rule`);
   }
-  const redHtml=redFlags.length?`<div style="margin-bottom:10px;display:flex;flex-direction:column;gap:6px;">${redFlags.map(f=>`<div style="padding:8px 11px;border-radius:9px;background:#fdecea;border:1px solid #f1c9c5;color:#a12622;font-size:13px;">${f}</div>`).join("")}</div>`:"";
+  // Item 4 — purpose policy hint (amber, non-blocking)
+  const pm=String(l.purpose||"").match(/wedding|debut|vacation|travel|gadget|phone|appliance|invest|business capital|bet|gambl/i);
+  if(pm) push(amber,"purpose",`⚠ Purpose may fall outside loan policy (${esc(pm[0])}) — confirm it qualifies.`,`Purpose may fall outside loan policy (${pm[0]})`);
+  const level=red.length?"red":(amber.length?"amber":"green");
+  const top=red.length?red[0].label:(amber.length?amber[0].label:"");
+  return {level,red,amber,redCount:red.length,amberCount:amber.length,top,noEmpId:!l.employee_id,hasEmp:!!e,disp:{tenureTxt,ct,stTxt,src}};
+}
+// Item 3 — one-glance verdict badge at the top of the loan modal.
+function loanVerdictBadgeHtml(l){
+  const s=loanFlagSummary(l);
+  let bg,bd,fg,icon,txt;
+  if(s.level==="red"){ bg="#fdecea";bd="#f1c9c5";fg="#a12622";icon="⛔";txt="Not eligible"; }
+  else if(s.level==="amber"){ bg="#fbeee6";bd="#ecdca6";fg="#8a5a00";icon="⚠";txt=`Review flags (${s.amberCount})`; }
+  else { bg="#e6f4ea";bd="#bfe0c8";fg="#1f6b3a";icon="✓";txt="Ready to approve"; }
+  const top=s.top?`<div style="font-weight:500;font-size:12.5px;margin-top:2px;opacity:.92;">${esc(s.top)}</div>`:"";
+  return `<div id="loanVerdict" data-lvl="${s.level}" style="margin:0 0 14px;padding:12px 15px;border-radius:11px;background:${bg};border:1px solid ${bd};color:${fg};">
+    <div style="font-size:15px;font-weight:800;">${icon} ${txt}</div>${top}</div>`;
+}
+// Eligibility snapshot for the loan review — renders from loanFlagSummary so it stays in sync with the badge.
+function loanEligibilityHtml(l){
+  const s=loanFlagSummary(l);
+  const redHtml=s.red.length?`<div style="margin-bottom:10px;display:flex;flex-direction:column;gap:6px;">${s.red.map(f=>`<div style="padding:8px 11px;border-radius:9px;background:#fdecea;border:1px solid #f1c9c5;color:#a12622;font-size:13px;">${f.html}</div>`).join("")}</div>`:"";
   if(!l.employee_id) return `${redHtml}<div class="note">No Employee ID linked yet — link the PayPlus ID to see tenure, status and second-loan checks.</div>`;
-  const e=EMPLOYEES.find(x=>String(x.employee_id)===String(l.employee_id));
-  const flags=[];
-  let tenureTxt="—", ct="—", stTxt="—", src="—";
-  if(e){
-    const ty=tenureYears(e.hire_date);
-    tenureTxt=ty!=null?(ty<1?Math.round(ty*12)+" months":ty.toFixed(1)+" years")+(e.hire_date?` (since ${fmtDate(e.hire_date)})`:""):"no hire date on file";
-    ct=e.contract_type||"—"; stTxt=e.status||"—"; src=e.hire_source||e.group_name||"Direct";
-    if((e.status||"")!=="Active") flags.push(`⚠ Roster status is <b>${esc(e.status||"unknown")}</b> — loans are for active employees.`);
-    if(/probation/i.test(ct)) flags.push(`⚠ <b>Probationary</b> — moto & discretionary loans need regular status / minimum tenure.`);
-    if(ty!=null && ty<2 && l.loan_type==="moto") flags.push(`⚠ Motorcycle loan needs <b>2+ years</b> tenure (currently ${ty.toFixed(1)}y).`);
-    if(/jell|m&g|^mg|agency/i.test(src)) flags.push(`⚠ Appears <b>agency-placed</b> (${esc(src)}) — company loans are for direct hires; confirm.`);
-  } else {
-    flags.push(`⚠ No roster record found for ID ${esc(l.employee_id)} — verify the employee exists in PayPlus.`);
-  }
-  // Second active loan (clear-first rule): any OTHER portal loan for this ID not Rejected/Released…
-  const others=(typeof LOANS!=="undefined"?LOANS:[]).filter(x=>String(x.employee_id)===String(l.employee_id) && String(x.id)!==String(l.id) && !["Rejected","Released"].includes(x.status));
-  if(others.length) flags.push(`⚠ <b>${others.length} other open loan application(s)</b> in the portal (${esc(others.map(o=>o.loan_ref).join(", "))}) — clear-first rule.`);
-  return `${redHtml}${phRow("Tenure",tenureTxt)}${phRow("Contract type",ct)}${phRow("Roster status",stTxt)}${phRow("Source",src)}
+  const flags=s.amber;
+  return `${redHtml}${phRow("Tenure",s.disp.tenureTxt)}${phRow("Contract type",s.disp.ct)}${phRow("Roster status",s.disp.stTxt)}${phRow("Source",s.disp.src)}
     ${flags.length
-      ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">${flags.map(f=>`<div style="padding:8px 11px;border-radius:9px;background:#fbeee6;border:1px solid #ecdca6;font-size:13px;">${f}</div>`).join("")}</div>`
+      ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">${flags.map(f=>`<div style="padding:8px 11px;border-radius:9px;background:#fbeee6;border:1px solid #ecdca6;font-size:13px;">${f.html}</div>`).join("")}</div>`
       : `<div style="margin-top:10px;padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;"><b style="color:var(--green);">✓ No eligibility flags</b> — active, and no other open loan.</div>`}`;
 }
+// Item 1 — printable, RCC-letterhead-style guidance page (mirrors printLoanAgreement's plain-print style).
+function printLoanGuidance(l,remark){
+  const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to print the guidance."); return; }
+  const E=s=>String(s==null?"":s).replace(/[&<>]/g,x=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[x]));
+  const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${E(l.loan_ref||"Loan")} — Loan application update</title><style>
+    *{box-sizing:border-box}body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1a1a1a;font-size:13px;line-height:1.6;margin:28px;}
+    .lh{text-align:center;border-bottom:2px solid #1E3A5F;padding-bottom:8px;margin-bottom:4px;}
+    .co{font-size:16px;font-weight:800;color:#1E3A5F;letter-spacing:.4px;}.addr{font-size:10px;color:#666;margin-top:2px;}
+    .title{text-align:center;font-size:13px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;margin:14px 0 1px;}
+    .ref{text-align:center;font-size:11px;color:#666;margin-bottom:14px;}
+    .body{white-space:pre-wrap;max-width:680px;margin:0 auto;}
+    .foot{margin-top:24px;border-top:1px solid #cfcfcf;padding-top:6px;font-size:9.5px;color:#888;text-align:center;}
+    @media print{body{margin:14mm;}}
+  </style></head><body>
+    <div class="lh"><div class="co">ROSHAN COMMERCIAL CORPORATION</div><div class="addr">104 Shaw Blvd, Pasig City</div></div>
+    <div class="title">Loan Application — Update &amp; Guidance</div>
+    <div class="ref">${E(l.loan_ref||"")} · ${today}</div>
+    <div class="body">${E(remark||l.decline_reason||"")}</div>
+    <div class="foot"><b>THE RIGHT MOVE</b> · 3rd Floor RCC Center, 104 Shaw Blvd, Pasig City 1603 · +632 8638 6556<br>Generated ${today} from the RCC HRIS.</div>
+    <scr`+`ipt>window.onload=function(){setTimeout(function(){window.print();},150);}</scr`+`ipt>
+  </body></html>`;
+  w.document.write(html); w.document.close();
+}
+window.printLoanGuidance=printLoanGuidance;
 function newLoanToken(){ try{ if(crypto&&crypto.randomUUID) return crypto.randomUUID().replace(/-/g,""); }catch(e){} return Date.now().toString(36)+Math.random().toString(36).slice(2,12); }
 // DOLE-cleaned loan agreement (Art. 113 compliant; no void post-separation penalty interest).
 function buildLoanAgreement(l,approver){
@@ -827,11 +897,26 @@ function renderLoans(){
         <div class="kpi" data-lf="approved" style="cursor:pointer;" onclick="setLoanFilter('approved')"><div class="k-l">Approved / Released</div><div class="k-n">${approved}</div></div>
         <div class="kpi" data-lf="all" style="cursor:pointer;" onclick="setLoanFilter('all')"><div class="k-l">Total Applications</div><div class="k-n">${LOANS.length}</div></div>
       </div>
+      <div id="loanExposure" style="display:none;margin-top:8px;font-size:13px;color:var(--muted);"></div>
       ${LOANS.length?`<table><thead><tr><th>Ref</th><th>Applicant</th><th>Type</th><th>Amount</th><th>Monthly (est.)</th><th>Status</th></tr></thead>
         <tbody id="loanRows"></tbody></table>`
         : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1E3A5F" stroke-width="2"><path d="M12 1v22M5 8h9a3 3 0 010 6H7"/></svg></div><h2>No applications yet</h2><p>Share the employee application link above. Submissions appear here automatically.</p></div>`}
     </div>`;
   renderLoanRows();
+  // Item 6 — total RCC company loan exposure (active history outstanding + approved-not-released portal loans; gov't excluded).
+  (async()=>{
+    const el=document.getElementById("loanExposure"); if(!el) return;
+    try{
+      const {data,error}=await sb.from("loan_history").select("employee_id,loan_type,outstanding,status");
+      if(error) return;
+      const active=(data||[]).filter(r=>r.status==="Active" && !isGovtLoan(r.loan_type));
+      let sum=active.reduce((s,r)=>s+Number(r.outstanding||0),0);
+      const emps=new Set(active.map(r=>String(r.employee_id)));
+      LOANS.filter(l=>l.status==="Approved").forEach(l=>{ sum+=Number(l.amount||0); emps.add(String(l.employee_id||l.id)); });
+      el.innerHTML=`Company loan exposure: <b>₱${sum.toLocaleString(undefined,{maximumFractionDigits:0})}</b> out across ${emps.size} employee${emps.size===1?"":"s"} <span class="psub">· active company loans + approved-not-released · gov't excluded</span>`;
+      el.style.display="";
+    }catch(e){ /* hide the line if the aggregate can't be fetched */ }
+  })();
 }
 function openLoan(id){
   const l=LOANS.find(x=>String(x.id)===String(id)); if(!l) return;
@@ -846,6 +931,7 @@ function openLoan(id){
       <div style="font-size:12.5px;opacity:.9;">${esc(l.loan_ref)} · ${esc(loanTypeLabel(l.loan_type))} · ${peso(l.amount)}</div>
     </div>
     <div style="padding:18px 22px 60px;">
+      ${loanVerdictBadgeHtml(l)}
       <div class="panel" style="margin-top:0;">
         <h2>Application</h2>
         ${phRow("Loan type",loanTypeLabel(l.loan_type))}${phRow("Amount",peso(l.amount))}${phRow("Term",(l.term_months||"—")+" months")}${phRow("Est. monthly",peso(l.monthly_estimate))}${phRow("Mobile",l.contact_number)}${phRow("Email",l.email)}${phRow("Employee ID",l.employee_id)}${phRow("Position",l.department)}${phRow("Take-home given",l.net_pay?peso(l.net_pay):"—")}${phRow("Purpose",l.purpose)}${phRow("Authorized",l.authorized?"Applied & consented online (RA 8792)":"—")}
@@ -880,6 +966,37 @@ function openLoan(id){
       <div class="panel" style="border:2px solid #cfe0d4;">
         <h2>Affordability — 15%-of-pay rule</h2>
         <div id="loanAfford"><div class="psub">Calculating…</div></div>
+      </div>
+      <div class="panel">
+        <h2>Repayment schedule</h2>
+        <details>
+          <summary style="cursor:pointer;font-size:13px;font-weight:700;color:#1E3A5F;">Show per-cut-off deductions</summary>
+          <div style="margin-top:10px;">${(()=>{
+            const amt=Number(l.amount||0), term=Number(l.term_months||0);
+            if(!amt||!term) return `<div class="psub">Needs an amount and term to preview a schedule.</div>`;
+            const rate=(typeof LOAN_RATES!=="undefined"?LOAN_RATES[l.loan_type]:null)??12;
+            const total=amt+amt*(rate/100)*(term/12), monthly=total/term, perCut=monthly/2;
+            const nCut=term*2, maxRows=Math.min(nCut,24); let bal=total, rows="";
+            for(let k=1;k<=maxRows;k++){ bal=Math.max(0,bal-perCut); const mo=Math.ceil(k/2), half=(k%2===1)?"15th":"30th"; rows+=`<tr><td>${k}</td><td>Month ${mo}, ${half}</td><td style="text-align:right;">${peso(perCut)}</td><td style="text-align:right;">${peso(bal)}</td></tr>`; }
+            const more=nCut>maxRows?`<tr><td colspan="4" class="psub" style="padding-top:6px;">…and ${nCut-maxRows} more cut-off(s), ending at ₱0.</td></tr>`:"";
+            return `<div class="psub" style="margin-bottom:7px;">Based on the <b>requested</b> amount (${peso(amt)} · ${term} mo · ${rate}%/yr flat). Total payable ${peso(total)} · ${peso(monthly)}/mo · ${peso(perCut)}/cut-off (payroll 15th &amp; 30th). Adjust in the approve box above for the final schedule.</div>
+              <table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr style="color:var(--muted);text-align:left;"><th>Cut-off</th><th>When</th><th style="text-align:right;">Deduction</th><th style="text-align:right;">Balance</th></tr></thead><tbody>${rows}${more}</tbody></table>`;
+          })()}</div>
+        </details>
+      </div>
+      <div class="panel">
+        <h2>Required documents <span style="font-size:12px;font-weight:600;color:var(--muted);">— checklist (guidance)</span></h2>
+        ${(()=>{
+          const t=l.loan_type, list=["Payslip","Valid government ID"];
+          const health=/medical|health|hospital|clinic|surgery|med[- ]?cert|prescription|illness|sick|dental|maternity|confinement|treatment/i.test(String(l.purpose||""));
+          if(t==="educational") list.push("Enrollment assessment","Grades / report card","Child's signed waiver");
+          else if(t==="moto") list.push("OR/CR or dealer quote","Proof of 10% down payment");
+          else if(t==="emergency"||t==="discretionary"){ if(health) list.push("Medical proof (prescription / bill / med-cert)"); else list.push("Proof of the stated purpose"); }
+          const docCount=(Array.isArray(l.documents)?l.documents.length:0);
+          return `<div class="psub" style="margin-bottom:8px;">${docCount} file(s) attached on this application. Tick each as you verify it — this is a display aid, not saved.</div>
+            ${list.map(d=>`<label style="display:flex;gap:9px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px;cursor:pointer;"><input type="checkbox"> ${esc(d)}</label>`).join("")}
+            ${t==="educational"?`<div class="psub" style="margin-top:8px;">Release stays blocked for educational loans until the signed waiver is on file.</div>`:""}`;
+        })()}
       </div>
       <div class="panel">
         <h2>Recent attendance <span style="font-size:12px;font-weight:600;color:var(--muted);">— last 3 months (PayPlus)</span></h2>
@@ -950,6 +1067,10 @@ function openLoan(id){
         <h2>Status</h2>
         <div class="psub">Current: ${loanStatusPill(l.status)}</div>
         ${l.mgmt_signature?`<div style="margin-top:8px;padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;"><b style="color:var(--green);">Approved &amp; signed</b> by ${esc(l.mgmt_signer||"")}${l.mgmt_signed_at?(" · "+fmtDate(l.mgmt_signed_at)):""}<br><img src="${esc(l.mgmt_signature)}" alt="signature" style="max-height:70px;margin-top:6px;border:1px solid var(--line);border-radius:6px;background:#fff;"></div>`:""}
+        ${l.decline_reason?`<div style="margin-top:8px;padding:10px 12px;border-radius:9px;background:#fbeee6;border:1px solid #ecdca6;font-size:13px;">
+          <b style="color:#8a5a00;">Declined with guidance</b>${l.declined_at?(" · "+fmtDate(l.declined_at)):""}${l.reapply_after?` · reapply after <b>${fmtDate(l.reapply_after)}</b>`:""}
+          <div class="esub" style="white-space:pre-wrap;margin-top:5px;">${esc(l.decline_reason)}</div>
+          <button class="btn ghost" id="loanReprintGuide" style="margin-top:8px;padding:4px 10px;font-size:12px;">View / reprint guidance</button></div>`:""}
         <textarea id="loanNotes" rows="2" placeholder="HR notes…" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin-top:8px;">${esc(l.hr_notes||"")}</textarea>
         ${(stage.canAct && (l.status==="HR Review"||l.status==="Management"))?`
         <div style="margin-top:10px;padding:11px 13px;border-radius:10px;background:#f4f8f5;border:1px solid #cfe0d4;">
@@ -967,6 +1088,7 @@ function openLoan(id){
             : `<div style="flex:1 1 100%;padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;">⏳ Waiting on <b>${esc(stage.label)}</b> — you can review but it's not your turn.</div>`)
             :""}
           ${(l.status!=="Submitted"&&l.status!=="Rejected"&&l.status!=="Released")?`<button class="btn ghost" id="loanBack" style="color:#8a5a00;border-color:#ecdca6;">↩ Send back to HR</button>`:""}
+          ${!["Approved","Released","Rejected"].includes(l.status)?`<button class="btn ghost" id="loanDecline" style="color:#8a5a00;border-color:#ecdca6;">Decline with guidance</button>`:""}
           ${l.status!=="Rejected"&&l.status!=="Released"?`<button class="btn ghost" id="loanRej" style="color:var(--red);border-color:#f1c9c5;">Reject</button>`:""}
           ${l.status==="Approved"?`<button class="btn" id="loanRel">Mark Released</button>`:""}
           ${l.status==="Rejected"?`<button class="btn ghost" id="loanUndoRej" style="color:#1f6b3a;border-color:#cfe6d6;">↩ Undo reject → HR Review</button>`:""}
@@ -1087,8 +1209,11 @@ function openLoan(id){
       if(!ms.length){ box.innerHTML=`<div class="note" style="background:#fffaf0;border-color:#f0d9a6;">No attendance found in the last 3 months — may be agency (not enrolled) or newly hired. Verify manually.</div>`; return; }
       const totAbs=ms.reduce((s,x)=>s+Number(x.absent||0),0);
       const flag=totAbs>=6;
+      box.dataset.attFlag=flag?"1":"0"; box.dataset.totAbs=String(totAbs);   // read by the decline modal (Item 1)
       box.innerHTML=`<table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr style="color:var(--muted);"><th style="text-align:left;">Month</th><th style="text-align:right;">Present</th><th style="text-align:right;">Absent</th><th style="text-align:right;">Late(m)</th><th style="text-align:right;">UT(m)</th></tr></thead><tbody>${ms.map(x=>`<tr><td>${esc(x.month)}</td><td style="text-align:right;">${Number(x.present||0)}</td><td style="text-align:right;${Number(x.absent||0)>=3?'color:var(--red);font-weight:700;':''}">${x.absent||0}</td><td style="text-align:right;">${Number(x.lateMinutes||0).toFixed(0)}</td><td style="text-align:right;">${Number(x.undertimeMinutes||0).toFixed(0)}</td></tr>`).join("")}</tbody></table>
         <div style="margin-top:8px;padding:9px 12px;border-radius:9px;font-size:13px;background:${flag?'#fbeee6':'#eef4ef'};border:1px solid ${flag?'#ecdca6':'#cfe0d4'};">${flag?`<b style="color:#b26a00;">⚠ ${totAbs} absences across 3 months</b> — check attendance/reliability before granting a loan.`:`${totAbs} absences across 3 months — attendance looks steady.`}</div>`;
+      // Item 3 — fold attendance into the verdict badge (only ever escalate green → amber, never downgrade).
+      if(flag){ const bv=document.getElementById("loanVerdict"); if(bv && bv.dataset.lvl==="green"){ bv.dataset.lvl="amber"; bv.style.background="#fbeee6"; bv.style.borderColor="#ecdca6"; bv.style.color="#8a5a00"; bv.innerHTML=`<div style="font-size:15px;font-weight:800;">⚠ Review flags (1)</div><div style="font-weight:500;font-size:12.5px;margin-top:2px;opacity:.92;">Attendance — ${totAbs} absences over 3 months</div>`; } }
     }catch(e){ box.innerHTML=`<div class="note">Couldn't reach PayPlus: ${esc(String(e&&e.message||e))}</div>`; }
   })();
   (async()=>{
@@ -1206,17 +1331,18 @@ function openLoan(id){
   };
   // Item 5 — approve = sign: Director signs (saved / draw / upload) in one action → mgmt_signature.
   const loanApproveSign=()=>{
-    // Capture the (possibly adjusted) amount/term NOW, before the signature modal opens.
+    // Prefill the editable amount with the (possibly counter-offered) figure; the Director can edit it
+    // right in the approve dialog. Whatever's in the box on Approve is the amount that gets saved.
     const aI=document.getElementById("loanAdjAmt"), tI=document.getElementById("loanAdjTerm");
     const dA=aI?parseFloat(aI.value||""):NaN, dT=tI?parseInt(tI.value||""):NaN;
-    const useAmt=(!isNaN(dA)&&dA>0)?dA:Number(l.amount||0);
+    const startAmt=(!isNaN(dA)&&dA>0)?dA:Number(l.amount||0);
     const useTerm=(!isNaN(dT)&&dT>0)?dT:Number(l.term_months||12);
-    const adj=useAmt!==Number(l.amount)||useTerm!==Number(l.term_months);
     captureSignatureModal({
       title:"Approve & sign this loan",
-      subtitle:`${l.applicant_name} · ${loanTypeLabel(l.loan_type)} · ${peso(useAmt)}${adj?` — approving at this amount (requested ${peso(l.amount)})`:""}`,
+      subtitle:`${l.applicant_name} · ${loanTypeLabel(l.loan_type)} · ${useTerm} mo`,
+      editField:{ label:"Approved amount (₱) — edit to counter-offer", value:startAmt, hint:`Requested ${peso(l.amount)}. Whatever you enter here is what gets approved &amp; put on the agreement.` },
       cta:"Approve & Sign",
-      onSign:(dataUrl)=>{ if(!dataUrl) return; const patch=approvePatch(useAmt,useTerm); patch.mgmt_signature=dataUrl; patch.mgmt_signer=myName(); patch.mgmt_signed_at=new Date().toISOString(); setLoan(patch); }
+      onSign:(dataUrl, extra)=>{ if(!dataUrl) return; const finalAmt=(extra&&extra.amount>0)?extra.amount:startAmt; const patch=approvePatch(finalAmt,useTerm); patch.mgmt_signature=dataUrl; patch.mgmt_signer=myName(); patch.mgmt_signed_at=new Date().toISOString(); setLoan(patch); }
     });
   };
   const adv=document.getElementById("loanAdv"); if(adv) adv.addEventListener("click",()=>{
@@ -1279,6 +1405,63 @@ function openLoan(id){
     await logChange("loan",l.id,l.applicant_name,"Sent back to HR",l.loan_ref+" — "+c.trim().slice(0,80));
     await loadEmployees(); m.remove();
   });
+  // Item 1 — Decline with guidance + 3-month cooldown.
+  const reprint=document.getElementById("loanReprintGuide"); if(reprint) reprint.addEventListener("click",()=>printLoanGuidance(l,l.decline_reason));
+  const buildDeclineRemark=(items,raStr)=>{
+    const lines=items.map(it=>`• ${it.label} — ${it.guidance}`).join("\n");
+    return `Hi ${l.applicant_name||"there"}, thank you for your loan application. We're unable to proceed right now because of the following:\n${lines}\n\nTo improve your standing, please work on the items above. You're welcome to reapply after ${fmtDate(raStr)} (about 3 months). This is not a penalty — it's to make sure a loan works for you.`;
+  };
+  const loanDeclineModal=()=>{
+    // Collect the current flags: eligibility (sync) + attendance (from #loanAtt) + 15% (from #loanAfford).
+    const s=loanFlagSummary(l);
+    const items=[...s.red,...s.amber].map(f=>({code:f.code,label:f.label,guidance:f.guidance,on:true}));
+    const att=document.getElementById("loanAtt");
+    const attOn=att && att.dataset && att.dataset.attFlag==="1";
+    items.push({code:"attendance",label:attOn?`Poor attendance (${att.dataset.totAbs||""} absences over 3 months)`:"Attendance",guidance:LOAN_DECLINE_GUIDE.attendance,on:!!attOn});
+    const aff=document.getElementById("loanAfford");
+    if(aff && /over the 15% guide/i.test(aff.textContent||"")) items.push({code:"over_15pct",label:"Monthly obligations over the 15% guide",guidance:LOAN_DECLINE_GUIDE.over_15pct,on:true});
+    const ra=new Date(); ra.setMonth(ra.getMonth()+3); const raStr=ra.toISOString().slice(0,10);
+    let dm=document.getElementById("loanDeclineModal"); if(!dm){ dm=document.createElement("div"); dm.id="loanDeclineModal"; document.body.appendChild(dm); }
+    dm.style.cssText="position:fixed;inset:0;z-index:10004;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+    const chkRows=items.map((it,i)=>`<label style="display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;cursor:pointer;">
+      <input type="checkbox" class="lde-chk" data-i="${i}" ${it.on?"checked":""} style="margin-top:2px;">
+      <div><div style="font-weight:700;">${esc(it.label)}</div><div class="esub">${esc(it.guidance)}</div></div></label>`).join("");
+    dm.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
+      <div style="font-size:18px;font-weight:800;color:#12352a;margin-bottom:3px;">Decline with guidance</div>
+      <div class="psub" style="margin-bottom:10px;">Tick the items to include. The employee gets plain-language guidance and a <b>3-month</b> reapply date (${fmtDate(raStr)}). This is a fair-notice decline, not a penalty.</div>
+      <div style="border-top:1px solid var(--line);">${chkRows||`<div class="psub" style="padding:8px 0;">No flags were auto-detected — tick nothing to send a general note, or add your own wording below.</div>`}</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
+        <label style="font-size:12px;font-weight:700;color:var(--muted);">Message to the employee</label>
+        <button class="btn ghost" id="ldeRebuild" type="button" style="margin-left:auto;padding:4px 10px;font-size:12px;">↻ Rebuild from ticked items</button>
+      </div>
+      <textarea id="ldeRemark" rows="9" style="width:100%;margin-top:6px;padding:10px 11px;border:1px solid var(--line);border-radius:8px;font-size:13px;line-height:1.5;">${esc(buildDeclineRemark(items.filter(x=>x.on),raStr))}</textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        <button class="btn ghost" id="ldeCopy" type="button">Copy remark</button>
+        <button class="btn ghost" id="ldePrint" type="button">Print remark</button>
+        <button class="btn ghost" id="ldeCancel" type="button" style="margin-left:auto;">Cancel</button>
+        <button class="btn" id="ldeConfirm" type="button" style="background:#a12622;">Decline &amp; notify</button>
+      </div>
+      <div class="psub" style="margin-top:8px;">Auto-email is added later once the Resend key is set — for now, Copy or Print and send it.</div>
+    </div>`;
+    dm.addEventListener("click",ev=>{ if(ev.target===dm) dm.remove(); });
+    const ticked=()=>Array.from(dm.querySelectorAll(".lde-chk")).filter(c=>c.checked).map(c=>items[Number(c.dataset.i)]);
+    document.getElementById("ldeRebuild").onclick=()=>{ document.getElementById("ldeRemark").value=buildDeclineRemark(ticked(),raStr); };
+    document.getElementById("ldeCopy").onclick=()=>{ const t=document.getElementById("ldeRemark").value; if(navigator.clipboard) navigator.clipboard.writeText(t); const b=document.getElementById("ldeCopy"); b.textContent="Copied ✓"; setTimeout(()=>b.textContent="Copy remark",1500); };
+    document.getElementById("ldePrint").onclick=()=>printLoanGuidance(l,document.getElementById("ldeRemark").value);
+    document.getElementById("ldeCancel").onclick=()=>dm.remove();
+    document.getElementById("ldeConfirm").onclick=async()=>{
+      const chosen=ticked(); const remark=document.getElementById("ldeRemark").value.trim();
+      if(!remark){ alert("Add a short message for the employee first (or Rebuild from ticked items)."); return; }
+      const btn=document.getElementById("ldeConfirm"); btn.disabled=true; btn.textContent="Declining…";
+      const nowIso=new Date().toISOString();
+      const stamp=`[Declined with guidance by ${myName()||myEmail()||"reviewer"} · reapply after ${fmtDate(raStr)} · ${fmtDate(nowIso)}]`;
+      const ta=document.getElementById("loanNotes"); if(ta) ta.value=(ta.value?ta.value+"\n":"")+stamp;   // setLoan reads loanNotes into hr_notes
+      dm.remove();
+      await setLoan({ status:"Rejected", decline_reason:remark, decline_flags:chosen.map(x=>({code:x.code,label:x.label})), reapply_after:raStr, declined_at:nowIso });
+      // TODO email — send the guidance to the employee once the Resend key is configured.
+    };
+  };
+  const decl=document.getElementById("loanDecline"); if(decl) decl.addEventListener("click",loanDeclineModal);
 }
 const isActive=(e)=>e.status==="Active";
 // "Store / Concession" classification, derived (display-only) from the worksite.
@@ -2534,6 +2717,11 @@ function captureSignatureModal(opts){
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
     <div style="font-size:18px;font-weight:800;color:#12352a;margin-bottom:3px;">${esc(opts.title||"Sign")}</div>
     <div class="psub" style="margin-bottom:8px;">${esc(opts.subtitle||"")}</div>
+    ${opts.editField?`<div style="margin-bottom:10px;padding:10px 12px;border-radius:9px;background:#f4f8f5;border:1px solid #cfe0d4;">
+      <label style="font-size:12px;font-weight:700;color:#12352a;display:block;margin-bottom:4px;">${esc(opts.editField.label||"Amount")}</label>
+      <input id="capEditVal" type="number" min="0" step="500" value="${Number(opts.editField.value||0)}" style="width:170px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:16px;font-weight:800;color:#12352a;">
+      ${opts.editField.hint?`<div class="psub" style="margin-top:5px;">${esc(opts.editField.hint)}</div>`:""}
+    </div>`:""}
     ${savedSig?`<div style="display:flex;align-items:center;gap:10px;background:#eef6f0;border:1px solid #cfe6d8;border-radius:9px;padding:8px 12px;margin-bottom:10px;">
       <img src="${savedSig}" style="height:34px;background:#fff;border-radius:4px;padding:2px 4px;border:1px solid #e2e7e4;">
       <div style="flex:1;font-size:12.5px;color:#12352a;">Your saved signature — one tap.</div>
@@ -2564,7 +2752,7 @@ function captureSignatureModal(opts){
   cv.addEventListener("touchstart",start,{passive:false}); cv.addEventListener("touchmove",move,{passive:false}); cv.addEventListener("touchend",end);
   document.getElementById("capClear").onclick=()=>{ ctx.clearRect(0,0,cv.width,cv.height); dirty=false; };
   mvWireSigUpload(cv,ctx,document.getElementById("capUpload"),document.getElementById("capFile"),()=>{ dirty=true; document.getElementById("capMsg").textContent=""; });
-  const done=(data)=>{ m.remove(); opts.onSign&&opts.onSign(data); };
+  const done=(data)=>{ const ev=document.getElementById("capEditVal"); const av=ev?parseFloat(ev.value||""):NaN; const extra=(!isNaN(av)&&av>0)?{amount:av}:{}; m.remove(); opts.onSign&&opts.onSign(data, extra); };
   const sv=document.getElementById("capSaved"); if(sv) sv.onclick=()=>done(savedSig);
   document.getElementById("capDo").onclick=()=>{ if(!dirty){ document.getElementById("capMsg").textContent="Add your signature first — upload or draw it."; return; } const data=cv.toDataURL("image/png"); const rem=document.getElementById("capRemember"); if(rem&&rem.checked&&typeof saveSavedSig==='function') saveSavedSig(data); done(data); };
 }

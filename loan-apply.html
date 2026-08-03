@@ -95,6 +95,8 @@ const TYPES={
   moto:{n:"Motorcycle",rate:6,max:100000,term:36,d:"work use only · 2+ yrs service · RCC-owned until paid · 10% DP",
     docs:["Dealer quotation","Valid driver's license","Proof of capacity to pay","Supervisor endorsement — the unit is used for your work"]},
 };
+// Documents every loan needs, regardless of type (informational — never blocks submission).
+const DOC_ALWAYS=["Latest payslip","Valid government ID"];
 let SEL=null;
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const peso=n=>"₱"+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0});
@@ -118,9 +120,19 @@ function renderDocs(k){
   const chooser=`<label>Attach your files <span style="font-weight:400;color:var(--muted);font-size:11px;">— photos or PDFs, one or many</span></label>
      <input type="file" id="docPick" multiple accept="image/*,application/pdf,.pdf">
      <div id="docList" style="margin-top:8px;"></div>`;
-  if(!t.docs||!t.docs.length){ hint.innerHTML="Attach anything that supports your request — a valid ID, quotation, bill, or estimate."; slots.innerHTML=chooser; }
-  else { hint.innerHTML=`Please attach the following for a <b>${t.n}</b> loan. Clear phone photos or PDFs are fine.`;
-    slots.innerHTML=`<ul style="margin:8px 0 12px 18px;padding:0;font-size:13.5px;color:var(--ink);line-height:1.7;">${t.docs.map(d=>`<li>${esc(d)}</li>`).join("")}</ul>${chooser}`; }
+  const typeDocs=(t&&t.docs&&t.docs.length)?t.docs:[];
+  // "Documents to attach" guidance box — always-required items + this type's docs. Informational only.
+  const docBox=`<div style="background:var(--bg);border-radius:10px;padding:11px 13px;margin:8px 0 12px;">
+     <div style="font-weight:800;color:var(--navy);font-size:12.5px;margin-bottom:6px;">Documents to attach</div>
+     <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;">Always required</div>
+     <ul style="margin:3px 0 8px 18px;padding:0;font-size:13.5px;color:var(--ink);line-height:1.7;">${DOC_ALWAYS.map(d=>`<li>${esc(d)}</li>`).join("")}</ul>
+     ${typeDocs.length?`<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;">For a ${esc(t.n)} loan</div>
+     <ul style="margin:3px 0 0 18px;padding:0;font-size:13.5px;color:var(--ink);line-height:1.7;">${typeDocs.map(d=>`<li>${esc(d)}</li>`).join("")}</ul>`:""}
+   </div>`;
+  hint.innerHTML = typeDocs.length
+    ? `Please attach the following for a <b>${esc(t.n)}</b> loan. Clear phone photos or PDFs are fine.`
+    : "Attach the documents below — a valid ID, payslip, quotation, bill, or estimate.";
+  slots.innerHTML = docBox + chooser;
   document.getElementById("docPick").addEventListener("change",function(){
     for(let i=0;i<this.files.length;i++) DOCFILES.push(this.files[i]);
     this.value=""; paintDocList();

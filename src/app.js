@@ -149,7 +149,7 @@ function applyRoleUI(){
     if(pg==='movements'){ n.style.display=canSeeMovements()?'':'none'; return; } // Movements/NPA = Anj/Grazel/Rhel
     if(pg==='govremit'){ n.style.display=canEditIds()?'':'none'; return; } // Gov't Remittances = gov-ID owners (Anj/Vina/Grazel)
     if(pg==='concerns'){ n.style.display=canSeeConcerns()?'':'none'; return; } // Concerns & Cases = Anj + Juvy (hr@) + Rhel (hr4@) — they handle arbitration/legal
-    if(pg==='policies'||pg==='processes'||pg==='desk'||pg==='orgchart'||pg==='positions'||pg==='links'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies, Processes, HR Desk, Org Chart, Positions & JD, Links = every logged-in HR
+    if(pg==='policies'||pg==='processes'||pg==='desk'||pg==='orgchart'||pg==='positions'||pg==='links'||pg==='cosign'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies, Processes, HR Desk, Org Chart, Positions & JD, Links, Documents to Sign = every logged-in HR
     n.style.display=(allow&&allow.indexOf(pg)===-1)?'none':'';
   });
   document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display=limited?'none':''; });
@@ -868,21 +868,24 @@ function printLoanAgreement(l){
   (typeof loanCoSigners==="function"?loanCoSigners(l):[]).filter(s=>String((s&&s.status)||"").toLowerCase()==="signed").forEach(s=>{ if(s.signature_data) capSigs.push({img:s.signature_data, name:(s.signed_name||s.signer_name), role:s.signer_role, date:s.signed_at}); });
   const capSigHtml = capSigs.length ? `<div class="sec">Captured e-signatures (RA 8792)</div><div class="sig">${capSigs.map(sg=>`<div class="sigbox"><img src="${sg.img}" style="max-height:60px;max-width:100%;border-bottom:1px solid #333;background:#fff;"><div class="signame">${E(sg.name||"")}</div><div class="sigcap">${E(sg.role||"")}${sg.date?" · "+E(fmtDate(sg.date)):""}</div></div>`).join("")}</div>` : "";
   const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${E(l.loan_ref||"Loan")} — Loan Agreement</title><style>
-    *{box-sizing:border-box}body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1a1a1a;font-size:12.5px;line-height:1.5;margin:28px;}
-    .lh{text-align:center;border-bottom:2px solid #1E3A5F;padding-bottom:8px;margin-bottom:4px;}
-    .co{font-size:16px;font-weight:800;color:#1E3A5F;letter-spacing:.4px;}.addr{font-size:10px;color:#666;margin-top:2px;}
-    .title{text-align:center;font-size:13px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;margin:14px 0 1px;}
-    .ref{text-align:center;font-size:11px;color:#666;margin-bottom:10px;}
+    *{box-sizing:border-box}body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1a1a1a;font-size:12.5px;line-height:1.5;margin:28px;background:#f4f5f7;}
+    .doc{max-width:820px;margin:0 auto;background:#fff;padding:34px 40px 30px;border:1px solid #e2e6ea;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+    .lh{text-align:center;border-bottom:2px solid #1E3A5F;padding-bottom:10px;margin-bottom:2px;}
+    .co{font-size:17px;font-weight:800;color:#1E3A5F;letter-spacing:.5px;}.addr{font-size:10px;color:#666;margin-top:2px;}
+    .tag{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#9aa5ad;font-weight:700;margin-top:3px;}
+    .title{text-align:center;font-size:14px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:#1E3A5F;margin:16px 0 2px;}
+    .ref{text-align:center;font-size:11px;color:#666;margin-bottom:12px;}
     .agr-row{display:flex;border-bottom:1px dotted #cfcfcf;padding:3px 0;gap:10px;}.agr-k{flex:0 0 210px;color:#555;font-size:11.5px;}.agr-v{flex:1;font-weight:600;}
     .sec{font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#1E3A5F;margin:16px 0 6px;border-bottom:1px solid #1E3A5F;padding-bottom:3px;}
     table{width:100%;border-collapse:collapse;margin-top:6px;font-size:11px;}th,td{border:1px solid #cfcfcf;padding:3px 7px;}th{background:#eef1f5;text-align:left;}.num{text-align:right;}
     .terms{white-space:pre-wrap;font-size:11.5px;line-height:1.55;margin-top:6px;}
     .sig{display:flex;gap:30px;margin-top:22px;flex-wrap:wrap;}.sigbox{flex:1;min-width:220px;}.sigline{border-bottom:1px solid #333;height:34px;margin-bottom:3px;}.signame{font-weight:700;font-size:12px;}.sigcap{font-size:10px;color:#555;}
     .foot{margin-top:18px;border-top:1px solid #cfcfcf;padding-top:6px;font-size:9.5px;color:#888;text-align:center;}
-    @media print{body{margin:14mm;}}
+    @media print{body{margin:14mm;background:#fff;}.doc{max-width:none;padding:0;border:none;box-shadow:none;}}
   </style></head><body>
-    <div class="lh"><div class="co">ROSHAN COMMERCIAL CORPORATION</div><div class="addr">104 Shaw Blvd, Pasig City</div></div>
-    <div class="title">${moto?"Vehicle Loan Agreement":"Employee Loan Agreement &amp; Computation"}</div>
+    <div class="doc">
+    <div class="lh"><div class="co">ROSHAN COMMERCIAL CORPORATION</div><div class="addr">104 Shaw Blvd, Pasig City</div><div class="tag">The Right Move</div></div>
+    <div class="title">${moto?"Vehicle Loan Agreement":"Employee Loan Agreement"}</div>
     <div class="ref">${E(l.loan_ref||"")} · ${today}</div>
     <div class="sec">Application &amp; Loan</div>
     ${kv("Application date",today)}${kv("Borrower",E(l.applicant_name||"—"))}${kv("Employee ID",E(l.employee_id||"—"))}${kv("Department / position",E(l.department||"—"))}
@@ -915,6 +918,7 @@ function printLoanAgreement(l){
     </div>
     ${capSigHtml}
     <div class="foot"><b>THE RIGHT MOVE</b> · 3rd Floor RCC Center, 104 Shaw Blvd, Pasig City 1603 · +632 8638 6556<br>Generated ${today} from the RCC HRIS. Salary-deduction authorization is subject to Art. 113, Labor Code — deductions may not drop take-home below minimum wage.</div>
+    </div>
     <scr`+`ipt>window.onload=function(){setTimeout(function(){window.print();},150);}</scr`+`ipt>
   </body></html>`;
   w.document.write(html); w.document.close();
@@ -922,6 +926,8 @@ function printLoanAgreement(l){
 window.printLoanAgreement=printLoanAgreement;
 // Clickable-KPI list filter (Item 6). Module-level so setLoanFilter can re-render #loanRows without reloading data.
 let LOAN_FILTER=null;
+// Free-text search box (composes with LOAN_FILTER — both applied, AND). Matches name / ref / type.
+let LOAN_SEARCH="";
 function loanFilterMatch(l){
   switch(LOAN_FILTER){
     case "mine": return (typeof loanIsMine==="function")&&loanIsMine(l);
@@ -931,23 +937,38 @@ function loanFilterMatch(l){
     default: return true; // "all" or null
   }
 }
+function loanSearchMatch(l){
+  const q=String(LOAN_SEARCH||"").trim().toLowerCase(); if(!q) return true;
+  return [l.applicant_name,l.loan_ref,loanTypeLabel(l.loan_type),l.loan_type].some(x=>String(x==null?"":x).toLowerCase().includes(q));
+}
+// Sort: "waiting on you" first, then LOAN_STAGES order, then newest; Released/Rejected always last.
+function loanListSort(a,b){
+  const am=loanIsMine(a)?0:1, bm=loanIsMine(b)?0:1; if(am!==bm) return am-bm;
+  const at=["Released","Rejected"].includes(a.status)?1:0, bt=["Released","Rejected"].includes(b.status)?1:0; if(at!==bt) return at-bt;
+  const ai=LOAN_STAGES.indexOf(a.status), bi=LOAN_STAGES.indexOf(b.status); if(ai!==bi) return (ai<0?99:ai)-(bi<0?99:bi);
+  return String(b.created_at||b.submitted_at||"").localeCompare(String(a.created_at||a.submitted_at||""));
+}
 function renderLoanRows(){
   const rows=$("#loanRows"); if(!rows) return;
   const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
-  const list=LOANS.filter(loanFilterMatch);
+  const list=LOANS.filter(l=>loanFilterMatch(l)&&loanSearchMatch(l)).sort(loanListSort);
+  const rate=(l)=>((typeof LOAN_RATES!=="undefined"?LOAN_RATES[l.loan_type]:null)??12);
+  const mineFlag=`<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:9px;background:#fff3d6;border:1px solid #ecdca6;color:#8a5a00;font-size:10.5px;font-weight:700;vertical-align:middle;">● waiting on you</span>`;
   rows.innerHTML=list.length?list.map(l=>`<tr class="clickable" data-id="${l.id}">
       <td><b>${esc(l.loan_ref)}</b></td>
-      <td>${esc(l.applicant_name)}${l.department?`<div class="esub">${esc(l.department)}</div>`:""}</td>
-      <td>${esc(loanTypeLabel(l.loan_type))}</td>
+      <td style="max-width:230px;">${esc(l.applicant_name)}${loanIsMine(l)?mineFlag:""}${l.department?`<div class="esub">${esc(l.department)}</div>`:""}${l.purpose?`<div class="esub" style="opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(l.purpose)}</div>`:""}</td>
+      <td>${esc(loanTypeLabel(l.loan_type))}<div class="esub">${rate(l)}% p.a.</div></td>
       <td>${peso(l.amount)}</td>
       <td>${peso(l.monthly_estimate)}</td>
       <td>${loanStatusPill(l.status)}</td></tr>`).join("")
-    :`<tr><td colspan="6" class="psub" style="padding:14px;">No applications match this filter.</td></tr>`;
+    :`<tr><td colspan="6" class="psub" style="padding:14px;">No applications match this filter${LOAN_SEARCH?" or search":""}.</td></tr>`;
   $$("#loanRows tr").forEach(tr=>{ if(tr.dataset.id) tr.addEventListener("click",()=>openLoan(tr.dataset.id)); });
   $$("#page-loans .kpi[data-lf]").forEach(t=>{ t.style.cursor="pointer"; t.style.outline=(t.dataset.lf===LOAN_FILTER)?"2px solid var(--green-dark)":""; t.style.outlineOffset="1px"; });
 }
 function setLoanFilter(k){ LOAN_FILTER=(LOAN_FILTER===k?null:k); renderLoanRows(); }
 window.setLoanFilter=setLoanFilter;
+function setLoanSearch(v){ LOAN_SEARCH=v||""; renderLoanRows(); }
+window.setLoanSearch=setLoanSearch;
 function renderLoans(){
   const pg=$("#page-loans"); if(!pg) return;
   const open=LOANS.filter(l=>!["Released","Rejected"].includes(l.status));
@@ -971,7 +992,8 @@ function renderLoans(){
         <div class="kpi" data-lf="all" style="cursor:pointer;" onclick="setLoanFilter('all')"><div class="k-l">Total Applications</div><div class="k-n">${LOANS.length}</div></div>
       </div>
       <div id="loanExposure" style="display:none;margin-top:8px;font-size:13px;color:var(--muted);"></div>
-      ${LOANS.length?`<table><thead><tr><th>Ref</th><th>Applicant</th><th>Type</th><th>Amount</th><th>Monthly (est.)</th><th>Status</th></tr></thead>
+      ${LOANS.length?`<div style="margin:12px 0 4px;"><input id="loanSearch" type="text" placeholder="Search name, ref or type…" value="${esc(LOAN_SEARCH||'')}" oninput="setLoanSearch(this.value)" style="width:100%;max-width:340px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;font-size:13px;"></div>
+        <table><thead><tr><th>Ref</th><th>Applicant</th><th>Type</th><th>Amount</th><th>Monthly (est.)</th><th>Status</th></tr></thead>
         <tbody id="loanRows"></tbody></table>`
         : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1E3A5F" stroke-width="2"><path d="M12 1v22M5 8h9a3 3 0 010 6H7"/></svg></div><h2>No applications yet</h2><p>Share the employee application link above. Submissions appear here automatically.</p></div>`}
     </div>`;
@@ -991,6 +1013,49 @@ function renderLoans(){
     }catch(e){ /* hide the line if the aggregate can't be fetched */ }
   })();
 }
+// Item 5 — at-a-glance summary strip for the loan review (Amount · Est. monthly · Interest · Term · Verdict).
+function loanSummaryStripHtml(l){
+  const rate=((typeof LOAN_RATES!=="undefined"?LOAN_RATES[l.loan_type]:null)??12);
+  const s=loanFlagSummary(l);
+  const v=({red:{t:"Not eligible",c:"#a12622"},amber:{t:"Review",c:"#8a5a00"},green:{t:"Ready",c:"#1f6b3a"}})[s.level]||{t:"Ready",c:"#1f6b3a"};
+  const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+  const cell=(label,val,fg)=>`<div style="flex:1;min-width:92px;padding:8px 11px;background:#fff;border:1px solid var(--line);border-radius:9px;">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;">${label}</div>
+    <div style="font-size:14.5px;font-weight:800;color:${fg||'#122'};margin-top:2px;">${val}</div></div>`;
+  return `<div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;">
+    ${cell("Amount",peso(l.amount))}
+    ${cell("Est. monthly",peso(l.monthly_estimate))}
+    ${cell("Interest",rate+"% <span style='font-weight:600;font-size:11px;'>p.a. flat</span>")}
+    ${cell("Term",(l.term_months||"—")+" mo")}
+    ${cell("Verdict",v.t,v.c)}
+  </div>`;
+}
+// Item 7 — horizontal progress tracker (Submitted → HR review → Management → Approved → Co-signed → Released).
+function loanProgressHtml(l){
+  if(String(l.status)==="Rejected")
+    return `<div style="margin:0 0 12px;padding:9px 13px;border-radius:10px;background:#fdecea;border:1px solid #f1c9c5;color:#a12622;font-weight:800;font-size:13px;">✕ Rejected — application closed</div>`;
+  const steps=["Submitted","HR review","Management","Approved","Co-signed","Released"];
+  const statusStep={"Submitted":0,"HR Review":1,"Management":2,"Approved":3,"Released":5};
+  let cur=statusStep[l.status]; if(cur==null) cur=0;
+  const cos=(typeof loanCoSigners==="function"?loanCoSigners(l):[]);
+  const allSigned=cos.length&&cos.every(loanCoSignerSigned);
+  const someSigned=cos.some(loanCoSignerSigned);
+  const dot=(state,label)=>{
+    const c=state==="done"?{bg:"#e6f4ea",bd:"#bfe0c8",fg:"#1f6b3a",m:"✓"}
+      :state==="current"?{bg:"#1E3A5F",bd:"#1E3A5F",fg:"#fff",m:"●"}
+      :{bg:"#eef1f3",bd:"#dfe4e8",fg:"#9aa5ad",m:"○"};
+    return `<div style="display:flex;align-items:center;gap:5px;">
+      <span style="width:19px;height:19px;border-radius:50%;background:${c.bg};border:1px solid ${c.bd};color:${c.fg};font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;">${c.m}</span>
+      <span style="font-size:11.5px;font-weight:${state==="future"?"500":"700"};color:${state==="future"?"#9aa5ad":"#1a2b1f"};white-space:nowrap;">${label}</span></div>`;
+  };
+  const cells=steps.map((label,i)=>{
+    let state;
+    if(i===4){ state=allSigned?"done":(someSigned?"current":"future"); if(cur>4) state="done"; }
+    else state=i<cur?"done":(i===cur?"current":"future");
+    return dot(state,label);
+  });
+  return `<div style="display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin:0 0 12px;padding:10px 13px;background:#fff;border:1px solid var(--line);border-radius:10px;">${cells.join('<span style="color:#cfd6db;font-size:12px;">→</span>')}</div>`;
+}
 function openLoan(id){
   const l=LOANS.find(x=>String(x.id)===String(id)); if(!l) return;
   const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
@@ -1004,6 +1069,8 @@ function openLoan(id){
       <div style="font-size:12.5px;opacity:.9;">${esc(l.loan_ref)} · ${esc(loanTypeLabel(l.loan_type))} · ${peso(l.amount)}</div>
     </div>
     <div style="padding:18px 22px 60px;">
+      ${loanSummaryStripHtml(l)}
+      ${loanProgressHtml(l)}
       ${loanVerdictBadgeHtml(l)}
       <div class="panel" style="margin-top:0;">
         <h2>Application</h2>
@@ -5112,34 +5179,65 @@ function ensureCosignDom(){
     }
   }
 }
+// Human-readable label for a signature_requests doc_type.
+function cosignReqTypeLabel(dt){ const M={claim:"Final pay quitclaim",nte:"Attendance NTE",meeting_nte:"Meeting-absence NTE",memo:"Memo",contract:"Contract",advance:"Advance release",coe:"Certificate of Employment"}; return M[dt]||(dt?String(dt).replace(/_/g," "):"Document"); }
+// Broadened: aggregate EVERY pending e-signature for the current user across BOTH sources —
+//  1) external_signoffs (loan co-signs / exit sign-offs) — routed by signer_email, opened via openCosignDoc.
+//  2) signature_requests (quitclaims / NTEs / memos) — REUSES the exact Signatures-page predicate
+//     (awaiting==="you" && status==="pending" && canSignItem(s)) and its sign handler openSignDoc(id).
+// Normalized shape per item: {kind,id,title,subtitle,sign,img,at}. Everything guarded for undefined globals.
+// future: NPA / movement steps live in the Movements tab and are intentionally NOT aggregated here.
 function renderCosign(){
   ensureCosignDom();
   const pg=$("#page-cosign"); if(!pg) return;
   const me=(myEmail()||"").toLowerCase();
-  const mine=(EXT_SIGNOFFS||[]).filter(s=> ((s.signer_email||"").toLowerCase())===me && me);
-  const pending=mine.filter(s=> String(s.status||"").toLowerCase()==="pending");
-  const signed=mine.filter(s=> String(s.status||"").toLowerCase()==="signed")
-    .sort((a,b)=> String(b.signed_at||b.created_at||"").localeCompare(String(a.signed_at||a.created_at||"")));
-  const pendCard=(s)=>`
+  const norm=(v)=>String(v||"").toLowerCase();
+  const byNewest=(a,b)=>String(b.at||"").localeCompare(String(a.at||""));
+
+  // --- Source 1: external_signoffs (co-signs + exit sign-offs) routed to me ---
+  const xsMine=(EXT_SIGNOFFS||[]).filter(s=> norm(s.signer_email)===me && me);
+  const xsPending=xsMine.filter(s=> norm(s.status)==="pending").map(s=>({
+    kind:"signoff", id:s.id, title:s.context_label||"Document",
+    subtitle:s.signer_role?("Signing as "+s.signer_role):"", sign:()=>openCosignDoc(s.id) }));
+  const xsSigned=xsMine.filter(s=> norm(s.status)==="signed").map(s=>({
+    kind:"signoff", id:s.id, title:s.context_label||"Document",
+    img:s.signature_data||"", at:s.signed_at||s.created_at||"" }));
+
+  // --- Source 2: signature_requests — same "mine & pending" rule the Signatures page uses ---
+  const canSign=(typeof canSignItem==="function")?canSignItem:(()=>false);
+  const srPending=(SIGNATURES||[]).filter(s=> s.awaiting==="you" && s.status==="pending" && canSign(s)).map(s=>({
+    kind:"request", id:s.id, title:(s.doc_title||"Document")+(s.subject_name?(" — "+s.subject_name):""),
+    subtitle:cosignReqTypeLabel(s.doc_type)+(s.from_name?(" · from "+s.from_name):""),
+    sign:()=>{ if(typeof openSignDoc==="function") openSignDoc(s.id); } }));
+  const srSigned=(SIGNATURES||[]).filter(s=> s.status==="signed" && norm(s.signer_name)===me && me).map(s=>({
+    kind:"request", id:s.id, title:(s.doc_title||"Document")+(s.subject_name?(" — "+s.subject_name):""),
+    img:s.signature_data||"", at:s.signed_at||s.created_at||"" }));
+
+  const pending=xsPending.concat(srPending);
+  const signed=xsSigned.concat(srSigned).sort(byNewest);
+  // Stash for the click handlers (id can repeat across sources → key by kind+id).
+  const signMap={}; pending.forEach(p=>{ signMap[p.kind+":"+p.id]=p.sign; });
+
+  const pendCard=(p)=>`
     <div class="lk-row" style="display:flex;align-items:center;gap:12px;border-top:1px solid var(--line,#e4eae6);padding:11px 0;">
       <div style="flex:1;min-width:0;">
-        <div style="font-weight:700;color:#12352a;">${esc(s.context_label||"Document")}</div>
-        ${s.signer_role?`<div class="psub" style="margin:2px 0 0;">Signing as ${esc(s.signer_role)}</div>`:""}
+        <div style="font-weight:700;color:#12352a;">${esc(p.title)}</div>
+        ${p.subtitle?`<div class="psub" style="margin:2px 0 0;">${esc(p.subtitle)}</div>`:""}
       </div>
-      <button class="btn" data-cosign="${esc(s.id)}" style="flex-shrink:0;">Review &amp; sign</button>
+      <button class="btn" data-cosign-key="${esc(p.kind+":"+p.id)}" style="flex-shrink:0;">Review &amp; sign</button>
     </div>`;
-  const signedCard=(s)=>`
+  const signedCard=(p)=>`
     <div class="lk-row" style="display:flex;align-items:center;gap:12px;border-top:1px solid var(--line,#e4eae6);padding:11px 0;">
       <div style="flex:1;min-width:0;">
-        <div style="font-weight:700;color:#12352a;">${esc(s.context_label||"Document")}</div>
-        <div class="psub" style="margin:2px 0 0;color:var(--green);">✓ Signed${s.signed_at?" "+fmtDate(s.signed_at):""}</div>
+        <div style="font-weight:700;color:#12352a;">${esc(p.title)}</div>
+        <div class="psub" style="margin:2px 0 0;color:var(--green);">✓ Signed${p.at?" "+fmtDate(p.at):""}</div>
       </div>
-      ${s.signature_data?`<img src="${s.signature_data}" alt="signature" style="height:34px;flex-shrink:0;background:#fff;border:1px solid #e2e7e4;border-radius:4px;padding:2px 4px;">`:""}
+      ${p.img?`<img src="${p.img}" alt="signature" style="height:34px;flex-shrink:0;background:#fff;border:1px solid #e2e7e4;border-radius:4px;padding:2px 4px;">`:""}
     </div>`;
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
       <h2>Documents awaiting your signature</h2>
-      <div class="psub">Review each document and add your signature. You can upload a photo of your signature or draw it.</div>
+      <div class="psub">Everything waiting on your e-signature, in one place. Review each document and sign — upload a photo of your signature or draw it.</div>
     </div>
     <div class="panel">
       <h2 style="font-size:15px;">To sign${pending.length?` · ${pending.length}`:""}</h2>
@@ -5148,9 +5246,9 @@ function renderCosign(){
     </div>
     ${signed.length?`<div class="panel">
       <h2 style="font-size:15px;">Signed recently</h2>
-      ${signed.map(signedCard).join("")}
+      ${signed.slice(0,12).map(signedCard).join("")}
     </div>`:""}`;
-  $$('#page-cosign [data-cosign]').forEach(b=>b.addEventListener("click",()=>openCosignDoc(b.dataset.cosign)));
+  $$('#page-cosign [data-cosign-key]').forEach(b=>b.addEventListener("click",()=>{ const fn=signMap[b.dataset.cosignKey]; if(typeof fn==="function") fn(); }));
 }
 window.renderCosign=renderCosign;
 // Review-and-sign modal for one co-sign document.

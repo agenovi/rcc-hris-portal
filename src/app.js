@@ -211,8 +211,27 @@ $("#loginForm").addEventListener("submit", async (e)=>{
   if(error){ msg.textContent=error.message; return; }
   showApp(data.user);
 });
+// Wipe the static HTML mockup the instant someone logs in and paint the REAL greeting
+// (their name + today's real date) + a neutral loading state. Prevents the old placeholder
+// dashboard ("Good morning, Juvelyn" + a frozen date + demo figures) from flashing for the
+// ~10s it takes live data to load — which looked like a wrong/leaked session but was only stale markup.
+function bootDashboardShell(user){
+  const pg=document.getElementById("page-dashboard"); if(!pg) return;
+  const hr=new Date().getHours(); const g=hr<12?"Good morning":hr<18?"Good afternoon":"Good evening";
+  const nm=((user&&user.email)||(CURRENT_USER&&CURRENT_USER.email)||"").split("@")[0];
+  const dstr=new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"}).toUpperCase();
+  pg.innerHTML=`<div class="hello">
+      <div class="hd">${esc(dstr)}</div>
+      <div class="hh">${g}, <span>${esc(nm)}.</span></div>
+      <div class="hsub">Loading your live workforce…</div>
+    </div>
+    <div class="grid kpis">
+      ${[0,1,2,3].map(()=>`<div class="kpi"><div class="k-l" style="opacity:.5;">Loading…</div><div class="k-n" style="opacity:.35;">…</div></div>`).join("")}
+    </div>`;
+}
 async function showApp(user){
   CURRENT_USER=user; $("#login").style.display="none";
+  bootDashboardShell(user);  // paint the REAL name + today's date instantly, wiping the static mockup so no other name/date ever flashes while data loads
   try{ sb.rpc("touch_presence").then(()=>{},()=>{}); }catch(e){}  // stamp real last-active (updates even on a resumed session, unlike last_sign_in_at) — MUST attach .then() or supabase-js never fires the request
   patchSidebarFoot(user);
   ensureCosignDom();  // inject the "Documents to Sign" nav item + page container BEFORE role gating, so applyRoleUI hides/shows it correctly for every role

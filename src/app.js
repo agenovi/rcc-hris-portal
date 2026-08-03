@@ -951,6 +951,16 @@ function openLoan(id){
         <div class="psub">Current: ${loanStatusPill(l.status)}</div>
         ${l.mgmt_signature?`<div style="margin-top:8px;padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;"><b style="color:var(--green);">Approved &amp; signed</b> by ${esc(l.mgmt_signer||"")}${l.mgmt_signed_at?(" · "+fmtDate(l.mgmt_signed_at)):""}<br><img src="${esc(l.mgmt_signature)}" alt="signature" style="max-height:70px;margin-top:6px;border:1px solid var(--line);border-radius:6px;background:#fff;"></div>`:""}
         <textarea id="loanNotes" rows="2" placeholder="HR notes…" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin-top:8px;">${esc(l.hr_notes||"")}</textarea>
+        ${(stage.canAct && (l.status==="HR Review"||l.status==="Management"))?`
+        <div style="margin-top:10px;padding:11px 13px;border-radius:10px;background:#f4f8f5;border:1px solid #cfe0d4;">
+          <div style="font-weight:700;font-size:13px;color:#12352a;">Adjust &amp; approve a workable amount <span class="psub" style="font-weight:500;">— counter-offer instead of sending back</span></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
+            <div><div class="esub">Approved amount (₱)</div><input id="loanAdjAmt" type="number" min="0" step="500" value="${Number(l.amount||0)}" style="width:130px;padding:8px;border:1px solid var(--line);border-radius:8px;"></div>
+            <div><div class="esub">Term (months)</div><input id="loanAdjTerm" type="number" min="1" value="${Number(l.term_months||12)}" style="width:96px;padding:8px;border:1px solid var(--line);border-radius:8px;"></div>
+            <button class="btn ghost" id="loanAdjMax" style="padding:8px 12px;">Use suggested max</button>
+          </div>
+          <div id="loanAdjOut" class="psub" style="margin-top:8px;line-height:1.5;">Computing…</div>
+        </div>`:""}
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
           ${next?(stage.canAct
             ? `<button class="btn" id="loanAdv">${l.status==="HR Review"?"Send up → Management":l.status==="Management"?"Approve &amp; Sign →":"Advance → "+esc(next)}</button>`
@@ -1000,9 +1010,12 @@ function openLoan(id){
         <button class="btn ghost" style="flex:none;padding:4px 10px;font-size:12px;color:var(--red);border-color:#f1c9c5;" onclick="delLoanHist('${r.id}','${esc(l.id)}')">Remove</button>
       </div>`).join("")}`;
   };
+  let _existMon={rcc:0,govt:0};
   const renderAfford=(rccMon, govtMon)=>{
+    rccMon=Number(rccMon||0); govtMon=Number(govtMon||0);
+    _existMon={rcc:rccMon,govt:govtMon}; if(typeof updateLoanAdj==="function") updateLoanAdj();
     const box=document.getElementById("loanAfford"); if(!box) return;
-    rccMon=Number(rccMon||0); govtMon=Number(govtMon||0); const activeMon=rccMon+govtMon;
+    const activeMon=rccMon+govtMon;
     const disposable=Number(l.net_pay||0);
     const guide=disposable*0.15;
     const thisMon=Number(l.monthly_estimate||0);
@@ -1018,7 +1031,7 @@ function openLoan(id){
       ${phRow("Combined monthly","₱"+combined.toLocaleString(undefined,{maximumFractionDigits:0}))}
       <div style="margin-top:10px;padding:11px 13px;border-radius:10px;font-size:13.5px;background:${ok?'#e6f4ea':'#fbeee6'};border:1px solid ${ok?'#bfe0c8':'#ecdca6'};">
         ${ok?`<b style="color:var(--green);">✓ Within the 15% guide.</b> Combined ₱${combined.toLocaleString(undefined,{maximumFractionDigits:0})} fits under ₱${guide.toLocaleString(undefined,{maximumFractionDigits:0})}.`
-             :`<b style="color:#b26a00;">⚠ Over the 15% guide.</b> Combined ₱${combined.toLocaleString(undefined,{maximumFractionDigits:0})} exceeds ₱${guide.toLocaleString(undefined,{maximumFractionDigits:0})} — consider a smaller amount or longer term, or clear the existing loan first.`}
+             :`<b style="color:#b26a00;">⚠ Over the 15% guide.</b> Combined ₱${combined.toLocaleString(undefined,{maximumFractionDigits:0})} exceeds ₱${guide.toLocaleString(undefined,{maximumFractionDigits:0})}.${(()=>{ const r=(typeof LOAN_RATES!=="undefined"?LOAN_RATES[l.loan_type]:null)??12, t=Number(l.term_months||12), mm=Math.max(0,guide-activeMon), mp=Math.floor((mm>0&&t>0?mm*t/(1+(r/100)*(t/12)):0)/100)*100; return mp>0?` <b>Most that fits ≈ ₱${mp.toLocaleString()}</b> at ${t} mo — use the counter-offer box above to approve that, or a longer term.`:` No room for a new loan at current deductions — clear an existing one first.`; })()}`}
       </div>
       ${(()=>{ const residual=disposable-combined; const below=residual<MIN_WAGE_MONTHLY_EST;
         return `<div style="margin-top:8px;padding:11px 13px;border-radius:10px;font-size:13px;background:${below?'#fbeee6':'#eef4ef'};border:1px solid ${below?'#ecdca6':'#cfe0d4'};">
@@ -1026,6 +1039,37 @@ function openLoan(id){
           ${below?` <span style="color:#b26a00;font-weight:700;">⚠ Below the floor — deductions may not lawfully reduce take-home below minimum wage.</span>`:` <span style="color:var(--green);font-weight:700;">✓ Stays above the floor.</span>`}</div>`; })()}
       <div class="psub" style="margin-top:8px;">Pay figure was declared on the application. Confirm against the latest payslip before approving. The 15% guide applies <b>after</b> government (SSS/PhilHealth/Pag-IBIG/tax) deductions. Min-wage floor is an NCR estimate — adjust for the employee's region.</div>`;
   };
+  // ── Counter-offer helper: live monthly + suggested max that fits the 15% guide + Art.113 floor ──
+  const LOAN_CAPS={moto:100000,discretionary:50000,emergency:20000};
+  const loanRateOf=()=>(typeof LOAN_RATES!=="undefined"?LOAN_RATES[l.loan_type]:null)??12;
+  const monthlyFor=(amt,term)=>{ const r=loanRateOf(); return term>0?(amt+amt*(r/100)*(term/12))/term:0; };
+  const principalFor=(maxMon,term)=>{ const r=loanRateOf(); return maxMon>0&&term>0? maxMon*term/(1+(r/100)*(term/12)):0; };
+  function updateLoanAdj(){
+    const aI=document.getElementById("loanAdjAmt"), tI=document.getElementById("loanAdjTerm"), out=document.getElementById("loanAdjOut");
+    if(!aI||!out) return;
+    const amt=parseFloat(aI.value||"0")||0, term=parseInt((tI&&tI.value)||l.term_months||12)||12;
+    const disposable=Number(l.net_pay||0), existing=Number(_existMon.rcc||0)+Number(_existMon.govt||0);
+    const mon=monthlyFor(amt,term), combined=mon+existing, guide=disposable*0.15, residual=disposable-combined;
+    const within=combined<=guide, floorOk=residual>=MIN_WAGE_MONTHLY_EST;
+    // Suggested max is driven by the 15% guide (the primary policy rule); the Art.113 floor is shown
+    // separately as a warning rather than zeroing the suggestion (net-pay vs gross-min-wage mismatch).
+    let maxMon=Math.max(0, guide - existing);
+    let maxP=principalFor(maxMon,term); const cap=LOAN_CAPS[l.loan_type]; if(cap) maxP=Math.min(maxP,cap);
+    maxP=Math.floor(maxP/100)*100; out.dataset.max=maxP;
+    const P=n=>"₱"+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0});
+    out.innerHTML=(disposable
+      ? `This amount → <b>${P(mon)}/mo</b> · combined ${P(combined)} vs 15% guide ${P(guide)} `
+        +(within?`<span style="color:var(--green);font-weight:700;">✓ within</span>`:`<span style="color:#b26a00;font-weight:700;">⚠ over</span>`)
+        +` · take-home ${floorOk?`<span style="color:var(--green);font-weight:700;">✓ ok</span>`:`<span style="color:#b26a00;font-weight:700;">⚠ below floor</span>`}<br>`
+        +`<b>Suggested max at ${term} mo:</b> ~${P(maxP)} (${P(monthlyFor(maxP,term))}/mo — fits the 15% guide &amp; take-home floor)${cap&&maxP>=cap?` · capped at the ${loanTypeLabel(l.loan_type)} policy max`:""}.`
+      : `No pay figure on file — confirm the payslip to compute a suggested max.`);
+  }
+  { const aI=document.getElementById("loanAdjAmt"), tI=document.getElementById("loanAdjTerm"), mx=document.getElementById("loanAdjMax");
+    if(aI) aI.addEventListener("input",updateLoanAdj);
+    if(tI) tI.addEventListener("input",updateLoanAdj);
+    if(mx) mx.addEventListener("click",()=>{ const out=document.getElementById("loanAdjOut"); const mv=out&&out.dataset.max; if(aI&&mv!=null){ aI.value=mv; updateLoanAdj(); } });
+    updateLoanAdj();
+  }
   renderAfford(0,0);
   // ── Recent attendance (last 3 completed months from PayPlus) ──
   (async()=>{
@@ -1112,7 +1156,25 @@ function openLoan(id){
     }
     return false;
   };
-  const approvePatch=()=>{ const approver=loanApprover(l); return { status:"Approved", mgmt_approver:approver, agreement_body:buildLoanAgreement(l,approver), agreement_token:newLoanToken(), agreement_status:"awaiting" }; };
+  const approvePatch=()=>{ const approver=loanApprover(l);
+    const patch={ status:"Approved", mgmt_approver:approver, agreement_token:newLoanToken(), agreement_status:"awaiting" };
+    // Counter-offer: if the Director adjusted the amount/term, approve at those figures (the borrower
+    // then consents to the adjusted amount when signing the agreement).
+    const aI=document.getElementById("loanAdjAmt"), tI=document.getElementById("loanAdjTerm");
+    const adjAmt=aI?parseFloat(aI.value||""):NaN, adjTerm=tI?parseInt(tI.value||""):NaN;
+    const changed=aI && !isNaN(adjAmt) && adjAmt>0 && (adjAmt!==Number(l.amount) || (!isNaN(adjTerm)&&adjTerm!==Number(l.term_months)));
+    if(changed){
+      const term=(!isNaN(adjTerm)&&adjTerm>0)?adjTerm:(l.term_months||12);
+      const r=loanRateOf(); patch.amount=adjAmt; patch.term_months=term;
+      patch.monthly_estimate=term?(adjAmt+adjAmt*(r/100)*(term/12))/term:0;
+      const ta=document.getElementById("loanNotes");
+      if(ta){ ta.value=(ta.value?ta.value+"\n":"")+`[Approved at ${peso(adjAmt)} · ${term} mo — requested ${peso(l.amount)} (${l.term_months||"?"} mo) · adjusted by ${myName()||"Director"} · ${fmtDate(new Date().toISOString())}]`; }
+      patch.agreement_body=buildLoanAgreement(Object.assign({},l,{amount:adjAmt,term_months:term}),approver);
+    } else {
+      patch.agreement_body=buildLoanAgreement(l,approver);
+    }
+    return patch;
+  };
   // Item 8 — send up to Management: name a supervisor for an FYI acknowledgment (non-blocking).
   const loanSendUp=()=>{
     const isSelf=loanIsHrSelfApp(l);
@@ -9007,6 +9069,9 @@ function printQuitclaim(x){
   const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to print the quitclaim."); return; }
   const emp=(EMPLOYEES||[]).find(e=>e.id===x.employee_id)||{};
   const P=n=>"₱"+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  // Stamp the Director's actual e-signature image (stored on the linked signature request) over her line.
+  const qSig=(SIGNATURES||[]).find(s=>String(s.id)===String(x.quitclaim_signature_id));
+  const qImg=(qSig&&qSig.status==="signed"&&qSig.signature_data)?qSig.signature_data:"";
   // Claims: split lines (last payroll / 13th / SIL) break out Basic + Allowance, with the combined total on the right.
   const claimRow=([k,l])=>{ const note=esc(fp[k+"_note"]||"");
     if(FP_SPLIT.has(k)){ const b=Number(fp[k+"_basic"]||0), a=Number(fp[k+"_allowance"]||0); const has=(b||a);
@@ -9040,7 +9105,7 @@ function printQuitclaim(x){
     <table style="margin-top:8px;"><tr class="net"><td>NET PAID TO EMPLOYEE</td><td class="n">${P(fpNet(fp))}</td></tr></table>
     ${(fp.payment_instruction||fp.bank_account)?`<div style="margin-top:8px;font-size:12px;"><b>Payment:</b> ${esc([fp.payment_instruction,fp.bank_account].filter(Boolean).join(" · "))}</div>`:""}
     <div class="sig"><div><div class="sl">Juvelyn M. Belvistre<br><span style="color:#667;">HR Officer — Prepared by</span></div></div>
-      <div><div class="sl">Anju Genomal<br><span style="color:#667;">Director, Admin &amp; Finance — Approved${x.quitclaim_date?" "+fmtDate(x.quitclaim_date):""}</span></div></div></div>
+      <div>${qImg?`<img src="${qImg}" style="height:42px;display:block;margin:6px auto -4px;">`:""}<div class="sl">Anju Genomal<br><span style="color:#667;">Director, Admin &amp; Finance — Approved${x.quitclaim_date?" "+fmtDate(x.quitclaim_date):""}</span></div></div></div>
     ${x.released?`<div class="sig"><div>${x.release_signature?`<img src="${x.release_signature}" style="height:42px;display:block;margin:6px auto -4px;">`:""}<div class="sl">${esc(((hrDisplayName(x.released_by)||"").split(" — ")[0])||x.released_by||"HR")}<br><span style="color:#667;">Final pay released${x.released_at?" "+fmtDate(x.released_at):""}${x.release_check_no?" · Check / ref "+esc(x.release_check_no):""}</span></div></div></div>`:""}
     <div class="sig"><div><div class="sl">${esc(x.employee_name)}<br><span style="color:#667;">Received &amp; conforme / Date</span></div></div></div>
     <script>window.print();</`+`script></body></html>`);

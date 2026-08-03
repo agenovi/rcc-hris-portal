@@ -687,6 +687,89 @@ function loanCoSignPanelHtml(l){
     <div style="margin-top:10px;">${rows}</div>
   </div>`;
 }
+// Loan RELEASE (operational, OFF the Director). Approval + signing is anj's; the release is a two-hand
+// operation: Accounting (Margie) uploads the disbursement proof, then Payroll (Grazel) records the PayPlus
+// salary-deduction and marks the loan Released. Admin (anj/sanjay) passes the payroll gate as an override.
+function loanReleasePanelHtml(l){
+  const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+  const canRelease=(userRole()==="payroll"||isAdminUser());
+  const proof=l.release_proof||null;
+  const dd=l.payplus_deduction||{};
+  // TODO api reconcile — auto-verify payplus_deduction against the PayPlus loan-deduction feed once it's live.
+  const proofRow=proof
+    ? `<div style="padding:8px 11px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;">✓ <b>Disbursement proof on file</b>${l.release_ref?` · ref ${esc(l.release_ref)}`:""}${proof.path?` <button class="btn ghost" type="button" style="padding:2px 9px;font-size:12px;margin-left:6px;" onclick="openLoanDoc('${esc(proof.path)}',this)">View</button>`:""}</div>`
+    : `<div style="padding:8px 11px;border-radius:9px;background:#fbeee6;border:1px solid #ecdca6;font-size:13px;">⏳ Awaiting Accounting (Margie) to upload the disbursement proof.</div>`;
+  return `<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
+    <div style="font-weight:800;font-size:14px;color:#12352a;margin-bottom:6px;">Release</div>
+    <div class="psub" style="margin-bottom:8px;">Approval &amp; signing is done. Release is operational — Accounting uploads the disbursement proof, then Payroll records the PayPlus deduction &amp; marks it Released.</div>
+    ${proofRow}
+    ${canRelease?`
+      <div style="margin-top:12px;">
+        <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">PayPlus salary-deduction record (Payroll)</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div><div class="esub">Amount per cut-off (₱)</div><input id="loanRelAmt" type="number" min="0" step="50" value="${dd.amount_per_cutoff!=null?esc(String(dd.amount_per_cutoff)):""}" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;"></div>
+          <div><div class="esub">Effective cut-off</div><input id="loanRelCut" type="date" value="${dd.effective_cutoff?esc(dd.effective_cutoff):""}" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;"></div>
+        </div>
+        <input id="loanRelNote" placeholder="Note (optional — e.g. starts 30th cut-off)" value="${dd.note?esc(dd.note):""}" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
+        <div style="margin-top:10px;"><button class="btn" id="loanRel">Mark Released</button></div>
+        <div class="psub" style="margin-top:8px;">PayPlus match pending — this deduction record is an attestation for now; it will auto-verify once the PayPlus loan-deduction API is live.</div>
+      </div>`
+    :`<div class="psub" style="margin-top:10px;">Payroll (Grazel) records the PayPlus deduction and marks this Released.</div>`}
+  </div>`;
+}
+// Read-only recap once a loan is Released — who released it, when, and the recorded PayPlus deduction.
+function loanReleasedInfoHtml(l){
+  const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+  const dd=l.payplus_deduction||{};
+  const proof=l.release_proof||null;
+  return `<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
+    <div style="font-weight:800;font-size:14px;color:#12352a;margin-bottom:6px;">Released</div>
+    <div style="padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;">
+      ✓ <b style="color:var(--green);">Released</b>${l.released_by?` by ${esc(l.released_by)}`:""}${l.released_at?` · ${fmtDate(l.released_at)}`:""}
+      ${(dd.amount_per_cutoff!=null||dd.effective_cutoff)?`<div class="esub" style="margin-top:4px;">PayPlus deduction: ${dd.amount_per_cutoff!=null?peso(dd.amount_per_cutoff)+"/cut-off":"—"}${dd.effective_cutoff?` · effective ${fmtDate(dd.effective_cutoff)}`:""}${dd.note?` · ${esc(dd.note)}`:""}</div>`:""}
+      ${proof?`<div class="esub" style="margin-top:4px;">Disbursement proof${l.release_ref?` · ref ${esc(l.release_ref)}`:""}${proof.path?` <button class="btn ghost" type="button" style="padding:2px 9px;font-size:12px;margin-left:4px;" onclick="openLoanDoc('${esc(proof.path)}',this)">View</button>`:""}</div>`:""}
+    </div>
+  </div>`;
+}
+// Record the disbursement proof (Accounting / Margie) from the scoped "Documents to Sign" page.
+function recordLoanDisbursement(id){
+  const l=(typeof LOANS!=="undefined"?LOANS:[]).find(x=>String(x.id)===String(id)); if(!l) return;
+  const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+  let m=document.getElementById("loanRelProofModal"); if(!m){ m=document.createElement("div"); m.id="loanRelProofModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10005;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:22px;">
+    <div style="font-size:18px;font-weight:800;color:#12352a;margin-bottom:3px;">Record disbursement</div>
+    <div class="psub" style="margin-bottom:12px;">${esc(l.applicant_name||"")} · ${esc(l.loan_ref||"")} · ${peso(l.amount)}</div>
+    <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;">Cheque / GCash reference</label>
+    <input id="lrpRef" placeholder="e.g. cheque #12345 / GCash ref" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin-bottom:12px;">
+    <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;">Proof of disbursement (file)</label>
+    <input id="lrpFile" type="file" accept="image/*,application/pdf,.pdf" style="width:100%;">
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn ghost" id="lrpCancel" type="button" style="margin-left:auto;">Cancel</button>
+      <button class="btn" id="lrpSave" type="button">Save proof</button>
+    </div></div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("lrpCancel").onclick=()=>m.remove();
+  document.getElementById("lrpSave").onclick=async()=>{
+    const ref=(document.getElementById("lrpRef").value||"").trim();
+    const fi=document.getElementById("lrpFile");
+    if(!fi||!fi.files||!fi.files[0]){ alert("Attach the disbursement proof file first."); return; }
+    if(!ref && !confirm("No cheque/GCash reference entered. Save the proof anyway?")) return;
+    const btn=document.getElementById("lrpSave"); btn.disabled=true; btn.textContent="Uploading…";
+    const f=fi.files[0];
+    const path=(l.loan_ref||"loan")+"/release-"+Date.now().toString(36)+"-"+f.name.replace(/[^a-zA-Z0-9._-]+/g,"_").slice(0,100);
+    const {error:upErr}=await sb.storage.from("loan-docs").upload(path,f,{upsert:true});
+    if(upErr){ alert("Couldn't upload the proof: "+upErr.message); btn.disabled=false; btn.textContent="Save proof"; return; }
+    const nowIso=new Date().toISOString();
+    const {error}=await sb.from("loans").update({ release_proof:{path:path,name:f.name,ref:ref||null}, release_ref:ref||null, updated_at:nowIso }).eq("id",l.id);
+    if(error){ alert(error.message); btn.disabled=false; btn.textContent="Save proof"; return; }
+    await logChange("loan",l.id,l.applicant_name,"Disbursement proof recorded",(l.loan_ref||"")+(ref?(" · "+ref):""));
+    await loadEmployees();
+    m.remove();
+    if(typeof renderCosign==="function") renderCosign();
+  };
+}
+window.recordLoanDisbursement=recordLoanDisbursement;
 // NCR daily minimum wage (2026 order). Monthly floor ≈ daily × 26. Regional rates vary — HR confirms.
 const NCR_MIN_DAILY=755, MIN_WAGE_MONTHLY_EST=Math.round(755*26);
 // Loan-type classification — government (SSS/Pag-IBIG/PhilHealth) loans are disclosure-only, never RCC company loans.
@@ -706,6 +789,25 @@ function loanStageOwner(l){
   if(l.status==="Management") return {label:"Management (Director)", canAct:isAdminUser()};
   return {label:"", canAct:false};
 }
+// Natural owner of the current stage — the role that's SUPPOSED to act now (Item 1 routing fix).
+// HR stages (Submitted / HR Review) are owned by the HR team; Management is owned by admin (Director).
+// Admin can technically act on any stage, but must NOT be prompted with HR's step — see the Status action row.
+const LOAN_HR_OWNER_ROLES=["relations","payroll","manager","recruiter"];
+function loanNaturalOwnerRole(l){
+  if(!l) return "";
+  if(l.status==="Submitted"||l.status==="HR Review") return "HR";
+  if(l.status==="Management") return "Management";
+  return "";
+}
+function isLoanNaturalOwner(l){
+  if(typeof CURRENT_USER==="undefined"||!CURRENT_USER) return false;
+  const who=loanNaturalOwnerRole(l);
+  if(who==="HR") return LOAN_HR_OWNER_ROLES.includes(userRole());
+  if(who==="Management") return isAdminUser();
+  return false;
+}
+// Item 2 — missing supporting documents. True when nothing is attached AND HR hasn't marked them received on paper.
+function loanNeedsDocs(l){ return (!Array.isArray(l.documents) || l.documents.length===0) && !l.docs_received_physically; }
 // HR-staff self-application — segregation of duties (Item 2). HR cannot review its own loan.
 function loanIsHrSelfApp(l){
   const em=String(l.email||"").toLowerCase();
@@ -778,6 +880,8 @@ function loanFlagSummary(l){
   // Item 4 — purpose policy hint (amber, non-blocking)
   const pm=String(l.purpose||"").match(/wedding|debut|vacation|travel|gadget|phone|appliance|invest|business capital|bet|gambl/i);
   if(pm) push(amber,"purpose",`⚠ Purpose may fall outside loan policy (${esc(pm[0])}) — confirm it qualifies.`,`Purpose may fall outside loan policy (${pm[0]})`);
+  // Item 2 — no supporting documents on file. Only flagged while the loan is still in review (not on closed/approved loans).
+  if(loanNeedsDocs(l) && !["Approved","Released","Rejected"].includes(l.status)) push(red,"docs",`⛔ <b>No supporting documents on file</b> — attach them or mark received before advancing.`,"No supporting documents on file");
   const level=red.length?"red":(amber.length?"amber":"green");
   const top=red.length?red[0].label:(amber.length?amber[0].label:"");
   return {level,red,amber,redCount:red.length,amberCount:amber.length,top,noEmpId:!l.employee_id,hasEmp:!!e,disp:{tenureTxt,ct,stTxt,src}};
@@ -947,12 +1051,24 @@ window.printLoanAgreement=printLoanAgreement;
 let LOAN_FILTER=null;
 // Free-text search box (composes with LOAN_FILTER — both applied, AND). Matches name / ref / type.
 let LOAN_SEARCH="";
+// Cache the computed "Company loan exposure" HTML so it shows instantly on re-render and never blanks
+// out during a re-render or a transient fetch error.
+let LOAN_EXPOSURE_HTML="";
+// True if the loan was Released within the current calendar month (uses released_at).
+function loanReleasedThisMonth(l){
+  if(!l||l.status!=="Released"||!l.released_at) return false;
+  const d=new Date(l.released_at); if(isNaN(d)) return false;
+  const now=new Date();
+  return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth();
+}
 function loanFilterMatch(l){
   switch(LOAN_FILTER){
     case "mine": return (typeof loanIsMine==="function")&&loanIsMine(l);
     case "new": return l.status==="Submitted";
     case "open": return !["Released","Rejected"].includes(l.status);
     case "approved": return ["Approved","Released"].includes(l.status);
+    case "released": return l.status==="Released";
+    case "released_month": return loanReleasedThisMonth(l);
     default: return true; // "all" or null
   }
 }
@@ -995,6 +1111,11 @@ function renderLoans(){
   const approved=LOANS.filter(l=>["Approved","Released"].includes(l.status)).length;
   const mineCt=LOANS.filter(loanIsMine).length;
   const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+  // Released-money views: this calendar month + all-time.
+  const releasedAll=LOANS.filter(l=>l.status==="Released");
+  const relMonth=releasedAll.filter(loanReleasedThisMonth);
+  const relMonthSum=relMonth.reduce((s,l)=>s+Number(l.amount||0),0);
+  const relAllSum=releasedAll.reduce((s,l)=>s+Number(l.amount||0),0);
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
       <h2>Employee Loans <span class="count-tag">live</span></h2>
@@ -1010,6 +1131,10 @@ function renderLoans(){
         <div class="kpi" data-lf="approved" style="cursor:pointer;" onclick="setLoanFilter('approved')"><div class="k-l">Approved / Released</div><div class="k-n">${approved}</div></div>
         <div class="kpi" data-lf="all" style="cursor:pointer;" onclick="setLoanFilter('all')"><div class="k-l">Total Applications</div><div class="k-n">${LOANS.length}</div></div>
       </div>
+      <div class="grid kpis" style="grid-template-columns:repeat(2,1fr);margin-top:8px;">
+        <div class="kpi" data-lf="released_month" style="cursor:pointer;" onclick="setLoanFilter('released_month')"><div class="k-l">Released this month</div><div class="k-n">${relMonth.length}</div><div class="k-s">${peso(relMonthSum)}</div></div>
+        <div class="kpi" data-lf="released" style="cursor:pointer;" onclick="setLoanFilter('released')"><div class="k-l">Total loans released</div><div class="k-n">${releasedAll.length}</div><div class="k-s">${peso(relAllSum)} · all-time</div></div>
+      </div>
       <div id="loanExposure" style="display:none;margin-top:8px;font-size:13px;color:var(--muted);"></div>
       ${LOANS.length?`<div style="margin:12px 0 4px;"><input id="loanSearch" type="text" placeholder="Search name, ref or type…" value="${esc(LOAN_SEARCH||'')}" oninput="setLoanSearch(this.value)" style="width:100%;max-width:340px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;font-size:13px;"></div>
         <table><thead><tr><th>Ref</th><th>Applicant</th><th>Type</th><th>Amount</th><th>Monthly (est.)</th><th>Status</th></tr></thead>
@@ -1020,16 +1145,17 @@ function renderLoans(){
   // Item 6 — total RCC company loan exposure (active history outstanding + approved-not-released portal loans; gov't excluded).
   (async()=>{
     const el=document.getElementById("loanExposure"); if(!el) return;
+    if(LOAN_EXPOSURE_HTML){ el.innerHTML=LOAN_EXPOSURE_HTML; el.style.display=""; }  // show cached instantly — never blanks on re-render
     try{
       const {data,error}=await sb.from("loan_history").select("employee_id,loan_type,outstanding,status");
-      if(error) return;
+      if(error) return;   // keep the cached value on error
       const active=(data||[]).filter(r=>r.status==="Active" && !isGovtLoan(r.loan_type));
       let sum=active.reduce((s,r)=>s+Number(r.outstanding||0),0);
       const emps=new Set(active.map(r=>String(r.employee_id)));
       LOANS.filter(l=>l.status==="Approved").forEach(l=>{ sum+=Number(l.amount||0); emps.add(String(l.employee_id||l.id)); });
-      el.innerHTML=`Company loan exposure: <b>₱${sum.toLocaleString(undefined,{maximumFractionDigits:0})}</b> out across ${emps.size} employee${emps.size===1?"":"s"} <span class="psub">· active company loans + approved-not-released · gov't excluded</span>`;
-      el.style.display="";
-    }catch(e){ /* hide the line if the aggregate can't be fetched */ }
+      LOAN_EXPOSURE_HTML=`Company loan exposure: <b>₱${sum.toLocaleString(undefined,{maximumFractionDigits:0})}</b> out across ${emps.size} employee${emps.size===1?"":"s"} <span class="psub">· active company loans + approved-not-released · gov't excluded</span>`;
+      el.innerHTML=LOAN_EXPOSURE_HTML; el.style.display="";
+    }catch(e){ /* keep the cached value */ }
   })();
 }
 // Item 5 — at-a-glance summary strip for the loan review (Amount · Est. monthly · Interest · Term · Verdict).
@@ -1173,6 +1299,18 @@ function openLoan(id){
           <input type="file" id="loanDocAdd" multiple accept="image/*,application/pdf,.pdf" style="flex:1;">
           <button class="btn ghost" id="loanDocUp" style="flex:none;">Upload</button>
         </div>
+        ${(()=>{
+          // Item 2/3 — only HR/admin manage the "received physically" mark + document requests.
+          const canDocs=isAdminUser()||LOAN_HR_OWNER_ROLES.includes(userRole());
+          if(!canDocs) return "";
+          return `<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
+            ${l.docs_received_physically
+              ? `<div style="padding:8px 11px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;">✓ <b>Documents received physically</b> — on file with HR (who &amp; when in the HR notes / audit log).</div>`
+              : `<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;cursor:pointer;"><input type="checkbox" id="loanDocsPhys"> Documents received physically (handed to HR / on file outside the portal)</label>`}
+            <div id="loanDocReqStatus" class="psub" style="margin-top:10px;${l.doc_request_sent_at?'':'display:none;'}">${l.doc_request_sent_at?`✉ Documents requested · ${fmtDate(l.doc_request_sent_at)}${l.doc_request_by?` · ${esc(l.doc_request_by)}`:""}`:""}</div>
+            ${loanNeedsDocs(l)?`<button class="btn ghost" id="loanReqDocs" style="margin-top:8px;">✉ Request documents from applicant</button>`:""}
+          </div>`;
+        })()}
       </div>
       ${l.loan_type==="educational"?`
       <div class="panel" style="border:2px solid ${l.waiver_signed?'var(--green)':'#e0b400'};">
@@ -1242,20 +1380,24 @@ function openLoan(id){
           <div id="loanAdjOut" class="psub" style="margin-top:8px;line-height:1.5;">Computing…</div>
         </div>`:""}
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          ${next?(stage.canAct
+          ${next?(
+            isLoanNaturalOwner(l)
             ? `<button class="btn" id="loanAdv">${l.status==="HR Review"?"Send up → Management":l.status==="Management"?"Approve &amp; Sign →":"Advance → "+esc(next)}</button>`
-            : `<div style="flex:1 1 100%;padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;">⏳ Waiting on <b>${esc(stage.label)}</b> — you can review but it's not your turn.</div>`)
+            : (isAdminUser()
+              // Item 1 — admin is NOT the natural owner of an HR-stage loan: don't present HR's step as her main button.
+              ? `<div style="flex:1 1 100%;padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;">⏳ Waiting on <b>HR (Juvy)</b> to review &amp; send up.<div style="margin-top:6px;"><button id="loanAdvOverride" style="background:none;border:none;padding:0;color:#8a5a00;font-size:12px;text-decoration:underline;cursor:pointer;">Advance anyway (override)</button></div></div>`
+              : `<div style="flex:1 1 100%;padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;">⏳ Waiting on <b>${esc(stage.label)}</b> — you can review but it's not your turn.</div>`))
             :""}
           ${(l.status!=="Submitted"&&l.status!=="Rejected"&&l.status!=="Released")?`<button class="btn ghost" id="loanBack" style="color:#8a5a00;border-color:#ecdca6;">↩ Send back to HR</button>`:""}
           ${!["Approved","Released","Rejected"].includes(l.status)?`<button class="btn ghost" id="loanDecline" style="color:#8a5a00;border-color:#ecdca6;">Decline with guidance</button>`:""}
           ${l.status!=="Rejected"&&l.status!=="Released"?`<button class="btn ghost" id="loanRej" style="color:var(--red);border-color:#f1c9c5;">Reject</button>`:""}
-          ${l.status==="Approved"?`<button class="btn" id="loanRel">Mark Released</button>`:""}
           ${l.status==="Rejected"?`<button class="btn ghost" id="loanUndoRej" style="color:#1f6b3a;border-color:#cfe6d6;">↩ Undo reject → HR Review</button>`:""}
           ${(l.amount&&l.term_months)?`<button class="btn ghost" id="loanAgree" style="color:#1E3A5F;">📄 Computation + Agreement (PDF)</button>`:""}
           ${(l.status==="Approved" && l.mgmt_signature && loanCoSigners(l).length===0 && (isAdminUser()||["relations","payroll","manager"].includes(userRole())))?`<button class="btn" id="loanFwdCosign">Forward for co-signing (Juvy sends)</button>`:""}
           <button class="btn ghost" id="loanClose" style="margin-left:auto;">Close</button>
         </div>
         ${(next&&stage.canAct&&loanIsHrSelfApp(l)&&l.status==="HR Review")?`<div class="psub" style="margin-top:8px;color:#a12622;">HR review skipped — routed to Director (SOP).</div>`:""}
+        ${l.status==="Approved"?loanReleasePanelHtml(l):(l.status==="Released"?loanReleasedInfoHtml(l):"")}
       </div>
       ${loanCoSignPanelHtml(l)}
     </div></div>`;
@@ -1423,6 +1565,67 @@ function openLoan(id){
     if(error){ alert(error.message); dUp.disabled=false; dUp.textContent="Upload"; return; }
     await loadEmployees(); m.remove(); openLoan(l.id);
   });
+  // Item 2 — "Documents received physically" mark (HR/admin). Clears the missing-docs block; stamps who/when into HR notes + audit log.
+  const docsPhys=document.getElementById("loanDocsPhys"); if(docsPhys) docsPhys.addEventListener("change",async()=>{
+    if(!docsPhys.checked) return;
+    if(!confirm("Mark the supporting documents as received physically (handed to HR / on file outside the portal)?\n\nThis lets the loan advance without files attached.")){ docsPhys.checked=false; return; }
+    docsPhys.disabled=true;
+    const stamp=`[Documents received physically — ${myName()||myEmail()||"HR"} · ${fmtDate(new Date().toISOString())}]`;
+    const notesEl=document.getElementById("loanNotes"); const merged=((notesEl&&notesEl.value)?notesEl.value+"\n":"")+stamp;
+    const {error}=await sb.from("loans").update({docs_received_physically:true, hr_notes:merged, updated_at:new Date().toISOString()}).eq("id",l.id);
+    if(error){ alert(error.message); docsPhys.disabled=false; docsPhys.checked=false; return; }
+    await logChange("loan",l.id,l.applicant_name,"Documents received physically",l.loan_ref);
+    await loadEmployees(); m.remove(); openLoan(l.id);
+  });
+  // Item 3 — one-click "Request documents" editable draft (Copy / mailto / SMS; auto-send later via Resend).
+  const reqDocsBtn=document.getElementById("loanReqDocs"); if(reqDocsBtn) reqDocsBtn.addEventListener("click",()=>{
+    const first=(String(l.applicant_name||"").trim().split(/[\s,]+/)[0])||"there";
+    const health=/medical|health|hospital|clinic|surgery|med[- ]?cert|prescription|illness|sick|dental|maternity|confinement|treatment/i.test(String(l.purpose||""));
+    const extra=[];
+    if(l.loan_type==="educational") extra.push("Enrollment assessment","Latest grades");
+    else if(l.loan_type==="moto") extra.push("OR/CR or dealer quotation","Proof of 10% down payment");
+    else if((l.loan_type==="emergency"||l.loan_type==="discretionary")&&health) extra.push("Medical bill / prescription / medical certificate");
+    else extra.push("Proof / brief document supporting the stated purpose");
+    const bullets=["Latest payslip","Valid government ID"].concat(extra).map(x=>"• "+x).join("\n");
+    const body=`Dear ${first},\n\nWe received your loan request (${l.loan_ref||""}). To continue, we still need the following documents:\n${bullets}\n\nPlease send them to HR (reply to this email), or hand them over at the HR office. We'll proceed once they're in.\n\nThank you,\nRCC HR`;
+    const smsExtra=extra.length?(" and "+extra[0].toLowerCase()):"";
+    const sms=`RCC HR: For your loan ${l.loan_ref||""}, please send your latest payslip, valid ID${smsExtra} to HR — reply here or drop by the office. Thank you.`;
+    const subject=`RCC loan ${l.loan_ref||""} — documents needed`;
+    let rm=document.getElementById("loanReqDocsModal"); if(!rm){ rm=document.createElement("div"); rm.id="loanReqDocsModal"; document.body.appendChild(rm); }
+    rm.style.cssText="position:fixed;inset:0;z-index:10004;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+    rm.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
+      <div style="font-size:18px;font-weight:800;color:#12352a;margin-bottom:3px;">Request documents from applicant</div>
+      <div class="psub" style="margin-bottom:10px;">Email: <b>${esc(l.email||"—")}</b> · Mobile: <b>${esc(l.contact_number||"—")}</b></div>
+      <label style="font-size:12px;font-weight:700;color:var(--muted);">Message (editable)</label>
+      <textarea id="rdMsg" rows="12" style="width:100%;margin-top:6px;padding:10px 11px;border:1px solid var(--line);border-radius:8px;font-size:13px;line-height:1.5;">${esc(body)}</textarea>
+      <div id="rdStatus" class="psub" style="margin-top:8px;display:none;color:var(--green);"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        <button class="btn ghost" id="rdCopy" type="button">Copy message</button>
+        <a class="btn ghost" id="rdMail" type="button" href="#" style="text-decoration:none;">Open in email</a>
+        <button class="btn ghost" id="rdSms" type="button">Copy SMS text</button>
+        <button class="btn ghost" id="rdCancel" type="button" style="margin-left:auto;">Close</button>
+      </div>
+      <div class="psub" style="margin-top:8px;">One-click auto-send from the portal turns on once the Resend email key is set.</div>
+    </div>`;
+    rm.addEventListener("click",ev=>{ if(ev.target===rm) rm.remove(); });
+    let marked=false;
+    const markRequested=async()=>{
+      if(marked) return; marked=true;
+      const nowIso=new Date().toISOString(); const by=myName()||myEmail()||"HR";
+      const {error}=await sb.from("loans").update({doc_request_sent_at:nowIso, doc_request_by:by, updated_at:nowIso}).eq("id",l.id);
+      if(error){ marked=false; return; }
+      l.doc_request_sent_at=nowIso; l.doc_request_by=by;
+      await logChange("loan",l.id,l.applicant_name,"Requested documents",l.loan_ref);
+      // TODO Resend auto-send — email the applicant directly once the key is configured.
+      const st=document.getElementById("rdStatus"); if(st){ st.style.display="block"; st.textContent="✓ Recorded: documents requested just now."; }
+      const panelSt=document.getElementById("loanDocReqStatus"); if(panelSt){ panelSt.style.display="block"; panelSt.textContent=`✉ Documents requested · ${fmtDate(nowIso)} · ${by}`; }
+    };
+    document.getElementById("rdMail").href=`mailto:${encodeURIComponent(l.email||"")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent((document.getElementById("rdMsg")||{}).value||body)}`;
+    document.getElementById("rdCopy").onclick=()=>{ const t=document.getElementById("rdMsg").value; if(navigator.clipboard) navigator.clipboard.writeText(t); const b=document.getElementById("rdCopy"); b.textContent="Copied ✓"; setTimeout(()=>b.textContent="Copy message",1500); markRequested(); };
+    document.getElementById("rdMail").addEventListener("click",()=>{ document.getElementById("rdMail").href=`mailto:${encodeURIComponent(l.email||"")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(document.getElementById("rdMsg").value||body)}`; markRequested(); });
+    document.getElementById("rdSms").onclick=()=>{ if(navigator.clipboard) navigator.clipboard.writeText(sms); const b=document.getElementById("rdSms"); b.textContent="SMS copied ✓"; setTimeout(()=>b.textContent="Copy SMS text",1500); markRequested(); };
+    document.getElementById("rdCancel").onclick=()=>rm.remove();
+  });
   m.addEventListener("click",(ev)=>{ if(ev.target===m) m.remove(); });
   const setLoan=async(patch)=>{ patch.hr_notes=document.getElementById("loanNotes").value; patch.updated_at=new Date().toISOString();
     const {error}=await sb.from("loans").update(patch).eq("id",l.id); if(error){alert(error.message);return;}
@@ -1464,6 +1667,8 @@ function openLoan(id){
   };
   // Item 8 — send up to Management: name a supervisor for an FYI acknowledgment (non-blocking).
   const loanSendUp=()=>{
+    // Item 2 — block pushing a loan up to Management with no supporting documents.
+    if(loanNeedsDocs(l)){ alert("This loan has no supporting documents. Attach them, or tick 'Documents received physically', before sending it to Management."); return; }
     const isSelf=loanIsHrSelfApp(l);
     let mm=document.getElementById("loanSendUpModal"); if(!mm){ mm=document.createElement("div"); mm.id="loanSendUpModal"; document.body.appendChild(mm); }
     mm.style.cssText="position:fixed;inset:0;z-index:10003;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
@@ -1506,12 +1711,15 @@ function openLoan(id){
       onSign:(dataUrl, extra)=>{ if(!dataUrl) return; const finalAmt=(extra&&extra.amount>0)?extra.amount:startAmt; const patch=approvePatch(finalAmt,useTerm); patch.mgmt_signature=dataUrl; patch.mgmt_signer=myName(); patch.mgmt_signed_at=new Date().toISOString(); setLoan(patch); }
     });
   };
-  const adv=document.getElementById("loanAdv"); if(adv) adv.addEventListener("click",()=>{
+  const doLoanAdvance=()=>{
     if(!stage.canAct) return;                       // read-only for non-owners
-    if(l.status==="HR Review"){ loanSendUp(); return; }        // → Management + supervisor FYI
+    if(l.status==="HR Review"){ loanSendUp(); return; }        // → Management + supervisor FYI (blocks if no docs)
     if(l.status==="Management"){ loanApproveSign(); return; }   // → Approved (admin signs)
     setLoan({status:next});                          // Submitted → HR Review
-  });
+  };
+  const adv=document.getElementById("loanAdv"); if(adv) adv.addEventListener("click",doLoanAdvance);
+  // Item 1 — admin's de-emphasized "Advance anyway (override)" runs the exact same advance logic.
+  const advOvr=document.getElementById("loanAdvOverride"); if(advOvr) advOvr.addEventListener("click",doLoanAdvance);
   // Supervisor FYI acknowledgment (non-blocking) — visible to the named supervisor or an admin recording on their behalf.
   const supAck=document.getElementById("supAck"); if(supAck) supAck.addEventListener("click",async()=>{
     const perf=(document.querySelector('input[name="supPerf"]:checked')||{}).value||"Good";
@@ -1522,7 +1730,27 @@ function openLoan(id){
     await logChange("loan",l.id,l.applicant_name,"Supervisor acknowledged (FYI)",perf);
     await loadEmployees(); m.remove(); openLoan(l.id);
   });
-  const rel=document.getElementById("loanRel"); if(rel) rel.addEventListener("click",()=>{ if(waiverBlocked()||agreementBlocked()) return; setLoan({status:"Released"}); });
+  // Release is OFF the Director now: Payroll (Grazel) records the PayPlus deduction + marks Released,
+  // and only after Accounting (Margie) has uploaded the disbursement proof. Admin can still act as an override.
+  const relBtn=document.getElementById("loanRel");
+  if(relBtn){
+    const amtEl=document.getElementById("loanRelAmt"), cutEl=document.getElementById("loanRelCut");
+    const syncRel=()=>{ const ok=!!l.release_proof && !!amtEl && parseFloat(amtEl.value||"")>0 && !!cutEl && !!(cutEl.value||"").trim(); relBtn.disabled=!ok; relBtn.style.opacity=ok?"":".55"; };
+    if(amtEl) amtEl.addEventListener("input",syncRel);
+    if(cutEl) cutEl.addEventListener("input",syncRel);
+    syncRel();
+    relBtn.addEventListener("click",()=>{
+      if(relBtn.disabled) return;
+      if(waiverBlocked()||agreementBlocked()) return;
+      if(!l.release_proof){ alert("Accounting (Margie) must upload the disbursement proof before this loan can be marked Released."); return; }
+      const amt=parseFloat((amtEl&&amtEl.value)||""); const cut=((cutEl&&cutEl.value)||"").trim();
+      const noteEl=document.getElementById("loanRelNote");
+      if(!(amt>0)||!cut){ alert("Enter the PayPlus deduction amount per cut-off and the effective cut-off date before marking Released."); return; }
+      const nowIso=new Date().toISOString();
+      setLoan({ status:"Released", released_by:myName()||myEmail(), released_at:nowIso,
+        payplus_deduction:{ amount_per_cutoff:amt, effective_cutoff:cut, note:((noteEl&&noteEl.value.trim())||null), recorded_by:myEmail(), recorded_at:nowIso } });
+    });
+  }
   const genAgr=document.getElementById("loanGenAgr"); if(genAgr) genAgr.addEventListener("click",()=>{ const approver=loanApprover(l); setLoan({mgmt_approver:approver,agreement_body:buildLoanAgreement(l,approver),agreement_token:newLoanToken(),agreement_status:"awaiting"}); });
   const viewAgr=document.getElementById("loanViewAgr"); if(viewAgr) viewAgr.addEventListener("click",()=>{ const w=window.open("","_blank"); if(w){ w.document.write(`<title>${esc(l.loan_ref)} — Loan Agreement</title><pre style="white-space:pre-wrap;font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;padding:28px;max-width:680px;margin:0 auto;color:#1F2A37;">${esc(l.agreement_body||"")}</pre>`); w.document.close(); } });
   const agrCopy=document.getElementById("agrCopy"); if(agrCopy) agrCopy.addEventListener("click",()=>{ const inp=document.getElementById("agrLink"); inp.select(); navigator.clipboard.writeText(inp.value).then(()=>{ agrCopy.textContent="Copied"; setTimeout(()=>agrCopy.textContent="Copy",1500); }); });
@@ -5237,6 +5465,22 @@ function renderCosign(){
   // Stash for the click handlers (id can repeat across sources → key by kind+id).
   const signMap={}; pending.forEach(p=>{ signMap[p.kind+":"+p.id]=p.sign; });
 
+  // --- Releases to record: loans I co-signed that the Director approved but have no disbursement proof yet ---
+  const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+  const iAmLoanCosigner=(EXT_SIGNOFFS||[]).some(s=> s.context_type==="loan" && norm(s.signer_email)===me && me);
+  const relToRecord=(typeof LOANS!=="undefined"?LOANS:[]).filter(l=>
+    l && l.status==="Approved" && !l.release_proof &&
+    loanCoSigners(l).some(s=> norm(s.signer_email)===me && me));
+  const showRelSection = iAmLoanCosigner || isAdminUser() || userRole()==="payroll";
+  const relCard=(l)=>`
+    <div class="lk-row" style="display:flex;align-items:center;gap:12px;border-top:1px solid var(--line,#e4eae6);padding:11px 0;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;color:#12352a;">${esc(l.applicant_name||"")}</div>
+        <div class="psub" style="margin:2px 0 0;">${esc(l.loan_ref||"")} · ${peso(l.amount)}</div>
+      </div>
+      <button class="btn" data-rec-release="${esc(String(l.id))}" style="flex-shrink:0;">Record disbursement</button>
+    </div>`;
+
   const pendCard=(p)=>`
     <div class="lk-row" style="display:flex;align-items:center;gap:12px;border-top:1px solid var(--line,#e4eae6);padding:11px 0;">
       <div style="flex:1;min-width:0;">
@@ -5263,11 +5507,17 @@ function renderCosign(){
       ${pending.length ? pending.map(pendCard).join("")
         : `<div class="psub" style="border-top:1px solid var(--line,#e4eae6);padding-top:10px;">Nothing waiting for your signature right now.</div>`}
     </div>
+    ${showRelSection?`<div class="panel">
+      <h2 style="font-size:15px;">Releases to record${relToRecord.length?` · ${relToRecord.length}`:""}</h2>
+      <div class="psub">Loans the Director approved &amp; you co-signed — upload the disbursement proof (cheque/GCash ref + file). Once recorded, Payroll marks it Released.</div>
+      ${relToRecord.length?relToRecord.map(relCard).join(""):`<div class="psub" style="border-top:1px solid var(--line,#e4eae6);padding-top:10px;">No disbursements to record right now.</div>`}
+    </div>`:""}
     ${signed.length?`<div class="panel">
       <h2 style="font-size:15px;">Signed recently</h2>
       ${signed.slice(0,12).map(signedCard).join("")}
     </div>`:""}`;
   $$('#page-cosign [data-cosign-key]').forEach(b=>b.addEventListener("click",()=>{ const fn=signMap[b.dataset.cosignKey]; if(typeof fn==="function") fn(); }));
+  $$('#page-cosign [data-rec-release]').forEach(b=>b.addEventListener("click",()=>recordLoanDisbursement(b.dataset.recRelease)));
 }
 window.renderCosign=renderCosign;
 // Review-and-sign modal for one co-sign document.

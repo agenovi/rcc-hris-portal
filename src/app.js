@@ -773,7 +773,7 @@ function buildLoanAgreement(l,approver){
     L.push(`3. REPAYMENT. The Borrower shall repay over ${term} month(s) in equal amortizations of approximately ${P(monthly)} each (principal plus interest), by salary deduction every payroll.`);
   }
   L.push(`4. SALARY DEDUCTION AUTHORIZATION. The Borrower freely authorizes the Company, in writing, to deduct the agreed amortization from his/her salary each payroll until the loan is fully paid. Such deductions shall not reduce the Borrower's take-home pay below the applicable minimum wage (Article 113, Labor Code).`);
-  L.push(`5. SEPARATION. Upon separation for any cause, the outstanding balance becomes due and may be deducted from the Borrower's final pay only to the extent allowed by law. Any remaining balance is settled directly, without additional penalty interest.`);
+  L.push(`5. SEPARATION. Upon separation for any cause, the entire outstanding balance becomes immediately due and may be deducted from the Borrower's final pay. Any amount exceeding the final pay shall be payable within thirty (30) days from the date of separation, subject to added interest charges at three percent (3%) per month on the unpaid balance until fully settled.`);
   if(moto) L.push(`6. OWNERSHIP. The motorcycle remains the property of the Company until the loan and all related charges are fully paid; ownership transfers to the Borrower upon full payment.`);
   L.push(`${moto?7:6}. APPROVAL. The amount and terms are subject to the Company's approval and the Borrower's capacity to pay.`);
   L.push(`${moto?8:7}. ELECTRONIC SIGNATURE (RA 8792). The Borrower's electronic signature below has the same legal effect as a handwritten signature.`,"");
@@ -945,7 +945,7 @@ function openLoan(id){
       ${loanVerdictBadgeHtml(l)}
       <div class="panel" style="margin-top:0;">
         <h2>Application</h2>
-        ${phRow("Loan type",loanTypeLabel(l.loan_type))}${phRow("Amount",peso(l.amount))}${phRow("Term",(l.term_months||"—")+" months")}${phRow("Est. monthly",peso(l.monthly_estimate))}${phRow("Mobile",l.contact_number)}${phRow("Email",l.email)}${phRow("Employee ID",l.employee_id)}${phRow("Position",l.department)}${phRow("Take-home given",l.net_pay?peso(l.net_pay):"—")}${phRow("Purpose",l.purpose)}${phRow("Authorized",l.authorized?"Applied & consented online (RA 8792)":"—")}
+        ${phRow("Loan type",loanTypeLabel(l.loan_type))}${phRow("Amount",peso(l.amount))}${phRow("Term",(l.term_months||"—")+" months")}${phRow("Interest rate",((typeof LOAN_RATES!=="undefined"?LOAN_RATES[l.loan_type]:null)??12)+"% p.a., flat")}${phRow("Est. monthly",peso(l.monthly_estimate))}${phRow("Mobile",l.contact_number)}${phRow("Email",l.email)}${phRow("Employee ID",l.employee_id)}${phRow("Position",l.department)}${phRow("Take-home given",l.net_pay?peso(l.net_pay):"—")}${phRow("Purpose",l.purpose)}${phRow("Authorized",l.authorized?"Applied & consented online (RA 8792)":"—")}
       </div>
       <div class="panel" style="border:2px solid #cfe0d4;">
         <h2>Eligibility snapshot</h2>
@@ -1191,7 +1191,7 @@ function openLoan(id){
     maxP=Math.floor(maxP/100)*100; out.dataset.max=maxP;
     const P=n=>"₱"+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0});
     out.innerHTML=(disposable
-      ? `This amount → <b>${P(mon)}/mo</b> · combined ${P(combined)} vs 15% guide ${P(guide)} `
+      ? `This amount → <b>${P(mon)}/mo</b> at ${loanRateOf()}% p.a. flat · combined ${P(combined)} vs 15% guide ${P(guide)} `
         +(within?`<span style="color:var(--green);font-weight:700;">✓ within</span>`:`<span style="color:#b26a00;font-weight:700;">⚠ over</span>`)
         +` · take-home ${floorOk?`<span style="color:var(--green);font-weight:700;">✓ ok</span>`:`<span style="color:#b26a00;font-weight:700;">⚠ below floor</span>`}<br>`
         +`<b>Suggested max at ${term} mo:</b> ~${P(maxP)} (${P(monthlyFor(maxP,term))}/mo — fits the 15% guide &amp; take-home floor)${cap&&maxP>=cap?` · capped at the ${loanTypeLabel(l.loan_type)} policy max`:""}.`
@@ -1350,7 +1350,7 @@ function openLoan(id){
     const useTerm=(!isNaN(dT)&&dT>0)?dT:Number(l.term_months||12);
     captureSignatureModal({
       title:"Approve & sign this loan",
-      subtitle:`${l.applicant_name} · ${loanTypeLabel(l.loan_type)} · ${useTerm} mo`,
+      subtitle:`${l.applicant_name} · ${loanTypeLabel(l.loan_type)} · ${useTerm} mo · ${loanRateOf()}% p.a. flat`,
       editField:{ label:"Approved amount (₱) — edit to counter-offer", value:startAmt, hint:`Requested ${peso(l.amount)}. Whatever you enter here is what gets approved & put on the agreement.` },
       cta:"Approve & Sign",
       onSign:(dataUrl, extra)=>{ if(!dataUrl) return; const finalAmt=(extra&&extra.amount>0)?extra.amount:startAmt; const patch=approvePatch(finalAmt,useTerm); patch.mgmt_signature=dataUrl; patch.mgmt_signer=myName(); patch.mgmt_signed_at=new Date().toISOString(); setLoan(patch); }

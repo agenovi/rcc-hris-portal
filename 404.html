@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785853700";
+window.APP_BUILD="1785854335";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785853700" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785854335" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -3231,7 +3231,7 @@ function loanFlagSummary(l){
   const red=[], amber=[];
   const push=(arr,code,html,label,guidance)=>arr.push({code,html,label,guidance:guidance||LOAN_DECLINE_GUIDE[code]||label});
   // Item 2 — HR-staff self-application (segregation of duties)
-  if(loanIsHrSelfApp(l)) push(red,"hr_self",`⛔ <b>HR-staff self-application</b> — segregation of duties. HR cannot review its own loan; this must be decided by Management (Director).`,"HR-staff self-application (segregation of duties)");
+  if(loanIsHrSelfApp(l)) push(amber,"hr_self",`⚠ <b>HR-staff self-application</b> — segregation of duties: HR cannot review its own loan, so this is decided by Management (the Director). Not an eligibility issue — just who signs off.`,"HR-staff self-application (decided by the Director)");
   let e=null, tenureTxt="—", ct="—", stTxt="—", src="—", ty=null;
   if(l.employee_id){
     // Loans carry the PayPlus id; exit_clearance links by the employee's internal UUID (employees.id).
@@ -3246,7 +3246,7 @@ function loanFlagSummary(l){
     const sepSub=ex.find(x=>_matchExit(x) && x.separation_status==="Submitted");
     const sepRev=(typeof SEPARATION_REVIEW!=="undefined"?SEPARATION_REVIEW:[]).find(x=>String(x.employee_id)===String(l.employee_id)||(_appNk&&_nk(x.full_name)===_appNk));
     // Item 10 — open exit / separating employee
-    if(openExit||sepSub||sepRev) push(red,"open_exit",`⚠ <b>This employee has an open exit / is separating</b> — a new loan may only be recoverable from final pay. Confirm before granting.`,"Open exit / separating employee");
+    if(openExit||sepSub||sepRev) push(amber,"open_exit",`⚠ <b>This employee has an open exit / is separating</b> — a new loan may only be recoverable from final pay. Confirm before granting.`,"Open exit / separating employee");
     // Item 1 — 3-month cooldown: any prior loan for this ID declined with a future reapply_after date.
     const today=new Date().toISOString().slice(0,10);
     const cd=(typeof LOANS!=="undefined"?LOANS:[]).filter(x=>String(x.employee_id)===String(l.employee_id) && String(x.id)!==String(l.id) && x.reapply_after && String(x.reapply_after).slice(0,10)>today)
@@ -3641,15 +3641,11 @@ function loanSummaryStripHtml(l){
     ${cell("Verdict",v.t,v.c)}
   </div>`;
 }
-// Application date + 5-working-day processing indicator for the loan review header.
+// Application date for the loan review header. A loan is an aid the company extends, not something owed on a
+// deadline — so we show only WHEN it was applied for, with no elapsed-time / "processing window" pressure framing.
 function loanAppliedLineHtml(l){
   if(!l||!l.created_at) return "";
-  const n=(typeof workingDaysBetween==="function")?workingDaysBetween(l.created_at,new Date()):0;
-  const inReview=["Submitted","HR Review","Management"].includes(l.status);
-  let note="";
-  if(inReview && n<5) note=`<span style="color:#8a5a00;font-weight:700;"> · within the 5-working-day processing window — a follow-up is early.</span>`;
-  else if(inReview && n>=5) note=`<span style="color:var(--muted);"> · past the 5-working-day window.</span>`;
-  return `<div class="psub" style="margin:-4px 0 10px;">Applied ${fmtDate(l.created_at)} · ${n} working day${n===1?"":"s"} ago${note}</div>`;
+  return `<div class="psub" style="margin:-4px 0 10px;">Applied ${fmtDate(l.created_at)}</div>`;
 }
 // Item 7 — horizontal progress tracker (Submitted → HR review → Management → Approved → Co-signed → Released).
 function loanProgressHtml(l){
@@ -3691,7 +3687,6 @@ function openLoan(id){
     </div>
     <div style="padding:18px 22px 60px;">
       ${loanSummaryStripHtml(l)}
-      ${(()=>{ if(!l.created_at) return ""; const wd=(typeof workingDaysBetween==="function")?workingDaysBetween(l.created_at,new Date()):null; const inReview=!["Approved","Released","Rejected"].includes(l.status); const note=(inReview&&wd!=null)?(wd<5?`<span style="color:#b26a00;font-weight:700;"> · within the 5-working-day processing window — a follow-up is early</span>`:`<span style="color:var(--muted);"> · past the 5-working-day window</span>`):""; return `<div style="margin:10px 0 0;padding:8px 12px;border-radius:9px;background:#f4f8f5;border:1px solid #cfe0d4;font-size:13px;">📅 <b>Applied ${esc(fmtDate(l.created_at))}</b>${wd!=null?` · ${wd} working day${wd===1?"":"s"} ago`:""}${note}</div>`; })()}
       ${loanAppliedLineHtml(l)}
       ${loanProgressHtml(l)}
       ${loanVerdictBadgeHtml(l)}

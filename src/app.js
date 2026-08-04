@@ -2104,7 +2104,12 @@ function openLoan(id){
     if(error){ alert(error.message); wSave.disabled=false; wSave.textContent="Save waiver status"; return; }
     await loadEmployees(); m.remove();
   });
-  const rej=document.getElementById("loanRej"); if(rej) rej.addEventListener("click",()=>setLoan({status:"Rejected"}));
+  const rej=document.getElementById("loanRej"); if(rej) rej.addEventListener("click",async()=>{
+    const why=prompt("Reject this loan — reason (required):\n\n(e.g. \"already has an active company loan\", \"under the required tenure\", \"documents incomplete\", \"purpose not covered\")");
+    if(why==null) return;                                   // cancelled — no change
+    if(!why.trim()){ alert("A reason is required to reject a loan."); return; }
+    await setLoan({ status:"Rejected", decline_reason:why.trim(), declined_at:new Date().toISOString() });
+  });
   const undoRej=document.getElementById("loanUndoRej"); if(undoRej) undoRej.addEventListener("click",async()=>{
     if(!confirm("Undo the rejection and send this loan back to HR Review?")) return;
     undoRej.disabled=true; undoRej.textContent="Reopening…";

@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785854945";
+window.APP_BUILD="1785856907";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785854945" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785856907" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -2351,6 +2351,9 @@ let CONCERNS=[];      // arbitration / ongoing legal cases (Concerns Tracker —
 let DEPT_HEADS=[];    // department_heads — HRIS-owned org structure (dept → head employee); editable by Rhel/admins in Org Chart
 let TRANSFERS=[];     // employee_transfers — SC-requested store transfers/deployments w/ store-head before+after confirmation
 let SC_LINKS=[];      // sc_links — per-SC private transfer-request tokens (cascade to their people + anti-tamper)
+let MANNING_SCONF={}; // manning_store_confirm — store -> {confirmed_by, confirmed_at, note} (SC confirms a store's manning is correct)
+let MANNING_PCONF={}; // manning_person_confirm — employee_id -> {confirmed_by, confirmed_at} (Grazel confirms a person is actually present)
+let STORE_CHANGES=[]; // store_change_requests — maker-checker for store-list changes (non-admins request; admins approve/reject)
 let POSITION_PROFILES=[]; // position_profiles — per-position Job Description / Key Tasks / Deliverables / Reports-To (HRIS-owned, fill once per role)
 let POLICY_ACKS=[];   // policy_acknowledgments rows (read-and-sign roster)
 let PROCESSES=[];     // processes rows (SOPs)
@@ -2613,7 +2616,7 @@ function updateNavBadges(){
 }
 async function loadEmployees(){
   await loadUserRoles();   // role overlay first — so all access gating below reflects the latest User Access settings
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh, ppf, incd, hmod, sephist] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh, ppf, incd, hmod, sephist, msconf, mpconf, schg] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2652,7 +2655,10 @@ async function loadEmployees(){
     sb.from("position_profiles").select("*"),
     sb.from("incidents").select("*").order("date_received",{ascending:false}),
     sb.from("hmo_members").select("*").order("member_no",{ascending:true}),
-    sb.from("separations_history").select("*")
+    sb.from("separations_history").select("*"),
+    sb.from("manning_store_confirm").select("*"),
+    sb.from("manning_person_confirm").select("*"),
+    sb.from("store_change_requests").select("*").order("requested_at",{ascending:false})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2694,6 +2700,9 @@ async function loadEmployees(){
   INCIDENTS=(incd&&incd.data)||[];
   HMO_MEMBERS=(hmod&&hmod.data)||[];
   SEPARATIONS=(sephist&&sephist.data)||[];
+  MANNING_SCONF={}; ((msconf&&msconf.data)||[]).forEach(r=>{ MANNING_SCONF[r.store]=r; });
+  MANNING_PCONF={}; ((mpconf&&mpconf.data)||[]).forEach(r=>{ MANNING_PCONF[String(r.employee_id)]=r; });
+  STORE_CHANGES=(schg&&schg.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -7010,7 +7019,7 @@ const normWorksite=(w)=> WORKSITE_ALIAS[w]||w;
 // Confirmed staff at a store = LIVE PayPlus roster only (active employees whose worksite matches the store). Manning Sheet is retired now that PayPlus is the source.
 function staffAtStore(store){
   return (EMPLOYEES||[]).filter(e=> normWorksite(e.worksite)===store && (e.status||"Active")==="Active")
-    .map(e=>({ name:e.full_name, emp_no:e.employee_id, position:e.position, diser_type:null, hired_by:e.hire_source, status:e.status||"Active", total_rate:e.daily_rate }));
+    .map(e=>({ name:e.full_name, emp_no:e.employee_id, position:e.position, diser_type:null, hired_by:e.hire_source, status:e.status||"Active", total_rate:e.daily_rate, sub_location:e.sub_location }));
 }
 const chcFor=(store)=> staffAtStore(store).length;
 
@@ -7021,7 +7030,7 @@ function diserSourceBadge(h){ const x=(h||"").toLowerCase();
   return `<span class="pill ${lbl==="Direct"?"active":"di"}">${lbl}</span>`;
 }
 function storeForm(b){
-  const isNew=!b; b=b||{};
+  const isNew=!b; b=b||{}; const admin=isAdminUser();
   let m=document.getElementById("stModal"); if(!m){ m=document.createElement("div"); m.id="stModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;padding:22px;max-height:90vh;overflow-y:auto;">
@@ -7032,9 +7041,12 @@ function storeForm(b){
     <div class="form-grid">${sel("st_cat","Type",["CO","CN"],b.category||"CO")}${sel("st_status","Status",["Open","Closed","Under Renovation","No Manning","Pending"],b.status||"Open")}</div>
     <div class="form-grid">${fld("st_ahcs","Approved stationary",b.ahc_stationary??0,"number")}${fld("st_ahcr","Approved reliever",b.ahc_reliever??0,"number")}</div>
     <div class="psub" style="margin:2px 0 6px;">CO = Boutique · CN = Concession. Approved headcount = how many this store should have.</div>
+    ${!admin?`<div style="margin:4px 0 4px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Reason for change *</label>
+      <input id="st_reason" placeholder="Why this change is needed — goes to Management for approval" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;"></div>
+      <div class="psub" style="margin:-2px 0 6px;color:#a4322a;">Store-list changes need Management approval — this is submitted as a request, not applied directly.</div>`:''}
     ${demoChk("st_isdemo",b.is_demo)}
     <div id="stMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
-    <div style="display:flex;gap:10px;"><button class="btn ghost" id="stCancel" style="flex:1;">Cancel</button><button class="btn" id="stSave" style="flex:1;">${isNew?"Add store":"Save"}</button></div>
+    <div style="display:flex;gap:10px;"><button class="btn ghost" id="stCancel" style="flex:1;">Cancel</button><button class="btn" id="stSave" style="flex:1;">${isNew?(admin?"Add store":"Request store"):(admin?"Save":"Request change")}</button></div>
   </div>`;
   m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
   document.getElementById("stCancel").addEventListener("click",()=>m.remove());
@@ -7042,6 +7054,27 @@ function storeForm(b){
     const name=v("st_name"); if(!name){ document.getElementById("stMsg").textContent="Store name is required."; return; }
     const payload={ name, city:v("st_city"), area:v("st_area"), sc:v("st_sc"), category:v("st_cat"), status:v("st_status"),
       ahc_stationary:nv("st_ahcs")||0, ahc_reliever:nv("st_ahcr")||0, is_demo:demoChecked("st_isdemo") };
+    if(!admin){
+      const reason=v("st_reason");
+      if(!reason){ document.getElementById("stMsg").textContent="A reason is required for a change request."; return; }
+      const reqs=[];
+      if(isNew){ reqs.push({ change_type:"new", old_value:null, new_value:name }); }
+      else {
+        if((b.name||"")!==name) reqs.push({ change_type:"rename", old_value:b.name||"", new_value:name });
+        if((b.sc||"")!==(payload.sc||"")) reqs.push({ change_type:"sc", old_value:b.sc||"", new_value:payload.sc||"" });
+        if((b.status||"")!==(payload.status||"")) reqs.push({ change_type:"status", old_value:b.status||"", new_value:payload.status });
+        if((b.ahc_stationary||0)!=payload.ahc_stationary) reqs.push({ change_type:"ahc_stationary", old_value:String(b.ahc_stationary||0), new_value:String(payload.ahc_stationary) });
+        if((b.ahc_reliever||0)!=payload.ahc_reliever) reqs.push({ change_type:"ahc_reliever", old_value:String(b.ahc_reliever||0), new_value:String(payload.ahc_reliever) });
+      }
+      if(!reqs.length){ document.getElementById("stMsg").textContent="No changes to request."; return; }
+      const rbtn=document.getElementById("stSave"); rbtn.disabled=true; rbtn.textContent="Requesting…";
+      const rows=reqs.map(r=>({ store:name, change_type:r.change_type, old_value:r.old_value, new_value:r.new_value, reason, requested_by:myEmail(), status:"Pending" }));
+      const {error}=await sb.from("store_change_requests").insert(rows);
+      if(error){ document.getElementById("stMsg").textContent=error.message; rbtn.disabled=false; rbtn.textContent=isNew?"Request store":"Request change"; return; }
+      const msg=document.getElementById("stMsg"); msg.style.color="var(--green-dark)"; msg.textContent="Change requested — pending approval.";
+      setTimeout(async()=>{ m.remove(); const sm=document.getElementById("storeModal"); if(sm) sm.remove(); await loadEmployees(); window.go("manning"); }, 1100);
+      return;
+    }
     const btn=document.getElementById("stSave"); btn.disabled=true; btn.textContent="Saving…";
     let res, newId=b.id;
     if(isNew){ res=await sb.from("branches").insert(payload).select().single(); newId=res.data&&res.data.id; }
@@ -7077,14 +7110,21 @@ function openStore(b){
       <div class="panel" style="margin-top:14px;">
         <h2>Merchandisers at this store <span class="count-tag">${here.length}</span></h2>
         <div class="psub">Live from PayPlus — active employees assigned to this worksite. Daily rate is blank until PayPlus exposes pay via the API.</div>
-        ${here.length? `<table><thead><tr><th>Name</th><th>Source</th><th>Type</th><th>Position</th>${canSeePay()?'<th>Daily Rate</th>':''}<th>Status</th></tr></thead>
-          <tbody>${here.map(d=>`<tr><td><b>${esc(d.name)}</b><div style="font-size:11px;color:var(--muted);">${esc(d.emp_no||"")}</div></td>
+        ${here.length? `<table><thead><tr><th>Name</th><th>Source</th><th>Type</th><th>Position</th>${canSeePay()?'<th>Daily Rate</th>':''}<th>Status</th>${canConfirmPerson()?'<th>Present</th>':''}</tr></thead>
+          <tbody>${here.map(d=>{
+            const pc=MANNING_PCONF[String(d.emp_no)];
+            const presCell = pc?`<span class="pill active">✓ present · ${pc.confirmed_at?fmtDate(pc.confirmed_at):''}</span>`
+              : (d.emp_no?`<button class="btn ghost mn-pconf" data-emp="${esc(d.emp_no)}" style="padding:2px 8px;font-size:11px;">✓ Present</button>`:'<span class="note">—</span>');
+            return `<tr><td><b>${esc(d.name)}</b>${d.sub_location?` <span class="pill di" style="font-size:10px;">also covers ${esc(d.sub_location)}</span>`:''}<div style="font-size:11px;color:var(--muted);">${esc(d.emp_no||"")}</div></td>
             <td>${diserSourceBadge(d.hired_by)}</td>
             <td>${esc(d.diser_type||"—")}</td><td>${esc(d.position||"—")}</td>
             ${canSeePay()?`<td>${d.total_rate?("₱"+Number(d.total_rate).toLocaleString()):"—"}</td>`:''}
-            <td><span class="pill ${(d.status||'').includes('Probation')?'probation':'active'}">${esc(d.status||"—")}</span></td></tr>`).join("")}</tbody></table>`
+            <td><span class="pill ${(d.status||'').includes('Probation')?'probation':'active'}">${esc(d.status||"—")}</span></td>
+            ${canConfirmPerson()?`<td>${presCell}</td>`:''}</tr>`;
+          }).join("")}</tbody></table>`
           : `<div class="placeholder" style="padding:30px;"><p>No current merchandiser placement on file for this store.<br>Live placement comes through the PayPlus connection.</p></div>`}
       </div>
+      ${(()=>{ const rc=(EMPLOYEES||[]).filter(e=>e.sub_location===b.name && (e.status||"Active")==="Active"); return rc.length?`<div class="panel" style="margin-top:14px;"><h2>Reliever coverage <span class="count-tag">${rc.length}</span></h2><div class="psub">Relievers based at another store who also cover this one.</div>${rc.map(e=>`<div class="task"><div style="flex:1;"><div class="tt">${esc(e.full_name)} — covers this store</div><div class="td">based at ${esc(e.worksite||"—")}</div></div></div>`).join("")}</div>`:""; })()}
       ${(()=>{ const h=CHANGE_LOG.filter(c=>c.entity==='branch'&&String(c.entity_id)===String(b.id)).slice(0,8); return h.length?`<div class="panel" style="margin-top:14px;"><h2>Change log <span class="count-tag">${h.length}</span></h2>${h.map(c=>`<div class="task" style="align-items:flex-start;"><div style="flex:1;"><div class="tt">${esc(c.action)}${c.detail?` — ${esc(c.detail)}`:""}</div><div class="td">${esc(c.changed_by||"")} · ${c.created_at?fmtDate(c.created_at):""}</div></div></div>`).join("")}</div>`:""; })()}
       <div style="display:flex;gap:10px;margin-top:14px;">
         ${canManageStores()?`<button class="btn" id="storeEdit">Edit store</button>
@@ -7093,9 +7133,17 @@ function openStore(b){
       </div>
     </div></div>`;
   document.getElementById("storeClose").addEventListener("click",()=>m.remove());
+  m.querySelectorAll(".mn-pconf").forEach(btn=>btn.addEventListener("click",()=>manningPersonConfirm(btn.dataset.emp, b)));
   const _se=document.getElementById("storeEdit"); if(_se) _se.addEventListener("click",()=>storeForm(b));
   const _st=document.getElementById("storeToggle"); if(_st) _st.addEventListener("click",async()=>{
     const closing=b.status!=="Closed"; const ns=closing?"Closed":"Open";
+    if(!isAdminUser()){
+      const reason=prompt((closing?"Request to CLOSE ":"Request to REOPEN ")+b.name+"? A reason is required (goes to Management for approval):",""); if(reason===null) return;
+      if(!reason.trim()){ alert("A reason is required."); return; }
+      const {error}=await sb.from("store_change_requests").insert({ store:b.name, change_type:"status", old_value:b.status||"", new_value:ns, reason:reason.trim(), requested_by:myEmail(), status:"Pending" });
+      if(error){ alert(error.message); return; }
+      alert("Change requested — pending Management approval."); m.remove(); await loadEmployees(); window.go("manning"); return;
+    }
     let reason="";
     if(closing){ reason=prompt("Close "+b.name+"? Give a brief reason (this is logged):",""); if(reason===null) return; }
     const {error}=await sb.from("branches").update({status:ns}).eq("id",b.id);
@@ -9499,15 +9547,83 @@ async function transferSet(t,patch,parent,logMsg){
   if(parent) parent.remove();
   await loadEmployees(); window.go("manning");
 }
+/* ---------- MANNING VERIFICATION + GOVERNANCE (additive) ---------- */
+// SC confirms a store's manning is correct; Grazel confirms a specific person is present; store-list edits by non-admins go through maker-checker.
+function canConfirmStoreManning(){ return isAdminUser() || userRole()==='sales' || canManageStores(); }
+function canConfirmPerson(){ const r=userRole(); return r==="admin"||r==="payroll"; }
+function scChangeLabel(t){ return ({ahc_stationary:"Approved stationary",ahc_reliever:"Approved reliever",status:"Status",sc:"Sales Coordinator",rename:"Rename",close:"Close store",new:"New store"})[t]||t; }
+async function manningStoreConfirm(store){
+  const {error}=await sb.from("manning_store_confirm").upsert({ store, confirmed_by:myEmail(), confirmed_at:new Date().toISOString() }, { onConflict:"store" });
+  if(error){ alert(error.message); return; }
+  await logChange("branch",null,store,"Manning confirmed",null);
+  await loadEmployees(); window.go("manning");
+}
+async function manningStoreUnconfirm(store){
+  const {error}=await sb.from("manning_store_confirm").delete().eq("store",store);
+  if(error){ alert(error.message); return; }
+  await loadEmployees(); window.go("manning");
+}
+async function manningPersonConfirm(empId, b){
+  if(!empId) return;
+  const {error}=await sb.from("manning_person_confirm").upsert({ employee_id:String(empId), confirmed_by:myEmail(), confirmed_at:new Date().toISOString() }, { onConflict:"employee_id" });
+  if(error){ alert(error.message); return; }
+  await loadEmployees(); const nb=(BRANCHES||[]).find(x=>x.id===b.id)||b; openStore(nb);
+}
+function manningApprovalsPanel(){
+  if(!isAdminUser()) return '';
+  const pend=STORE_CHANGES.filter(c=>(c.status||'Pending')==='Pending');
+  if(!pend.length) return '';
+  return `<div class="panel" style="margin-top:0;border:1px solid #f1c9c5;">
+    <h2>Store-change requests <span class="count-tag">${pend.length} pending</span></h2>
+    <div class="psub">Store-list changes submitted by HR for your approval. Approve applies it to the store; reject sends it back.</div>
+    <table><thead><tr><th>Store</th><th>Change</th><th>Requested by</th><th>Reason</th><th></th></tr></thead>
+      <tbody>${pend.map(c=>`<tr>
+        <td><b>${esc(c.store||'—')}</b></td>
+        <td>${esc(scChangeLabel(c.change_type))}: ${esc(c.old_value||'—')} → <b>${esc(c.new_value||'—')}</b></td>
+        <td>${esc((c.requested_by||'').split('@')[0])}<div style="font-size:11px;color:var(--muted);">${c.requested_at?fmtDate(c.requested_at):''}</div></td>
+        <td>${esc(c.reason||'—')}</td>
+        <td style="text-align:right;white-space:nowrap;"><button class="btn mn-appr" data-id="${c.id}">Approve</button> <button class="btn ghost mn-rej" data-id="${c.id}" style="color:var(--red);border-color:#f1c9c5;">Reject</button></td>
+      </tr>`).join('')}</tbody></table>
+  </div>`;
+}
+async function approveStoreChange(id){
+  const c=STORE_CHANGES.find(x=>String(x.id)===String(id)); if(!c) return;
+  if(!confirm("Approve this change to "+(c.store||"the store")+"?")) return;
+  const br=BRANCHES.find(b=>b.name===c.store);
+  const t=c.change_type;
+  if(t==='new'){ const name=c.new_value||c.store; if(name) await sb.from("branches").insert({ name, status:"Open" }); }
+  else if(br){
+    const upd={};
+    if(t==='ahc_stationary') upd.ahc_stationary=Number(c.new_value)||0;
+    else if(t==='ahc_reliever') upd.ahc_reliever=Number(c.new_value)||0;
+    else if(t==='status') upd.status=c.new_value;
+    else if(t==='sc') upd.sc=c.new_value;
+    else if(t==='rename') upd.name=c.new_value;
+    else if(t==='close') upd.status='Closed';
+    if(Object.keys(upd).length){ const {error}=await sb.from("branches").update(upd).eq("id",br.id); if(error){ alert(error.message); return; } }
+  }
+  await sb.from("store_change_requests").update({ status:"Approved", decided_by:myEmail(), decided_at:new Date().toISOString() }).eq("id",id);
+  await logChange("branch",br?br.id:null,c.store,"Change approved", scChangeLabel(c.change_type)+": "+(c.old_value||"—")+" → "+(c.new_value||"—"));
+  await loadEmployees(); window.go("manning");
+}
+async function rejectStoreChange(id){
+  const c=STORE_CHANGES.find(x=>String(x.id)===String(id)); if(!c) return;
+  const note=prompt("Reject this change? Optional note back to HR:",""); if(note===null) return;
+  const {error}=await sb.from("store_change_requests").update({ status:"Rejected", decided_by:myEmail(), decided_at:new Date().toISOString(), decide_note:note||null }).eq("id",id);
+  if(error){ alert(error.message); return; }
+  await loadEmployees(); window.go("manning");
+}
 function renderManning(){
   const pg=$("#page-manning"); if(!pg) return;
   const open=BRANCHES.filter(b=>b.status==="Open");
   const SCs=[...new Set(open.map(b=>b.sc).filter(x=>x&&x!=='Unassigned'))].sort();
   const totAHC=open.reduce((s,b)=>s+b.ahc_stationary+b.ahc_reliever,0);
   const totCHC=open.reduce((s,b)=>s+chcFor(b.name),0);
+  const confStores=open.filter(b=>MANNING_SCONF[b.name]).length;
   const OPENINGS=MANPOWER.filter(o=>o.status==="Open");
   const opInReview=(store)=>PREHIRE.filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT","POOLED"].includes(p.phase)).length;
   pg.innerHTML=`
+    ${manningApprovalsPanel()}
     <div class="panel" style="margin-top:0;">
       <h2>Openings <span class="count-tag">${OPENINGS.length} stores · ${OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0)} positions</span></h2>
       <div class="psub">Manpower requests you post. These drive the agency links — each agency sees the shortfall + an in-review count, then submits candidates into the pipeline.</div>
@@ -9519,11 +9635,12 @@ function renderManning(){
     <div class="panel">
       <h2>Manning / Headcount <span class="count-tag">by Sales Coordinator</span></h2>
       <div class="psub">Every Sales Coordinator → their stores → approved vs. confirmed headcount. Store sales and live attendance plug in here once PayPlus and the sales system are connected.</div>
-      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
+      <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
         <div class="kpi"><div class="k-l">Sales Coordinators</div><div class="k-n">${SCs.length}</div></div>
         <div class="kpi"><div class="k-l">Open Stores</div><div class="k-n">${open.length}</div></div>
         <div class="kpi"><div class="k-l">Approved HC (AHC)</div><div class="k-n">${totAHC}</div></div>
         <div class="kpi warn"><div class="k-l">Confirmed HC (CHC)</div><div class="k-n">${totCHC}</div><div class="k-s">matched from active list</div></div>
+        <div class="kpi"><div class="k-l">Manning confirmed</div><div class="k-n">${confStores}</div><div class="k-s">of ${open.length} stores</div></div>
       </div>
       <div class="filterbar" id="scChips">
         ${["All",...SCs].map(s=>{ const gone=s!=="All"&&scIsGone(s); return `<div class="chip${s===scFilter?' active':''}" data-sc="${esc(s)}"${gone?' style="color:var(--red);border-color:#f1c9c5;font-weight:700;"':''}>${gone?'● ':''}${esc(s)}${s!=="All"?` (${open.filter(b=>b.sc===s).length})`:""}</div>`; }).join("")}
@@ -9569,20 +9686,29 @@ function renderManning(){
           ${canManageStores()?`<button class="btn ghost" data-scstatus="${esc(sc)}" style="flex-shrink:0;font-size:11px;color:var(--muted);border-color:var(--line,#dbe4dd);padding:4px 9px;">SC status</button>`:""}
         </div>
         <table>
-          <thead><tr><th>Store</th><th>City · Area</th><th>Type</th><th>AHC</th><th>CHC</th><th>Shortfall</th><th>Store Sales</th><th>Attendance</th></tr></thead>
+          <thead><tr><th>Store</th><th>City · Area</th><th>Type</th><th>AHC</th><th>CHC</th><th>Shortfall</th><th>Store Sales</th><th>Attendance</th><th>Manning confirmed</th></tr></thead>
           <tbody>${stores.map(b=>{
             const a=b.ahc_stationary+b.ahc_reliever, c=chcFor(b.name), d=Math.max(0,a-c);
+            const conf=MANNING_SCONF[b.name];
+            const confCell = conf
+              ? `<span class="pill active" title="${esc(conf.confirmed_by||'')}">✓ ${esc((conf.confirmed_by||'').split('@')[0])} · ${conf.confirmed_at?fmtDate(conf.confirmed_at):''}</span>${isAdminUser()?` <button class="btn ghost mn-sconf-undo" data-store="${esc(b.name)}" style="padding:2px 6px;font-size:11px;">undo</button>`:''}`
+              : (canConfirmStoreManning()?`<button class="btn ghost mn-sconf" data-store="${esc(b.name)}" style="padding:2px 8px;font-size:11px;">✓ Confirm</button>`:'<span class="note">—</span>');
             return `<tr class="clickable" data-bi="${BRANCHES.indexOf(b)}"><td><b>${esc(b.name)}</b></td><td>${esc(b.city||"—")}${b.area?" · "+esc(b.area):""}</td><td>${catPill(b.category)}</td>
               <td>${a}</td><td>${c}</td><td>${d>0?`<span class="pill awol">${d}</span>`:`<span class="pill active">0</span>`}</td>
-              <td><span style="color:var(--muted);font-size:12px;">— PayPlus</span></td><td><span style="color:var(--muted);font-size:12px;">— PayPlus</span></td></tr>`;
+              <td><span style="color:var(--muted);font-size:12px;">— PayPlus</span></td><td><span style="color:var(--muted);font-size:12px;">— PayPlus</span></td>
+              <td>${confCell}</td></tr>`;
           }).join("")}</tbody>
         </table>
       </div>`;
     }).join("");
     $$("#scBlocks tr.clickable").forEach(tr=>tr.addEventListener("click",()=>openStore(BRANCHES[+tr.dataset.bi])));
     $$("#scBlocks [data-scstatus]").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); scStatusPrompt(b.dataset.scstatus); }));
+    $$("#scBlocks .mn-sconf").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); manningStoreConfirm(b.dataset.store); }));
+    $$("#scBlocks .mn-sconf-undo").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); manningStoreUnconfirm(b.dataset.store); }));
   };
   $$("#scChips .chip").forEach(c=>c.addEventListener("click",()=>{ scFilter=c.dataset.sc; renderManning(); }));
+  $$("#page-manning .mn-appr").forEach(b=>b.addEventListener("click",()=>approveStoreChange(b.dataset.id)));
+  $$("#page-manning .mn-rej").forEach(b=>b.addEventListener("click",()=>rejectStoreChange(b.dataset.id)));
   paint();
 }
 function scStatusPrompt(sc){

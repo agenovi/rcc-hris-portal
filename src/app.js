@@ -671,6 +671,18 @@ function todayCutStr(){ const t=new Date(); return fmtCut(t.getFullYear(),t.getM
 function nextCutoff(x){ const p=_loanYMD(x); if(!p) return ""; return (p.d<=15)?fmtCut(p.y,p.m,15):fmtCut(p.y,p.m,lastDayOfMonth(p.y,p.m)); }
 // the cut-off STRICTLY AFTER the date = nextCutoff(date + 1 day). (15th → EOM same month; EOM → 15th next month.)
 function cutoffAfter(x){ const p=_loanYMD(x); if(!p) return ""; return nextCutoff(new Date(p.y,p.m-1,p.d+1)); }
+// Effective release + first-deduction dates for DISPLAY. Approved loans have the dates locked → use them. Before
+// approval there are none, so we show a PROVISIONAL schedule (release = the next Friday; first deduction = the closest
+// payroll cut-off after it) so every schedule/agreement shows ACTUAL calendar dates (e.g. Aug 15 / Aug 30) instead of
+// "Cut-off 1, 2, 3". provisional=true → the real Friday & cut-off are chosen when the loan is approved.
+function loanEffectiveDates(l){
+  l=l||{};
+  if(l.release_date && l.first_deduction_date) return {rd:l.release_date, fd:l.first_deduction_date, provisional:false};
+  const t=new Date(); const add=(5-t.getDay()+7)%7; const f=new Date(t.getFullYear(),t.getMonth(),t.getDate()+add);
+  const rd=l.release_date||fmtCut(f.getFullYear(),f.getMonth()+1,f.getDate());
+  const fd=l.first_deduction_date||cutoffAfter(rd);
+  return {rd,fd,provisional:true};
+}
 // Count Mon–Fri days strictly AFTER the application date up to `toDate` (default today). Weekends excluded;
 // PH holidays not handled (fine for the 5-working-day processing indicator). Function decl → hoisted (no TDZ).
 function workingDaysBetween(fromISO,toDate){
@@ -1070,8 +1082,9 @@ function printLoanAgreement(l){
   // first_deduction_date. Each cut-off deduction = total/(term×2); the LAST row absorbs any rounding remainder
   // so the Payment column totals exactly to the total payable. Falls back to plain numbering if no date is set.
   const nCut=(c.term||0)*2;
+  const _ed=loanEffectiveDates(l);
   const schedDates=[];
-  if(l.first_deduction_date && nCut>0){ let cur=l.first_deduction_date; for(let k=0;k<nCut;k++){ schedDates.push(cur); cur=cutoffAfter(cur); } }
+  if(nCut>0){ let cur=_ed.fd; for(let k=0;k<nCut;k++){ schedDates.push(cur); cur=cutoffAfter(cur); } }
   let rows=""; const perPrin=nCut?c.amortPrincipal/nCut:0, perInt=nCut?c.interest/nCut:0, perPay=nCut?c.total/nCut:0;
   { let cumPay=0;
     for(let k=1;k<=nCut;k++){
@@ -1091,7 +1104,7 @@ function printLoanAgreement(l){
   const appDate=l.created_at?fmtDate(l.created_at):today;
   // TYPE OF RELEASE from rush + the FIRST-DEDUCTION cut-off (releases go out on a Friday, so the payroll cut-off is
   // read from first_deduction_date's day-of-month: ≤15 → 15th cut-off, else end-of-month cut-off).
-  const _fd=(typeof _loanYMD==="function"&&l.first_deduction_date)?_loanYMD(l.first_deduction_date):null;
+  const _fd=(typeof _loanYMD==="function")?_loanYMD(_ed.fd):null;
   const typeOfRelease=l.rush?"Rush (off-cycle)":(_fd?(_fd.d<=15?"Cut-off 15th":"Cut-off 30th (end of month)"):"—");
   // Date of last payment = last row of the amortization schedule (when dated).
   const lastPayDate=schedDates.length?fmtDate(schedDates[schedDates.length-1]):"";
@@ -1172,9 +1185,9 @@ function printLoanAgreement(l){
       <tr><td><b>Total amount payable</b></td><td class="num"><b>${P(c.total)}</b></td></tr>
       <tr><td><b>Monthly amortization</b></td><td class="num"><b>${P(c.monthly)}</b> (${P(c.perCutoff)} / cut-off)</td></tr>
     </tbody></table>
-    ${kv("Date of release",(l.release_date?E(fmtDate(l.release_date)):"________________")+(l.rush?" &nbsp;<b style='color:#a12622;'>⚡ RUSH (off-cycle)</b>":""))}${kv("Date of first payment",l.first_deduction_date?E(fmtDate(l.first_deduction_date)):"________________")}
+    ${kv("Date of release",E(fmtDate(_ed.rd))+(l.rush?" &nbsp;<b style='color:#a12622;'>⚡ RUSH (off-cycle)</b>":"")+(_ed.provisional?" <span style='color:#8a5a00;'>(provisional — set on approval)</span>":""))}${kv("Date of first payment",E(fmtDate(_ed.fd))+(_ed.provisional?" <span style='color:#8a5a00;'>(provisional)</span>":""))}
     ${lastPayDate?kv("Date of last payment",E(lastPayDate)):""}
-    ${loanPeriodStr?kv("Loan period",loanPeriodStr):""}
+    ${loanPeriodStr?kv("Repayment period (first → last cut-off)",loanPeriodStr):""}
     <div class="sec">Amortization schedule</div>
     <table><thead><tr><th>#</th><th>Cut-off date</th><th class="num">Payment</th><th class="num">Principal</th><th class="num">Interest</th><th class="num">Balance</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="sec">Terms &amp; Conditions</div>
@@ -1427,11 +1440,14 @@ function openLoan(id){
             if(!amt||!term) return `<div class="psub">Needs an amount and term to preview a schedule.</div>`;
             const rate=(typeof LOAN_RATES!=="undefined"?LOAN_RATES[l.loan_type]:null)??12;
             const total=amt+amt*(rate/100)*(term/12), monthly=total/term, perCut=monthly/2;
-            const nCut=term*2, maxRows=Math.min(nCut,24); let bal=total, rows="";
-            for(let k=1;k<=maxRows;k++){ bal=Math.max(0,bal-perCut); const mo=Math.ceil(k/2), half=(k%2===1)?"15th":"30th"; rows+=`<tr><td>${k}</td><td>Month ${mo}, ${half}</td><td style="text-align:right;">${peso(perCut)}</td><td style="text-align:right;">${peso(bal)}</td></tr>`; }
+            const nCut=term*2, maxRows=Math.min(nCut,24);
+            const ed=loanEffectiveDates(l); const dates=[]; { let cur=ed.fd; for(let k=0;k<nCut;k++){ dates.push(cur); cur=cutoffAfter(cur); } }
+            let bal=total, rows="";
+            for(let k=1;k<=maxRows;k++){ bal=Math.max(0,bal-perCut); rows+=`<tr><td>${k}</td><td>${esc(fmtDate(dates[k-1]))}</td><td style="text-align:right;">${peso(perCut)}</td><td style="text-align:right;">${peso(bal)}</td></tr>`; }
             const more=nCut>maxRows?`<tr><td colspan="4" class="psub" style="padding-top:6px;">…and ${nCut-maxRows} more cut-off(s), ending at ₱0.</td></tr>`:"";
-            return `<div class="psub" style="margin-bottom:7px;">Based on the <b>requested</b> amount (${peso(amt)} · ${term} mo · ${rate}%/yr flat). Total payable ${peso(total)} · ${peso(monthly)}/mo · ${peso(perCut)}/cut-off (payroll 15th &amp; 30th). Adjust in the approve box above for the final schedule.</div>
-              <table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr style="color:var(--muted);text-align:left;"><th>Cut-off</th><th>When</th><th style="text-align:right;">Deduction</th><th style="text-align:right;">Balance</th></tr></thead><tbody>${rows}${more}</tbody></table>`;
+            const relNote=ed.provisional?`Release <b>${esc(fmtDate(ed.rd))}</b> (next Friday) · first deduction <b>${esc(fmtDate(ed.fd))}</b> — <i>provisional; the exact Friday &amp; cut-off are set when you approve.</i>`:`Release <b>${esc(fmtDate(ed.rd))}</b> · first deduction <b>${esc(fmtDate(ed.fd))}</b>.`;
+            return `<div class="psub" style="margin-bottom:7px;">Based on the <b>requested</b> amount (${peso(amt)} · ${term} mo · ${rate}%/yr = 1%/mo flat). Total payable ${peso(total)} · ${peso(monthly)}/mo · ${peso(perCut)}/cut-off (payroll 15th &amp; end-of-month). ${relNote}</div>
+              <table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr style="color:var(--muted);text-align:left;"><th>#</th><th>Cut-off date</th><th style="text-align:right;">Deduction</th><th style="text-align:right;">Balance</th></tr></thead><tbody>${rows}${more}</tbody></table>`;
           })()}</div>
         </details>
       </div>
@@ -1576,7 +1592,7 @@ function openLoan(id){
     </div></div>`;
   $("#loanClose").addEventListener("click",()=>m.remove());
   const _agr=$("#loanAgree"); if(_agr) _agr.addEventListener("click",()=>printLoanAgreement(l));
-  const _pv=$("#loanPrevDoc"); if(_pv) _pv.addEventListener("click",()=>loanPreviewConfirm(true));
+  const _pv=$("#loanPrevDoc"); if(_pv) _pv.addEventListener("click",()=>loanPreviewConfirm(!stage.canAct));   // approver → editable preview (calendar + amount/term); non-actor → read-only
   // ── Loan history (HR-maintained; PayPlus doesn't expose loan balances) ──
   const renderLoanHist=(rows)=>{
     const body=document.getElementById("loanHistBody"); if(!body) return;
@@ -1941,7 +1957,7 @@ function openLoan(id){
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;padding:11px 13px;border-radius:10px;background:#f4f8f5;border:1px solid #cfe0d4;">
         <div><div class="esub">Approved amount (₱)</div><input id="lpAmt" type="number" min="0" step="500" value="${initAmt}" ${dis} style="width:140px;padding:8px;border:1px solid var(--line);border-radius:8px;font-weight:700;"></div>
         <div><div class="esub">Term (months)</div><input id="lpTerm" type="number" min="1" value="${initTerm}" ${dis} style="width:100px;padding:8px;border:1px solid var(--line);border-radius:8px;font-weight:700;"></div>
-        ${readOnly?`<div style="flex:1 1 100%;font-size:12.5px;color:#12352a;"><b>Release date:</b> ${l.release_date?esc(fmtDate(l.release_date)):"—"}${l.rush?" · ⚡ RUSH":""} &nbsp;·&nbsp; <b>First deduction:</b> ${l.first_deduction_date?esc(fmtDate(l.first_deduction_date)):"—"}</div>`:`
+        ${readOnly?`<div style="flex:1 1 100%;font-size:12.5px;color:#12352a;"><b>Release date:</b> ${esc(fmtDate(loanEffectiveDates(l).rd))}${l.rush?" · ⚡ RUSH":""}${loanEffectiveDates(l).provisional?" <span style='color:#8a5a00;'>(provisional — set on approval)</span>":""} &nbsp;·&nbsp; <b>First deduction:</b> ${esc(fmtDate(loanEffectiveDates(l).fd))}</div>`:`
         <div style="flex:1 1 100%;">
           <div class="esub" style="margin-bottom:4px;">Release date <span style="color:#6B7785;font-weight:400;">— pick a Friday on the calendar</span></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
@@ -1969,7 +1985,7 @@ function openLoan(id){
     m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
     document.getElementById("lpCancel").onclick=()=>m.remove();
     const curInputs=()=>{
-      if(readOnly){ const rd=l.release_date||"", fd=l.first_deduction_date||(rd?cutoffAfter(rd):""); return {amt:Number(l.amount||0),term:Number(l.term_months||0),rd,fd,rush:!!l.rush,fdKind:defFdKind}; }
+      if(readOnly){ const _e=loanEffectiveDates(l); return {amt:Number(l.amount||0),term:Number(l.term_months||0),rd:_e.rd,fd:_e.fd,rush:!!l.rush,fdKind:defFdKind}; }
       const amt=parseFloat((document.getElementById("lpAmt")||{}).value||"0")||0;
       const term=parseInt((document.getElementById("lpTerm")||{}).value||"0")||0;
       const rush=!!(document.getElementById("lpRush")||{}).checked;
@@ -2005,7 +2021,7 @@ function openLoan(id){
           ${kv("Monthly amortization","<b>"+P2(c.monthly)+"</b> ("+P2(c.perCutoff)+" / cut-off)")}
           ${kv("Release date",(ci.rd?esc(fmtDate(ci.rd)):"—")+(ci.rush?" &nbsp;<b style='color:#a12622;'>⚡ RUSH</b>":""))}
           ${kv("First deduction",ci.fd?esc(fmtDate(ci.fd)):"—")}
-          ${kv("Loan period",loanPeriodStr)}
+          ${kv("Repayment period (first → last cut-off)",loanPeriodStr)}
         </table>
         <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#1E3A5F;border-bottom:1px solid #1E3A5F;padding-bottom:3px;margin:14px 0 6px;">Amortization schedule</div>
         <div style="max-height:230px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;">

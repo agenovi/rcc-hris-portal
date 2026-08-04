@@ -661,6 +661,16 @@ function todayCutStr(){ const t=new Date(); return fmtCut(t.getFullYear(),t.getM
 function nextCutoff(x){ const p=_loanYMD(x); if(!p) return ""; return (p.d<=15)?fmtCut(p.y,p.m,15):fmtCut(p.y,p.m,lastDayOfMonth(p.y,p.m)); }
 // the cut-off STRICTLY AFTER the date = nextCutoff(date + 1 day). (15th → EOM same month; EOM → 15th next month.)
 function cutoffAfter(x){ const p=_loanYMD(x); if(!p) return ""; return nextCutoff(new Date(p.y,p.m-1,p.d+1)); }
+// Count Mon–Fri days strictly AFTER the application date up to `toDate` (default today). Weekends excluded;
+// PH holidays not handled (fine for the 5-working-day processing indicator). Function decl → hoisted (no TDZ).
+function workingDaysBetween(fromISO,toDate){
+  const a=_loanYMD(fromISO); if(!a) return 0;
+  const end=(toDate instanceof Date && !isNaN(toDate))?toDate:new Date();
+  const cur=new Date(a.y,a.m-1,a.d); cur.setDate(cur.getDate()+1);   // start counting the day AFTER application
+  const last=new Date(end.getFullYear(),end.getMonth(),end.getDate());
+  let n=0; while(cur<=last){ const wd=cur.getDay(); if(wd!==0&&wd!==6) n++; cur.setDate(cur.getDate()+1); }
+  return n;
+}
 // Interest is FLAT on term (math unchanged); display it per-month per anj: annual/12 → "1% per month" (0% → "0%").
 function loanRateOfType(l){ return (typeof LOAN_RATES!=="undefined"?LOAN_RATES[l&&l.loan_type]:null)??12; }
 function loanRatePerMonthLabel(l){ const a=loanRateOfType(l); if(!a) return "0%"; return (Math.round((a/12)*100)/100)+"% per month"; }
@@ -678,12 +688,14 @@ function loanApprover(l){ const t=((l.department||"")+" "+(l.position||"")).toLo
 // Loan co-signing chain (anj): after the Director approves + signs, Juvy forwards it and Grazel (payroll) +
 // Margie (accounting) each e-sign the agreement. Reuses the external-signoff infra — Grazel signs in-portal,
 // Margie (not a portal user) signs via her private sign-off.html link. external_signoffs is the source of truth.
-// Co-signatories on the loan AGREEMENT. Margie (Accounting) was removed as a signatory (2026-08-04, her request:
-// interest is auto-computed + HR/approver verify) — she now handles the RELEASE (disbursement proof), not signing.
+// Co-signatories on the loan AGREEMENT = the two WITNESSES on RCC's real form. Grazel (HR Officer) signs in-portal;
+// Margie (Accounting Officer) signs via her private link. Margie ALSO does the disbursement/release review (below) —
+// she both witnesses the agreement AND uploads the release proof.
 const LOAN_COSIGNERS=[
-  {role:"HR / Payroll", name:"Grazel Lyn Agulto", email:"hr3@hassarams.com"},
+  {role:"HR Officer", name:"Grazel Lyn Agulto", email:"hr3@hassarams.com"},
+  {role:"Accounting Officer", name:"Margie Aliangan", email:"maliangan@hassarams.com"},
 ];
-// Accounting handles the disbursement/release (uploads proof) — not a signatory.
+// Accounting (Margie) also handles the disbursement/release (uploads proof) in addition to witnessing.
 const LOAN_RELEASE_ACCOUNTING="maliangan@hassarams.com";
 function loanCoSigners(l){ return (EXT_SIGNOFFS||[]).filter(s=>s.context_type==="loan" && String(s.context_id)===String(l&&l.id)); }
 // Status is case-insensitive: Margie's link is signed via the `signoff` edge fn (writes "Signed"),
@@ -988,27 +1000,33 @@ function printLoanGuidance(l,remark){
 window.printLoanGuidance=printLoanGuidance;
 function newLoanToken(){ try{ if(crypto&&crypto.randomUUID) return crypto.randomUUID().replace(/-/g,""); }catch(e){} return Date.now().toString(36)+Math.random().toString(36).slice(2,12); }
 // DOLE-cleaned loan agreement (Art. 113 compliant; no void post-separation penalty interest).
+// Loan agreement TEXT matched to RCC's real cash-loan form (Emergency / Discretionary / Educational). moto prints this
+// PLUS a separate Motorcycle Assistance Agreement (see printLoanAgreement). `approver` kept for call-site compatibility.
 function buildLoanAgreement(l,approver){
   const P=n=>"PHP "+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:2});
-  const rate=LOAN_RATES[l.loan_type]??12, term=l.term_months||12, amt=Number(l.amount||0);
-  const monthly=term?(amt+amt*(rate/100)*(term/12))/term:0;
-  const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
-  const moto=l.loan_type==="moto", L=[];
-  L.push(`This Employee Loan Agreement is made on ${today} between ROSHAN COMMERCIAL CORPORATION ("the Company") and ${l.applicant_name} ("the Borrower"), ${l.department||"employee"}.`,"");
-  L.push(`1. LOAN. The Company grants the Borrower a ${loanTypeLabel(l.loan_type)} loan of ${P(amt)} for the purpose stated by the Borrower: ${l.purpose||"—"}.`);
-  if(l.loan_type==="educational"){
-    L.push(`2. NATURE. This is educational assistance covering up to 50% of the child's tuition, paid directly to the school, at 0% interest. The Borrower's family shoulders the remaining tuition. The student/child shall sign a waiver as a condition of release.`);
-    L.push(`3. REPAYMENT. The Borrower shall repay ${P(amt)} over ${term} month(s) in equal amortizations of approximately ${P(monthly)} each, by salary deduction every payroll.`);
-  } else {
-    L.push(`2. INTEREST. Interest is ${Math.round((rate/12)*100)/100}% per month (${rate}% per annum), computed on a flat basis.`);
-    L.push(`3. REPAYMENT. The Borrower shall repay over ${term} month(s) in equal amortizations of approximately ${P(monthly)} each (principal plus interest), by salary deduction every payroll.`);
+  const rateAnnual=LOAN_RATES[l.loan_type]??12, term=l.term_months||12, amt=Number(l.amount||0);
+  const ratePerMonth=Math.round((rateAnnual/12)*100)/100;
+  const edu=l.loan_type==="educational";
+  const interest=edu?0:amt*(rateAnnual/100)*(term/12);
+  const nCut=term*2;
+  // Educational: the parent repays 50% by payroll (student/child covers the other 50% after graduation) — so the
+  // per-cut-off payroll figure is the parent's half spread over the term. All other loans amortize principal+interest.
+  const payrollBase=edu?(amt*0.5):(amt+interest);
+  const perCutoff=nCut?payrollBase/nCut:0;
+  const firstCut=l.first_deduction_date?fmtDate(l.first_deduction_date):"the first cut-off after release";
+  const L=[];
+  L.push(`This loan agreement is entered into by and between ROSHAN COMMERCIAL CORPORATION ("Lender") and ${l.applicant_name} ("Borrower") for the purpose of providing ${loanTypeLabel(l.loan_type)} assistance in the amount of ${P(amt)}. The loan shall carry an interest rate of ${ratePerMonth}% per month, on a flat basis, and shall be repaid in accordance with the schedule and conditions set forth below.`,"");
+  if(edu){
+    L.push(`NATURE (Educational Assistance). This is educational assistance at zero percent (0%) interest. The Company pays the tuition directly to the school, in full. Repayment is split: the Borrower (parent) repays fifty percent (50%) by salary deduction; the student/child repays the remaining fifty percent (50%) within three (3) months after graduation, also interest-free. Should the student/child fail to settle within that period, the Borrower (parent) shall cover the remaining balance by salary deduction. The student/child signs this Agreement, undertaking to repay their share, as a condition of release.`,"");
   }
-  L.push(`4. SALARY DEDUCTION AUTHORIZATION. The Borrower freely authorizes the Company, in writing, to deduct the agreed amortization from his/her salary each payroll until the loan is fully paid. Such deductions shall not reduce the Borrower's take-home pay below the applicable minimum wage (Article 113, Labor Code).`);
-  L.push(`5. SEPARATION. Upon separation for any cause, the entire outstanding balance becomes immediately due and may be deducted from the Borrower's final pay. Any amount exceeding the final pay shall be payable within thirty (30) days from the date of separation, subject to added interest charges at three percent (3%) per month on the unpaid balance until fully settled.`);
-  if(moto) L.push(`6. OWNERSHIP. The motorcycle remains the property of the Company until the loan and all related charges are fully paid; ownership transfers to the Borrower upon full payment.`);
-  L.push(`${moto?7:6}. APPROVAL. The amount and terms are subject to the Company's approval and the Borrower's capacity to pay.`);
-  L.push(`${moto?8:7}. ELECTRONIC SIGNATURE (RA 8792). The Borrower's electronic signature below has the same legal effect as a handwritten signature.`,"");
-  L.push(`Borrower: ${l.applicant_name}`,`Approved for the Company: ${approver||loanApprover(l)}`);
+  L.push(`REPAYMENT SCHEDULE. The Borrower agrees to repay the loan amount of ${P(amt)} and interest amounting to ${P(interest)} over a period of ${term} months, with ${nCut} installment payments of ${P(perCutoff)} due on each payroll cut-off, starting on ${firstCut}, and continuing until the loan is fully repaid.`,"");
+  L.push(`TERMS AND CONDITIONS`);
+  L.push(`1. Resignation or Termination. If the Borrower resigns or is terminated for just cause, the outstanding balance of the loan must be paid in full within fifteen (15) days from the date of separation. Failure to comply will result in the Lender initiating legal action to recover the unpaid amount.`);
+  L.push(`2. Interest on Unpaid Balance. In the event the Borrower fails to settle the outstanding loan upon separation or disconnection, an interest charge of twenty-four percent (24%) per annum shall be applied to the unpaid balance until full payment is made.`);
+  L.push(`3. Withdrawal or Misuse of Funds. Should the Borrower withdraw the funds intended for the stated purpose, or otherwise misuse the loan, the entire outstanding amount shall become immediately due and payable, subject to interest at thirty-six percent (36%) per annum until fully settled.`);
+  L.push(`4. Prepayment. The Borrower may prepay the loan, in full or in part, at any time without penalty.`);
+  L.push(`5. Amendment. Any amendments to this agreement must be made in writing and signed by both parties.`);
+  L.push(`6. Governing Law. This agreement shall be governed by and interpreted in accordance with the laws of the Republic of the Philippines.`);
   return L.join("\n");
 }
 const loanStatusPill=(s)=>{ const m={"Submitted":"a","HR Review":"a","Supervisor":"a","Management":"a","Approved":"g","Released":"g","Rejected":"r"}; return `<span class="pill ${({a:'probation',g:'active',r:'closed'})[m[s]||'a']}">${esc(s)}</span>`; };
@@ -1051,6 +1069,47 @@ function printLoanAgreement(l){
   const kv=(k,v)=>`<div class="agr-row"><div class="agr-k">${E(k)}</div><div class="agr-v">${v}</div></div>`;
   const agreementText=(typeof buildLoanAgreement==="function")?buildLoanAgreement(l):"";
   const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  const edu=l.loan_type==="educational";
+  // Application date = when the employee applied (created_at); falls back to today for legacy rows without a timestamp.
+  const appDate=l.created_at?fmtDate(l.created_at):today;
+  // TYPE OF RELEASE from rush + the release_date's day-of-month (≤15 → 15th cut-off, else end-of-month cut-off).
+  const _rd=(typeof _loanYMD==="function"&&l.release_date)?_loanYMD(l.release_date):null;
+  const typeOfRelease=l.rush?"Rush (off-cycle)":(_rd?(_rd.d<=15?"Cut-off 15th":"Cut-off 30th (end of month)"):"—");
+  // Date of last payment = last row of the amortization schedule (when dated).
+  const lastPayDate=schedDates.length?fmtDate(schedDates[schedDates.length-1]):"";
+  // Motorcycle Assistance Agreement — a SEPARATE document printed on its own page when the loan is a motorcycle loan.
+  // Motorcycle details / price are left as blanks where not captured.
+  const motoClauses=[
+    `1. Payment Terms. The purchase price shall be settled through bi-monthly payroll deductions, at an interest rate of three percent (3%) per annum, over a maximum term of three (3) years.`,
+    `2. Operating Expenses. The Employee shall shoulder all fuel, maintenance, and repair costs. The first-year registration and insurance are included in this assistance.`,
+    `3. Renewal of Registration and Insurance. The Company shall advance the annual registration and insurance premiums; the Employee shall reimburse the Company within thirty (30) days of billing.`,
+    `4. Safe Driving. The Employee shall not operate the motorcycle under the influence of alcohol or any prohibited substance.`,
+    `5. Liability. The Employee shall be solely liable for any accidents, traffic violations, or damage arising from the use of the motorcycle.`,
+    `6. Transfer of Ownership. Upon full payment, ownership and registration of the motorcycle shall be transferred to the Employee, who shall shoulder all transfer fees and taxes.`,
+    `7. Residual Value / Depreciation. Any sale or transfer prior to full payment shall be valued at the residual or depreciated value as determined by the Company's accounting.`,
+    `8. Intended Use. The motorcycle shall be used solely as personal transport to and from work. Commercial use is not permitted.`,
+    `9. Negligence and Maintenance. Should the Employee fail to properly maintain or repair the motorcycle, the Company may carry out the necessary repairs and bill the Employee the full cost.`,
+    `10. Resignation or Termination. Upon resignation or termination, the Employee shall return the motorcycle in good condition on or before the last working day, without need of demand. Failure to do so authorizes the Company to report the motorcycle as stolen.`,
+    `11. Retention of Ownership. The motorcycle shall remain the exclusive property of the Company until it is fully paid.`,
+    `12. Default and Repossession. In case of non-payment or breach, the Company may repossess and dispose of the motorcycle. It shall be appraised at market value less depreciation by a certified appraiser; any excess over the outstanding balance and costs shall be refunded to the Employee, while any deficiency shall remain payable by the Employee.`
+  ];
+  const motoDocHtml=moto?`
+    <div class="doc" style="margin-top:26px;page-break-before:always;">
+    <div class="lh"><div class="co">ROSHAN COMMERCIAL CORPORATION</div><div class="addr">104 Shaw Blvd, Pasig City</div><div class="tag">The Right Move</div></div>
+    <div class="title">Motorcycle Assistance Agreement</div>
+    <div class="ref">${E(l.loan_ref||"")} · ${appDate}</div>
+    <div class="terms">This Motorcycle Assistance Agreement is entered into between ${E(l.applicant_name||"the Employee")} ("Employee") and ROSHAN COMMERCIAL CORPORATION, represented by Sanjay Roshan Chatlani ("Company"). The Company shall purchase the motorcycle described below for the Employee's use. The motorcycle shall remain registered in the name of the Company until the purchase price is fully settled, subject to the following terms:</div>
+    <div class="sec">Motorcycle details</div>
+    ${kv("Make / model","________________________")}${kv("Engine / chassis no.","________________________")}${kv("Purchase price",P(c.amt))}
+    <div class="sec">Terms &amp; Conditions</div>
+    <div class="terms">${E(motoClauses.join("\n"))}</div>
+    <div class="sec">Signatures</div>
+    <div class="sig">
+      ${sigSlot("ANJU GENOMAL","Authorized Representative, Roshan Commercial Corporation","")}
+      ${sigSlot(E(l.applicant_name||""),"Employee · signature over printed name","")}
+    </div>
+    <div class="foot"><b>THE RIGHT MOVE</b> · 3rd Floor RCC Center, 104 Shaw Blvd, Pasig City 1603 · +632 8638 6556<br>Generated ${today} from the RCC HRIS.</div>
+    </div>`:"";
   // Merge captured e-signatures INTO the single signature block (no separate/duplicate section).
   // Each signatory's box shows their e-signature inline if signed, else a blank line for wet-signing.
   const _co=(typeof loanCoSigners==="function"?loanCoSigners(l):[]).filter(s=>String((s&&s.status)||"").toLowerCase()==="signed");
@@ -1081,10 +1140,10 @@ function printLoanAgreement(l){
     <div class="title">${moto?"Vehicle Loan Agreement":"Employee Loan Agreement"}</div>
     <div class="ref">${E(l.loan_ref||"")} · ${today}</div>
     <div class="sec">Application &amp; Loan</div>
-    ${kv("Application date",today)}${kv("Borrower",E(l.applicant_name||"—"))}${kv("Employee ID",E(l.employee_id||"—"))}${kv("Department / position",E(l.department||"—"))}
+    ${kv("Application date",E(appDate))}${kv("Lender","Roshan Commercial Corporation")}${kv("Borrower",E(l.applicant_name||"—"))}${kv("Employee ID",E(l.employee_id||"—"))}${kv("Department / position",E(l.department||"—"))}
     ${kv("Loan type",E(loanTypeLabel(l.loan_type)))}${kv("Purpose",E(l.purpose||"—"))}
     ${kv("Loan amount",P(c.amt)+" &nbsp; <span style='font-weight:400;'>("+E(pesosInWords(c.amt))+")</span>")}
-    ${kv("Type of release","☐ Rush &nbsp;&nbsp; ☐ Cut-off 15th &nbsp;&nbsp; ☐ Cut-off 30th")}
+    ${kv("Type of release",E(typeOfRelease))}
     ${kv("Payment instruction",E(l.payment_instruction||"________________________"))}
     <div class="sec">Computation</div>
     <table><tbody>
@@ -1095,7 +1154,8 @@ function printLoanAgreement(l){
       <tr><td><b>Total amount payable</b></td><td class="num"><b>${P(c.total)}</b></td></tr>
       <tr><td><b>Monthly amortization</b></td><td class="num"><b>${P(c.monthly)}</b> (${P(c.perCutoff)} / cut-off)</td></tr>
     </tbody></table>
-    ${kv("Release date",(l.release_date?E(fmtDate(l.release_date)):"________________")+(l.rush?" &nbsp;<b style='color:#a12622;'>⚡ RUSH (off-cycle)</b>":""))}${kv("Date of first deduction",l.first_deduction_date?E(fmtDate(l.first_deduction_date)):"________________")}
+    ${kv("Date of release",(l.release_date?E(fmtDate(l.release_date)):"________________")+(l.rush?" &nbsp;<b style='color:#a12622;'>⚡ RUSH (off-cycle)</b>":""))}${kv("Date of first payment",l.first_deduction_date?E(fmtDate(l.first_deduction_date)):"________________")}
+    ${lastPayDate?kv("Date of last payment",E(lastPayDate)):""}
     ${loanPeriodStr?kv("Loan period",loanPeriodStr):""}
     <div class="sec">Amortization schedule</div>
     <table><thead><tr><th>#</th><th>Cut-off date</th><th class="num">Payment</th><th class="num">Principal</th><th class="num">Interest</th><th class="num">Balance</th></tr></thead><tbody>${rows}</tbody></table>
@@ -1103,15 +1163,19 @@ function printLoanAgreement(l){
     <div class="terms">${E(agreementText)}</div>
     <div class="sec">Signatures</div>
     <div class="sig">
-      ${sigSlot(E(l.applicant_name||""),"Borrower — signature over printed name",l.agreement_signature,l.agreement_signed_at)}
-      ${sigSlot("ANJU GENOMAL","Authorized Signatory, Roshan Commercial Corporation",l.mgmt_signature,l.mgmt_signed_at)}
+      ${sigSlot("ANJU GENOMAL","Lender · Authorized Signatory, Roshan Commercial Corporation",l.mgmt_signature,l.mgmt_signed_at)}
+      ${sigSlot(E(l.applicant_name||""),"Borrower · signature over printed name",l.agreement_signature,l.agreement_signed_at)}
     </div>
-    <div class="sig">
-      ${sigSlot("GRAZEL LYN AGULTO","HR / Payroll",_grz&&_grz.signature_data,_grz&&_grz.signed_at)}
+    ${edu?`<div class="sig"><div style="flex:1;min-width:220px;">${sigSlot("","Student/Child · undertaking to repay their share","")}</div></div>`:""}
+    <div style="font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#1E3A5F;margin-top:16px;">Witnesseth</div>
+    <div class="sig" style="margin-top:6px;">
+      ${sigSlot("GRAZEL LYN AGULTO","Witness · HR Officer",_grz&&_grz.signature_data,_grz&&_grz.signed_at)}
+      ${sigSlot("MARGIE ALIANGAN","Witness · Accounting Officer",_mrg&&_mrg.signature_data,_mrg&&_mrg.signed_at)}
     </div>
     ${capSigHtml}
     <div class="foot"><b>THE RIGHT MOVE</b> · 3rd Floor RCC Center, 104 Shaw Blvd, Pasig City 1603 · +632 8638 6556<br>Generated ${today} from the RCC HRIS. Salary-deduction authorization is subject to Art. 113, Labor Code — deductions may not drop take-home below minimum wage.</div>
     </div>
+    ${motoDocHtml}
     <scr`+`ipt>window.onload=function(){setTimeout(function(){window.print();},150);}</scr`+`ipt>
   </body></html>`;
   w.document.write(html); w.document.close();
@@ -1245,6 +1309,16 @@ function loanSummaryStripHtml(l){
     ${cell("Verdict",v.t,v.c)}
   </div>`;
 }
+// Application date + 5-working-day processing indicator for the loan review header.
+function loanAppliedLineHtml(l){
+  if(!l||!l.created_at) return "";
+  const n=(typeof workingDaysBetween==="function")?workingDaysBetween(l.created_at,new Date()):0;
+  const inReview=["Submitted","HR Review","Management"].includes(l.status);
+  let note="";
+  if(inReview && n<5) note=`<span style="color:#8a5a00;font-weight:700;"> · within the 5-working-day processing window — a follow-up is early.</span>`;
+  else if(inReview && n>=5) note=`<span style="color:var(--muted);"> · past the 5-working-day window.</span>`;
+  return `<div class="psub" style="margin:-4px 0 10px;">Applied ${fmtDate(l.created_at)} · ${n} working day${n===1?"":"s"} ago${note}</div>`;
+}
 // Item 7 — horizontal progress tracker (Submitted → HR review → Management → Approved → Co-signed → Released).
 function loanProgressHtml(l){
   if(String(l.status)==="Rejected")
@@ -1285,6 +1359,7 @@ function openLoan(id){
     </div>
     <div style="padding:18px 22px 60px;">
       ${loanSummaryStripHtml(l)}
+      ${loanAppliedLineHtml(l)}
       ${loanProgressHtml(l)}
       ${loanVerdictBadgeHtml(l)}
       <div class="panel" style="margin-top:0;">
@@ -1797,6 +1872,7 @@ function openLoan(id){
       title:"Approve & sign this loan",
       subtitle:`${l.applicant_name} · ${loanTypeLabel(l.loan_type)} · ${useTerm} mo${useTerm!==Number(l.term_months||0)?` (originally ${l.term_months||"?"} mo)`:""} · ${loanRatePerMonthLabel(l)} flat`,
       editField:{ label:"Approved amount (₱) — edit to counter-offer", value:startAmt, hint:`Requested ${peso(l.amount)}. Whatever you enter here is what gets approved & put on the agreement.` },
+      reviewHtml:"<pre style='white-space:pre-wrap;font-family:sans-serif;font-size:12px;line-height:1.55;margin:0;'>"+esc(buildLoanAgreement(l,loanApprover(l)))+"</pre>",
       cta:"Approve & Sign",
       onSign:(dataUrl, extra)=>{ if(!dataUrl) return; const finalAmt=(extra&&extra.amount>0)?extra.amount:startAmt; const patch=approvePatch(finalAmt,useTerm); patch.mgmt_signature=dataUrl; patch.mgmt_signer=myName(); patch.mgmt_signed_at=new Date().toISOString(); setLoan(patch); }
     });
@@ -1990,6 +2066,7 @@ function openLoan(id){
     const row=(EXT_SIGNOFFS||[]).find(s=>String(s.id)===String(b.dataset.lcssign)); if(!row) return;
     captureSignatureModal({ title:"Co-sign this loan",
       subtitle:`${row.signer_role||""} — ${row.signer_name||""} · ${l.loan_ref} ${peso(l.amount)}`, cta:"Sign",
+      reviewHtml:"<pre style='white-space:pre-wrap;font-family:sans-serif;font-size:12px;line-height:1.55;margin:0;'>"+esc(buildLoanAgreement(l,l.mgmt_approver||loanApprover(l)))+"</pre>",
       onSign:(data)=>{ if(!data) return;
         sb.from("external_signoffs").update({status:"Signed", signature_data:data, signed_name:myName()||row.signer_name, signed_at:new Date().toISOString()}).eq("id", row.id).then(async({error})=>{ if(error){ alert(error.message); return; } await loadEmployees(); m.remove(); openLoan(l.id); }); }
     });
@@ -3254,6 +3331,10 @@ function captureSignatureModal(opts){
       <input id="capEditVal" type="number" min="0" step="500" value="${Number(opts.editField.value||0)}" style="width:170px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:16px;font-weight:800;color:#12352a;">
       ${opts.editField.hint?`<div class="psub" style="margin-top:5px;">${esc(opts.editField.hint)}</div>`:""}
     </div>`:""}
+    ${opts.reviewHtml?`<details style="margin-bottom:10px;border:1px solid var(--line);border-radius:9px;padding:8px 12px;background:#fafbfc;">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:#1E3A5F;">Review Terms &amp; Conditions</summary>
+      <div style="margin-top:8px;max-height:280px;overflow-y:auto;font-size:12px;line-height:1.55;">${opts.reviewHtml}</div>
+    </details>`:""}
     ${savedSig?`<div style="display:flex;align-items:center;gap:10px;background:#eef6f0;border:1px solid #cfe6d8;border-radius:9px;padding:8px 12px;margin-bottom:10px;">
       <img src="${savedSig}" style="height:34px;background:#fff;border-radius:4px;padding:2px 4px;border:1px solid #e2e7e4;">
       <div style="flex:1;font-size:12.5px;color:#12352a;">Your saved signature — one tap.</div>

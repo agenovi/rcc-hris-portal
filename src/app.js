@@ -1089,9 +1089,10 @@ function printLoanAgreement(l){
   const edu=l.loan_type==="educational";
   // Application date = when the employee applied (created_at); falls back to today for legacy rows without a timestamp.
   const appDate=l.created_at?fmtDate(l.created_at):today;
-  // TYPE OF RELEASE from rush + the release_date's day-of-month (≤15 → 15th cut-off, else end-of-month cut-off).
-  const _rd=(typeof _loanYMD==="function"&&l.release_date)?_loanYMD(l.release_date):null;
-  const typeOfRelease=l.rush?"Rush (off-cycle)":(_rd?(_rd.d<=15?"Cut-off 15th":"Cut-off 30th (end of month)"):"—");
+  // TYPE OF RELEASE from rush + the FIRST-DEDUCTION cut-off (releases go out on a Friday, so the payroll cut-off is
+  // read from first_deduction_date's day-of-month: ≤15 → 15th cut-off, else end-of-month cut-off).
+  const _fd=(typeof _loanYMD==="function"&&l.first_deduction_date)?_loanYMD(l.first_deduction_date):null;
+  const typeOfRelease=l.rush?"Rush (off-cycle)":(_fd?(_fd.d<=15?"Cut-off 15th":"Cut-off 30th (end of month)"):"—");
   // Date of last payment = last row of the amortization schedule (when dated).
   const lastPayDate=schedDates.length?fmtDate(schedDates[schedDates.length-1]):"";
   // Motorcycle Assistance Agreement — a SEPARATE document printed on its own page when the loan is a motorcycle loan.
@@ -1924,19 +1925,16 @@ function openLoan(id){
     const dA=aI0?parseFloat(aI0.value||""):NaN, dT=tI0?parseInt(tI0.value||""):NaN;
     const initAmt=readOnly?Number(l.amount||0):((!isNaN(dA)&&dA>0)?dA:Number(l.amount||0));
     const initTerm=readOnly?Number(l.term_months||0):((!isNaN(dT)&&dT>0)?dT:Number(l.term_months||12));
-    // Release-date helpers: the next specific 15th / EOM on-or-after today.
-    const next15=(x)=>{ const p=_loanYMD(x); if(!p) return ""; if(p.d<=15) return fmtCut(p.y,p.m,15); let y=p.y,mo=p.m+1; if(mo>12){mo=1;y++;} return fmtCut(y,mo,15); };
-    const nextEOM=(x)=>{ const p=_loanYMD(x); if(!p) return ""; return fmtCut(p.y,p.m,lastDayOfMonth(p.y,p.m)); };
-    const todayP=_loanYMD(new Date());
-    // Default = the next cut-off after today (nextCutoff), mapped to the matching radio.
-    let defChoice=(todayP&&todayP.d<=15)?"15":"eom";
-    if(readOnly) defChoice=l.rush?"rush":(((_loanYMD(l.release_date)||{d:99}).d<=15)?"15":"eom");
-    const relFor=(choice)=>{
-      if(readOnly) return {rd:l.release_date||"", rush:!!l.rush};
-      if(choice==="rush") return {rd:todayCutStr(), rush:true};       // Rush = today's actual date
-      if(choice==="15")   return {rd:next15(new Date()), rush:false};
-      return {rd:nextEOM(new Date()), rush:false};
-    };
+    // Date helpers. Release date = a Friday (payroll releases go out on Fridays); first deduction = the next 15th or
+    // end-of-month cut-off strictly AFTER the release Friday, chosen by HR. The schedule alternates 15th↔EOM from there.
+    const isoOf=(dt)=>fmtCut(dt.getFullYear(),dt.getMonth()+1,dt.getDate());
+    const addDaysISO=(iso,n)=>{ const p=_loanYMD(iso); if(!p) return iso; const dt=new Date(p.y,p.m-1,p.d); dt.setDate(dt.getDate()+n); return isoOf(dt); };
+    const snapFriday=(x)=>{ const p=_loanYMD(x); const base=p?new Date(p.y,p.m-1,p.d):new Date(); const add=(5-base.getDay()+7)%7; base.setDate(base.getDate()+add); return isoOf(base); };   // → the Friday on/after x
+    const nextFriday=()=>snapFriday(new Date());
+    const next15After=(x)=>{ const p=_loanYMD(x); if(!p) return ""; if(p.d<15) return fmtCut(p.y,p.m,15); let y=p.y,mo=p.m+1; if(mo>12){mo=1;y++;} return fmtCut(y,mo,15); };
+    const nextEOMafter=(x)=>{ const p=_loanYMD(x); if(!p) return ""; const eom=lastDayOfMonth(p.y,p.m); if(p.d<eom) return fmtCut(p.y,p.m,eom); let y=p.y,mo=p.m+1; if(mo>12){mo=1;y++;} return fmtCut(y,mo,lastDayOfMonth(y,mo)); };
+    const defFriday=readOnly?(l.release_date||nextFriday()):nextFriday();
+    const defFdKind=readOnly?(((_loanYMD(l.first_deduction_date)||{d:99}).d<=15)?"15":"eom"):"15";
     let m=document.getElementById("loanPrevModal"); if(!m){ m=document.createElement("div"); m.id="loanPrevModal"; document.body.appendChild(m); }
     m.style.cssText="position:fixed;inset:0;z-index:10005;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
     const dis=readOnly?"disabled":"";
@@ -1948,7 +1946,24 @@ function openLoan(id){
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;padding:11px 13px;border-radius:10px;background:#f4f8f5;border:1px solid #cfe0d4;">
         <div><div class="esub">Approved amount (₱)</div><input id="lpAmt" type="number" min="0" step="500" value="${initAmt}" ${dis} style="width:140px;padding:8px;border:1px solid var(--line);border-radius:8px;font-weight:700;"></div>
         <div><div class="esub">Term (months)</div><input id="lpTerm" type="number" min="1" value="${initTerm}" ${dis} style="width:100px;padding:8px;border:1px solid var(--line);border-radius:8px;font-weight:700;"></div>
-        <div style="flex:1 1 100%;"><div class="esub" style="margin-bottom:4px;">Release date</div><div style="display:flex;gap:8px;flex-wrap:wrap;">${radio("rush","⚡ Rush (today)")}${radio("15","Cut-off 15th")}${radio("eom","Cut-off 30th / EOM")}</div></div>
+        ${readOnly?`<div style="flex:1 1 100%;font-size:12.5px;color:#12352a;"><b>Release date:</b> ${l.release_date?esc(fmtDate(l.release_date)):"—"}${l.rush?" · ⚡ RUSH":""} &nbsp;·&nbsp; <b>First deduction:</b> ${l.first_deduction_date?esc(fmtDate(l.first_deduction_date)):"—"}</div>`:`
+        <div style="flex:1 1 100%;">
+          <div class="esub" style="margin-bottom:4px;">Release date <span style="color:#6B7785;font-weight:400;">— pick a Friday on the calendar</span></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <input id="lpRelDate" type="date" value="${defFriday}" min="${todayCutStr()}" style="padding:7px;border:1px solid var(--line);border-radius:8px;font-weight:600;">
+            <button type="button" id="lpFriThis" style="padding:6px 10px;font-size:12px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;">This Friday</button>
+            <button type="button" id="lpFriNext" style="padding:6px 10px;font-size:12px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;">Next Friday</button>
+            <label style="display:inline-flex;gap:5px;align-items:center;font-size:12.5px;margin-left:4px;cursor:pointer;"><input type="checkbox" id="lpRush"> ⚡ Rush (release today, off-cycle)</label>
+          </div>
+        </div>
+        <div style="flex:1 1 100%;">
+          <div class="esub" style="margin-bottom:4px;">First deduction (payroll cut-off)</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <label style="display:inline-flex;gap:5px;align-items:center;cursor:pointer;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:12.5px;"><input type="radio" name="lpFd" value="15" ${defFdKind==="15"?"checked":""}> 15th</label>
+            <label style="display:inline-flex;gap:5px;align-items:center;cursor:pointer;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:12.5px;"><input type="radio" name="lpFd" value="eom" ${defFdKind==="eom"?"checked":""}> 30th / end of month</label>
+          </div>
+          <div id="lpRelNote" style="font-size:11.5px;color:#12352a;margin-top:6px;font-weight:600;"></div>
+        </div>`}
       </div>
       <div id="lpBody" style="margin-top:14px;"></div>
       <div style="display:flex;gap:10px;margin-top:16px;">
@@ -1959,16 +1974,20 @@ function openLoan(id){
     m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
     document.getElementById("lpCancel").onclick=()=>m.remove();
     const curInputs=()=>{
-      const amt=readOnly?Number(l.amount||0):(parseFloat((document.getElementById("lpAmt")||{}).value||"0")||0);
-      const term=readOnly?Number(l.term_months||0):(parseInt((document.getElementById("lpTerm")||{}).value||"0")||0);
-      const choice=readOnly?defChoice:(((document.querySelector('input[name="lpRel"]:checked')||{}).value)||defChoice);
-      const rel=relFor(choice); const rd=rel.rd, rush=rel.rush;
-      const fd=readOnly?(l.first_deduction_date||(rd?cutoffAfter(rd):"")):(rd?cutoffAfter(rd):"");
-      return {amt,term,rd,fd,rush,choice};
+      if(readOnly){ const rd=l.release_date||"", fd=l.first_deduction_date||(rd?cutoffAfter(rd):""); return {amt:Number(l.amount||0),term:Number(l.term_months||0),rd,fd,rush:!!l.rush,fdKind:defFdKind}; }
+      const amt=parseFloat((document.getElementById("lpAmt")||{}).value||"0")||0;
+      const term=parseInt((document.getElementById("lpTerm")||{}).value||"0")||0;
+      const rush=!!(document.getElementById("lpRush")||{}).checked;
+      const fdKind=((document.querySelector('input[name="lpFd"]:checked')||{}).value)||"15";
+      const rd=rush?todayCutStr():snapFriday((document.getElementById("lpRelDate")||{}).value||defFriday);
+      const fd=(fdKind==="15")?next15After(rd):nextEOMafter(rd);
+      return {amt,term,rd,fd,rush,fdKind};
     };
     const recalc=()=>{
       const body=document.getElementById("lpBody"); if(!body) return;
       const ci=curInputs();
+      const noteEl=document.getElementById("lpRelNote");
+      if(noteEl) noteEl.innerHTML=ci.rush?("⚡ Releasing <b>today</b> (off-cycle) · first deduction "+esc(fmtDate(ci.fd))):("Release <b>"+esc(fmtDate(ci.rd))+"</b> (Friday) · first deduction <b>"+esc(fmtDate(ci.fd))+"</b>");
       if(!(ci.amt>0)||!(ci.term>0)){ body.innerHTML=`<div class="note">Enter an amount and a term to compute the document.</div>`; return; }
       const lt=Object.assign({},l,{amount:ci.amt,term_months:ci.term,release_date:ci.rd,first_deduction_date:ci.fd,rush:ci.rush});
       const c=loanCompute(lt);   // SAME helper the printout uses
@@ -2002,7 +2021,14 @@ function openLoan(id){
     };
     if(!readOnly){
       ["lpAmt","lpTerm"].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener("input",recalc); });
-      Array.prototype.forEach.call(document.querySelectorAll('input[name="lpRel"]'),r=>r.addEventListener("change",recalc));
+      const relEl=document.getElementById("lpRelDate");
+      if(relEl) relEl.addEventListener("change",()=>{ relEl.value=snapFriday(relEl.value||defFriday); recalc(); });
+      const rushEl=document.getElementById("lpRush");
+      if(rushEl) rushEl.addEventListener("change",()=>{ if(relEl){ relEl.disabled=rushEl.checked; relEl.style.opacity=rushEl.checked?".5":"1"; } recalc(); });
+      const _clearRush=()=>{ const r=document.getElementById("lpRush"); if(r) r.checked=false; if(relEl){ relEl.disabled=false; relEl.style.opacity="1"; } };
+      const friT=document.getElementById("lpFriThis"); if(friT) friT.addEventListener("click",()=>{ if(relEl) relEl.value=nextFriday(); _clearRush(); recalc(); });
+      const friN=document.getElementById("lpFriNext"); if(friN) friN.addEventListener("click",()=>{ if(relEl) relEl.value=addDaysISO(nextFriday(),7); _clearRush(); recalc(); });
+      Array.prototype.forEach.call(document.querySelectorAll('input[name="lpFd"]'),r=>r.addEventListener("change",recalc));
       const ap=document.getElementById("lpApprove");
       if(ap) ap.onclick=()=>{
         const ci=curInputs();

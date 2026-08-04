@@ -83,7 +83,10 @@ async function logChange(entity,id,name,action,detail){
 //   admin    (anj)    = everything
 //   payroll  (Grazel) = recruiting view + Employees + sees pay/bank/government
 //   recruiter(others) = recruiting only, pay hidden
-const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "sanjay@hassarams.com":"admin", "hr3@hassarams.com":"payroll", "hr4@hassarams.com":"manager", "hr@hassarams.com":"relations", "richard@hassarams.com":"manager", "pervin@hassarams.com":"manager", "maliangan@hassarams.com":"cosigner", "claude.test@hassarams.com":"admin" };  // hr3@=Grazel(payroll) · hr4@=Rhel(HR Manager) · hr@=Juvy(HR Relations) · richard@=IT reviewer · pervin@=AVP Admin & Logistics (warehouse NTE/NPA approver) · maliangan@=Margie (Accounting) — SCOPED co-signer: sees ONLY the Documents to Sign page (her loan co-sign queue), nothing else
+const ROLE_BY_EMAIL={ "anj@hassarams.com":"admin", "sanjay@hassarams.com":"admin", "hr3@hassarams.com":"payroll", "hr4@hassarams.com":"manager", "hr@hassarams.com":"relations", "richard@hassarams.com":"manager", "pervin@hassarams.com":"manager", "maliangan@hassarams.com":"cosigner", "sc4@hassarams.com":"sales", "rmarquez@hassarams.com":"sales", "bsabila@hassarams.com":"sales", "claude.test@hassarams.com":"admin" };  // hr3@=Grazel(payroll) · hr4@=Rhel(HR Manager) · hr@=Juvy(HR Relations) · richard@=IT reviewer · pervin@=AVP Admin & Logistics (warehouse NTE/NPA approver) · maliangan@=Margie (Accounting) — SCOPED co-signer: sees ONLY the Documents to Sign page · sc4@/rmarquez@/bsabila@=Sales Coordinators (Wilson/Ryan/Bryan) — SCOPED sales: see ONLY the Manning page, filtered to their own store cluster
+// Sales Coordinators → their own store cluster (branches.sc). A "sales" user sees ONLY the Manning page, scoped to their SC name.
+const SC_BY_EMAIL={ "sc4@hassarams.com":"Wilson", "rmarquez@hassarams.com":"Ryan", "bsabila@hassarams.com":"Bryan" };
+function scForUser(){ return SC_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||null; }
 let USER_ROLES={};  // DB overlay from the User Access page — takes precedence over the hardcoded defaults below
 async function loadUserRoles(){ try{ const {data}=await sb.from("user_roles").select("email,role"); const m={}; (data||[]).forEach(r=>{ if(r.email&&r.role) m[String(r.email).toLowerCase()]=r.role; }); USER_ROLES=m; }catch(_){} }
 function userRole(){ const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return USER_ROLES[e] || ROLE_BY_EMAIL[e] || "recruiter"; }
@@ -124,6 +127,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else if(r==="payroll") base = RECRUITER_PAGES.concat(["employees","timekeeping"]);
   else if(r==="relations") base = RELATIONS_PAGES.slice();
   else if(r==="cosigner") base = ["cosign"];  // scoped co-signer (Margie) — ONLY the Documents to Sign page
+  else if(r==="sales") base = ["manning"];    // scoped Sales Coordinator — ONLY the Manning page (filtered to their own cluster in renderManning)
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
@@ -137,6 +141,14 @@ function applyRoleUI(){
   if(userRole()==="cosigner"){
     ensureCosignDom();
     document.querySelectorAll('.nav-item[data-page]').forEach(n=>{ n.style.display=(n.getAttribute('data-page')==='cosign')?'':'none'; });
+    document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display='none'; });
+    const ts=document.querySelector('.topbar .search'); if(ts) ts.style.display='none';
+    return;
+  }
+  // Scoped Sales Coordinator (Wilson/Ryan/Bryan): sees EXACTLY one nav item — "Manning".
+  // Hide every other nav item, all section headers, and the top search.
+  if(userRole()==="sales"){
+    document.querySelectorAll('.nav-item[data-page]').forEach(n=>{ n.style.display=(n.getAttribute('data-page')==='manning')?'':'none'; });
     document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display='none'; });
     const ts=document.querySelector('.topbar .search'); if(ts) ts.style.display='none';
     return;
@@ -432,6 +444,9 @@ async function loadEmployees(){
     if(userRole()==="cosigner"){
       // Scoped co-signer lands straight on their Documents to Sign queue — no dashboard.
       if(typeof window.go==="function") window.go("cosign");
+    } else if(userRole()==="sales"){
+      // Scoped Sales Coordinator lands straight on Manning — they can't see the dashboard.
+      if(typeof window.go==="function") window.go("manning");
     } else if(deep && (SIGNATURES||[]).some(s=>String(s.id)===String(deep))){
       if(typeof window.go==="function") window.go("signatures");
       setTimeout(()=>{ try{ openSignDoc(deep); }catch(_){} history.replaceState(null,"",location.pathname); }, 60);
@@ -7312,14 +7327,17 @@ async function rejectStoreChange(id){
 }
 function renderManning(){
   const pg=$("#page-manning"); if(!pg) return;
-  const open=BRANCHES.filter(b=>b.status==="Open");
-  const SCs=[...new Set(open.map(b=>b.sc).filter(x=>x&&x!=='Unassigned'))].sort();
+  const _sc=(userRole()==='sales')?scForUser():null;  // Sales Coordinator: lock the whole page to their own cluster
+  if(_sc) scFilter=_sc;                                 // force the coordinator filter to them (they can't switch SCs)
+  const open=BRANCHES.filter(b=>b.status==="Open" && (!_sc || b.sc===_sc));
+  const SCs=_sc?[_sc]:[...new Set(open.map(b=>b.sc).filter(x=>x&&x!=='Unassigned'))].sort();
   const totAHC=open.reduce((s,b)=>s+b.ahc_stationary+b.ahc_reliever,0);
   const totCHC=open.reduce((s,b)=>s+chcFor(b.name),0);
   const confStores=open.filter(b=>MANNING_SCONF[b.name]).length;
-  const OPENINGS=MANPOWER.filter(o=>o.status==="Open");
+  const OPENINGS=MANPOWER.filter(o=>o.status==="Open" && (!_sc || o.sc===_sc));
   const opInReview=(store)=>PREHIRE.filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT","POOLED"].includes(p.phase)).length;
   pg.innerHTML=`
+    ${_sc?`<div class="panel" style="margin-top:0;background:var(--green-soft,#eef6f0);"><div style="font-weight:700;color:var(--green-dark);">Manning — ${esc(_sc)}'s stores</div><div class="psub" style="margin:2px 0 0;">Confirm the manning for your stores — tick ✓ Confirm on each once it's correct.</div></div>`:''}
     ${manningApprovalsPanel()}
     <div class="panel" style="margin-top:0;">
       <h2>Openings <span class="count-tag">${OPENINGS.length} stores · ${OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0)} positions</span></h2>
@@ -7339,9 +7357,9 @@ function renderManning(){
         <div class="kpi warn"><div class="k-l">Confirmed HC (CHC)</div><div class="k-n">${totCHC}</div><div class="k-s">matched from active list</div></div>
         <div class="kpi"><div class="k-l">Manning confirmed</div><div class="k-n">${confStores}</div><div class="k-s">of ${open.length} stores</div></div>
       </div>
-      <div class="filterbar" id="scChips">
+      ${_sc?'':`<div class="filterbar" id="scChips">
         ${["All",...SCs].map(s=>{ const gone=s!=="All"&&scIsGone(s); return `<div class="chip${s===scFilter?' active':''}" data-sc="${esc(s)}"${gone?' style="color:var(--red);border-color:#f1c9c5;font-weight:700;"':''}>${gone?'● ':''}${esc(s)}${s!=="All"?` (${open.filter(b=>b.sc===s).length})`:""}</div>`; }).join("")}
-      </div>
+      </div>`}
       <div id="scBlocks"></div>
     </div>`;
   const opNewBtn=$("#opNew"); if(opNewBtn) opNewBtn.addEventListener("click",()=>openingForm());

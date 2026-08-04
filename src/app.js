@@ -1003,7 +1003,7 @@ function loanEligibilityHtml(l){
   const flags=s.amber;
   const _money=n=>(n==null||n==="")?null:"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
   const _pay=_money(l.net_pay);
-  const _payTxt=_pay?(_pay+" <span style='color:var(--muted);font-weight:400;font-size:11px;'>· declared on application (verify vs payslip)</span>"):"— <span style='color:var(--muted);font-weight:400;font-size:11px;'>not declared — PayPlus doesn't expose pay</span>";
+  const _payTxt=_pay?(_pay+" · declared on application (verify vs payslip)"):"not declared — PayPlus doesn't expose pay";
   return `${redHtml}${phRow("Tenure",s.disp.tenureTxt)}${phRow("Monthly take-home pay",_payTxt)}${phRow("Contract type",s.disp.ct)}${phRow("Roster status",s.disp.stTxt)}${phRow("Source",s.disp.src)}
     ${flags.length
       ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">${flags.map(f=>`<div style="padding:8px 11px;border-radius:9px;background:#fbeee6;border:1px solid #ecdca6;font-size:13px;">${f.html}</div>`).join("")}</div>`

@@ -702,7 +702,9 @@ function loanApprover(l){ const t=((l.department||"")+" "+(l.position||"")).toLo
 // Margie (Accounting Officer) signs via her private link. Margie ALSO does the disbursement/release review (below) —
 // she both witnesses the agreement AND uploads the release proof.
 const LOAN_COSIGNERS=[
-  {role:"HR Officer", name:"Grazel Lyn Agulto", email:"hr3@hassarams.com"},
+  // HR-Officer WITNESS = Juvelyn Belvistre (hr@). Grazel (hr3@, payroll) is NO LONGER a witness — she is the
+  // release RECORDER (payroll deduction), handled separately below. (anj, 2026-08-04)
+  {role:"HR Officer", name:"Juvelyn Belvistre", email:"hr@hassarams.com"},
   {role:"Accounting Officer", name:"Margie Aliangan", email:"maliangan@hassarams.com"},
 ];
 // Accounting (Margie) also handles the disbursement/release (uploads proof) in addition to witnessing.
@@ -734,8 +736,8 @@ function loanCoSignPanelHtml(l){
       </div></div>`;
   }).join("");
   return `<div class="panel" id="loanCoSignPanel"><h2>Co-signatories <span class="count-tag">${list.filter(loanCoSignerSigned).length}/${list.length} signed</span></h2>
-    ${allSigned?`<div style="margin-bottom:10px;padding:9px 12px;border-radius:9px;background:#e6f4ea;border:1px solid #bfe0c8;color:var(--green);font-weight:700;font-size:13px;">✓ Fully executed — Director + Payroll + Accounting signed</div>`:""}
-    <div class="psub">Once the Director has approved &amp; signed, Grazel (payroll) &amp; Margie (accounting) each e-sign the agreement. Grazel signs in the portal; Margie signs via her private link (🔗 Copy link → send her the link).</div>
+    ${allSigned?`<div style="margin-bottom:10px;padding:9px 12px;border-radius:9px;background:#e6f4ea;border:1px solid #bfe0c8;color:var(--green);font-weight:700;font-size:13px;">✓ Fully executed — Director + HR + Accounting witnessed</div>`:""}
+    <div class="psub">Once the Director has approved &amp; signed, Juvy (HR) &amp; Margie (accounting) each e-sign the agreement as witnesses. Juvy signs in the portal; Margie signs via her private link (🔗 Copy link → send her the link).</div>
     ${l.forwarded_by?`<div class="psub" style="margin-top:4px;">Forwarded by <b>${esc(l.forwarded_by)}</b>${l.forwarded_at?" · "+fmtDate(l.forwarded_at):""}.</div>`:""}
     <div style="margin-top:10px;">${rows}</div>
   </div>`;
@@ -1033,10 +1035,10 @@ function buildLoanAgreement(l,approver){
   L.push(`TERMS AND CONDITIONS`);
   L.push(`1. Resignation or Termination. If the Borrower resigns or is terminated for just cause, the outstanding balance of the loan must be paid in full within fifteen (15) days from the date of separation. Failure to comply will result in the Lender initiating legal action to recover the unpaid amount.`);
   L.push(`2. Interest on Unpaid Balance. In the event the Borrower fails to settle the outstanding loan upon separation or disconnection, an interest charge of twenty-four percent (24%) per annum shall be applied to the unpaid balance until full payment is made.`);
-  L.push(`3. Withdrawal or Misuse of Funds. Should the Borrower withdraw the funds intended for the stated purpose, or otherwise misuse the loan, the entire outstanding amount shall become immediately due and payable, subject to interest at thirty-six percent (36%) per annum until fully settled.`);
+  L.push(`3. Withdrawal or Misuse of Funds. Should the Borrower withdraw, misuse, or divert the funds from the stated purpose, the entire outstanding amount shall become immediately due and payable, subject to interest at thirty-six percent (36%) per annum until fully settled.`);
   L.push(`4. Prepayment. The Borrower may prepay the loan, in full or in part, at any time without penalty.`);
   L.push(`5. Amendment. Any amendments to this agreement must be made in writing and signed by both parties.`);
-  L.push(`6. Governing Law. This agreement shall be governed by and interpreted in accordance with the laws of the Republic of the Philippines.`);
+  L.push(`6. Governing Law. This agreement shall be governed by and interpreted in accordance with the laws of the Republic of the Philippines, with venue for any dispute in the City of Pasig.`);
   return L.join("\n");
 }
 const loanStatusPill=(s)=>{ const m={"Submitted":"a","HR Review":"a","Supervisor":"a","Management":"a","Approved":"g","Released":"g","Rejected":"r"}; return `<span class="pill ${({a:'probation',g:'active',r:'closed'})[m[s]||'a']}">${esc(s)}</span>`; };
@@ -1129,7 +1131,7 @@ function printLoanAgreement(l){
   // Each signatory's box shows their e-signature inline if signed, else a blank line for wet-signing.
   const _co=(typeof loanCoSigners==="function"?loanCoSigners(l):[]).filter(s=>String((s&&s.status)||"").toLowerCase()==="signed");
   const _coBy=(email)=>_co.find(s=>String((s&&s.signer_email)||"").toLowerCase()===email && s.signature_data);
-  const _grz=_coBy("hr3@hassarams.com"), _mrg=_coBy("maliangan@hassarams.com");
+  const _hrw=_coBy("hr@hassarams.com"), _mrg=_coBy("maliangan@hassarams.com");   // HR witness = Juvelyn Belvistre (hr@)
   const sigSlot=(name,cap,img,date)=> img
     ? `<div class="sigbox"><img src="${img}" style="max-height:56px;max-width:100%;border-bottom:1px solid #333;background:#fff;"><div class="signame">${name}</div><div class="sigcap">${cap} · <b>e-signed (RA 8792)</b>${date?" · "+E(fmtDate(date)):""}</div></div>`
     : `<div class="sigbox"><div class="sigline"></div><div class="signame">${name}</div><div class="sigcap">${cap} · Date: __________</div></div>`;
@@ -1184,7 +1186,7 @@ function printLoanAgreement(l){
     ${edu?`<div class="sig"><div style="flex:1;min-width:220px;">${sigSlot("","Student/Child · undertaking to repay their share","")}</div></div>`:""}
     <div style="font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#1E3A5F;margin-top:16px;">Witnesseth</div>
     <div class="sig" style="margin-top:6px;">
-      ${sigSlot("GRAZEL LYN AGULTO","Witness · HR Officer",_grz&&_grz.signature_data,_grz&&_grz.signed_at)}
+      ${sigSlot("JUVELYN BELVISTRE","Witness · HR Officer",_hrw&&_hrw.signature_data,_hrw&&_hrw.signed_at)}
       ${sigSlot("MARGIE ALIANGAN","Witness · Accounting Officer",_mrg&&_mrg.signature_data,_mrg&&_mrg.signed_at)}
     </div>
     ${capSigHtml}
@@ -1566,6 +1568,7 @@ function openLoan(id){
           ${!["Approved","Released","Rejected"].includes(l.status)?`<button class="btn ghost" id="loanDecline" style="color:#8a5a00;border-color:#ecdca6;">Decline with guidance</button>`:""}
           ${l.status!=="Rejected"&&l.status!=="Released"?`<button class="btn ghost" id="loanRej" style="color:var(--red);border-color:#f1c9c5;">Reject</button>`:""}
           ${l.status==="Rejected"?`<button class="btn ghost" id="loanUndoRej" style="color:#1f6b3a;border-color:#cfe6d6;">↩ Undo reject → HR Review</button>`:""}
+          ${(l.amount&&l.term_months)?`<button class="btn ghost" id="loanPrevDoc" style="color:#1E3A5F;">📄 Preview final document</button>`:""}
           ${(l.amount&&l.term_months)?`<button class="btn ghost" id="loanAgree" style="color:#1E3A5F;">📄 Computation + Agreement (PDF)</button>`:""}
           ${(l.status==="Approved" && l.mgmt_signature && loanCoSigners(l).length===0 && (isAdminUser()||["relations","payroll","manager"].includes(userRole())))?`<button class="btn" id="loanFwdCosign">Forward for co-signing (Juvy sends)</button>`:""}
           <button class="btn ghost" id="loanClose" style="margin-left:auto;">Close</button>
@@ -1577,6 +1580,7 @@ function openLoan(id){
     </div></div>`;
   $("#loanClose").addEventListener("click",()=>m.remove());
   const _agr=$("#loanAgree"); if(_agr) _agr.addEventListener("click",()=>printLoanAgreement(l));
+  const _pv=$("#loanPrevDoc"); if(_pv) _pv.addEventListener("click",()=>loanPreviewConfirm(true));
   // ── Loan history (HR-maintained; PayPlus doesn't expose loan balances) ──
   const renderLoanHist=(rows)=>{
     const body=document.getElementById("loanHistBody"); if(!body) return;
@@ -1819,7 +1823,12 @@ function openLoan(id){
     }
     return false;
   };
-  const approvePatch=(ovrAmt,ovrTerm)=>{ const approver=loanApprover(l);
+  // approvePatch(ovrAmt, ovrTerm, ovrDates) — builds the Approved patch from the FINAL edited figures.
+  // ovrDates (from the Preview & confirm modal) = {release_date, first_deduction_date, rush}; when omitted, the
+  // dates fall back to the on/after-today cut-off (legacy behaviour). The amount/term/dates that end up on the
+  // patch are ALSO what agreement_body is built from — so the saved loan, its agreement, and the preview all match
+  // (no stale-term drift).
+  const approvePatch=(ovrAmt,ovrTerm,ovrDates)=>{ const approver=loanApprover(l);
     const patch={ status:"Approved", mgmt_approver:approver, agreement_token:newLoanToken(), agreement_status:"awaiting" };
     // Counter-offer: approve at the Director's adjusted amount/term. The figures are captured BEFORE the
     // signature modal opens and passed in explicitly (so approval never falls back to the requested amount).
@@ -1827,22 +1836,31 @@ function openLoan(id){
     const domAmt=aI?parseFloat(aI.value||""):NaN, domTerm=tI?parseInt(tI.value||""):NaN;
     const amt=(ovrAmt!=null&&!isNaN(Number(ovrAmt))&&Number(ovrAmt)>0)?Number(ovrAmt):(!isNaN(domAmt)&&domAmt>0?domAmt:Number(l.amount||0));
     const term=(ovrTerm!=null&&!isNaN(Number(ovrTerm))&&Number(ovrTerm)>0)?Number(ovrTerm):(!isNaN(domTerm)&&domTerm>0?domTerm:Number(l.term_months||12));
+    const r=loanRateOf();
+    // Always persist the final amount/term so the printout can never fall back to a stale value.
+    patch.amount=amt; patch.term_months=term;
+    patch.monthly_estimate=term?(amt+amt*(r/100)*(term/12))/term:0;
     const changed=(amt!==Number(l.amount)) || (term!==Number(l.term_months));
     if(changed){
-      const r=loanRateOf(); patch.amount=amt; patch.term_months=term;
-      patch.monthly_estimate=term?(amt+amt*(r/100)*(term/12))/term:0;
       const ta=document.getElementById("loanNotes");
       if(ta){ ta.value=(ta.value?ta.value+"\n":"")+`[Approved at ${peso(amt)} · ${term} mo — requested ${peso(l.amount)} (${l.term_months||"?"} mo) · adjusted by ${myName()||"Director"} · ${fmtDate(new Date().toISOString())}]`; }
-      patch.agreement_body=buildLoanAgreement(Object.assign({},l,{amount:amt,term_months:term}),approver);
-    } else {
-      patch.agreement_body=buildLoanAgreement(l,approver);
     }
-    // Set the release + first-deduction cut-off dates on approval (never overwrite ones already set).
-    // Release = the cut-off on/after today; first deduction = the cut-off strictly after the release date.
-    if(!l.release_date) patch.release_date=nextCutoff(new Date());
-    const _rd=l.release_date||patch.release_date;
-    if(!l.first_deduction_date && _rd) patch.first_deduction_date=cutoffAfter(_rd);
-    if(l.rush==null) patch.rush=false;
+    // Release + first-deduction cut-off dates. Preview passes them explicitly (Director picked Rush / 15th / EOM);
+    // otherwise fall back to the on/after-today cut-off (never overwrite ones already set).
+    let rd,fd,rush;
+    if(ovrDates && ovrDates.release_date){
+      rd=ovrDates.release_date; fd=ovrDates.first_deduction_date||cutoffAfter(rd); rush=!!ovrDates.rush;
+      patch.release_date=rd; patch.first_deduction_date=fd; patch.rush=rush;
+    } else {
+      if(!l.release_date) patch.release_date=nextCutoff(new Date());
+      rd=l.release_date||patch.release_date;
+      if(!l.first_deduction_date && rd) patch.first_deduction_date=cutoffAfter(rd);
+      fd=l.first_deduction_date||patch.first_deduction_date;
+      if(l.rush==null) patch.rush=false;
+      rush=(l.rush==null)?false:l.rush;
+    }
+    // Build the T&C body from the SAME final amount/term/dates (fixes the stale "starting on …" + term text).
+    patch.agreement_body=buildLoanAgreement(Object.assign({},l,{amount:amt,term_months:term,release_date:rd,first_deduction_date:fd,rush}),approver);
     return patch;
   };
   // Item 8 — send up to Management: name a supervisor for an FYI acknowledgment (non-blocking).
@@ -1893,10 +1911,122 @@ function openLoan(id){
       onSign:(dataUrl, extra)=>{ if(!dataUrl) return; const finalAmt=(extra&&extra.amount>0)?extra.amount:startAmt; const patch=approvePatch(finalAmt,useTerm); patch.mgmt_signature=dataUrl; patch.mgmt_signer=myName(); patch.mgmt_signed_at=new Date().toISOString(); setLoan(patch); }
     });
   };
+  // Preview & confirm before approving (Management stage). Recomputes the WHOLE document live from the current
+  // amount/term + a release date the Director picks (⚡ Rush today / Cut-off 15th / Cut-off 30th-EOM), so what gets
+  // signed always matches what prints — killing the stale-term bug. readOnly=true opens the same view for any
+  // reviewer (no edit, no approve). Everything is computed with the SAME helpers the printout uses (loanCompute +
+  // buildLoanAgreement + the identical schedule/date math), so preview == printout.
+  const loanPreviewConfirm=(readOnly)=>{
+    const approver=loanApprover(l);
+    const P2=n=>"₱"+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+    // Prefill from the counter-offer box if the Director already typed one, else the requested figures.
+    const aI0=document.getElementById("loanAdjAmt"), tI0=document.getElementById("loanAdjTerm");
+    const dA=aI0?parseFloat(aI0.value||""):NaN, dT=tI0?parseInt(tI0.value||""):NaN;
+    const initAmt=readOnly?Number(l.amount||0):((!isNaN(dA)&&dA>0)?dA:Number(l.amount||0));
+    const initTerm=readOnly?Number(l.term_months||0):((!isNaN(dT)&&dT>0)?dT:Number(l.term_months||12));
+    // Release-date helpers: the next specific 15th / EOM on-or-after today.
+    const next15=(x)=>{ const p=_loanYMD(x); if(!p) return ""; if(p.d<=15) return fmtCut(p.y,p.m,15); let y=p.y,mo=p.m+1; if(mo>12){mo=1;y++;} return fmtCut(y,mo,15); };
+    const nextEOM=(x)=>{ const p=_loanYMD(x); if(!p) return ""; return fmtCut(p.y,p.m,lastDayOfMonth(p.y,p.m)); };
+    const todayP=_loanYMD(new Date());
+    // Default = the next cut-off after today (nextCutoff), mapped to the matching radio.
+    let defChoice=(todayP&&todayP.d<=15)?"15":"eom";
+    if(readOnly) defChoice=l.rush?"rush":(((_loanYMD(l.release_date)||{d:99}).d<=15)?"15":"eom");
+    const relFor=(choice)=>{
+      if(readOnly) return {rd:l.release_date||"", rush:!!l.rush};
+      if(choice==="rush") return {rd:todayCutStr(), rush:true};       // Rush = today's actual date
+      if(choice==="15")   return {rd:next15(new Date()), rush:false};
+      return {rd:nextEOM(new Date()), rush:false};
+    };
+    let m=document.getElementById("loanPrevModal"); if(!m){ m=document.createElement("div"); m.id="loanPrevModal"; document.body.appendChild(m); }
+    m.style.cssText="position:fixed;inset:0;z-index:10005;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+    const dis=readOnly?"disabled":"";
+    const radio=(val,label)=>`<label style="display:inline-flex;gap:5px;align-items:center;cursor:${readOnly?'default':'pointer'};padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:12.5px;"><input type="radio" name="lpRel" value="${val}" ${val===defChoice?"checked":""} ${dis}> ${label}</label>`;
+    m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
+      <div style="font-size:10.5px;font-weight:800;letter-spacing:1.4px;color:#6B7785;">${readOnly?"PREVIEW — FINAL DOCUMENT":"PREVIEW &amp; CONFIRM BEFORE APPROVING"} · ${esc(l.loan_ref||"")}</div>
+      <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 3px;">${esc(l.applicant_name||"")} — ${esc(loanTypeLabel(l.loan_type))}</div>
+      <div class="psub" style="margin-bottom:10px;">${readOnly?"Read-only preview of the exact document with the current figures.":"Edit the amount, term, and release date — the whole document below recomputes live, so what you sign is exactly what prints."}</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;padding:11px 13px;border-radius:10px;background:#f4f8f5;border:1px solid #cfe0d4;">
+        <div><div class="esub">Approved amount (₱)</div><input id="lpAmt" type="number" min="0" step="500" value="${initAmt}" ${dis} style="width:140px;padding:8px;border:1px solid var(--line);border-radius:8px;font-weight:700;"></div>
+        <div><div class="esub">Term (months)</div><input id="lpTerm" type="number" min="1" value="${initTerm}" ${dis} style="width:100px;padding:8px;border:1px solid var(--line);border-radius:8px;font-weight:700;"></div>
+        <div style="flex:1 1 100%;"><div class="esub" style="margin-bottom:4px;">Release date</div><div style="display:flex;gap:8px;flex-wrap:wrap;">${radio("rush","⚡ Rush (today)")}${radio("15","Cut-off 15th")}${radio("eom","Cut-off 30th / EOM")}</div></div>
+      </div>
+      <div id="lpBody" style="margin-top:14px;"></div>
+      <div style="display:flex;gap:10px;margin-top:16px;">
+        <button class="btn ghost" id="lpCancel" type="button" style="margin-left:auto;">${readOnly?"Close":"Cancel"}</button>
+        ${readOnly?"":`<button class="btn" id="lpApprove" type="button">Approve &amp; Sign →</button>`}
+      </div>
+    </div>`;
+    m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+    document.getElementById("lpCancel").onclick=()=>m.remove();
+    const curInputs=()=>{
+      const amt=readOnly?Number(l.amount||0):(parseFloat((document.getElementById("lpAmt")||{}).value||"0")||0);
+      const term=readOnly?Number(l.term_months||0):(parseInt((document.getElementById("lpTerm")||{}).value||"0")||0);
+      const choice=readOnly?defChoice:(((document.querySelector('input[name="lpRel"]:checked')||{}).value)||defChoice);
+      const rel=relFor(choice); const rd=rel.rd, rush=rel.rush;
+      const fd=readOnly?(l.first_deduction_date||(rd?cutoffAfter(rd):"")):(rd?cutoffAfter(rd):"");
+      return {amt,term,rd,fd,rush,choice};
+    };
+    const recalc=()=>{
+      const body=document.getElementById("lpBody"); if(!body) return;
+      const ci=curInputs();
+      if(!(ci.amt>0)||!(ci.term>0)){ body.innerHTML=`<div class="note">Enter an amount and a term to compute the document.</div>`; return; }
+      const lt=Object.assign({},l,{amount:ci.amt,term_months:ci.term,release_date:ci.rd,first_deduction_date:ci.fd,rush:ci.rush});
+      const c=loanCompute(lt);   // SAME helper the printout uses
+      // Amortization schedule with REAL cut-off dates — identical math to printLoanAgreement (last row absorbs rounding).
+      const nCut=(c.term||0)*2; const schedDates=[];
+      if(ci.fd && nCut>0){ let cur=ci.fd; for(let k=0;k<nCut;k++){ schedDates.push(cur); cur=cutoffAfter(cur); } }
+      const perPrin=nCut?c.amortPrincipal/nCut:0, perInt=nCut?c.interest/nCut:0, perPay=nCut?c.total/nCut:0;
+      let cumPay=0, rows="";
+      for(let k=1;k<=nCut;k++){ const isLast=(k===nCut); const pay=isLast?Math.max(0,c.total-cumPay):Math.round(perPay*100)/100; cumPay+=pay; const bal=Math.max(0,Math.round((c.total-cumPay)*100)/100); const dcell=schedDates.length?esc(fmtDate(schedDates[k-1])):("Cut-off "+k); rows+=`<tr><td>${k}</td><td>${dcell}</td><td style="text-align:right;">${P2(pay)}</td><td style="text-align:right;">${P2(perPrin)}</td><td style="text-align:right;">${P2(perInt)}</td><td style="text-align:right;padding-right:7px;">${P2(bal)}</td></tr>`; }
+      const loanPeriodStr=schedDates.length?(esc(fmtDate(schedDates[0]))+" – "+esc(fmtDate(schedDates[schedDates.length-1]))):"—";
+      const kv=(k,v)=>`<tr><td style="color:#555;padding:2px 0;">${esc(k)}</td><td style="text-align:right;font-weight:600;padding:2px 0;">${v}</td></tr>`;
+      body.innerHTML=`
+        <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#1E3A5F;border-bottom:1px solid #1E3A5F;padding-bottom:3px;margin-bottom:6px;">Computation</div>
+        <table style="width:100%;font-size:12.5px;border-collapse:collapse;">
+          ${kv("Principal (loan amount)"+(c.edu?" — full tuition":""),P2(c.amt))}
+          ${kv("Interest rate",esc(loanRatePerMonthLabel(lt))+" ("+c.rate+"% per annum, flat)")}
+          ${kv("Term",c.term+" month(s)")}
+          ${kv("Amount of interest",P2(c.interest))}
+          ${kv("Total amount payable","<b>"+P2(c.total)+"</b>")}
+          ${kv("Monthly amortization","<b>"+P2(c.monthly)+"</b> ("+P2(c.perCutoff)+" / cut-off)")}
+          ${kv("Release date",(ci.rd?esc(fmtDate(ci.rd)):"—")+(ci.rush?" &nbsp;<b style='color:#a12622;'>⚡ RUSH</b>":""))}
+          ${kv("First deduction",ci.fd?esc(fmtDate(ci.fd)):"—")}
+          ${kv("Loan period",loanPeriodStr)}
+        </table>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#1E3A5F;border-bottom:1px solid #1E3A5F;padding-bottom:3px;margin:14px 0 6px;">Amortization schedule</div>
+        <div style="max-height:230px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;">
+          <table style="width:100%;font-size:11.5px;border-collapse:collapse;"><thead><tr style="color:var(--muted);text-align:left;position:sticky;top:0;background:#eef1f5;"><th style="padding:4px 7px;">#</th><th>Cut-off date</th><th style="text-align:right;">Payment</th><th style="text-align:right;">Principal</th><th style="text-align:right;">Interest</th><th style="text-align:right;padding-right:7px;">Balance</th></tr></thead><tbody>${rows}</tbody></table>
+        </div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#1E3A5F;border-bottom:1px solid #1E3A5F;padding-bottom:3px;margin:14px 0 6px;">Terms &amp; Conditions</div>
+        <div style="white-space:pre-wrap;font-size:11.5px;line-height:1.55;">${esc(buildLoanAgreement(lt,approver))}</div>`;
+    };
+    if(!readOnly){
+      ["lpAmt","lpTerm"].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener("input",recalc); });
+      Array.prototype.forEach.call(document.querySelectorAll('input[name="lpRel"]'),r=>r.addEventListener("change",recalc));
+      const ap=document.getElementById("lpApprove");
+      if(ap) ap.onclick=()=>{
+        const ci=curInputs();
+        if(!(ci.amt>0)){ alert("Enter an approved amount."); return; }
+        if(!(ci.term>0)){ alert("Enter a term in months."); return; }
+        const lt=Object.assign({},l,{amount:ci.amt,term_months:ci.term,release_date:ci.rd,first_deduction_date:ci.fd,rush:ci.rush});
+        m.remove();
+        // The previewed amount/term/dates flow straight into the approve patch → the saved loan + its agreement
+        // use these exact values (no recompute drift). The recomputed T&C ride on the sign screen too.
+        captureSignatureModal({
+          title:"Approve & sign this loan",
+          subtitle:`${l.applicant_name} · ${loanTypeLabel(l.loan_type)} · ${peso(ci.amt)} · ${ci.term} mo · ${loanRatePerMonthLabel(l)} flat · release ${ci.rush?"Rush (today)":fmtDate(ci.rd)}`,
+          reviewHtml:"<pre style='white-space:pre-wrap;font-family:sans-serif;font-size:12px;line-height:1.55;margin:0;'>"+esc(buildLoanAgreement(lt,approver))+"</pre>",
+          cta:"Approve & Sign",
+          onSign:(dataUrl)=>{ if(!dataUrl) return; const patch=approvePatch(ci.amt,ci.term,{release_date:ci.rd,first_deduction_date:ci.fd,rush:ci.rush}); patch.mgmt_signature=dataUrl; patch.mgmt_signer=myName(); patch.mgmt_signed_at=new Date().toISOString(); setLoan(patch); }
+        });
+      };
+    }
+    recalc();
+  };
   const doLoanAdvance=()=>{
     if(!stage.canAct) return;                       // read-only for non-owners
     if(l.status==="HR Review"){ loanSendUp(); return; }        // → Management + supervisor FYI (blocks if no docs)
-    if(l.status==="Management"){ loanApproveSign(); return; }   // → Approved (admin signs)
+    if(l.status==="Management"){ loanPreviewConfirm(false); return; }   // → Preview & confirm → Approve & Sign
     setLoan({status:next});                          // Submitted → HR Review
   };
   const adv=document.getElementById("loanAdv"); if(adv) adv.addEventListener("click",doLoanAdvance);
@@ -2059,7 +2189,7 @@ function openLoan(id){
   if(fwd) fwd.addEventListener("click",async()=>{
     if(!(l.status==="Approved" && l.mgmt_signature)){ alert("Forward for co-signing is available once the Director has approved & signed this loan."); return; }
     if(loanCoSigners(l).length){ alert("This loan has already been forwarded for co-signing."); return; }
-    if(!confirm("Forward this approved loan to Grazel (payroll) and Margie (accounting) for their signatures?")) return;
+    if(!confirm("Forward this approved loan to Juvy (HR) and Margie (accounting) for their witness signatures?")) return;
     fwd.disabled=true; fwd.textContent="Forwarding…";
     const docHtml="<pre style='white-space:pre-wrap;font-family:sans-serif;font-size:13px;line-height:1.6;'>"+esc(buildLoanAgreement(l,l.mgmt_approver||loanApprover(l)))+"</pre>";
     const rows=LOAN_COSIGNERS.map(cs=>({

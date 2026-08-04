@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785769220";
+window.APP_BUILD="1785812611";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785769220" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785812611" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -4062,9 +4062,9 @@ function openLoan(id){
     const empOpts=(typeof EMPLOYEES!=="undefined"?EMPLOYEES:[]).slice(0,800).map(e=>`<option value="${esc(e.full_name||"")}">`).join("");
     mm.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:22px;">
       <div style="font-size:18px;font-weight:800;color:#12352a;margin-bottom:3px;">Send up to Management</div>
-      <div class="psub" style="margin-bottom:10px;">Name the employee's supervisor for an FYI acknowledgment. This does <b>not</b> block approval — Management can approve regardless.</div>
+      <div class="psub" style="margin-bottom:10px;">Name the supervisor who is <b>aware</b> of this loan — <b>required</b>, so it's on record that a supervisor knows. No other details needed. This does <b>not</b> block approval.</div>
       ${isSelf?`<div style="padding:8px 11px;border-radius:9px;background:#fdecea;border:1px solid #f1c9c5;color:#a12622;font-size:13px;margin-bottom:10px;">HR review skipped — routed to Director (SOP).</div>`:""}
-      <input id="suName" list="suEmpList" placeholder="Supervisor name (optional)" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;" value="${esc(l.supervisor_name||"")}">
+      <input id="suName" list="suEmpList" placeholder="Supervisor name (required)" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;" value="${esc(l.supervisor_name||"")}">
       <datalist id="suEmpList">${empOpts}</datalist>
       <input id="suEmail" type="email" placeholder="Supervisor email (optional — for their FYI)" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;" value="${esc(l.supervisor_email||"")}">
       <div style="display:flex;gap:10px;margin-top:14px;">
@@ -4075,8 +4075,9 @@ function openLoan(id){
     document.getElementById("suCancel").onclick=()=>mm.remove();
     document.getElementById("suSend").onclick=()=>{
       const nm=(document.getElementById("suName").value||"").trim();
+      if(!nm){ alert("Please name the supervisor who is aware of this loan before sending it up to Management."); return; }
       const em2=(document.getElementById("suEmail").value||"").trim().toLowerCase();
-      const patch={ status:"Management", supervisor_name:nm||null, supervisor_email:em2||null, supervisor_status:(nm||em2)?"pending":null };
+      const patch={ status:"Management", supervisor_name:nm, supervisor_email:em2||null, supervisor_status:"pending" };
       if(isSelf){ const ta=document.getElementById("loanNotes"); if(ta){ const stamp=`[HR review skipped — HR-staff self-application routed to Director (SOP) · ${fmtDate(new Date().toISOString())}]`; ta.value=(ta.value?ta.value+"\n":"")+stamp; } }
       mm.remove();
       setLoan(patch);   // setLoan reads loanNotes into hr_notes, so the SOP stamp is persisted
@@ -4092,7 +4093,7 @@ function openLoan(id){
     const useTerm=(!isNaN(dT)&&dT>0)?dT:Number(l.term_months||12);
     captureSignatureModal({
       title:"Approve & sign this loan",
-      subtitle:`${l.applicant_name} · ${loanTypeLabel(l.loan_type)} · ${useTerm} mo · ${loanRateOf()}% p.a. flat`,
+      subtitle:`${l.applicant_name} · ${loanTypeLabel(l.loan_type)} · ${useTerm} mo${useTerm!==Number(l.term_months||0)?` (originally ${l.term_months||"?"} mo)`:""} · ${loanRateOf()}% p.a. flat`,
       editField:{ label:"Approved amount (₱) — edit to counter-offer", value:startAmt, hint:`Requested ${peso(l.amount)}. Whatever you enter here is what gets approved & put on the agreement.` },
       cta:"Approve & Sign",
       onSign:(dataUrl, extra)=>{ if(!dataUrl) return; const finalAmt=(extra&&extra.amount>0)?extra.amount:startAmt; const patch=approvePatch(finalAmt,useTerm); patch.mgmt_signature=dataUrl; patch.mgmt_signer=myName(); patch.mgmt_signed_at=new Date().toISOString(); setLoan(patch); }
@@ -9290,10 +9291,31 @@ async function renderActivity(){
       <div style="flex:1;min-width:0;"><div class="tt">${esc(c.action)} — ${esc(c.entity_name||c.entity||"")}${c.detail?` <span style="font-weight:400;color:var(--muted);">· ${esc(c.detail)}</span>`:""}</div>
       <div class="td">${esc(whoName(c.changed_by))} · ${c.created_at?fmtDateTime(c.created_at):""}</div></div>
     </div>`).join("");
+  // Weekly backups (owners only) — read the log; RLS restricts it to owners.
+  let backups=[]; try{ backups=(await sb.from("backup_log").select("*").order("created_at",{ascending:false})).data||[]; }catch(_){}
+  const mb=n=>(Number(n||0)/1048576).toFixed(2)+" MB";
+  const backupRows = backups.length ? backups.map(b=>`<tr>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);"><b>${fmtDateTime(b.created_at)}</b></td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);">${b.trigger==='manual'?'Manual':'Friday auto'}${b.created_by?` <span class="esub">${esc(b.created_by)}</span>`:''}</td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);">${b.table_count||0} tables · ${(b.row_count||0).toLocaleString()} rows</td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);">${mb(b.size_bytes)}</td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);text-align:right;"><button class="btn ghost" onclick="downloadBackup('${esc(b.filename)}')">⬇ Download</button></td>
+    </tr>`).join("") : `<tr><td colspan="5" class="psub" style="padding:9px;">No backups yet — click <b>Back up now</b> to create the first one.</td></tr>`;
   pg.innerHTML=`
     <div class="panel" style="margin-top:0;">
       <h2>Access &amp; Activity <span class="count-tag">owners only</span></h2>
       <div class="psub">Who has access, who's logging in, and every change made — the accountability trail for the handover.</div>
+    </div>
+    <div class="panel">
+      <h2>Weekly Backups <span class="count-tag">owners only</span></h2>
+      <div class="psub">A full snapshot of the entire HRIS database is saved automatically <b>every Friday, 6:00&nbsp;PM</b>. Download any week's file to keep an off-site copy (e.g. in your Dropbox) — that downloaded file is your safety net if anything is ever lost. The latest 12 are kept.</div>
+      <div style="margin:11px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <button class="btn" id="backupNowBtn" onclick="backupNow()">Back up now</button>
+        <span id="backupMsg" class="psub"></span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="text-align:left;color:var(--muted);">
+        <th style="padding:6px 9px;font-weight:600;">When</th><th style="padding:6px 9px;font-weight:600;">Type</th><th style="padding:6px 9px;font-weight:600;">Contents</th><th style="padding:6px 9px;font-weight:600;">Size</th><th style="padding:6px 9px;font-weight:600;text-align:right;">File</th></tr></thead>
+        <tbody>${backupRows}</tbody></table>
     </div>
     <div class="panel">
       <h2>Who can access what</h2>
@@ -9348,6 +9370,29 @@ async function renderActivity(){
   });
 }
 function fmtDateTime(d){ if(!d) return "—"; const x=new Date(d); if(isNaN(x)) return String(d); return x.toLocaleDateString("en-US",{month:"short",day:"numeric"})+", "+x.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}); }
+// ---- Weekly database backups (owner-only) ----
+// "Back up now" → the db-backup edge function snapshots every table to the private bucket.
+async function backupNow(){
+  const btn=document.getElementById("backupNowBtn"), msg=document.getElementById("backupMsg");
+  if(btn){ btn.disabled=true; btn.textContent="Backing up…"; } if(msg){ msg.textContent="Snapshotting the whole database…"; msg.style.color="var(--muted)"; }
+  try{
+    const { data, error } = await sb.functions.invoke("db-backup",{ body:{ trigger:"manual" } });
+    if(error||!data||!data.ok){ if(msg){ msg.textContent="Backup failed: "+((data&&data.error)||(error&&error.message)||"unknown"); msg.style.color="#a4322a"; } }
+    else if(msg){ msg.textContent="✓ Backed up "+data.table_count+" tables · "+(Number(data.row_count||0)).toLocaleString()+" rows · "+(Number(data.size_bytes||0)/1048576).toFixed(2)+" MB."; msg.style.color="var(--green-dark)"; }
+  }catch(e){ if(msg){ msg.textContent="Backup failed: "+e.message; msg.style.color="#a4322a"; } }
+  if(btn){ btn.disabled=false; btn.textContent="Back up now"; }
+  try{ await renderActivity(); }catch(_){}
+}
+window.backupNow=backupNow;
+// Download a backup file — a short-lived signed URL (owners only, enforced by storage RLS).
+async function downloadBackup(filename){
+  try{
+    const { data, error } = await sb.storage.from("db-backups").createSignedUrl(filename, 120, { download:true });
+    if(error||!data||!data.signedUrl){ alert("Could not prepare the download: "+((error&&error.message)||"unknown")); return; }
+    const a=document.createElement("a"); a.href=data.signedUrl; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+  }catch(e){ alert("Download error: "+e.message); }
+}
+window.downloadBackup=downloadBackup;
 /* ===================== MATERNITY BENEFITS (RA 11210) ===================== */
 let MAT_EDIT=null;
 function matDefaultDays(type,solo){ return type==="Miscarriage"?60:(solo?120:105); }

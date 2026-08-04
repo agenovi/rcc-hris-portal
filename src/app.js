@@ -650,10 +650,13 @@ function loanApprover(l){ const t=((l.department||"")+" "+(l.position||"")).toLo
 // Loan co-signing chain (anj): after the Director approves + signs, Juvy forwards it and Grazel (payroll) +
 // Margie (accounting) each e-sign the agreement. Reuses the external-signoff infra — Grazel signs in-portal,
 // Margie (not a portal user) signs via her private sign-off.html link. external_signoffs is the source of truth.
+// Co-signatories on the loan AGREEMENT. Margie (Accounting) was removed as a signatory (2026-08-04, her request:
+// interest is auto-computed + HR/approver verify) — she now handles the RELEASE (disbursement proof), not signing.
 const LOAN_COSIGNERS=[
   {role:"HR / Payroll", name:"Grazel Lyn Agulto", email:"hr3@hassarams.com"},
-  {role:"Accounting",   name:"Margie Aliangan",   email:"maliangan@hassarams.com"},
 ];
+// Accounting handles the disbursement/release (uploads proof) — not a signatory.
+const LOAN_RELEASE_ACCOUNTING="maliangan@hassarams.com";
 function loanCoSigners(l){ return (EXT_SIGNOFFS||[]).filter(s=>s.context_type==="loan" && String(s.context_id)===String(l&&l.id)); }
 // Status is case-insensitive: Margie's link is signed via the `signoff` edge fn (writes "Signed"),
 // while an in-portal "Co-sign now" writes "signed" per spec — both must read as signed.
@@ -984,12 +987,15 @@ function printLoanAgreement(l){
   const kv=(k,v)=>`<div class="agr-row"><div class="agr-k">${E(k)}</div><div class="agr-v">${v}</div></div>`;
   const agreementText=(typeof buildLoanAgreement==="function")?buildLoanAgreement(l):"";
   const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
-  // Captured e-signatures (only those that actually exist): Director + Borrower + co-signers.
-  const capSigs=[];
-  if(l.mgmt_signature) capSigs.push({img:l.mgmt_signature, name:(l.mgmt_signer||l.mgmt_approver||(typeof loanApprover==="function"?loanApprover(l):"")), role:"Approved for the Company — Director", date:l.mgmt_signed_at});
-  if(l.agreement_signature) capSigs.push({img:l.agreement_signature, name:(l.agreement_signer||l.applicant_name), role:"Borrower", date:l.agreement_signed_at});
-  (typeof loanCoSigners==="function"?loanCoSigners(l):[]).filter(s=>String((s&&s.status)||"").toLowerCase()==="signed").forEach(s=>{ if(s.signature_data) capSigs.push({img:s.signature_data, name:(s.signed_name||s.signer_name), role:s.signer_role, date:s.signed_at}); });
-  const capSigHtml = capSigs.length ? `<div class="sec">Captured e-signatures (RA 8792)</div><div class="sig">${capSigs.map(sg=>`<div class="sigbox"><img src="${sg.img}" style="max-height:60px;max-width:100%;border-bottom:1px solid #333;background:#fff;"><div class="signame">${E(sg.name||"")}</div><div class="sigcap">${E(sg.role||"")}${sg.date?" · "+E(fmtDate(sg.date)):""}</div></div>`).join("")}</div>` : "";
+  // Merge captured e-signatures INTO the single signature block (no separate/duplicate section).
+  // Each signatory's box shows their e-signature inline if signed, else a blank line for wet-signing.
+  const _co=(typeof loanCoSigners==="function"?loanCoSigners(l):[]).filter(s=>String((s&&s.status)||"").toLowerCase()==="signed");
+  const _coBy=(email)=>_co.find(s=>String((s&&s.signer_email)||"").toLowerCase()===email && s.signature_data);
+  const _grz=_coBy("hr3@hassarams.com"), _mrg=_coBy("maliangan@hassarams.com");
+  const sigSlot=(name,cap,img,date)=> img
+    ? `<div class="sigbox"><img src="${img}" style="max-height:56px;max-width:100%;border-bottom:1px solid #333;background:#fff;"><div class="signame">${name}</div><div class="sigcap">${cap} · <b>e-signed (RA 8792)</b>${date?" · "+E(fmtDate(date)):""}</div></div>`
+    : `<div class="sigbox"><div class="sigline"></div><div class="signame">${name}</div><div class="sigcap">${cap} · Date: __________</div></div>`;
+  const capSigHtml = "";  // captured signatures now render inline in the block below — no duplicate section
   const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${E(l.loan_ref||"Loan")} — Loan Agreement</title><style>
     *{box-sizing:border-box}body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#1a1a1a;font-size:12.5px;line-height:1.5;margin:28px;background:#f4f5f7;}
     .doc{max-width:820px;margin:0 auto;background:#fff;padding:34px 40px 30px;border:1px solid #e2e6ea;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
@@ -1032,12 +1038,11 @@ function printLoanAgreement(l){
     <div class="terms">${E(agreementText)}</div>
     <div class="sec">Signatures</div>
     <div class="sig">
-      <div class="sigbox"><div class="sigline"></div><div class="signame">${E(l.applicant_name||"")}</div><div class="sigcap">Borrower — signature over printed name · Date: __________</div></div>
-      <div class="sigbox"><div class="sigline"></div><div class="signame">ANJU GENOMAL</div><div class="sigcap">Authorized Signatory, Roshan Commercial Corporation · Date: __________</div></div>
+      ${sigSlot(E(l.applicant_name||""),"Borrower — signature over printed name",l.agreement_signature,l.agreement_signed_at)}
+      ${sigSlot("ANJU GENOMAL","Authorized Signatory, Roshan Commercial Corporation",l.mgmt_signature,l.mgmt_signed_at)}
     </div>
     <div class="sig">
-      <div class="sigbox"><div class="sigline"></div><div class="signame">GRAZEL LYN AGULTO</div><div class="sigcap">HR Officer · Date: __________</div></div>
-      <div class="sigbox"><div class="sigline"></div><div class="signame">MARGIE ALIANGAN</div><div class="sigcap">Accounting Officer · Date: __________</div></div>
+      ${sigSlot("GRAZEL LYN AGULTO","HR / Payroll",_grz&&_grz.signature_data,_grz&&_grz.signed_at)}
     </div>
     ${capSigHtml}
     <div class="foot"><b>THE RIGHT MOVE</b> · 3rd Floor RCC Center, 104 Shaw Blvd, Pasig City 1603 · +632 8638 6556<br>Generated ${today} from the RCC HRIS. Salary-deduction authorization is subject to Art. 113, Labor Code — deductions may not drop take-home below minimum wage.</div>
@@ -5466,13 +5471,14 @@ function renderCosign(){
   // Stash for the click handlers (id can repeat across sources → key by kind+id).
   const signMap={}; pending.forEach(p=>{ signMap[p.kind+":"+p.id]=p.sign; });
 
-  // --- Releases to record: loans I co-signed that the Director approved but have no disbursement proof yet ---
+  // --- Releases to record: Accounting (Margie) disburses ALL Director-approved loans that have no proof yet.
+  //     (Margie is no longer a loan co-signer — she owns the release, not the signature.) ---
   const peso=(n)=>n==null?"—":"₱"+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
-  const iAmLoanCosigner=(EXT_SIGNOFFS||[]).some(s=> s.context_type==="loan" && norm(s.signer_email)===me && me);
-  const relToRecord=(typeof LOANS!=="undefined"?LOANS:[]).filter(l=>
-    l && l.status==="Approved" && !l.release_proof &&
-    loanCoSigners(l).some(s=> norm(s.signer_email)===me && me));
-  const showRelSection = iAmLoanCosigner || isAdminUser() || userRole()==="payroll";
+  const isAcctReleaser = (me && norm(LOAN_RELEASE_ACCOUNTING)===me) || isAdminUser() || userRole()==="payroll";
+  const relToRecord = isAcctReleaser
+    ? (typeof LOANS!=="undefined"?LOANS:[]).filter(l=> l && l.status==="Approved" && !l.release_proof)
+    : [];
+  const showRelSection = isAcctReleaser;
   const relCard=(l)=>`
     <div class="lk-row" style="display:flex;align-items:center;gap:12px;border-top:1px solid var(--line,#e4eae6);padding:11px 0;">
       <div style="flex:1;min-width:0;">

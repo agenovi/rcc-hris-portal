@@ -633,6 +633,10 @@ window.APP_BUILD="__BUILD__";
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a8 8 0 1 1-3-6.2L21 3"/><path d="M21 3v6h-6"/></svg>
         Exit Interview<span class="nav-badge tbd">TBD</span>
       </div>
+      <div class="nav-item" data-page="separations" onclick="go('separations')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+        Separations History<span class="nav-badge" style="display:none;"></span>
+      </div>
 
       <div class="nav-sec">Policies &amp; Processes</div>
       <div class="nav-item" data-page="policies" onclick="go('policies')">
@@ -1244,6 +1248,7 @@ window.APP_BUILD="__BUILD__";
       <section class="page" id="page-orgchart"></section>
       <section class="page" id="page-concerns"></section>
       <section class="page" id="page-incidents"></section>
+      <section class="page" id="page-separations"></section>
       <section class="page" id="page-links"></section>
       <section class="page" id="page-demodata"></section>
       <section class="page" id="page-exit">
@@ -1883,7 +1888,7 @@ window.APP_BUILD="__BUILD__";
     exitinterview:'Exit Interview', compliance:'Compliance', audit:'Audit Log',
     settings:'Settings', parking:'Parking Lot', hractivity:'HR Activity & Expense',
     hmo:'HMO Coverage', insurance:'Personal Insurance', maternity:'Maternity Benefits',
-    storemap:'Store Mapping', orgchart:'Org Chart', concerns:'Concerns & Cases', incidents:'Incident Reports', links:'Links to Send',
+    storemap:'Store Mapping', orgchart:'Org Chart', concerns:'Concerns & Cases', incidents:'Incident Reports', separations:'Separations History', links:'Links to Send',
     desk:'HR Desk'
   };
   var NAVFOR={employee:'employees', store:'branches'};

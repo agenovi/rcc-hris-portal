@@ -124,7 +124,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='incidents') return canSeeIncidents(); if(id==='hmo') return canSeeHmo(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='cosign') return !!CURRENT_USER; if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='incidents') return canSeeIncidents(); if(id==='hmo') return canSeeHmo(); if(id==='separations') return canSeeSeparations(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='cosign') return !!CURRENT_USER; if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
@@ -299,7 +299,7 @@ function updateNavBadges(){
 }
 async function loadEmployees(){
   await loadUserRoles();   // role overlay first — so all access gating below reflects the latest User Access settings
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh, ppf, incd, hmod] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh, ppf, incd, hmod, sephist] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -337,7 +337,8 @@ async function loadEmployees(){
     sb.from("department_heads").select("*"),
     sb.from("position_profiles").select("*"),
     sb.from("incidents").select("*").order("date_received",{ascending:false}),
-    sb.from("hmo_members").select("*").order("member_no",{ascending:true})
+    sb.from("hmo_members").select("*").order("member_no",{ascending:true}),
+    sb.from("separations_history").select("*")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -378,6 +379,7 @@ async function loadEmployees(){
   POSITION_PROFILES=(ppf&&ppf.data)||[];
   INCIDENTS=(incd&&incd.data)||[];
   HMO_MEMBERS=(hmod&&hmod.data)||[];
+  SEPARATIONS=(sephist&&sephist.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -405,6 +407,7 @@ async function loadEmployees(){
   renderConcerns();
   renderIncidents();
   renderHmo();
+  renderSeparations();
   renderMeetings();
   renderDemoData();
   renderTimekeeping();
@@ -448,7 +451,7 @@ async function ppSyncFetch(params){
 
 // Honesty pass: every screen NOT backed by live data gets a visible "Preview" ribbon,
 // so HR never mistakes an illustrative mock-up for real data. Real pages are listed here.
-const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity","maternity","timekeeping","meetings","govremit","movements","policies","processes","orgchart","storemap","concerns","incidents","hmo","links","positions","cosign"]);
+const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity","maternity","timekeeping","meetings","govremit","movements","policies","processes","orgchart","storemap","concerns","incidents","hmo","separations","links","positions","cosign"]);
 function tagPreviewPages(){
   document.querySelectorAll('section.page').forEach(sec=>{
     const id=(sec.id||"").replace("page-","");
@@ -1237,7 +1240,7 @@ function renderLoanRows(){
   const mineFlag=`<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:9px;background:#fff3d6;border:1px solid #ecdca6;color:#8a5a00;font-size:10.5px;font-weight:700;vertical-align:middle;">● waiting on you</span>`;
   rows.innerHTML=list.length?list.map(l=>`<tr class="clickable" data-id="${l.id}">
       <td><b>${esc(l.loan_ref)}</b></td>
-      <td style="max-width:230px;">${esc(l.applicant_name)}${loanIsMine(l)?mineFlag:""}${l.department?`<div class="esub">${esc(l.department)}</div>`:""}${l.purpose?`<div class="esub" style="opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(l.purpose)}</div>`:""}</td>
+      <td style="max-width:230px;">${esc(l.applicant_name)}${loanIsMine(l)?mineFlag:""}${l.department?`<div class="esub">${esc(l.department)}</div>`:""}${l.purpose?`<div class="esub" style="opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(l.purpose)}</div>`:""}${l.created_at?`<div class="esub" style="opacity:.7;">Applied ${esc(fmtDate(l.created_at))}</div>`:""}</td>
       <td>${esc(loanTypeLabel(l.loan_type))}<div class="esub">${loanRatePerMonthLabel(l)}</div></td>
       <td>${peso(l.amount)}</td>
       <td>${peso(l.monthly_estimate)}</td>
@@ -1371,6 +1374,7 @@ function openLoan(id){
     </div>
     <div style="padding:18px 22px 60px;">
       ${loanSummaryStripHtml(l)}
+      ${(()=>{ if(!l.created_at) return ""; const wd=(typeof workingDaysBetween==="function")?workingDaysBetween(l.created_at,new Date()):null; const inReview=!["Approved","Released","Rejected"].includes(l.status); const note=(inReview&&wd!=null)?(wd<5?`<span style="color:#b26a00;font-weight:700;"> · within the 5-working-day processing window — a follow-up is early</span>`:`<span style="color:var(--muted);"> · past the 5-working-day window</span>`):""; return `<div style="margin:10px 0 0;padding:8px 12px;border-radius:9px;background:#f4f8f5;border:1px solid #cfe0d4;font-size:13px;">📅 <b>Applied ${esc(fmtDate(l.created_at))}</b>${wd!=null?` · ${wd} working day${wd===1?"":"s"} ago`:""}${note}</div>`; })()}
       ${loanAppliedLineHtml(l)}
       ${loanProgressHtml(l)}
       ${loanVerdictBadgeHtml(l)}
@@ -6053,6 +6057,77 @@ window.deleteHmoMember=deleteHmoMember;
 async function loadHmo(){
   const { data }=await sb.from("hmo_members").select("*").order("member_no",{ascending:true});
   HMO_MEMBERS=data||[];
+}
+
+/* ================= SEPARATIONS HISTORY — historical register of past exits =================
+   Read-only registry of everyone who has left RCC (from the HR separations sheet).
+   Separate from the live Exit Clearance workflow so history doesn't skew the work queue.
+   Searchable by name/branch/reason/year; CSV export. Gated to admin + HR manager/relations. */
+var SEPARATIONS = (typeof SEPARATIONS!=="undefined" && SEPARATIONS) || [];
+function canSeeSeparations(){ const r=userRole(); return r==="admin"||r==="manager"||r==="relations"; }
+function sepYear(s){ if(s.date_of_separation){ const y=String(s.date_of_separation).slice(0,4); if(/^\d{4}$/.test(y)) return y; } const m=String(s.date_text||"").match(/(20\d\d)/); return m?m[1]:null; }
+function renderSeparations(){
+  const pg=$("#page-separations"); if(!pg) return;
+  if(!canSeeSeparations()){ pg.innerHTML=`<div class="panel" style="margin-top:0;"><div class="psub">Separations History is restricted to the Director and HR (Manager, Relations).</div></div>`; return; }
+  const all=SEPARATIONS;
+  const noClear=all.filter(s=>String(s.section||"").toLowerCase().includes("did not")).length;
+  const years=[...new Set(all.map(sepYear).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
+  const thisYear=all.filter(s=>sepYear(s)===String(new Date().getFullYear())).length;
+  // top reason (normalised loosely)
+  const rc={}; all.forEach(s=>{ const r=(s.reason||"").trim(); if(r) rc[r]=(rc[r]||0)+1; });
+  const topReason=Object.entries(rc).sort((a,b)=>b[1]-a[1])[0];
+  const sorted=all.slice().sort((a,b)=>String(b.date_of_separation||b.date_text||"").localeCompare(String(a.date_of_separation||a.date_text||"")));
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <div><h2 style="margin:0;">Separations History</h2>
+          <div class="psub">Read-only register of past separations — reasons for leaving &amp; who did not process clearance. Separate from the live Exit Clearance work queue.</div></div>
+        <button class="btn ghost" id="sepExport">Export CSV</button>
+      </div>
+      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-top:12px;">
+        <div class="kpi"><div class="k-l">Total on record</div><div class="k-n">${all.length}</div></div>
+        <div class="kpi"><div class="k-l">Separated this year</div><div class="k-n">${thisYear}</div></div>
+        <div class="kpi ${noClear?"warn":""}"><div class="k-l">Did not process clearance</div><div class="k-n">${noClear}</div></div>
+        <div class="kpi"><div class="k-l">Top reason</div><div class="k-n" style="font-size:14px;line-height:1.25;">${topReason?esc(topReason[0])+" ("+topReason[1]+")":"—"}</div></div>
+      </div>
+      <div class="filterbar" id="sepYears" style="margin-top:12px;">
+        <div class="chip active" data-y="All">All years (${all.length})</div>
+        ${years.slice(0,10).map(y=>`<div class="chip" data-y="${y}">${y} (${all.filter(s=>sepYear(s)===y).length})</div>`).join("")}
+      </div>
+      <input id="sepSearch" class="search" style="width:100%;margin:10px 0 4px;" placeholder="Search name, branch, job title, reason…">
+      <table style="margin-top:6px;"><thead><tr><th>Emp No</th><th>Name</th><th>Job title</th><th>Branch</th><th>Separation</th><th>Reason</th></tr></thead>
+        <tbody id="sepRows"></tbody></table>
+      <div id="sepCount" style="font-size:12px;color:var(--muted,#6b7785);margin-top:10px;"></div>
+    </div>`;
+  let yFilter="All"; const CAP=300;
+  const paint=()=>{
+    const q=($("#sepSearch")?$("#sepSearch").value:"").trim().toLowerCase();
+    const shown=sorted.filter(s=>yFilter==="All"||sepYear(s)===yFilter)
+      .filter(s=>!q || [s.emp_no,s.employee_name,s.job_title,s.branch,s.reason].filter(Boolean).join(" ").toLowerCase().includes(q));
+    const rows=$("#sepRows"); if(!rows) return;
+    rows.innerHTML=shown.slice(0,CAP).map(s=>`<tr>
+      <td>${esc(s.emp_no||"—")}</td>
+      <td><b>${esc(s.employee_name||"—")}</b>${String(s.section||"").toLowerCase().includes("did not")?` <span class="pill" style="background:#fde8e8;color:#a12;font-weight:700;font-size:9px;">no clearance</span>`:""}</td>
+      <td>${esc(s.job_title||"—")}</td>
+      <td>${esc(s.branch||"—")}</td>
+      <td>${s.date_of_separation?fmtDate(s.date_of_separation):esc(s.date_text||"—")}</td>
+      <td>${esc(s.reason||"—")}</td></tr>`).join("");
+    const cc=$("#sepCount"); if(cc) cc.textContent=`Showing ${Math.min(shown.length,CAP)} of ${shown.length}${shown.length>CAP?" (refine your search to see more)":""} · ${all.length} total on record`;
+  };
+  $$("#sepYears .chip").forEach(c=>c.addEventListener("click",()=>{ $$("#sepYears .chip").forEach(x=>x.classList.remove("active")); c.classList.add("active"); yFilter=c.dataset.y; paint(); }));
+  const s=$("#sepSearch"); if(s) s.addEventListener("input",paint);
+  const ex=$("#sepExport"); if(ex) ex.addEventListener("click",()=>{
+    const hdr=["Emp No","Name","Job title","Branch","Date of separation","Reason","Section"];
+    const esc2=v=>`"${String(v==null?"":v).replace(/"/g,'""')}"`;
+    const csv=[hdr.join(",")].concat(sorted.map(s=>[s.emp_no,s.employee_name,s.job_title,s.branch,(s.date_of_separation||s.date_text||""),s.reason,s.section].map(esc2).join(","))).join("\n");
+    const blob=new Blob([csv],{type:"text/csv"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="RCC-separations-history.csv"; a.click();
+  });
+  paint();
+}
+window.renderSeparations=renderSeparations;
+async function loadSeparations(){
+  const { data }=await sb.from("separations_history").select("*");
+  SEPARATIONS=data||[];
 }
 
 /* ================= LINKS TO SEND — one hub for every self-service / share link, named by purpose ================= */

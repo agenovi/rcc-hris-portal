@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785833379";
+window.APP_BUILD="1785834262";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785833379" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785834262" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -618,6 +618,10 @@ window.APP_BUILD="1785833379";
       <div class="nav-item" data-page="concerns" onclick="go('concerns')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6a2 2 0 0 1 2-2h8l2 2h4a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v3M12 16h.01"/></svg>
         Concerns &amp; Cases<span class="nav-badge" style="display:none;"></span>
+      </div>
+      <div class="nav-item" data-page="incidents" onclick="go('incidents')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 2 21h20L12 2z"/><path d="M12 9v5M12 17h.01"/></svg>
+        Incident Reports<span class="nav-badge" style="display:none;"></span>
       </div>
 
       <div class="nav-sec">Exit</div>
@@ -1239,6 +1243,7 @@ window.APP_BUILD="1785833379";
       <section class="page" id="page-storemap"></section>
       <section class="page" id="page-orgchart"></section>
       <section class="page" id="page-concerns"></section>
+      <section class="page" id="page-incidents"></section>
       <section class="page" id="page-links"></section>
       <section class="page" id="page-demodata"></section>
       <section class="page" id="page-exit">
@@ -1878,7 +1883,7 @@ window.APP_BUILD="1785833379";
     exitinterview:'Exit Interview', compliance:'Compliance', audit:'Audit Log',
     settings:'Settings', parking:'Parking Lot', hractivity:'HR Activity & Expense',
     hmo:'HMO Coverage', insurance:'Personal Insurance', maternity:'Maternity Benefits',
-    storemap:'Store Mapping', orgchart:'Org Chart', concerns:'Concerns & Cases', links:'Links to Send',
+    storemap:'Store Mapping', orgchart:'Org Chart', concerns:'Concerns & Cases', incidents:'Incident Reports', links:'Links to Send',
     desk:'HR Desk'
   };
   var NAVFOR={employee:'employees', store:'branches'};
@@ -2428,7 +2433,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='cosign') return !!CURRENT_USER; if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='incidents') return canSeeIncidents(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='cosign') return !!CURRENT_USER; if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
@@ -2598,11 +2603,12 @@ function updateNavBadges(){
     navBadgeSet("onboarding",(typeof ONBOARDING!=="undefined"?ONBOARDING:[]).filter(c=>c.status!=="Complete").length);
     try{ navBadgeSet("evaluations", evDueList().filter(x=>x.bucket==="due"||x.bucket==="overdue").length); }catch(_){}
     if(typeof canSeeConcerns==="function"&&canSeeConcerns()){ navBadgeSet("concerns",(typeof CONCERNS!=="undefined"?CONCERNS:[]).filter(c=>{ const n=(typeof daysUntil==="function")?daysUntil(c.next_hearing):null; return n!=null&&n<=14&&(c.status==="Open"||c.status==="Ongoing"); }).length); } else navBadgeSet("concerns",0);
+    if(typeof canSeeIncidents==="function"&&canSeeIncidents()){ navBadgeSet("incidents",(typeof INCIDENTS!=="undefined"?INCIDENTS:[]).filter(i=>typeof incOpen==="function"&&incOpen(i)).length); } else navBadgeSet("incidents",0);
   }catch(_){}
 }
 async function loadEmployees(){
   await loadUserRoles();   // role overlay first — so all access gating below reflects the latest User Access settings
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh, ppf] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh, ppf, incd] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2638,7 +2644,8 @@ async function loadEmployees(){
     sb.from("employee_transfers").select("*").order("created_at", {ascending:false}),
     sb.from("sc_links").select("*").order("sc_name"),
     sb.from("department_heads").select("*"),
-    sb.from("position_profiles").select("*")
+    sb.from("position_profiles").select("*"),
+    sb.from("incidents").select("*").order("date_received",{ascending:false})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2677,6 +2684,7 @@ async function loadEmployees(){
   SC_LINKS=(scl&&scl.data)||[];
   DEPT_HEADS=(dh&&dh.data)||[];
   POSITION_PROFILES=(ppf&&ppf.data)||[];
+  INCIDENTS=(incd&&incd.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -2702,6 +2710,7 @@ async function loadEmployees(){
   renderOrgChart();
   renderPositions();
   renderConcerns();
+  renderIncidents();
   renderMeetings();
   renderDemoData();
   renderTimekeeping();
@@ -3342,9 +3351,14 @@ function pesosInWords(n){ n=Math.round(n||0); if(n===0) return "Zero Pesos";
   const sc=["","Thousand","Million","Billion"];let p=[],i=0,x=n;
   while(x>0){const c=x%1000;if(c)p.unshift(th(c)+(sc[i]?" "+sc[i]:""));x=Math.floor(x/1000);i++;} return p.join(" ")+" Pesos"; }
 function loanCompute(l){
-  const rate=(typeof LOAN_RATES!=="undefined"?LOAN_RATES[l.loan_type]:null)??12, term=Number(l.term_months||0), amt=Number(l.amount||0);
-  const interest=amt*(rate/100)*(term/12), total=amt+interest, monthly=term?total/term:0;
-  return {amt,rate,term,interest,total,monthly,perCutoff:monthly/2};
+  const baseRate=(typeof LOAN_RATES!=="undefined"?LOAN_RATES[l.loan_type]:null)??12, term=Number(l.term_months||0), amt=Number(l.amount||0);
+  // Educational: full tuition is the loan/assistance amount, but the PARENT amortizes only their 50% (0% interest)
+  // over the loan term. The child's 50% is a deferred obligation (3 months post-graduation) — not on this schedule.
+  const edu=l.loan_type==="educational";
+  const rate=edu?0:baseRate;
+  const amortPrincipal=edu?amt*0.5:amt;
+  const interest=amortPrincipal*(rate/100)*(term/12), total=amortPrincipal+interest, monthly=term?total/term:0;
+  return {amt,rate,term,interest,total,monthly,perCutoff:monthly/2,amortPrincipal,edu};
 }
 function printLoanAgreement(l){
   if(!l.amount||!l.term_months){ alert("This loan needs an amount and a term to compute."); return; }
@@ -3359,7 +3373,7 @@ function printLoanAgreement(l){
   const nCut=(c.term||0)*2;
   const schedDates=[];
   if(l.first_deduction_date && nCut>0){ let cur=l.first_deduction_date; for(let k=0;k<nCut;k++){ schedDates.push(cur); cur=cutoffAfter(cur); } }
-  let rows=""; const perPrin=nCut?c.amt/nCut:0, perInt=nCut?c.interest/nCut:0, perPay=nCut?c.total/nCut:0;
+  let rows=""; const perPrin=nCut?c.amortPrincipal/nCut:0, perInt=nCut?c.interest/nCut:0, perPay=nCut?c.total/nCut:0;
   { let cumPay=0;
     for(let k=1;k<=nCut;k++){
       const isLast=(k===nCut);
@@ -7824,6 +7838,262 @@ window.deleteConcern=deleteConcern;
 async function loadConcerns(){
   const { data }=await sb.from("concerns").select("*").order("created_at",{ascending:false});
   CONCERNS=data||[];
+}
+
+/* ================= INCIDENT REPORTS — HO & Disers incident log =================
+   Operational incident tracker (from HO & DISERS INCIDENT REPORT MONITORING).
+   Logs each incident, whether an NTE was issued, status, repeat-offense count,
+   action taken and resolution. Visible to admin + HR manager/relations/payroll. */
+var INCIDENTS = (typeof INCIDENTS!=="undefined" && INCIDENTS) || [];
+const INCIDENT_TYPES=["ATTENDANCE","LATE OPENING/EARLY CLOSING","LATE ENTRY IN POS/STOREHUB","WRONG AMOUNT PUNCH IN","WRONG CODE ENTER","DOUBLE PUNCH ITEM","WRONG ITEM SERVE","DISCOUNT; MARKED UP PRICE","UNDECLARED ITEM-MANUAL INVOICE","CASH DEPOSIT DISCREPANCIES","QUALITY/ICC","ALLEGED WORKPLACE HARASSMENT","ACCIDENT","THEFT","OTHER"];
+const INCIDENT_STATUSES=["PENDING","ONGOING","DONE","CLOSE"];
+const INCIDENT_COUNTS=["FIRST","SECOND","THIRD","FOURTH+"];
+const INCIDENT_CHANNELS=["EMAIL","DIRECT SUBMIT OF IR","PHONE","WALK-IN","OTHER"];
+const INCIDENT_OFFICE_TYPES=["OUTLET STORE","DEPARTMENT STORE","SOLARIS WH","HEAD OFFICE"];
+function canSeeIncidents(){ const r=userRole(); return r==="admin"||r==="manager"||r==="relations"||r==="payroll"; }
+function incStatusPill(s){ s=(s||"").toUpperCase(); const map={DONE:["#1f6b3a","#e4f3ea"],CLOSE:["#4a5560","#eef1f0"],PENDING:["#8a5a00","#fdf1d8"],ONGOING:["#8a5a00","#fdf1d8"]}; const c=map[s]||["#4a5560","#eef1f0"]; return `<span class="pill" style="background:${c[1]};color:${c[0]};font-weight:700;">${esc(s||"—")}</span>`; }
+function incOpen(i){ const s=(i.status||"").toUpperCase(); return s!=="DONE"&&s!=="CLOSE"; }
+function incNteYes(i){ return (i.nte_issued||"").toUpperCase().startsWith("Y"); }
+function incRepeatMap(){ const m={}; (INCIDENTS||[]).forEach(i=>{ const k=(i.person_name||"").trim().toLowerCase(); if(k) m[k]=(m[k]||0)+1; }); return m; }
+
+function renderIncidents(){
+  const pg=$("#page-incidents"); if(!pg) return;
+  if(!canSeeIncidents()){ pg.innerHTML=`<div class="panel" style="margin-top:0;"><div class="psub">Incident Reports is restricted to the Director and HR (Manager, Relations, Payroll).</div></div>`; return; }
+  const total=INCIDENTS.length;
+  const nte=INCIDENTS.filter(incNteYes).length;
+  const open=INCIDENTS.filter(incOpen).length;
+  const rmap=incRepeatMap();
+  const repeatPeople=Object.keys(rmap).filter(k=>rmap[k]>1).length;
+  const sorted=INCIDENTS.slice().sort((a,b)=>{
+    if(incOpen(a)!==incOpen(b)) return incOpen(a)?-1:1;
+    return String(b.date_received||"").localeCompare(String(a.date_received||""));
+  });
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <div><h2 style="margin:0;">Incident Reports</h2>
+          <div class="psub">HO &amp; Disers incident log — from the store &amp; warehouse floor. Tracks the notice-to-explain, action taken, resolution and repeat offenders.</div></div>
+        <button class="btn" id="inNew">＋ Log incident</button>
+      </div>
+      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-top:12px;">
+        <div class="kpi"><div class="k-l">Total logged</div><div class="k-n">${total}</div></div>
+        <div class="kpi"><div class="k-l">NTE issued</div><div class="k-n">${nte}</div></div>
+        <div class="kpi ${open?"warn":""}"><div class="k-l">Pending / ongoing</div><div class="k-n">${open}</div></div>
+        <div class="kpi ${repeatPeople?"warn":""}"><div class="k-l">Repeat offenders</div><div class="k-n">${repeatPeople}</div></div>
+      </div>
+      <div class="filterbar" id="inFilter" style="margin-top:12px;">
+        ${["All",...INCIDENT_STATUSES].map(s=>`<div class="chip${s==="All"?" active":""}" data-st="${esc(s)}">${esc(s)}${s==="All"?` (${total})`:` (${INCIDENTS.filter(i=>(i.status||"").toUpperCase()===s).length})`}</div>`).join("")}
+      </div>
+      <input id="inSearch" class="search" style="width:100%;margin:10px 0 4px;" placeholder="Search person, branch, type, reporter, remarks…">
+      ${total?`<table style="margin-top:6px;"><thead><tr><th>Incident</th><th>Person involved</th><th>Type</th><th>NTE</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="inRows"></tbody></table><div id="inCount" style="font-size:12px;color:var(--muted,#6b7785);margin-top:10px;"></div>`
+      :`<div class="psub" style="margin-top:10px;">No incidents logged yet — click “＋ Log incident”.</div>`}
+    </div>`;
+  const bN=$("#inNew"); if(bN) bN.addEventListener("click",()=>openIncidentForm(null));
+  let stFilter="All";
+  const paint=()=>{
+    const q=($("#inSearch")?$("#inSearch").value:"").trim().toLowerCase();
+    const shown=sorted.filter(i=>stFilter==="All"||(i.status||"").toUpperCase()===stFilter)
+      .filter(i=>!q || [i.incident_no,i.person_name,i.branch,i.incident_type,i.reporter_name,i.remarks,i.action_taken,i.office_type].filter(Boolean).join(" ").toLowerCase().includes(q));
+    const rows=$("#inRows"); if(!rows) return;
+    rows.innerHTML=shown.map(i=>{
+      const rc=rmap[(i.person_name||"").trim().toLowerCase()]||0;
+      const rep=rc>1?` <span class="pill" style="background:#fde8e8;color:#a12;font-weight:700;font-size:9.5px;">${rc}×</span>`:"";
+      return `<tr class="clickable" data-iid="${esc(String(i.id))}">
+        <td><b>${esc(i.incident_no||"—")}</b><div class="esub">${i.date_received?fmtDate(i.date_received):""}${i.branch?" · "+esc(i.branch):""}</div></td>
+        <td>${esc(i.person_name||"—")}${rep}${i.person_position?`<div class="esub">${esc(i.person_position)}</div>`:""}</td>
+        <td>${esc(i.incident_type||"—")}</td>
+        <td>${incNteYes(i)?`<span class="pill" style="background:#e4f3ea;color:#1f6b3a;font-weight:700;">Yes</span>`:`<span class="pill" style="background:#eef1f0;color:#6b7785;">No</span>`}</td>
+        <td>${incStatusPill(i.status)}</td>
+        <td>${esc(i.action_taken||"—")}</td></tr>`; }).join("");
+    const cc=$("#inCount"); if(cc) cc.textContent=`${shown.length} of ${total} incident${total!==1?"s":""}`;
+    $$("#inRows tr.clickable").forEach(tr=>tr.addEventListener("click",()=>openIncident(INCIDENTS.find(x=>String(x.id)===tr.dataset.iid))));
+  };
+  $$("#inFilter .chip").forEach(c=>c.addEventListener("click",()=>{ $$("#inFilter .chip").forEach(x=>x.classList.remove("active")); c.classList.add("active"); stFilter=c.dataset.st; paint(); }));
+  const s=$("#inSearch"); if(s) s.addEventListener("input",paint); paint();
+}
+window.renderIncidents=renderIncidents;
+
+function openIncident(i){
+  if(!i) return;
+  const rc=incRepeatMap()[(i.person_name||"").trim().toLowerCase()]||0;
+  const kv=(k,val)=>`<div class="efield"><div class="el">${esc(k)}</div><div class="ev">${val}</div></div>`;
+  let m=document.getElementById("inDrawer"); if(!m){ m=document.createElement("div"); m.id="inDrawer"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:620px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#123524,#1f6b3a);color:#fff;padding:18px 22px;position:sticky;top:0;z-index:2;">
+      <div style="font-size:20px;font-weight:800;">${esc(i.incident_no||"Incident")}</div>
+      <div style="font-size:12.5px;opacity:.92;">${esc(i.incident_type||"—")}${i.branch?" · "+esc(i.branch):""}</div>
+    </div>
+    <div style="padding:16px 20px 70px;">
+      <div class="panel" style="margin-top:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h2 style="margin:0;">Incident</h2>${incStatusPill(i.status)}</div>
+        <div class="egrid" style="margin-top:8px;">
+          ${kv("Person involved",esc(i.person_name||"—")+(i.person_position?` · ${esc(i.person_position)}`:"")+(rc>1?` <span class="pill" style="background:#fde8e8;color:#a12;font-weight:700;font-size:10px;">repeat · ${rc}×</span>`:""))}
+          ${kv("Branch / office",esc(i.branch||"—")+(i.office_type?` · ${esc(i.office_type)}`:""))}
+          ${kv("Reported by",esc(i.reporter_name||"—")+(i.reporter_position?` · ${esc(i.reporter_position)}`:""))}
+          ${kv("Channel",esc(i.channel||"—"))}
+          ${kv("Date of incident",esc(i.date_incident||"—"))}
+          ${kv("Date received by HR",i.date_received?fmtDate(i.date_received):"—")}
+          ${kv("NTE issued",incNteYes(i)?"Yes"+(i.nte_date&&i.nte_date!=="-"?` · ${esc(i.nte_date)}`:""):"No")}
+          ${kv("Occurrence",esc(i.incident_count||"—"))}
+          ${kv("Action taken",esc(i.action_taken||"—"))}
+          ${kv("Date resolved",esc(i.date_resolved||"—"))}
+          ${kv("Person in charge",esc(i.person_incharge||"—"))}
+        </div>
+        ${(Array.isArray(i.attachments)&&i.attachments.length)?`<div style="margin-top:10px;"><div class="subhead" style="margin-bottom:4px;">Attachments <span class="count-tag">${i.attachments.length}</span></div>${i.attachments.map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📎 ${esc(a.name)}</span><button class="btn ghost" style="padding:3px 10px;font-size:12px;flex-shrink:0;" onclick="openLoanDoc('${esc(a.path)}',this)">View</button></div>`).join("")}</div>`:""}
+      </div>
+      ${i.remarks?`<div class="panel"><div class="subhead">Remarks</div><div style="white-space:pre-wrap;font-size:13.5px;line-height:1.55;color:#22302a;">${esc(i.remarks)}</div></div>`:""}
+      <div class="psub" style="margin-top:2px;">${i.updated_at?"Updated "+fmtDate(i.updated_at):(i.created_at?"Created "+fmtDate(i.created_at):"")}${i.created_by?" · "+esc(i.created_by):""}</div>
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
+        <button class="btn" id="inEdit">Edit</button>
+        <button class="btn ghost" id="inDel" style="color:#a12;border-color:#e9b9b9;">Delete</button>
+        <button class="btn ghost" id="inCloseBtn" style="margin-left:auto;">Close</button>
+      </div>
+    </div></div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("inCloseBtn").onclick=()=>m.remove();
+  document.getElementById("inEdit").onclick=()=>{ m.remove(); openIncidentForm(i); };
+  document.getElementById("inDel").onclick=()=>deleteIncident(i);
+}
+window.openIncident=openIncident;
+
+function openIncidentForm(i){
+  const isNew=!i; i=i||{};
+  const opt=(arr,sel)=>arr.map(v=>`<option value="${esc(v)}"${v===sel?" selected":""}>${esc(v)}</option>`).join("");
+  const empList=[...new Set((EMPLOYEES||[]).map(e=>e.full_name).filter(Boolean))].sort();
+  let m=document.getElementById("inForm"); if(!m){ m=document.createElement("div"); m.id="inForm"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,20,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+  const fld=(label,inner)=>`<div style="margin-bottom:10px;"><div style="font-size:11.5px;font-weight:700;color:#4a5560;margin-bottom:3px;">${label}</div>${inner}</div>`;
+  const inp=(id,val,ph,type)=>`<input id="${id}" ${type?`type="${type}"`:""} value="${val!=null?esc(String(val)):""}" placeholder="${ph||""}" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;">`;
+  const sel=(id,arr,val,blank)=>`<select id="${id}" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;">${blank?`<option value="">—</option>`:""}${opt(arr,val)}</select>`;
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:660px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
+    <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#1f6b3a;">${isNew?"NEW":"EDIT"} INCIDENT REPORT</div>
+    <div style="font-size:18px;font-weight:800;color:#123524;margin:2px 0 10px;">${isNew?"Log an incident":esc(i.incident_no||"Edit incident")}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      ${fld("Incident no.",inp("infNo",i.incident_no,isNew?"e.g. INC-0024":""))}
+      ${fld("Date received by HR",inp("infReceived",i.date_received,"","date"))}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      ${fld("Date of incident",inp("infIncDate",i.date_incident,"e.g. 07/17/2026"))}
+      ${fld("Channel",sel("infChannel",INCIDENT_CHANNELS,i.channel,true))}
+    </div>
+    <div style="border-top:1px solid #eef1f0;margin:6px 0 10px;"></div>
+    ${fld("Person involved",`<input id="infPerson" list="infEmpList" value="${i.person_name?esc(i.person_name):""}" placeholder="Search employee…" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;"><datalist id="infEmpList">${empList.map(n=>`<option value="${esc(n)}"></option>`).join("")}</datalist>`)}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      ${fld("Position",inp("infPersonPos",i.person_position,"e.g. MERCHANDISER"))}
+      ${fld("Office type",sel("infOffice",INCIDENT_OFFICE_TYPES,i.office_type,true))}
+    </div>
+    ${fld("Branch",inp("infBranch",i.branch,"e.g. SPYDER URDANETA"))}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      ${fld("Reported by",inp("infReporter",i.reporter_name,"reporter name"))}
+      ${fld("Reporter position",inp("infReporterPos",i.reporter_position,""))}
+    </div>
+    ${fld("Type of incident",`<input id="infType" list="infTypeList" value="${i.incident_type?esc(i.incident_type):""}" placeholder="Select or type…" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;"><datalist id="infTypeList">${INCIDENT_TYPES.map(t=>`<option value="${esc(t)}"></option>`).join("")}</datalist>`)}
+    <div style="border-top:1px solid #eef1f0;margin:6px 0 10px;"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+      ${fld("NTE issued",sel("infNte",["","YES","NO"],i.nte_issued!=null?String(i.nte_issued).toUpperCase():"",false))}
+      ${fld("NTE date",inp("infNteDate",i.nte_date&&i.nte_date!=="-"?i.nte_date:"","","date"))}
+      ${fld("Occurrence",sel("infCount",INCIDENT_COUNTS,i.incident_count,true))}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      ${fld("Status",sel("infStatus",INCIDENT_STATUSES,i.status||"PENDING",false))}
+      ${fld("Date resolved",inp("infResolved",i.date_resolved,"","date"))}
+    </div>
+    ${fld("Action taken",inp("infAction",i.action_taken,"e.g. FOR CHARGE, VOID, VERBAL WARNING, ADMIN HEARING"))}
+    ${fld("Person in charge",inp("infIncharge",i.person_incharge,"e.g. JUVIE, GRAZEL"))}
+    ${fld("Remarks",`<textarea id="infRemarks" rows="3" placeholder="Details, notes, resolution context…" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;">${i.remarks?esc(i.remarks):""}</textarea>`)}
+    ${fld("Upload attachments (IR, ATD, photos…)",`<input type="file" id="infFile" multiple style="font-size:12.5px;"><div id="infFileList" style="margin-top:6px;"></div>`)}
+    <div id="infMsg" style="color:#a12;font-size:12.5px;min-height:16px;margin:2px 0;"></div>
+    <div style="display:flex;gap:10px;margin-top:6px;">
+      <button class="btn" id="infSave">${isNew?"Log incident":"Save changes"}</button>
+      <button class="btn ghost" id="infCancel" style="margin-left:auto;">Cancel</button>
+    </div>
+  </div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("infCancel").onclick=()=>m.remove();
+  let inAttach = Array.isArray(i.attachments)?i.attachments.slice():[];
+  const key = i.id || ("new-"+Math.random().toString(36).slice(2,9));
+  const renderAttach=()=>{ const w=document.getElementById("infFileList"); if(!w) return;
+    w.innerHTML = inAttach.length ? inAttach.map((a,ix)=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px;"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📎 ${esc(a.name)}</span><button type="button" class="btn ghost" data-axr="${ix}" style="padding:2px 8px;font-size:11.5px;flex-shrink:0;">Remove</button></div>`).join("") : `<div class="psub">No files attached yet.</div>`;
+    w.querySelectorAll("[data-axr]").forEach(b=>b.onclick=()=>{ inAttach.splice(+b.dataset.axr,1); renderAttach(); });
+  };
+  renderAttach();
+  const fInput=document.getElementById("infFile");
+  if(fInput) fInput.onchange=async()=>{
+    const files=[...fInput.files]; if(!files.length) return;
+    const msg=document.getElementById("infMsg"); const setMsg=(t,c)=>{ if(msg){ msg.style.color=c||"#4a5560"; msg.textContent=t; } };
+    for(const f of files){
+      if(f.size>25*1024*1024){ setMsg(`“${f.name}” is over 25 MB — attach a smaller file.`, "#a12"); continue; }
+      setMsg("Uploading "+f.name+"…");
+      const path=`incidents/${key}/${Date.now()}-${f.name.replace(/[^\w.\-]+/g,"_")}`;
+      const {error:upErr}=await sb.storage.from("loan-docs").upload(path,f,{upsert:true});
+      if(upErr){ setMsg("Upload failed: "+upErr.message, "#a12"); continue; }
+      inAttach.push({name:f.name, path, uploaded_at:new Date().toISOString(), uploaded_by:(CURRENT_USER&&CURRENT_USER.email)||null});
+    }
+    setMsg(""); fInput.value=""; renderAttach();
+  };
+  document.getElementById("infSave").onclick=()=>saveIncident(i,isNew,inAttach);
+}
+window.openIncidentForm=openIncidentForm;
+
+async function saveIncident(i,isNew,attachments){
+  const val=id=>{ const el=document.getElementById(id); return el?el.value.trim():""; };
+  const msg=document.getElementById("infMsg");
+  const person=val("infPerson"), no=val("infNo");
+  if(!person && !no){ if(msg) msg.textContent="Enter at least an incident no. or the person involved."; return; }
+  const matched=(EMPLOYEES||[]).find(e=>e.full_name===person);
+  const payload={
+    incident_no:no||null,
+    date_received:val("infReceived")||null,
+    date_incident:val("infIncDate")||null,
+    month_year: val("infReceived") ? (function(){ try{ const d=new Date(val("infReceived")); return d.toLocaleString("en-US",{month:"short"})+"-"+d.getFullYear(); }catch(_){ return null; } })() : (i.month_year||null),
+    channel:val("infChannel")||null,
+    reporter_name:val("infReporter")||null,
+    reporter_position:val("infReporterPos")||null,
+    office_type:val("infOffice")||null,
+    branch:val("infBranch")||null,
+    person_name:person||null,
+    person_position:val("infPersonPos")||null,
+    emp_id: matched?(matched.employee_id||null):(i.emp_id||null),
+    incident_type:val("infType")||null,
+    nte_issued:val("infNte")||null,
+    nte_date:val("infNteDate")||null,
+    status:val("infStatus")||"PENDING",
+    incident_count:val("infCount")||null,
+    action_taken:val("infAction")||null,
+    date_resolved:val("infResolved")||null,
+    remarks:val("infRemarks")||null,
+    person_incharge:val("infIncharge")||null,
+    attachments:Array.isArray(attachments)?attachments:[],
+    updated_at:new Date().toISOString(),
+    updated_by:(CURRENT_USER&&CURRENT_USER.email)||null
+  };
+  const btn=document.getElementById("infSave"); if(btn){ btn.disabled=true; btn.textContent="Saving…"; }
+  let error;
+  if(isNew){ payload.created_by=(CURRENT_USER&&CURRENT_USER.email)||null; payload.created_at=new Date().toISOString(); ({ error }=await sb.from("incidents").insert(payload)); }
+  else { ({ error }=await sb.from("incidents").update(payload).eq("id",i.id)); }
+  if(error){ if(msg) msg.textContent="Could not save: "+error.message; if(btn){ btn.disabled=false; btn.textContent=isNew?"Log incident":"Save changes"; } return; }
+  try{ await logChange("incident", isNew?null:i.id, payload.incident_no||person, isNew?"Incident logged":"Incident updated", payload.status); }catch(_){}
+  const fm=document.getElementById("inForm"); if(fm) fm.remove();
+  await loadIncidents(); renderIncidents(); updateNavBadges();
+}
+window.saveIncident=saveIncident;
+
+async function deleteIncident(i){
+  if(!i||!i.id) return;
+  if(!confirm(`Delete incident “${i.incident_no||i.person_name||""}”? This cannot be undone.`)) return;
+  const { error }=await sb.from("incidents").delete().eq("id",i.id);
+  if(error){ alert("Could not delete: "+error.message); return; }
+  try{ await logChange("incident", i.id, i.incident_no||i.person_name||"", "Incident deleted", ""); }catch(_){}
+  const d=document.getElementById("inDrawer"); if(d) d.remove();
+  await loadIncidents(); renderIncidents(); updateNavBadges();
+}
+window.deleteIncident=deleteIncident;
+
+async function loadIncidents(){
+  const { data }=await sb.from("incidents").select("*").order("date_received",{ascending:false});
+  INCIDENTS=data||[];
 }
 
 /* ================= LINKS TO SEND — one hub for every self-service / share link, named by purpose ================= */

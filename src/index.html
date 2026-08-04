@@ -619,6 +619,10 @@ window.APP_BUILD="__BUILD__";
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6a2 2 0 0 1 2-2h8l2 2h4a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v3M12 16h.01"/></svg>
         Concerns &amp; Cases<span class="nav-badge" style="display:none;"></span>
       </div>
+      <div class="nav-item" data-page="incidents" onclick="go('incidents')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 2 21h20L12 2z"/><path d="M12 9v5M12 17h.01"/></svg>
+        Incident Reports<span class="nav-badge" style="display:none;"></span>
+      </div>
 
       <div class="nav-sec">Exit</div>
       <div class="nav-item" data-page="exit" onclick="go('exit')">
@@ -1239,6 +1243,7 @@ window.APP_BUILD="__BUILD__";
       <section class="page" id="page-storemap"></section>
       <section class="page" id="page-orgchart"></section>
       <section class="page" id="page-concerns"></section>
+      <section class="page" id="page-incidents"></section>
       <section class="page" id="page-links"></section>
       <section class="page" id="page-demodata"></section>
       <section class="page" id="page-exit">
@@ -1878,7 +1883,7 @@ window.APP_BUILD="__BUILD__";
     exitinterview:'Exit Interview', compliance:'Compliance', audit:'Audit Log',
     settings:'Settings', parking:'Parking Lot', hractivity:'HR Activity & Expense',
     hmo:'HMO Coverage', insurance:'Personal Insurance', maternity:'Maternity Benefits',
-    storemap:'Store Mapping', orgchart:'Org Chart', concerns:'Concerns & Cases', links:'Links to Send',
+    storemap:'Store Mapping', orgchart:'Org Chart', concerns:'Concerns & Cases', incidents:'Incident Reports', links:'Links to Send',
     desk:'HR Desk'
   };
   var NAVFOR={employee:'employees', store:'branches'};

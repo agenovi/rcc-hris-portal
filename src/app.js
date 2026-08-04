@@ -2373,8 +2373,10 @@ function renderDashboard(){
   const ten=A.map(e=>tenureYears(e.hire_date)).filter(x=>x!=null);
   const avgTen=ten.length?(ten.reduce((a,b)=>a+b,0)/ten.length).toFixed(1):"—";
   const concession=open.filter(b=>b.category==="CN").length, coOp=open.filter(b=>b.category==="CO").length;
-  const dAct=DISERS.filter(d=>(d.status||"").toLowerCase().startsWith("active")); // agency merchandisers come from the diser roster (hired_by), not employees.hire_source
-  const agJellon=dAct.filter(d=>/jell/i.test(d.hired_by||"")).length, agMG=dAct.filter(d=>/^mg|m&g/i.test(d.hired_by||"")).length, agency=agJellon+agMG;
+  // Agency merchandisers count from employees.hire_source (synced from PayPlus companyName every night), NOT the
+  // manually-uploaded diser roster — that roster was stale for M&G (showed 3 vs 16 live in PayPlus). One live source.
+  const agMerch=A.filter(e=>/diser|merch|roving|lead|assistant/i.test(e.position||""));
+  const agJellon=agMerch.filter(e=>/jell/i.test(e.hire_source||"")).length, agMG=agMerch.filter(e=>/m&g/i.test(e.hire_source||"")||(e.hire_source||"")==="M&G").length, agency=agJellon+agMG;
   const awol=EMPLOYEES.filter(e=>e.status==="AWOL").length;
   const phPipe=PREHIRE.filter(p=>!["HIRED","REJECTED","POOLED","DRAFT"].includes(p.phase)).length;
   const phReady=PREHIRE.filter(p=>["HR_SIGNOFF","CONTRACT_SIGNING"].includes(p.phase)).length;
@@ -2499,7 +2501,7 @@ function renderDashboardKPIs(){
   const ho=A.filter(e=>e.group_name==="Head Office").length;
   const wh=A.filter(e=>e.group_name==="Warehouse").length;
   const rt=A.filter(e=>e.group_name==="Retail").length;
-  const _dA=DISERS.filter(d=>(d.status||"").toLowerCase().startsWith("active")); const agJ=_dA.filter(d=>/jell/i.test(d.hired_by||"")).length, agM=_dA.filter(d=>/^mg|m&g/i.test(d.hired_by||"")).length; const ag=agJ+agM;
+  const _agM=A.filter(e=>/diser|merch|roving|lead|assistant/i.test(e.position||"")); const agJ=_agM.filter(e=>/jell/i.test(e.hire_source||"")).length, agM=_agM.filter(e=>/m&g/i.test(e.hire_source||"")||(e.hire_source||"")==="M&G").length; const ag=agJ+agM;
   const prob=A.filter(e=>e.contract_type==="Probationary").length;
   const sep=EMPLOYEES.filter(e=>e.status==="Separated").length;
   const grids=$$("#page-dashboard .kpis");
@@ -2526,7 +2528,7 @@ function renderEmployeesPage(){
   const ho=A.filter(e=>e.group_name==="Head Office").length;
   const wh=A.filter(e=>e.group_name==="Warehouse").length;
   const rt=A.filter(e=>e.group_name==="Retail").length;
-  const _dA=DISERS.filter(d=>(d.status||"").toLowerCase().startsWith("active")); const agJ=_dA.filter(d=>/jell/i.test(d.hired_by||"")).length, agM=_dA.filter(d=>/^mg|m&g/i.test(d.hired_by||"")).length; const ag=agJ+agM;
+  const _agM=A.filter(e=>/diser|merch|roving|lead|assistant/i.test(e.position||"")); const agJ=_agM.filter(e=>/jell/i.test(e.hire_source||"")).length, agM=_agM.filter(e=>/m&g/i.test(e.hire_source||"")||(e.hire_source||"")==="M&G").length; const ag=agJ+agM;
   const prob=A.filter(e=>e.contract_type==="Probationary").length;
   const panel=$("#page-employees .panel"); if(!panel) return;
   panel.innerHTML=`

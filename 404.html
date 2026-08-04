@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785834506";
+window.APP_BUILD="1785835000";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785834506" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785835000" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -2433,7 +2433,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='incidents') return canSeeIncidents(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='cosign') return !!CURRENT_USER; if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='incidents') return canSeeIncidents(); if(id==='hmo') return canSeeHmo(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='cosign') return !!CURRENT_USER; if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
@@ -2608,7 +2608,7 @@ function updateNavBadges(){
 }
 async function loadEmployees(){
   await loadUserRoles();   // role overlay first — so all access gating below reflects the latest User Access settings
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh, ppf, incd] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh, ppf, incd, hmod] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2645,7 +2645,8 @@ async function loadEmployees(){
     sb.from("sc_links").select("*").order("sc_name"),
     sb.from("department_heads").select("*"),
     sb.from("position_profiles").select("*"),
-    sb.from("incidents").select("*").order("date_received",{ascending:false})
+    sb.from("incidents").select("*").order("date_received",{ascending:false}),
+    sb.from("hmo_members").select("*").order("member_no",{ascending:true})
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2685,6 +2686,7 @@ async function loadEmployees(){
   DEPT_HEADS=(dh&&dh.data)||[];
   POSITION_PROFILES=(ppf&&ppf.data)||[];
   INCIDENTS=(incd&&incd.data)||[];
+  HMO_MEMBERS=(hmod&&hmod.data)||[];
   renderDashboard();
   renderCompliance();
   renderEmployeesPage();
@@ -2711,6 +2713,7 @@ async function loadEmployees(){
   renderPositions();
   renderConcerns();
   renderIncidents();
+  renderHmo();
   renderMeetings();
   renderDemoData();
   renderTimekeeping();
@@ -2754,7 +2757,7 @@ async function ppSyncFetch(params){
 
 // Honesty pass: every screen NOT backed by live data gets a visible "Preview" ribbon,
 // so HR never mistakes an illustrative mock-up for real data. Real pages are listed here.
-const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity","maternity","timekeeping","meetings","govremit","movements","policies","processes","orgchart","storemap","concerns","incidents","links","positions","cosign"]);
+const REAL_PAGES=new Set(["dashboard","employees","branches","manning","prehire","onboarding","exit","contracts","loans","compliance","settings","signatures","memos","evaluations","reports","activity","maternity","timekeeping","meetings","govremit","movements","policies","processes","orgchart","storemap","concerns","incidents","hmo","links","positions","cosign"]);
 function tagPreviewPages(){
   document.querySelectorAll('section.page').forEach(sec=>{
     const id=(sec.id||"").replace("page-","");
@@ -8094,6 +8097,271 @@ window.deleteIncident=deleteIncident;
 async function loadIncidents(){
   const { data }=await sb.from("incidents").select("*").order("date_received",{ascending:false});
   INCIDENTS=data||[];
+}
+
+/* ================= HMO COVERAGE — ICARE tier-based premium sharing =================
+   Enrollee tracker + employer/employee premium sharing. The 5 tiers carry FIXED
+   ER/EE amounts (ICARE 2026: ₱7,968.75 per head), so the money follows from the
+   member's tier. Money page → admin + payroll (anj + Grazel). */
+var HMO_MEMBERS = (typeof HMO_MEMBERS!=="undefined" && HMO_MEMBERS) || [];
+const HMO_PREMIUM=7968.75, HMO_GROUP_LIFE=10000, HMO_MBL=70000;
+const HMO_TIERS={
+  cat1:{label:"Category 1 · General Staff (1–8 yrs)", short:"Cat 1", ratio:"60/40", er:4781.25, ee:3187.50, freq:"4 deductions", perCut:796.88},
+  cat2:{label:"Category 2 · General Staff (8+ yrs)",  short:"Cat 2", ratio:"70/30", er:5578.13, ee:2390.63, freq:"3 deductions", perCut:796.88},
+  cat3:{label:"Category 3 · Supervisory",             short:"Cat 3", ratio:"80/20", er:6375.00, ee:1593.75, freq:"2 deductions", perCut:796.88},
+  cat4:{label:"Category 4 · Top Management",          short:"Cat 4", ratio:"100/0", er:7968.75, ee:0.00,    freq:"—",           perCut:0},
+  lead:{label:"Lead Diser",                           short:"Lead",  ratio:"50/50", er:3984.38, ee:3984.38, freq:"4 deductions", perCut:996.09}
+};
+const HMO_TIER_ORDER=["cat1","cat2","cat3","cat4","lead"];
+function canSeeHmo(){ return canSeePay(); }
+function hmoEmp(m){ if(!m||!m.emp_id) return null; return (EMPLOYEES||[]).find(e=>String(e.employee_id||"")===String(m.emp_id)); }
+function hmoName(m){ const e=hmoEmp(m); if(e&&e.full_name) return e.full_name; return [m.first_name,m.last_name].filter(Boolean).join(" ")||"—"; }
+function hmoPosition(m){ const e=hmoEmp(m); return (e&&e.position)||m.position||"—"; }
+function hmoHire(m){ const e=hmoEmp(m); return (e&&(e.hire_date||e.date_hired))||m.date_hired||null; }
+function hmoTenureYears(m){ const h=hmoHire(m); if(!h) return null; const d=new Date(h); if(isNaN(d)) return null; return (Date.now()-d.getTime())/(365.25*24*3600*1000); }
+function hmoTier(m){ return HMO_TIERS[m&&m.tier]||null; }
+function hmoIsDep(m){ return (m&&m.member_type||"P").toUpperCase().startsWith("D"); }
+function hmoDeps(m){ if(!m) return []; return (HMO_MEMBERS||[]).filter(x=>hmoIsDep(x) && String(x.principal_emp_id||"")===String(m.emp_id||"~none")); }
+function hmoTierPill(t){ const T=HMO_TIERS[t]; if(!T) return `<span class="pill" style="background:#eef1f0;color:#6b7785;">—</span>`; const col=t==="cat4"?["#123524","#dbeadf"]:t==="cat3"?["#1f6b3a","#e4f3ea"]:t==="lead"?["#8a5a00","#fdf1d8"]:["#31506a","#e6eef6"]; return `<span class="pill" style="background:${col[1]};color:${col[0]};font-weight:700;">${esc(T.short)} · ${esc(T.ratio)}</span>`; }
+
+function renderHmo(){
+  const pg=$("#page-hmo"); if(!pg) return;
+  if(!canSeeHmo()){ pg.innerHTML=`<div class="panel" style="margin-top:0;"><div class="psub">HMO Coverage is restricted to the Director and Payroll (premium &amp; payroll-deduction data).</div></div>`; return; }
+  const principals=HMO_MEMBERS.filter(m=>!hmoIsDep(m));
+  const active=principals.filter(m=>(m.status||"Active")==="Active");
+  const erTot=active.reduce((s,m)=>s+((hmoTier(m)||{}).er||0),0);
+  const eeTot=active.reduce((s,m)=>s+((hmoTier(m)||{}).ee||0),0);
+  const annual=active.length*HMO_PREMIUM;
+  const crossings=active.filter(m=>m.tier==="cat1"&&(hmoTenureYears(m)||0)>=7.5);
+  const depCount=HMO_MEMBERS.filter(hmoIsDep).length;
+  const tierCounts={}; HMO_TIER_ORDER.forEach(t=>tierCounts[t]=active.filter(m=>m.tier===t).length);
+  const sorted=principals.slice().sort((a,b)=>{ const ta=HMO_TIER_ORDER.indexOf(a.tier), tb=HMO_TIER_ORDER.indexOf(b.tier); if(ta!==tb) return ta-tb; return hmoName(a).localeCompare(hmoName(b)); });
+  pg.innerHTML=`
+    <div class="panel" style="margin-top:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <div><h2 style="margin:0;">HMO Coverage — ICARE ${esc(String((HMO_MEMBERS[0]&&HMO_MEMBERS[0].policy_year)||2026))}</h2>
+          <div class="psub">Tier-based employer / employee premium sharing. Tier is driven by <b>tenure &amp; position</b>; the ER/EE amounts follow the tier automatically. MBL ₱${HMO_MBL.toLocaleString()} · Ward · ₱${HMO_GROUP_LIFE.toLocaleString()} group life bundled.</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn" id="hmNew">＋ Enrol member</button>
+          <button class="btn ghost" id="hmNewDep">＋ Add dependent</button>
+        </div>
+      </div>
+      <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);margin-top:12px;">
+        <div class="kpi"><div class="k-l">Active members</div><div class="k-n">${active.length}</div><div class="k-s">${depCount} dependent${depCount!==1?"s":""}</div></div>
+        <div class="kpi"><div class="k-l">Total annual premium</div><div class="k-n" style="font-size:19px;">${peso(annual)}</div><div class="k-s">₱${HMO_PREMIUM.toLocaleString()} / head</div></div>
+        <div class="kpi"><div class="k-l">RCC share</div><div class="k-n" style="font-size:19px;color:var(--green-dark,#1f6b3a);">${peso(erTot)}</div></div>
+        <div class="kpi"><div class="k-l">Employee share</div><div class="k-n" style="font-size:19px;">${peso(eeTot)}</div></div>
+        <div class="kpi ${crossings.length?"warn":""}"><div class="k-l">8-yr tier crossings</div><div class="k-n">${crossings.length}</div><div class="k-s">Cat 1 → Cat 2 soon</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Tier structure — ICARE ${esc(String((HMO_MEMBERS[0]&&HMO_MEMBERS[0].policy_year)||2026))}</h2>
+      <div class="psub">Premium per head ₱${HMO_PREMIUM.toLocaleString()} · ER + EE share is fixed per tier.</div>
+      <table><thead><tr><th>Tier</th><th>Eligibility</th><th>Sharing</th><th>ER ₱</th><th>EE ₱</th><th>Per cut-off</th><th>Members</th></tr></thead><tbody>
+        ${HMO_TIER_ORDER.map(t=>{ const T=HMO_TIERS[t]; return `<tr><td><b>${esc(T.short)}</b></td><td>${esc(T.label.replace(/^Category \d+ · /,""))}</td><td>${esc(T.ratio)}</td><td>${peso(T.er)}</td><td>${peso(T.ee)}</td><td>${T.perCut?peso(T.perCut)+" × "+esc(T.freq.replace(/[^0-9]/g,"")||""):"—"}</td><td>${tierCounts[t]}</td></tr>`; }).join("")}
+      </tbody></table>
+    </div>
+
+    <div class="panel">
+      <h2>Members</h2>
+      <div class="filterbar" id="hmFilter">
+        <div class="chip active" data-t="All">All (${principals.length})</div>
+        ${HMO_TIER_ORDER.map(t=>`<div class="chip" data-t="${t}">${esc(HMO_TIERS[t].short)} · ${esc(HMO_TIERS[t].ratio)} (${tierCounts[t]})</div>`).join("")}
+      </div>
+      <input id="hmSearch" class="search" style="width:100%;margin:10px 0 4px;" placeholder="Search name, emp ID, position…">
+      <table style="margin-top:6px;"><thead><tr><th>Emp ID</th><th>Name</th><th>Position</th><th>Tenure</th><th>Tier</th><th>ER / EE</th><th>Deps</th></tr></thead>
+        <tbody id="hmRows"></tbody></table>
+      <div id="hmCount" style="font-size:12px;color:var(--muted,#6b7785);margin-top:10px;"></div>
+    </div>`;
+  const bN=$("#hmNew"); if(bN) bN.addEventListener("click",()=>openHmoForm(null,false));
+  const bD=$("#hmNewDep"); if(bD) bD.addEventListener("click",()=>openHmoForm(null,true));
+  let tFilter="All";
+  const paint=()=>{
+    const q=($("#hmSearch")?$("#hmSearch").value:"").trim().toLowerCase();
+    const shown=sorted.filter(m=>tFilter==="All"||m.tier===tFilter)
+      .filter(m=>!q || [hmoName(m),m.emp_id,hmoPosition(m)].filter(Boolean).join(" ").toLowerCase().includes(q));
+    const rows=$("#hmRows"); if(!rows) return;
+    rows.innerHTML=shown.map(m=>{ const T=hmoTier(m); const ty=hmoTenureYears(m); const cross=m.tier==="cat1"&&(ty||0)>=7.5; const nd=hmoDeps(m).length;
+      return `<tr class="clickable" data-hid="${esc(String(m.id))}"${cross?' style="background:#fff9ea;"':''}>
+        <td>${esc(m.emp_id||"—")}</td>
+        <td><b>${esc(hmoName(m))}</b>${m.remarks?`<div class="esub">${esc(m.remarks)}</div>`:""}</td>
+        <td>${esc(hmoPosition(m))}</td>
+        <td>${ty!=null?ty.toFixed(1)+"y":"—"}${cross?` <span class="pill" style="background:#fde8c8;color:#8a5a00;font-weight:700;font-size:9.5px;">→ Cat 2</span>`:""}</td>
+        <td>${hmoTierPill(m.tier)}</td>
+        <td>${T?peso(T.er)+" / "+peso(T.ee):"—"}</td>
+        <td>${nd||"—"}</td></tr>`; }).join("");
+    const cc=$("#hmCount"); if(cc) cc.textContent=`${shown.length} of ${principals.length} member${principals.length!==1?"s":""}`;
+    $$("#hmRows tr.clickable").forEach(tr=>tr.addEventListener("click",()=>openHmoMember(HMO_MEMBERS.find(x=>String(x.id)===tr.dataset.hid))));
+  };
+  $$("#hmFilter .chip").forEach(c=>c.addEventListener("click",()=>{ $$("#hmFilter .chip").forEach(x=>x.classList.remove("active")); c.classList.add("active"); tFilter=c.dataset.t; paint(); }));
+  const s=$("#hmSearch"); if(s) s.addEventListener("input",paint); paint();
+}
+window.renderHmo=renderHmo;
+
+function openHmoMember(m){
+  if(!m) return;
+  const T=hmoTier(m); const ty=hmoTenureYears(m); const deps=hmoDeps(m);
+  const kv=(k,val)=>`<div class="efield"><div class="el">${esc(k)}</div><div class="ev">${val}</div></div>`;
+  let d=document.getElementById("hmDrawer"); if(!d){ d=document.createElement("div"); d.id="hmDrawer"; document.body.appendChild(d); }
+  d.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  d.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:620px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#123524,#1f6b3a);color:#fff;padding:18px 22px;position:sticky;top:0;z-index:2;">
+      <div style="font-size:20px;font-weight:800;">${esc(hmoName(m))}</div>
+      <div style="font-size:12.5px;opacity:.92;">${esc(hmoPosition(m))}${m.emp_id?" · "+esc(m.emp_id):""}${hmoIsDep(m)?" · DEPENDENT":""}</div>
+    </div>
+    <div style="padding:16px 20px 70px;">
+      <div class="panel" style="margin-top:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h2 style="margin:0;">Coverage</h2>${hmoTierPill(m.tier)}</div>
+        <div class="egrid" style="margin-top:8px;">
+          ${kv("Provider / year",esc((m.hmo_provider||"ICARE")+" "+(m.policy_year||2026)))}
+          ${kv("Benefit / MBL",esc((m.benefit_class||"WARD"))+" · ₱"+Number(m.mbl||HMO_MBL).toLocaleString())}
+          ${kv("Tenure",ty!=null?ty.toFixed(1)+" years":"—")}
+          ${kv("Sharing",T?T.ratio:"—")}
+          ${kv("Employer share",T?peso(T.er):"—")}
+          ${kv("Employee share",T?peso(T.ee):"—")}
+          ${kv("Payroll deduction",T&&T.perCut?peso(T.perCut)+" × "+esc(T.freq):"—")}
+          ${kv("Effective",m.effective_date?fmtDate(m.effective_date):"—")}
+          ${kv("Expiry",m.expiry_date?fmtDate(m.expiry_date):"—")}
+          ${kv("Status",esc(m.status||"Active"))}
+          ${m.vip_tagging?kv("VIP tag",esc(m.vip_tagging)):""}
+        </div>
+        ${m.remarks?`<div style="margin-top:8px;font-size:13px;color:#22302a;"><b>Remarks:</b> ${esc(m.remarks)}</div>`:""}
+      </div>
+      ${!hmoIsDep(m)?`<div class="panel"><div style="display:flex;align-items:center;justify-content:space-between;"><div class="subhead">Dependents <span class="count-tag">${deps.length}</span></div><button class="btn ghost" id="hmAddDep" style="padding:4px 10px;font-size:12px;">＋ Add</button></div>
+        ${deps.length?deps.map(dp=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #e4eae6;font-size:13px;"><span style="flex:1;">${esc(hmoName(dp))}${dp.relationship?` · ${esc(dp.relationship)}`:""}</span><button class="btn ghost" data-editdep="${esc(String(dp.id))}" style="padding:2px 8px;font-size:11.5px;">Edit</button></div>`).join(""):`<div class="psub" style="margin-top:6px;">No dependents on file.</div>`}</div>`:(m.principal_emp_id?`<div class="panel"><div class="subhead">Principal</div><div style="font-size:13px;">${esc((()=>{ const p=HMO_MEMBERS.find(x=>String(x.emp_id||"")===String(m.principal_emp_id)&&!hmoIsDep(x)); return p?hmoName(p)+" · "+(m.principal_emp_id):m.principal_emp_id; })())}</div></div>`:"")}
+      <div class="psub" style="margin-top:2px;">${m.updated_at?"Updated "+fmtDate(m.updated_at):(m.created_at?"Created "+fmtDate(m.created_at):"")}</div>
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
+        <button class="btn" id="hmEdit">Edit</button>
+        <button class="btn ghost" id="hmDel" style="color:#a12;border-color:#e9b9b9;">Delete</button>
+        <button class="btn ghost" id="hmCloseBtn" style="margin-left:auto;">Close</button>
+      </div>
+    </div></div>`;
+  d.addEventListener("click",ev=>{ if(ev.target===d) d.remove(); });
+  document.getElementById("hmCloseBtn").onclick=()=>d.remove();
+  document.getElementById("hmEdit").onclick=()=>{ d.remove(); openHmoForm(m,hmoIsDep(m)); };
+  document.getElementById("hmDel").onclick=()=>deleteHmoMember(m);
+  const ad=document.getElementById("hmAddDep"); if(ad) ad.onclick=()=>{ d.remove(); openHmoForm({principal_emp_id:m.emp_id, tier:m.tier},true); };
+  d.querySelectorAll("[data-editdep]").forEach(b=>b.onclick=()=>{ d.remove(); openHmoForm(HMO_MEMBERS.find(x=>String(x.id)===b.dataset.editdep),true); });
+}
+window.openHmoMember=openHmoMember;
+
+function openHmoForm(m,isDep){
+  const isNew=!m||!m.id; m=m||{};
+  const opt=(arr,sel)=>arr.map(v=>`<option value="${esc(v.v!=null?v.v:v)}"${(v.v!=null?v.v:v)===sel?" selected":""}>${esc(v.l!=null?v.l:v)}</option>`).join("");
+  const empList=[...new Set((EMPLOYEES||[]).map(e=>e.full_name).filter(Boolean))].sort();
+  const principals=HMO_MEMBERS.filter(x=>!hmoIsDep(x));
+  let mo=document.getElementById("hmForm"); if(!mo){ mo=document.createElement("div"); mo.id="hmForm"; document.body.appendChild(mo); }
+  mo.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,20,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
+  const fld=(label,inner)=>`<div style="margin-bottom:10px;"><div style="font-size:11.5px;font-weight:700;color:#4a5560;margin-bottom:3px;">${label}</div>${inner}</div>`;
+  const inp=(id,val,ph,type)=>`<input id="${id}" ${type?`type="${type}"`:""} value="${val!=null?esc(String(val)):""}" placeholder="${ph||""}" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;">`;
+  const tierOpts=HMO_TIER_ORDER.map(t=>({v:t,l:HMO_TIERS[t].short+" · "+HMO_TIERS[t].ratio}));
+  mo.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:620px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
+    <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#1f6b3a;">${isNew?"NEW":"EDIT"} HMO ${isDep?"DEPENDENT":"MEMBER"}</div>
+    <div style="font-size:18px;font-weight:800;color:#123524;margin:2px 0 10px;">${isNew?(isDep?"Add a dependent":"Enrol a member"):esc(hmoName(m))}</div>
+    ${isDep?`
+      ${fld("Principal (employee) *",`<select id="hmfPrincipal" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;"><option value="">— select principal —</option>${principals.map(p=>`<option value="${esc(p.emp_id||"")}"${String(p.emp_id||"")===String(m.principal_emp_id||"")?" selected":""}>${esc(hmoName(p))}${p.emp_id?" · "+esc(p.emp_id):""}</option>`).join("")}</select>`)}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        ${fld("First name",inp("hmfFirst",m.first_name,"dependent first name"))}
+        ${fld("Last name",inp("hmfLast",m.last_name,"dependent last name"))}
+      </div>
+      ${fld("Relationship",`<select id="hmfRel" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;">${opt(["","Spouse","Child","Parent","Sibling","Domestic partner","Other"],m.relationship||"")}</select>`)}
+    `:`
+      ${fld("Employee *",`<input id="hmfEmp" list="hmfEmpList" value="${m.first_name||m.last_name?esc(hmoName(m)):""}" placeholder="Search employee…" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;"><datalist id="hmfEmpList">${empList.map(n=>`<option value="${esc(n)}"></option>`).join("")}</datalist>`)}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        ${fld("Employee ID",inp("hmfEmpId",m.emp_id,"PayPlus ID"))}
+        ${fld("Member no.",inp("hmfNo",m.member_no,"","number"))}
+      </div>
+      ${fld("Tier *",`<select id="hmfTier" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;"><option value="">— select tier —</option>${opt(tierOpts,m.tier||"")}</select>`)}
+      <div id="hmfTierHint" class="psub" style="margin:-4px 0 8px;"></div>
+    `}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      ${fld("Effective date",inp("hmfEff",m.effective_date||"2026-01-27","","date"))}
+      ${fld("Expiry date",inp("hmfExp",m.expiry_date||"2027-01-27","","date"))}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      ${fld("Status",`<select id="hmfStatus" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;">${opt(["Active","Suspended","For reversal","Separated"],m.status||"Active")}</select>`)}
+      ${fld("VIP tag",inp("hmfVip",m.vip_tagging,"optional"))}
+    </div>
+    ${fld("Remarks",`<textarea id="hmfRemarks" rows="2" placeholder="e.g. New Enrollee, For Reversal Final Pay…" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;">${m.remarks?esc(m.remarks):""}</textarea>`)}
+    <div id="hmfMsg" style="color:#a12;font-size:12.5px;min-height:16px;margin:2px 0;"></div>
+    <div style="display:flex;gap:10px;margin-top:6px;">
+      <button class="btn" id="hmfSave">${isNew?(isDep?"Add dependent":"Enrol"):"Save changes"}</button>
+      <button class="btn ghost" id="hmfCancel" style="margin-left:auto;">Cancel</button>
+    </div>
+  </div>`;
+  mo.addEventListener("click",ev=>{ if(ev.target===mo) mo.remove(); });
+  document.getElementById("hmfCancel").onclick=()=>mo.remove();
+  if(!isDep){
+    const empIn=document.getElementById("hmfEmp"), idIn=document.getElementById("hmfEmpId");
+    if(empIn) empIn.addEventListener("change",()=>{ const e=(EMPLOYEES||[]).find(x=>x.full_name===empIn.value); if(e&&idIn&&!idIn.value) idIn.value=e.employee_id||""; });
+    const tierSel=document.getElementById("hmfTier"), hint=document.getElementById("hmfTierHint");
+    const showHint=()=>{ const T=HMO_TIERS[tierSel.value]; if(hint) hint.textContent=T?`ER ${peso(T.er)} · EE ${peso(T.ee)} · ${T.perCut?peso(T.perCut)+" per cut-off ("+T.freq+")":"no employee share"}`:""; };
+    if(tierSel){ tierSel.addEventListener("change",showHint); showHint(); }
+  }
+  document.getElementById("hmfSave").onclick=()=>saveHmoMember(m,isNew,isDep);
+}
+window.openHmoForm=openHmoForm;
+
+async function saveHmoMember(m,isNew,isDep){
+  const val=id=>{ const el=document.getElementById(id); return el?el.value.trim():""; };
+  const msg=document.getElementById("hmfMsg");
+  let payload={
+    effective_date:val("hmfEff")||null,
+    expiry_date:val("hmfExp")||null,
+    status:val("hmfStatus")||"Active",
+    vip_tagging:val("hmfVip")||null,
+    remarks:val("hmfRemarks")||null,
+    updated_at:new Date().toISOString(),
+    updated_by:(CURRENT_USER&&CURRENT_USER.email)||null
+  };
+  if(isDep){
+    const principal=val("hmfPrincipal");
+    if(!principal){ if(msg) msg.textContent="Select the principal employee."; return; }
+    const P=HMO_MEMBERS.find(x=>String(x.emp_id||"")===String(principal)&&!hmoIsDep(x));
+    payload.member_type="D"; payload.principal_emp_id=principal;
+    payload.first_name=val("hmfFirst")||null; payload.last_name=val("hmfLast")||null;
+    payload.relationship=val("hmfRel")||null;
+    payload.tier=P?P.tier:(m.tier||null);
+  } else {
+    const empName=val("hmfEmp"), tier=val("hmfTier");
+    if(!empName){ if(msg) msg.textContent="Select the employee."; return; }
+    if(!tier){ if(msg) msg.textContent="Select the coverage tier."; return; }
+    const e=(EMPLOYEES||[]).find(x=>x.full_name===empName);
+    payload.member_type="P";
+    payload.emp_id=val("hmfEmpId")||(e&&e.employee_id)||null;
+    payload.member_no=val("hmfNo")?Number(val("hmfNo")):(m.member_no||null);
+    payload.tier=tier; payload.tier_override=(m.tier&&m.tier!==tier)?true:(m.tier_override||false);
+    if(e){ const parts=(e.full_name||"").split(" "); } // name comes from the linked employee at render time
+    if(!payload.emp_id && e===undefined){ payload.first_name=empName; }
+  }
+  const btn=document.getElementById("hmfSave"); if(btn){ btn.disabled=true; btn.textContent="Saving…"; }
+  let error;
+  if(isNew){ payload.created_by=(CURRENT_USER&&CURRENT_USER.email)||null; payload.created_at=new Date().toISOString(); payload.hmo_provider=payload.hmo_provider||"ICARE"; payload.policy_year=payload.policy_year||2026; ({ error }=await sb.from("hmo_members").insert(payload)); }
+  else { ({ error }=await sb.from("hmo_members").update(payload).eq("id",m.id)); }
+  if(error){ if(msg) msg.textContent="Could not save: "+error.message; if(btn){ btn.disabled=false; btn.textContent=isNew?"Enrol":"Save changes"; } return; }
+  try{ await logChange("hmo", isNew?null:m.id, payload.first_name||payload.emp_id||"", isNew?"HMO enrolled":"HMO updated", payload.status); }catch(_){}
+  const fm=document.getElementById("hmForm"); if(fm) fm.remove();
+  await loadHmo(); renderHmo();
+}
+window.saveHmoMember=saveHmoMember;
+
+async function deleteHmoMember(m){
+  if(!m||!m.id) return;
+  const deps=hmoIsDep(m)?[]:hmoDeps(m);
+  if(deps.length){ alert(`Remove the ${deps.length} dependent(s) first.`); return; }
+  if(!confirm(`Remove ${hmoName(m)} from HMO coverage? This cannot be undone.`)) return;
+  const { error }=await sb.from("hmo_members").delete().eq("id",m.id);
+  if(error){ alert("Could not delete: "+error.message); return; }
+  try{ await logChange("hmo", m.id, hmoName(m), "HMO removed", ""); }catch(_){}
+  const d=document.getElementById("hmDrawer"); if(d) d.remove();
+  await loadHmo(); renderHmo();
+}
+window.deleteHmoMember=deleteHmoMember;
+
+async function loadHmo(){
+  const { data }=await sb.from("hmo_members").select("*").order("member_no",{ascending:true});
+  HMO_MEMBERS=data||[];
 }
 
 /* ================= LINKS TO SEND — one hub for every self-service / share link, named by purpose ================= */

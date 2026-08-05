@@ -139,7 +139,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='incidents') return canSeeIncidents(); if(id==='hmo') return canSeeHmo(); if(id==='separations') return canSeeSeparations(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='cosign') return !!CURRENT_USER; if(id==='policies'||id==='processes'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='incidents') return canSeeIncidents(); if(id==='hmo') return canSeeHmo(); if(id==='separations') return canSeeSeparations(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='cosign') return !!CURRENT_USER; if(id==='processes') return isAdminUser(); /* Processes & SOPs locked to admin (anj) — parked while priority modules are worked; removed from HR/Rhel for now */ if(id==='policies'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
@@ -173,7 +173,8 @@ function applyRoleUI(){
     if(pg==='movements'){ n.style.display=canSeeMovements()?'':'none'; return; } // Movements/NPA = Anj/Grazel/Rhel
     if(pg==='govremit'){ n.style.display=canEditIds()?'':'none'; return; } // Gov't Remittances = gov-ID owners (Anj/Vina/Grazel)
     if(pg==='concerns'){ n.style.display=canSeeConcerns()?'':'none'; return; } // Concerns & Cases = Anj + Juvy (hr@) + Rhel (hr4@) — they handle arbitration/legal
-    if(pg==='policies'||pg==='processes'||pg==='desk'||pg==='orgchart'||pg==='positions'||pg==='links'||pg==='cosign'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies, Processes, HR Desk, Org Chart, Positions & JD, Links, Documents to Sign = every logged-in HR
+    if(pg==='processes'){ n.style.display=isAdminUser()?'':'none'; return; } // Processes & SOPs = admin (anj) only for now — parked/locked, hidden from HR/Rhel
+    if(pg==='policies'||pg==='desk'||pg==='orgchart'||pg==='positions'||pg==='links'||pg==='cosign'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies, HR Desk, Org Chart, Positions & JD, Links, Documents to Sign = every logged-in HR
     n.style.display=(allow&&allow.indexOf(pg)===-1)?'none':'';
   });
   document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display=limited?'none':''; });

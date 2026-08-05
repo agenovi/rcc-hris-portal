@@ -877,20 +877,19 @@ function loanReleasePanelHtml(l){
   const pp=l.payplus_proof||null;
   const deductionDone=(dd.amount_per_cutoff!=null && dd.amount_per_cutoff!=="" && !!dd.effective_cutoff);
   // STEP 1 — Payroll (Grazel) FIRST: record the PayPlus salary-deduction + upload proof of the PayPlus entry (anj: her upload before Accounting).
-  const step1=deductionDone
-    ? `<div style="padding:8px 11px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;">✓ <b>PayPlus deduction recorded</b> — ${peso(dd.amount_per_cutoff)}/cut-off${dd.effective_cutoff?` · effective ${fmtDate(dd.effective_cutoff)}`:""}${dd.note?` · ${esc(dd.note)}`:""}${pp&&pp.path?` <button class="btn ghost" type="button" style="padding:2px 9px;font-size:12px;margin-left:6px;" onclick="openLoanDoc('${esc(pp.path)}',this)">View proof</button>`:""}</div>`
-    : (canPayroll
-      ? `<div style="margin-top:4px;">
+  const _relFields=(saveLabel,proofReq)=>`<div style="margin-top:4px;">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
             <div><div class="esub">Amount per cut-off (₱)</div><input id="loanRelAmt" type="number" min="0" step="50" value="${dd.amount_per_cutoff!=null?esc(String(dd.amount_per_cutoff)):""}" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;"></div>
             <div><div class="esub">Effective cut-off</div><input id="loanRelCut" type="date" value="${dd.effective_cutoff?esc(dd.effective_cutoff):""}" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;"></div>
           </div>
           <input id="loanRelNote" placeholder="Note (optional — e.g. starts 30th cut-off)" value="${dd.note?esc(dd.note):""}" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
-          <div class="esub" style="margin-top:8px;font-weight:700;">📷 Proof of the PayPlus deduction (screenshot) — required</div>
+          <div class="esub" style="margin-top:8px;font-weight:700;">📷 Proof of the PayPlus deduction ${proofReq?"(screenshot) — required":"— upload a new file only if it changed"}</div>
           <input id="loanRelProofFile" type="file" accept="image/*,application/pdf,.pdf" style="width:100%;margin-top:3px;font-size:12px;">
-          <div style="margin-top:10px;"><button class="btn" id="loanRelSave">Save PayPlus deduction record</button></div>
-        </div>`
-      : `<div style="padding:8px 11px;border-radius:9px;background:#fbeee6;border:1px solid #ecdca6;font-size:13px;">⏳ Awaiting Payroll (Grazel) to record the PayPlus deduction &amp; upload proof.</div>`);
+          <div style="margin-top:10px;"><button class="btn" id="loanRelSave">${saveLabel}</button></div>
+        </div>`;
+  const step1=deductionDone
+    ? `<div style="padding:8px 11px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;">✓ <b>PayPlus deduction recorded</b> — ${peso(dd.amount_per_cutoff)}/cut-off${dd.effective_cutoff?` · effective ${fmtDate(dd.effective_cutoff)}`:""}${dd.note?` · ${esc(dd.note)}`:""}${pp&&pp.path?` <button class="btn ghost" type="button" style="padding:2px 9px;font-size:12px;margin-left:6px;" onclick="openLoanDoc('${esc(pp.path)}',this)">View proof</button>`:""}</div>${canPayroll?`<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:#1E3A5F;list-style:none;">✏ Edit / update this record (before release)</summary>${_relFields("Update record",false)}</details>`:""}`
+    : (canPayroll ? _relFields("Save PayPlus deduction record",true) : `<div style="padding:8px 11px;border-radius:9px;background:#fbeee6;border:1px solid #ecdca6;font-size:13px;">⏳ Awaiting Payroll (Grazel) to record the PayPlus deduction &amp; upload proof.</div>`);
   // STEP 2 — Accounting (Margie): disburse. BLOCKED until step 1 is done.
   const step2=!deductionDone
     ? `<div style="padding:8px 11px;border-radius:9px;background:#f3f4f6;border:1px solid #dfe4e8;font-size:13px;color:#6b7785;">🔒 Accounting disburses <b>after</b> Payroll records the PayPlus deduction above.</div>`
@@ -2266,13 +2265,18 @@ function openLoan(id){
     const amt=parseFloat((amtEl&&amtEl.value)||""); const cut=((cutEl&&cutEl.value)||"").trim();
     if(!(amt>0)||!cut){ alert("Enter the PayPlus deduction amount per cut-off and the effective cut-off date."); return; }
     const f=fi&&fi.files&&fi.files[0];
-    if(!f){ alert("Attach a screenshot / proof of the PayPlus deduction entry — it must be on file before Accounting disburses."); return; }
-    relSaveBtn.disabled=true; relSaveBtn.textContent="Uploading…";
-    const path=(l.loan_ref||"loan")+"/payplus-"+Date.now().toString(36)+"-"+f.name.replace(/[^a-zA-Z0-9._-]+/g,"_").slice(0,100);
-    const {error:upErr}=await sb.storage.from("loan-docs").upload(path,f,{upsert:true});
-    if(upErr){ alert("Couldn't upload the proof: "+upErr.message); relSaveBtn.disabled=false; relSaveBtn.textContent="Save PayPlus deduction record"; return; }
+    const existingProof=(l.payplus_proof&&l.payplus_proof.path)?l.payplus_proof:null;
+    if(!f && !existingProof){ alert("Attach a screenshot / proof of the PayPlus deduction entry — it must be on file before Accounting disburses."); return; }
+    relSaveBtn.disabled=true; relSaveBtn.textContent="Saving…";
+    let proofObj=existingProof;
+    if(f){
+      const path=(l.loan_ref||"loan")+"/payplus-"+Date.now().toString(36)+"-"+f.name.replace(/[^a-zA-Z0-9._-]+/g,"_").slice(0,100);
+      const {error:upErr}=await sb.storage.from("loan-docs").upload(path,f,{upsert:true});
+      if(upErr){ alert("Couldn't upload the proof: "+upErr.message); relSaveBtn.disabled=false; relSaveBtn.textContent="Save PayPlus deduction record"; return; }
+      proofObj={path,name:f.name};
+    }
     const nowIso=new Date().toISOString();
-    const {error}=await sb.from("loans").update({ payplus_deduction:{ amount_per_cutoff:amt, effective_cutoff:cut, note:((noteEl&&noteEl.value.trim())||null), recorded_by:myEmail(), recorded_at:nowIso }, payplus_proof:{path:path,name:f.name}, updated_at:nowIso }).eq("id",l.id);
+    const {error}=await sb.from("loans").update({ payplus_deduction:{ amount_per_cutoff:amt, effective_cutoff:cut, note:((noteEl&&noteEl.value.trim())||null), recorded_by:myEmail(), recorded_at:nowIso }, payplus_proof:proofObj, updated_at:nowIso }).eq("id",l.id);
     if(error){ alert(error.message); relSaveBtn.disabled=false; relSaveBtn.textContent="Save PayPlus deduction record"; return; }
     await logChange("loan",l.id,l.applicant_name,"PayPlus deduction recorded (Payroll)",peso(amt)+"/cut-off");
     await loadEmployees(); m.remove(); openLoan(l.id);

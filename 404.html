@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785895470";
+window.APP_BUILD="1785902056";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785895470" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785902056" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -2417,9 +2417,17 @@ function canManageStores(){ const r=userRole(); return r==="admin"||r==="payroll
 // Posting/editing OPENINGS = Recruitment owns it too (anj, 2026-07-17, per Grazel's note). Anyone with the Manning page except HR-Relations.
 function canPostOpenings(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"||r==="recruiter"; }
 // Merchandiser meeting attendance + reimbursement = Anj + Grazel(payroll) + Rhel(manager) + Vina(hr2, builds the bank report)
-function canRunMeetings(){ const r=userRole(); const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return r==="admin"||r==="payroll"||r==="manager"||e===IDS_EDITOR; }
-// Only owners/payroll edit the meeting settings (open/close, venue-IP lock); Vina/Rhel operate + export
-function canConfigMeetings(){ const r=userRole(); return r==="admin"||r==="payroll"; }
+// MEETING_RUNNERS = extra emails granted meeting-running on top of their role (e.g. an SC who runs the meeting on the ground). They get attendance/QR/Wi-Fi-lock but NOT the reimbursement/bank data (see canSeeMeetingBank).
+const MEETING_RUNNERS=new Set(["bsabila@hassarams.com"]);  // Bryan (SC) — runs the merchandiser meeting on-site
+// Sales users who see the FULL manning overview (all stores/leads/relievers/shortfall), not just their own cluster.
+// They can still only REQUEST changes (approval-gated) and never see salary. Wilson/Ryan stay cluster-scoped.
+const MANNING_FULL=new Set(["bsabila@hassarams.com"]);     // Bryan — full manning visibility across all stores
+function manningFullOverview(){ return MANNING_FULL.has(myEmail()); }
+function canRunMeetings(){ const r=userRole(); const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return r==="admin"||r==="payroll"||r==="manager"||e===IDS_EDITOR||MEETING_RUNNERS.has(e); }
+// Only owners/payroll edit the meeting settings (open/close, venue-IP lock); Vina/Rhel operate + export; on-site runners (Bryan) may open/close + lock Wi-Fi
+function canConfigMeetings(){ const r=userRole(); const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return r==="admin"||r==="payroll"||MEETING_RUNNERS.has(e); }
+// Reimbursement figures + merchandiser BANK details (account holder/bank/account no, export, payout files) = payroll/owners/Vina only. On-site runners see attendance, never bank data.
+function canSeeMeetingBank(){ const r=userRole(); const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return r==="admin"||r==="payroll"||e===IDS_EDITOR; }
 // Personnel Movement / NPA module = Anj + Grazel(payroll) + Rhel(manager) — the people who prepare/route/approve movements.
 function canSeeMovements(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"; }
 // Concerns & Cases (arbitration / legal-labor matters) = Anj/Sanjay (admin) + Juvy (HR Relations, hr@) + Rhel (HR Manager, hr4@) — they handle these. Explicit emails on purpose: Richard (also "manager", IT reviewer) is excluded.
@@ -2434,7 +2442,7 @@ const RELATIONS_PAGES=["dashboard","onboarding","evaluations","exit","compliance
 // HR Manager (Rhel) — oversees the whole department: every page except owner-only Settings.
 const MANAGER_PAGES=["dashboard","employees","branches","prehire","contracts","onboarding","evaluations","loans","exit","manning","compliance","signatures","memos","reports","timekeeping"];
 // Per-person extra pages on top of their role. Vina = sole bank/gov encoder → needs the Employees directory to enter/correct those numbers (salary stays masked for her).
-const EXTRA_PAGES_BY_EMAIL={ "hr2@hassarams.com":["employees"] };
+const EXTRA_PAGES_BY_EMAIL={ "hr2@hassarams.com":["employees"], "bsabila@hassarams.com":["meetings"] };  // Bryan (SC): Manning + runs the merchandiser Meeting on-site
 function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   let base;
   if(r==="manager") base = MANAGER_PAGES.slice();
@@ -2462,7 +2470,8 @@ function applyRoleUI(){
   // Scoped Sales Coordinator (Wilson/Ryan/Bryan): sees EXACTLY one nav item — "Manning".
   // Hide every other nav item, all section headers, and the top search.
   if(userRole()==="sales"){
-    document.querySelectorAll('.nav-item[data-page]').forEach(n=>{ n.style.display=(n.getAttribute('data-page')==='manning')?'':'none'; });
+    const salesAllow=allowedPages()||["manning"];  // ["manning"] + any per-email extras (e.g. Bryan gets "meetings")
+    document.querySelectorAll('.nav-item[data-page]').forEach(n=>{ n.style.display=(salesAllow.indexOf(n.getAttribute('data-page'))!==-1)?'':'none'; });
     document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display='none'; });
     const ts=document.querySelector('.topbar .search'); if(ts) ts.style.display='none';
     return;
@@ -9599,6 +9608,8 @@ async function transferSet(t,patch,parent,logMsg){
 /* ---------- MANNING VERIFICATION + GOVERNANCE (additive) ---------- */
 // SC confirms a store's manning is correct; Grazel confirms a specific person is present; store-list edits by non-admins go through maker-checker.
 function canConfirmStoreManning(){ return isAdminUser() || userRole()==='sales' || canManageStores(); }
+// Full-overview sales (Bryan) may CONFIRM manning only for their OWN cluster; on every other store they can view + request changes (approval-gated) only.
+function canConfirmThisStore(b){ if(userRole()==='sales' && manningFullOverview()) return !!(b && b.sc===scForUser()); return canConfirmStoreManning(); }
 function canConfirmPerson(){ const r=userRole(); return r==="admin"||r==="payroll"; }
 function scChangeLabel(t){ return ({ahc_stationary:"Approved stationary",ahc_reliever:"Approved reliever",status:"Status",sc:"Sales Coordinator",rename:"Rename",close:"Close store",new:"New store",note:"Note / flag",remove_person:"Remove person",add_person:"Add missing person"})[t]||t; }
 async function manningStoreConfirm(store){
@@ -9771,7 +9782,8 @@ async function rejectStoreChange(id){
 }
 function renderManning(){
   const pg=$("#page-manning"); if(!pg) return;
-  const _sc=(userRole()==='sales')?scForUser():null;  // Sales Coordinator: lock the whole page to their own cluster
+  // Sales Coordinator: lock the whole page to their own cluster — EXCEPT full-overview sales (Bryan), who sees all stores.
+  const _sc=(userRole()==='sales' && !manningFullOverview())?scForUser():null;
   if(_sc) scFilter=_sc;                                 // force the coordinator filter to them (they can't switch SCs)
   const open=BRANCHES.filter(b=>b.status==="Open" && (!_sc || b.sc===_sc));
   const SCs=_sc?[_sc]:[...new Set(open.map(b=>b.sc).filter(x=>x&&x!=='Unassigned'))].sort();
@@ -9851,7 +9863,7 @@ function renderManning(){
             const conf=MANNING_SCONF[b.name];
             const confCell = conf
               ? `<span class="pill active" title="${esc(conf.confirmed_by||'')}">✓ ${esc((conf.confirmed_by||'').split('@')[0])} · ${conf.confirmed_at?fmtDate(conf.confirmed_at):''}</span>${isAdminUser()?` <button class="btn ghost mn-sconf-undo" data-store="${esc(b.name)}" style="padding:2px 6px;font-size:11px;">undo</button>`:''}`
-              : (canConfirmStoreManning()?`<button class="btn ghost mn-sconf" data-store="${esc(b.name)}" style="padding:2px 8px;font-size:11px;">✓ Confirm</button>`:'<span class="note">—</span>');
+              : (canConfirmThisStore(b)?`<button class="btn ghost mn-sconf" data-store="${esc(b.name)}" style="padding:2px 8px;font-size:11px;">✓ Confirm</button>`:'<span class="note">—</span>');
             const screq=(userRole()==='sales')?`<div style="margin-top:3px;"><button class="btn ghost mn-screq" data-store="${esc(b.name)}" style="padding:2px 8px;font-size:11px;">Request change</button></div>`:'';
             return `<tr class="clickable" data-bi="${BRANCHES.indexOf(b)}"><td><b>${esc(b.name)}</b>${screq}</td><td>${esc(b.city||"—")}${b.area?" · "+esc(b.area):""}</td><td>${catPill(b.category)}</td>
               <td>${a}</td><td>${c}</td><td>${d>0?`<span class="pill awol">${d}</span>`:`<span class="pill active">0</span>`}</td>
@@ -10631,7 +10643,7 @@ let MEETING_VIEW=null; // selected meeting_date to view; null = active/latest
 
 function renderMeetings(){
   const pg=$("#page-meetings"); if(!pg||!canRunMeetings()) return;
-  const active=meetingActive(), ips=meetingAllowedIPs(), cfgAllowed=canConfigMeetings();
+  const active=meetingActive(), ips=meetingAllowedIPs(), cfgAllowed=canConfigMeetings(), bank=canSeeMeetingBank();
   const metaByDate={};
   MEETINGS.forEach(r=>{ const k=r.meeting_date||"—"; if(!metaByDate[k]) metaByDate[k]={date:r.meeting_date,label:r.meeting_label,n:0}; metaByDate[k].n++; });
   const meetingList=Object.values(metaByDate).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
@@ -10643,8 +10655,8 @@ function renderMeetings(){
 
   pg.innerHTML=`
   <div class="panel" style="margin-top:0;">
-    <h2>Merchandiser Meeting — Attendance &amp; Reimbursement</h2>
-    <div class="psub">QR sign-in on meeting day, IP-locked to the venue Wi-Fi so attendance can't be faked. Each merchandiser fills their transport / LBC reimbursement + bank details on their phone. Vina exports the bank report for Accounting.</div>
+    <h2>Merchandiser Meeting — ${bank?"Attendance &amp; Reimbursement":"Attendance"}</h2>
+    <div class="psub">QR sign-in on meeting day, IP-locked to the venue Wi-Fi so attendance can't be faked.${bank?" Each merchandiser fills their transport / LBC reimbursement + bank details on their phone. Vina exports the bank report for Accounting.":" You run the sign-in on the ground; Accounting handles reimbursement separately."}</div>
     ${cfgAllowed?`
     <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;">
       <div style="flex:1;min-width:260px;border:1px solid var(--line);border-radius:12px;padding:14px;">
@@ -10689,20 +10701,21 @@ function renderMeetings(){
       <h2 style="margin:0;">Attendance ${viewDate?"· "+fmtDate(viewDate):""}</h2>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         ${meetingList.length>1?`<select id="mtgPick" style="${MSEL}">${meetingList.map(m=>`<option value="${esc(m.date)}"${String(m.date)===String(viewDate)?" selected":""}>${esc(m.label||"Meeting")} · ${esc(m.date)} (${m.n})</option>`).join("")}</select>`:""}
-        <button class="btn" style="${SBTN}" id="mtgExport">Export bank report (CSV)</button>
+        ${bank?`<button class="btn" style="${SBTN}" id="mtgExport">Export bank report (CSV)</button>`:""}
       </div>
     </div>
-    <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-top:12px;">
+    <div class="grid kpis" style="grid-template-columns:repeat(${bank?4:2},1fr);margin-top:12px;">
       <div class="kpi"><div class="k-l">Attended</div><div class="k-n">${rows.length}</div></div>
-      <div class="kpi"><div class="k-l">Transport total</div><div class="k-n" style="font-size:18px;">${mPeso(totT)}</div></div>
+      ${bank?`<div class="kpi"><div class="k-l">Transport total</div><div class="k-n" style="font-size:18px;">${mPeso(totT)}</div></div>
       <div class="kpi"><div class="k-l">LBC total</div><div class="k-n" style="font-size:18px;">${mPeso(totL)}</div></div>
-      <div class="kpi"><div class="k-l">Verified / Paid</div><div class="k-n" style="font-size:18px;">${verified} / ${paid}</div></div>
+      <div class="kpi"><div class="k-l">Verified / Paid</div><div class="k-n" style="font-size:18px;">${verified} / ${paid}</div></div>`
+      :`<div class="kpi"><div class="k-l">On venue ✓</div><div class="k-n">${rows.filter(r=>r.ip_ok===true).length}</div></div>`}
     </div>
     ${rows.length?`
     <div style="overflow-x:auto;margin-top:12px;">
     <table><thead><tr>
       <th>Name</th><th>Emp&nbsp;No</th><th>Store</th><th>Signed in</th><th>Venue</th>
-      <th>Transport</th><th>LBC</th><th>Ride&nbsp;pass</th><th>Account holder</th><th>Bank</th><th>Account&nbsp;no</th><th>Status</th>
+      ${bank?`<th>Transport</th><th>LBC</th><th>Ride&nbsp;pass</th><th>Account holder</th><th>Bank</th><th>Account&nbsp;no</th><th>Status</th>`:``}
     </tr></thead><tbody>
     ${rows.map(r=>`<tr>
       <td><b>${esc(r.name)}</b></td>
@@ -10710,18 +10723,18 @@ function renderMeetings(){
       <td>${esc(r.store||"—")}</td>
       <td>${r.signed_in_at?esc(new Date(r.signed_in_at).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})):"—"}</td>
       <td>${r.ip_ok===true?'<span class="pill active" title="'+esc(r.client_ip||"")+'">on venue ✓</span>':r.ip_ok===false?'<span class="pill awol" title="'+esc(r.client_ip||"")+'">off venue</span>':'<span class="pill probation" title="'+esc(r.client_ip||"")+'">not locked</span>'}</td>
-      <td>${mPeso(r.reimb_transport)}</td>
+      ${bank?`<td>${mPeso(r.reimb_transport)}</td>
       <td>${mPeso(r.reimb_lbc)}</td>
       <td>${r.ride_pass_url?`<a href="${esc(r.ride_pass_url)}" target="_blank">view</a>`:"—"}</td>
       <td>${esc(r.account_holder||"—")}</td>
       <td>${esc(r.bank_name||"—")}</td>
       <td>${esc(r.bank_account_no||"—")}</td>
-      <td><select class="mtg-status" data-id="${r.id}" style="${MSEL}">${["Submitted","Verified","Paid"].map(s=>`<option${r.status===s?" selected":""}>${s}</option>`).join("")}</select></td>
+      <td><select class="mtg-status" data-id="${r.id}" style="${MSEL}">${["Submitted","Verified","Paid"].map(s=>`<option${r.status===s?" selected":""}>${s}</option>`).join("")}</select></td>`:``}
     </tr>`).join("")}
     </tbody></table></div>`
     : `<div class="placeholder" style="margin-top:12px;"><h2>No sign-ins yet${viewDate?" for "+esc(viewDate):""}</h2><p>Open a meeting, display the QR, and merchandiser sign-ins appear here live.</p></div>`}
   </div>
-  ${meetingReimbPanel(rows,viewDate)}
+  ${bank?meetingReimbPanel(rows,viewDate):""}
   ${meetingRosterPanel(viewDate,active)}
   ${meetingAbsenteePanel(viewDate,active)}
   ${meetingTrackerPanel()}`;

@@ -112,8 +112,9 @@ function manningFullOverview(){ return MANNING_FULL.has(myEmail()); }
 function canRunMeetings(){ const r=userRole(); const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return r==="admin"||r==="payroll"||r==="manager"||e===IDS_EDITOR||MEETING_RUNNERS.has(e); }
 // Only owners/payroll edit the meeting settings (open/close, venue-IP lock); Vina/Rhel operate + export; on-site runners (Bryan) may open/close + lock Wi-Fi
 function canConfigMeetings(){ const r=userRole(); const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return r==="admin"||r==="payroll"||MEETING_RUNNERS.has(e); }
-// Reimbursement figures + merchandiser BANK details (account holder/bank/account no, export, payout files) = payroll/owners/Vina only. On-site runners see attendance, never bank data.
-function canSeeMeetingBank(){ const r=userRole(); const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return r==="admin"||r==="payroll"||e===IDS_EDITOR; }
+// Reimbursement figures + merchandiser BANK details (account holder/bank/account no, export, payout files) = payroll/owners/Vina + explicitly-granted runners. Other on-site runners see attendance only, never bank data.
+const MEETING_BANK_EXTRA=new Set(["bsabila@hassarams.com"]);  // Bryan (SC) — anj granted the full reimbursement/bank view (2026-08-05)
+function canSeeMeetingBank(){ const r=userRole(); const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return r==="admin"||r==="payroll"||e===IDS_EDITOR||MEETING_BANK_EXTRA.has(e); }
 // Personnel Movement / NPA module = Anj + Grazel(payroll) + Rhel(manager) — the people who prepare/route/approve movements.
 function canSeeMovements(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"; }
 // Concerns & Cases (arbitration / legal-labor matters) = Anj/Sanjay (admin) + Juvy (HR Relations, hr@) + Rhel (HR Manager, hr4@) — they handle these. Explicit emails on purpose: Richard (also "manager", IT reviewer) is excluded.

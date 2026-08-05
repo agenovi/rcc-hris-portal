@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785908490";
+window.APP_BUILD="1785936580";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785908490" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785936580" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -3397,6 +3397,8 @@ function loanFlagSummary(l){
   if(pm) push(amber,"purpose",`⚠ Purpose may fall outside loan policy (${esc(pm[0])}) — confirm it qualifies.`,`Purpose may fall outside loan policy (${pm[0]})`);
   // Item 2 — no supporting documents on file. Only flagged while the loan is still in review (not on closed/approved loans).
   if(loanNeedsDocs(l) && !["Approved","Released","Rejected"].includes(l.status)) push(red,"docs",`⛔ <b>No supporting documents on file</b> — attach them or mark received before advancing.`,"No supporting documents on file");
+  // Supervisor answered NOT in good standing (or needs improvement) — amber caution for the approver.
+  if(l.supervisor_status==="acknowledged" && /not in good standing|needs improvement/i.test(String(l.supervisor_performance||""))) push(amber,"sup_flag",`⚠ <b>Supervisor flagged this employee</b> — ${esc(l.supervisor_performance)}${l.supervisor_note?`: “${esc(l.supervisor_note)}”`:""}. Weigh this before approving.`,"Supervisor: "+(l.supervisor_performance||"not in good standing"));
   const level=red.length?"red":(amber.length?"amber":"green");
   const top=red.length?red[0].label:(amber.length?amber[0].label:"");
   return {level,red,amber,redCount:red.length,amberCount:amber.length,top,noEmpId:!l.employee_id,hasEmp:!!e,disp:{tenureTxt,ct,stTxt,src}};
@@ -3942,7 +3944,7 @@ function openLoan(id){
         </div>`:""}
         <h2>Supervisor <span style="font-size:12px;font-weight:600;color:var(--muted);">— FYI acknowledgment (non-blocking)</span></h2>
         ${(()=>{
-          if(l.supervisor_status==="acknowledged"){ const who=esc(l.supervisor_name||l.supervisor_email||"the supervisor"); return `<div style="padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;"><b>${who}</b> — <span style="color:var(--green);font-weight:700;">✓ acknowledged</span>${l.supervisor_performance?(" · "+esc(l.supervisor_performance)):""}${l.supervisor_ack_at?(" · "+fmtDate(l.supervisor_ack_at)):""}${l.supervisor_note?`<div class="esub" style="margin-top:4px;">${esc(l.supervisor_note)}</div>`:""}</div>`; }
+          if(l.supervisor_status==="acknowledged"){ const who=esc(l.supervisor_name||l.supervisor_email||"the supervisor"); const bad=/not in good standing|needs improvement/i.test(String(l.supervisor_performance||"")); return `<div style="padding:9px 12px;border-radius:9px;background:${bad?'#fbeee6':'#eef4ef'};border:1px solid ${bad?'#ecdca6':'#cfe0d4'};font-size:13px;"><b>${who}</b> — <span style="color:${bad?'#a12622':'var(--green)'};font-weight:700;">${bad?'⚠ flagged — not in good standing':'✓ acknowledged'}</span>${(l.supervisor_performance&&!bad)?(" · "+esc(l.supervisor_performance)):""}${l.supervisor_ack_at?(" · "+fmtDate(l.supervisor_ack_at)):""}${l.supervisor_note?`<div class="esub" style="margin-top:4px;">${esc(l.supervisor_note)}</div>`:""}</div>`; }
           if(l.supervisor_name||l.supervisor_email){ const who=esc(l.supervisor_name||l.supervisor_email||""); return `<div style="padding:9px 12px;border-radius:9px;background:#fbeee6;border:1px solid #ecdca6;font-size:13px;"><b>${who}</b> — ⏳ awaiting acknowledgment${l.supervisor_email?(` · ${esc(l.supervisor_email)}`):""}</div>`; }
           return `<div class="psub">— no supervisor named yet. Enter the supervisor who is aware of this loan below (it never blocks approval).</div>`;
         })()}
@@ -4873,6 +4875,7 @@ function renderDashboard(){
       <div class="hsub">${recruiterMode?`Recruitment at a glance — ${openSlots} open position${openSlots===1?"":"s"} across ${openStores} stores, ${phPipe} candidate${phPipe===1?"":"s"} in the pipeline.`:`Your whole workforce, live from the database — ${A.length} active people across ${open.length} stores.`}</div>
       <button class="btn ghost" id="dashCust" style="margin-top:10px;font-size:12.5px;padding:5px 12px;">Customize dashboard</button>
     </div>
+    ${remindersBar("dashboard")}
     ${recruiterMode?recruitmentScorecard():""}
     <div class="grid kpis">
       <div class="kpi" style="cursor:pointer;" onclick="go('employees')"><div class="k-l">Active Employees</div><div class="k-n">${A.length}</div><div class="k-break"><span>HO+WH<b>${ho+wh}</b></span><span>Retail<b>${rt}</b></span></div></div>

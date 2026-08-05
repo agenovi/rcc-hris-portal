@@ -2347,7 +2347,7 @@ function openLoan(id){
     });
   }));
 }
-const isActive=(e)=>e.status==="Active";
+const isActive=(e)=>e.status==="Active" && e.group_name!=="Leadership"; // Leadership = top-management org-chart nodes, kept out of headcount/directory
 // "Store / Concession" classification, derived (display-only) from the worksite.
 // Rule (anj): worksite for Spyder / Ridelab / Gear Up = our own STORE; anything else = a CONCESSION.
 // PayPlus stays the master of the raw worksite — this never edits the roster.
@@ -5215,7 +5215,7 @@ function renderOrgChart(){
   const resolvableSup=(e)=>{ const se=String(e.supervisor_email||"").toLowerCase(); return !!(se && emailToEmp[se] && emailToEmp[se]!==e); };
   // KPI figures + data-gap flags
   const supRefs=new Set(); ACT.forEach(e=>{ const lbl=String(e.supervisor_email||e.supervisor_name||"").trim().toLowerCase(); if(lbl) supRefs.add(lbl); });
-  const noSup=ACT.filter(e=>!String(e.supervisor_name||"").trim() && !String(e.supervisor_email||"").trim());
+  const noSup=ACT.filter(e=>e.group_name!=="Leadership" && !String(e.supervisor_name||"").trim() && !String(e.supervisor_email||"").trim());
   const deptsNoHead=depts.filter(d=>!deptHasHead(d));
   const initialsOf=(e)=>(e.full_name||"?").split(/[ ,]+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("").toUpperCase();
   // Unobtrusive ghost button to (re)assign a person's supervisor — only editors see it; stops the row's open-record click.
@@ -5502,7 +5502,7 @@ function positionProfileFor(pos,dept){ const k=posKey(pos,dept); return POSITION
 function positionHasJD(p){ if(!p) return false; const t=x=>String(x||"").trim(); const arr=x=>Array.isArray(x)?x.filter(v=>t(v)):[]; return !!(t(p.job_description) || arr(p.key_tasks).length || arr(p.deliverables).length); }
 // Distinct (position, department) pairs across ACTIVE staff, with headcount + matching profile.
 function positionPairs(){
-  const ACT=EMPLOYEES.filter(e=>(e.status||"").toLowerCase().startsWith("active") && String(e.position||"").trim());
+  const ACT=EMPLOYEES.filter(e=>(e.status||"").toLowerCase().startsWith("active") && e.group_name!=="Leadership" && String(e.position||"").trim());
   const map={};
   ACT.forEach(e=>{ const pos=String(e.position).trim(), dept=String(e.department||"").trim(); const k=posKey(pos,dept);
     if(!map[k]) map[k]={ position:pos, department:dept, people:[] };
@@ -5557,7 +5557,7 @@ window.renderPositions=renderPositions;
 function openPositionProfile(position, department){
   const canEdit=canEditOrg();
   const prof=positionProfileFor(position,department);
-  const people=EMPLOYEES.filter(e=>(e.status||"").toLowerCase().startsWith("active") && String(e.position||"").trim().toLowerCase()===String(position||"").trim().toLowerCase() && String(e.department||"").trim().toLowerCase()===String(department||"").trim().toLowerCase())
+  const people=EMPLOYEES.filter(e=>(e.status||"").toLowerCase().startsWith("active") && e.group_name!=="Leadership" && String(e.position||"").trim().toLowerCase()===String(position||"").trim().toLowerCase() && String(e.department||"").trim().toLowerCase()===String(department||"").trim().toLowerCase())
     .sort((a,b)=>(a.full_name||"").localeCompare(b.full_name||""));
   const tasks=Array.isArray(prof&&prof.key_tasks)?prof.key_tasks.filter(t=>String(t||"").trim()):[];
   const delivs=Array.isArray(prof&&prof.deliverables)?prof.deliverables.filter(t=>String(t||"").trim()):[];
@@ -8486,13 +8486,14 @@ function renderMeetings(){
     ${rows.length?`
     <div style="overflow-x:auto;margin-top:12px;">
     <table><thead><tr>
-      <th>Name</th><th>Emp&nbsp;No</th><th>Store</th><th>Signed in</th><th>Venue</th>
+      <th>Name</th><th>Emp&nbsp;No</th><th>Store</th><th>Employment</th><th>Signed in</th><th>Venue</th>
       ${bank?`<th>Transport</th><th>LBC</th><th>Ride&nbsp;pass</th><th>Account holder</th><th>Bank</th><th>Account&nbsp;no</th><th>Status</th>`:``}
     </tr></thead><tbody>
-    ${rows.map(r=>`<tr>
+    ${rows.map(r=>{ const ag=mAgencyOf(r), mism=mAgencyMismatch(r); return `<tr>
       <td><b>${esc(r.name)}</b></td>
       <td>${esc(r.emp_no||"—")}</td>
       <td>${esc(r.store||"—")}</td>
+      <td>${ag==="Direct"?'<span class="pill" style="background:#eef1f6;color:#41506b;">Direct</span>':'<span class="pill active">'+esc(ag)+'</span>'}${mism?' <span title="Picked &quot;'+esc(mCanonAgency(r.hire_type))+'&quot; but the PayPlus roster says &quot;'+esc(mRosterAgencyOf(r))+'&quot; — roster used." style="color:#c0392b;font-weight:700;cursor:help;">⚠</span>':''}</td>
       <td>${r.signed_in_at?esc(new Date(r.signed_in_at).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})):"—"}</td>
       <td>${r.ip_ok===true?'<span class="pill active" title="'+esc(r.client_ip||"")+'">on venue ✓</span>':r.ip_ok===false?'<span class="pill awol" title="'+esc(r.client_ip||"")+'">off venue</span>':'<span class="pill probation" title="'+esc(r.client_ip||"")+'">not locked</span>'}</td>
       ${bank?`<td>${mPeso(r.reimb_transport)}</td>
@@ -8502,7 +8503,7 @@ function renderMeetings(){
       <td>${esc(r.bank_name||"—")}</td>
       <td>${esc(r.bank_account_no||"—")}</td>
       <td><select class="mtg-status" data-id="${r.id}" style="${MSEL}">${["Submitted","Verified","Paid"].map(s=>`<option${r.status===s?" selected":""}>${s}</option>`).join("")}</select></td>`:``}
-    </tr>`).join("")}
+    </tr>`; }).join("")}
     </tbody></table></div>`
     : `<div class="placeholder" style="margin-top:12px;"><h2>No sign-ins yet${viewDate?" for "+esc(viewDate):""}</h2><p>Open a meeting, display the QR, and merchandiser sign-ins appear here live.</p></div>`}
   </div>
@@ -8551,10 +8552,10 @@ async function meetingLockIP(){
   }catch(e){ alert("Couldn't reach the sign-in service: "+e.message); }
 }
 function meetingExport(rows,viewDate){
-  const cols=[["Name","name"],["Employee No","emp_no"],["Store","store"],["Account Holder","account_holder"],["Bank","bank_name"],["Account Number","bank_account_no"],["Transport","reimb_transport"],["LBC","reimb_lbc"],["Total","__total"],["Status","status"]];
+  const cols=[["Name","name"],["Employee No","emp_no"],["Store","store"],["Employment","__agency"],["Account Holder","account_holder"],["Bank","bank_name"],["Account Number","bank_account_no"],["Transport","reimb_transport"],["LBC","reimb_lbc"],["Total","__total"],["Status","status"]];
   const head=cols.map(c=>c[0]).join(",");
   const body=(rows||[]).map(r=>cols.map(c=>{
-    let v = c[1]==="__total" ? (Number(r.reimb_transport||0)+Number(r.reimb_lbc||0)) : r[c[1]];
+    let v = c[1]==="__total" ? (Number(r.reimb_transport||0)+Number(r.reimb_lbc||0)) : c[1]==="__agency" ? mAgencyOf(r) : r[c[1]];
     return `"${(v==null?"":String(v)).replace(/"/g,'""')}"`;
   }).join(",")).join("\n");
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([head+"\n"+body],{type:"text/csv"}));
@@ -8562,13 +8563,28 @@ function meetingExport(rows,viewDate){
 }
 
 /* ===== REIMBURSEMENT PAYOUT — Agency/Direct × GCash/UB tally + bank-ready upload files ===== */
-// Agency vs Direct for a sign-in row, matched to the merchandiser roster (hired_by = agency).
+// Canonicalise a raw agency string to Direct | Jell-on | M&G (or "" if it says nothing).
+function mCanonAgency(s){ const v=String(s||""); if(/jell/i.test(v)) return "Jell-on"; if(/^mg|m&g/i.test(v)) return "M&G"; if(/direct/i.test(v)) return "Direct"; return v.trim(); }
+// Agency vs Direct for a sign-in row. PayPlus roster (hired_by) is authoritative when it confidently
+// matches; otherwise fall back to what the merchandiser self-declared on the sign-in form — NEVER blindly
+// "Direct" (that was the bug Vina flagged: an unmatched name silently read as Direct).
 function mAgencyOf(row){
   const d=(DISERS||[]).find(x=> (row.emp_no && x.emp_no && String(x.emp_no)===String(row.emp_no)) || mNorm(x.name)===mNorm(row.name));
-  const hb=d?String(d.hired_by||""):"";
-  if(/jell/i.test(hb)) return "Jell-on";
-  if(/^mg|m&g/i.test(hb)) return "M&G";
-  return hb.trim()||"Direct";
+  const fromRoster=mCanonAgency(d&&d.hired_by);
+  if(fromRoster) return fromRoster;                 // matched the roster → trust PayPlus
+  const fromSelf=mCanonAgency(row.hire_type);
+  if(fromSelf) return fromSelf;                      // no roster match → use their own answer
+  return "Direct";                                   // truly nothing on record
+}
+// Canon agency from the roster match alone ("" if no confident match).
+function mRosterAgencyOf(row){
+  const d=(DISERS||[]).find(x=> (row.emp_no && x.emp_no && String(x.emp_no)===String(row.emp_no)) || mNorm(x.name)===mNorm(row.name));
+  return mCanonAgency(d&&d.hired_by);
+}
+// True when the person's self-declared agency conflicts with a roster match (so HR can spot a mis-tag).
+function mAgencyMismatch(row){
+  const fromRoster=mRosterAgencyOf(row), fromSelf=mCanonAgency(row.hire_type);
+  return !!(fromRoster && fromSelf && fromRoster!==fromSelf);
 }
 function mIsAgency(row){ return mAgencyOf(row)!=="Direct"; }
 // Payout channel from the self-entered method: "GCash" | "UB" | null (anything else can't be paid).

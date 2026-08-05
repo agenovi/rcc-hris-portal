@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785906597";
+window.APP_BUILD="1785906787";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785906597" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785906787" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -3001,6 +3001,7 @@ async function openPrehireDoc(path,btn){
 }
 window.openPrehireDoc=openPrehireDoc;
 const LOAN_SIGN_BASE="https://agenovi.github.io/rcc-hris-portal/loan-sign.html";
+const LOAN_SUPERVISOR_URL="https://agenovi.github.io/rcc-hris-portal/supervisor.html";  // no-login supervisor "in good standing?" confirmation page (edge fn loan-supervisor)
 const LOAN_RATES={discretionary:12,emergency:12,educational:0,moto:6};
 // ── Payroll cut-off date helpers (cut-offs = the 15th and the LAST DAY of the month). Pure string math
 //    (YYYY-MM-DD), built from Y/M/D ints to avoid timezone drift; all guarded → return a "YYYY-MM-DD" string
@@ -3877,6 +3878,17 @@ function openLoan(id){
           if(l.supervisor_name||l.supervisor_email){ const who=esc(l.supervisor_name||l.supervisor_email||""); return `<div style="padding:9px 12px;border-radius:9px;background:#fbeee6;border:1px solid #ecdca6;font-size:13px;"><b>${who}</b> — ⏳ awaiting acknowledgment${l.supervisor_email?(` · ${esc(l.supervisor_email)}`):""}</div>`; }
           return `<div class="psub">— no supervisor named yet. Enter the supervisor who is aware of this loan below (it never blocks approval).</div>`;
         })()}
+        ${(l.supervisor_name && l.supervisor_status!=="acknowledged" && l.status!=="Rejected")?(()=>{
+          const tok=l.supervisor_token; const link=tok?(LOAN_SUPERVISOR_URL+"?ref="+encodeURIComponent(l.loan_ref)+"&t="+encodeURIComponent(tok)):"";
+          if(!link) return `<div class="psub" style="margin-top:8px;">Save the supervisor's name (button below) to generate their confirmation link.</div>`;
+          const mail=l.supervisor_email?`mailto:${esc(l.supervisor_email)}?subject=${encodeURIComponent("RCC — please confirm: "+(l.applicant_name||"")+" loan")}&body=${encodeURIComponent("Hi "+(l.supervisor_name||"")+",\n\nPlease confirm whether "+(l.applicant_name||"the employee")+" is in good standing for a company loan. Tap the link and choose In good standing or Not:\n\n"+link+"\n\nThank you,\nRCC HR")}`:"";
+          return `<div style="margin-top:8px;padding:9px 12px;border-radius:9px;background:#f4f8f5;border:1px solid #cfe0d4;">
+            <div class="esub" style="font-weight:700;margin-bottom:5px;">✉ Ask the supervisor to confirm — “in good standing or not” (no login)</div>
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><input readonly value="${esc(link)}" onclick="this.select()" style="flex:1;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font-size:12px;"><button class="btn ghost" type="button" data-supcopy="${esc(link)}" style="flex:none;font-size:12px;padding:5px 10px;">Copy</button></div>
+            ${mail?`<a class="btn ghost" href="${mail}" style="display:inline-block;text-decoration:none;font-size:12px;padding:5px 10px;">✉ Email ${esc(l.supervisor_email)}</a>`:`<div class="psub">Add the supervisor's email above to email them, or Copy the link and send it via WhatsApp.</div>`}
+            <div class="psub" style="margin-top:5px;">Their answer lands here automatically as ✓ acknowledged · In good standing / Not.</div>
+          </div>`;
+        })():""}
         ${(l.supervisor_status!=="acknowledged" && !["Approved","Released","Rejected"].includes(l.status) && (myEmail()===String(l.supervisor_email||"").toLowerCase() || isAdminUser()))?`
           <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
             <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">Name the supervisor who is aware of this loan</label>
@@ -4438,12 +4450,16 @@ function openLoan(id){
     supSaveName.disabled=true; supSaveName.textContent="Saving…";
     const patch={ supervisor_name:nm, supervisor_email:em||null, updated_at:new Date().toISOString() };
     if(l.supervisor_status!=="acknowledged") patch.supervisor_status="pending";
+    if(!l.supervisor_token) patch.supervisor_token=newSignoffToken();   // token for the no-login "in good standing?" confirmation link
     const {error}=await sb.from("loans").update(patch).eq("id",l.id);
     if(error){ alert(error.message); supSaveName.disabled=false; supSaveName.textContent="Save supervisor name"; return; }
     await logChange("loan",l.id,l.applicant_name,"Supervisor named (FYI)",nm);
     const ok=document.getElementById("supSavedMsg"); if(ok) ok.style.display="";
     await loadEmployees(); m.remove(); openLoan(l.id);
   });
+  m.querySelectorAll("[data-supcopy]").forEach(b=>b.addEventListener("click",async()=>{
+    try{ await navigator.clipboard.writeText(b.dataset.supcopy); const t=b.textContent; b.textContent="✓ Copied"; setTimeout(()=>b.textContent=t,1500); }catch(_){ prompt("Copy the supervisor link:", b.dataset.supcopy); }
+  }));
   const supAck=document.getElementById("supAck"); if(supAck) supAck.addEventListener("click",async()=>{
     const nm=((document.getElementById("supName")||{}).value||"").trim();
     const em=((document.getElementById("supEmail")||{}).value||"").trim();

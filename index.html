@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785884577";
+window.APP_BUILD="1785889450";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785884577" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785889450" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -9579,7 +9579,7 @@ async function transferSet(t,patch,parent,logMsg){
 // SC confirms a store's manning is correct; Grazel confirms a specific person is present; store-list edits by non-admins go through maker-checker.
 function canConfirmStoreManning(){ return isAdminUser() || userRole()==='sales' || canManageStores(); }
 function canConfirmPerson(){ const r=userRole(); return r==="admin"||r==="payroll"; }
-function scChangeLabel(t){ return ({ahc_stationary:"Approved stationary",ahc_reliever:"Approved reliever",status:"Status",sc:"Sales Coordinator",rename:"Rename",close:"Close store",new:"New store",note:"Note / flag"})[t]||t; }
+function scChangeLabel(t){ return ({ahc_stationary:"Approved stationary",ahc_reliever:"Approved reliever",status:"Status",sc:"Sales Coordinator",rename:"Rename",close:"Close store",new:"New store",note:"Note / flag",remove_person:"Remove person",add_person:"Add missing person"})[t]||t; }
 async function manningStoreConfirm(store){
   const {error}=await sb.from("manning_store_confirm").upsert({ store, confirmed_by:myEmail(), confirmed_at:new Date().toISOString() }, { onConflict:"store" });
   if(error){ alert(error.message); return; }
@@ -9598,8 +9598,12 @@ async function manningPersonConfirm(empId, b){
   await loadEmployees(); const nb=(BRANCHES||[]).find(x=>x.id===b.id)||b; openStore(nb);
 }
 function scChangeCells(c){
+  const isPerson=(c.change_type==='remove_person'||c.change_type==='add_person');
+  const change=isPerson
+    ? `${esc(scChangeLabel(c.change_type))} — <b>${esc(c.new_value||c.old_value||'—')}</b>`
+    : `${esc(scChangeLabel(c.change_type))}: ${esc(c.old_value||'—')} → <b>${esc(c.new_value||'—')}</b>`;
   return `<td><b>${esc(c.store||'—')}</b></td>
-    <td>${esc(scChangeLabel(c.change_type))}: ${esc(c.old_value||'—')} → <b>${esc(c.new_value||'—')}</b></td>
+    <td>${change}</td>
     <td>${esc((c.requested_by||'').split('@')[0])}<div style="font-size:11px;color:var(--muted);">${c.requested_at?fmtDate(c.requested_at):''}</div></td>
     <td>${esc(c.reason||'—')}</td>`;
 }
@@ -9648,11 +9652,19 @@ async function confirmStoreChange(id){
 function scRequestStoreChange(b){
   if(!b) return;
   const stVals=["Open","Closed","Under Renovation","No Manning","Pending"];
+  const inStyle="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;";
   const valInput=(field)=>{
-    if(field==='status') return `<select id="scr_val" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;">${stVals.map(s=>`<option value="${s}"${s===(b.status||'')?' selected':''}>${s}</option>`).join('')}</select>`;
+    if(field==='status') return `<select id="scr_val" style="${inStyle}">${stVals.map(s=>`<option value="${s}"${s===(b.status||'')?' selected':''}>${s}</option>`).join('')}</select>`;
     if(field==='note') return `<div class="psub" style="margin:0;">No value needed — describe what you'd like changed in the reason below.</div>`;
+    if(field==='remove_person'){
+      const staff=staffAtStore(b.name);
+      const opts=staff.map(p=>`<option value="${esc(p.emp_no||'')}">${esc(p.name||'—')}${p.emp_no?' · '+esc(p.emp_no):''}</option>`).join('');
+      return `<select id="scr_person" style="${inStyle}">${opts}<option value="__other__">Someone else — type the name below</option></select>
+        <input id="scr_pername" placeholder="Or type the person's name (if not listed above)" style="${inStyle}margin-top:8px;">`;
+    }
+    if(field==='add_person') return `<input id="scr_pername" placeholder="Name of the person to add" style="${inStyle}">`;
     const cur=field==='ahc_reliever'?(b.ahc_reliever||0):(b.ahc_stationary||0);
-    return `<input id="scr_val" type="number" min="0" value="${cur}" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;">`;
+    return `<input id="scr_val" type="number" min="0" value="${cur}" style="${inStyle}">`;
   };
   let m=document.getElementById("scReqModal"); if(!m){ m=document.createElement("div"); m.id="scReqModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
@@ -9664,6 +9676,8 @@ function scRequestStoreChange(b){
       <option value="ahc_stationary">Approved stationary (now ${b.ahc_stationary||0})</option>
       <option value="ahc_reliever">Approved reliever (now ${b.ahc_reliever||0})</option>
       <option value="status">Status (now ${esc(b.status||'—')})</option>
+      <option value="remove_person">Remove a person (left / not here)</option>
+      <option value="add_person">Add a missing person</option>
       <option value="note">Note / flag to HR</option>
     </select>
     <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">New value</label>
@@ -9685,7 +9699,14 @@ function scRequestStoreChange(b){
     else if(field==='ahc_stationary'){ old_value=String(b.ahc_stationary||0); new_value=String(Number(document.getElementById("scr_val").value)||0); }
     else if(field==='ahc_reliever'){ old_value=String(b.ahc_reliever||0); new_value=String(Number(document.getElementById("scr_val").value)||0); }
     else if(field==='note'){ old_value=""; new_value=""; }
-    if(field!=='note' && String(old_value)===String(new_value)){ document.getElementById("scrMsg").textContent="That's the same as the current value — nothing to change."; return; }
+    else if(field==='remove_person'){
+      const sel=document.getElementById("scr_person"); const nameTxt=(document.getElementById("scr_pername")&&document.getElementById("scr_pername").value||"").trim();
+      const picked=sel?sel.value:"__other__";
+      if(picked && picked!=="__other__"){ old_value=picked; new_value=((sel.options[sel.selectedIndex].text||"").split(" · ")[0]).trim(); }
+      else { if(!nameTxt){ document.getElementById("scrMsg").textContent="Pick a person from the list, or type a name."; return; } old_value=""; new_value=nameTxt; }
+    }
+    else if(field==='add_person'){ const nameTxt=(document.getElementById("scr_pername")&&document.getElementById("scr_pername").value||"").trim(); if(!nameTxt){ document.getElementById("scrMsg").textContent="Type the person's name."; return; } old_value=""; new_value=nameTxt; }
+    if(!["note","remove_person","add_person"].includes(field) && String(old_value)===String(new_value)){ document.getElementById("scrMsg").textContent="That's the same as the current value — nothing to change."; return; }
     const btn=document.getElementById("scrSave"); btn.disabled=true; btn.textContent="Submitting…";
     const {error}=await sb.from("store_change_requests").insert({ store:b.name, change_type:field, old_value, new_value, reason, requested_by:myEmail(), status:"Pending" });
     if(error){ document.getElementById("scrMsg").textContent=error.message; btn.disabled=false; btn.textContent="Submit request"; return; }
@@ -9700,6 +9721,12 @@ async function approveStoreChange(id){
   const br=BRANCHES.find(b=>b.name===c.store);
   const t=c.change_type;
   if(t==='new'){ const name=c.new_value||c.store; if(name) await sb.from("branches").insert({ name, status:"Open" }); }
+  else if(t==='remove_person'){
+    // SC-flagged a person as gone; Grazel confirmed, Anj approved → mark them Separated. Reversible.
+    if(c.old_value){ const {error}=await sb.from("employees").update({ status:"Separated", end_date:new Date().toISOString().slice(0,10), end_reason:"Removed at store — confirmed by SC, approved by Director", updated_at:new Date().toISOString() }).eq("employee_id", c.old_value); if(error){ alert(error.message); return; } }
+    // No employee_id (free-text name) → apply nothing; the approved request is HR's instruction to act.
+  }
+  else if(t==='add_person'){ /* person not in the system yet → apply nothing; approved request instructs HR to add them in PayPlus / pre-hire */ }
   else if(br){
     const upd={};
     if(t==='ahc_stationary') upd.ahc_stationary=Number(c.new_value)||0;

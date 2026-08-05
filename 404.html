@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785906787";
+window.APP_BUILD="1785908490";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785906787" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785908490" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -2509,6 +2509,72 @@ const POOL_PRIORITIES=["High","Medium","Low"];
 const POOL_PRIO_RANK={High:0,Medium:1,Low:2};
 let landed=false;
 
+/* ===================== EDITABLE PER-PAGE REMINDERS =====================
+   Reminder banners you (admin/manager) can add, edit, and delete right on the
+   page they belong to — stored in the DB (page_reminders), no code changes. */
+let PAGE_REMINDERS=[];
+const REM_RENDER={movements:"renderMovements", dashboard:"renderDashboard", concerns:"renderConcerns"};
+function canEditReminders(){ return canManageStores(); } // Anj + Grazel + Rhel
+function remToneCss(t){ return t==="red"?"background:#fdecea;border-color:#f5c6c2;color:#8a2018;"
+  :t==="green"?"background:#eef7f0;border-color:#cfe6d6;color:#12352a;"
+  :t==="blue"?"background:#eef3fb;border-color:#c9dbf3;color:#1b3a63;"
+  :"background:#fff8e6;border-color:#f0e2b8;color:#6b5a17;"; } // amber = default
+function remDueChip(d){ if(!d) return ""; const n=(typeof daysUntil==="function")?daysUntil(d):null;
+  let c="#6b5a17"; if(n!=null){ if(n<0) c="#a4322a"; else if(n<=14) c="#9a6a00"; }
+  const lbl=(n==null)?fmtDate(d):(n<0?("overdue "+Math.abs(n)+"d"):(n===0?"due today":("in "+n+"d")));
+  return ` <span style="font-weight:800;color:${c};">· ${esc(lbl)}${n!=null?" ("+fmtDate(d)+")":""}</span>`; }
+// HTML for a page's reminder banners (+ an "add" link for editors). Call in a page's innerHTML.
+function remindersBar(page){
+  const list=(PAGE_REMINDERS||[]).filter(r=>r.page===page)
+    .sort((a,b)=>((a.sort_order||0)-(b.sort_order||0))||String(a.created_at||"").localeCompare(String(b.created_at||"")));
+  const canEd=canEditReminders();
+  const items=list.map(r=>`<div class="note" style="margin:8px 0;${remToneCss(r.tone)}display:flex;gap:10px;align-items:flex-start;">
+      <div style="flex:1;">📌 <b>Reminder</b> — ${esc(r.body)}${remDueChip(r.due_date)}</div>
+      ${canEd?`<div style="white-space:nowrap;display:flex;gap:8px;">
+        <a href="#" class="rem-edit" data-id="${esc(String(r.id))}" style="font-weight:700;text-decoration:none;">Edit</a>
+        <a href="#" class="rem-del" data-id="${esc(String(r.id))}" style="color:#a4322a;font-weight:700;text-decoration:none;">Delete</a></div>`:""}
+    </div>`).join("");
+  const add=canEd?`<div style="margin:4px 0 2px;"><a href="#" class="rem-add" data-page="${esc(page)}" style="font-size:12.5px;font-weight:700;color:#1f6b3a;text-decoration:none;">＋ Add a reminder</a></div>`:"";
+  return `<div class="rem-bar" data-rempage="${esc(page)}">${items}${add}</div>`;
+}
+// Wire edit/add/delete inside a container — call at the end of each page render.
+function wireReminders(root){ root=root||document;
+  root.querySelectorAll(".rem-add").forEach(el=>el.addEventListener("click",e=>{ e.preventDefault(); remEditReminder(null, el.dataset.page); }));
+  root.querySelectorAll(".rem-edit").forEach(el=>el.addEventListener("click",e=>{ e.preventDefault(); remEditReminder(el.dataset.id); }));
+  root.querySelectorAll(".rem-del").forEach(el=>el.addEventListener("click",e=>{ e.preventDefault(); remDeleteReminder(el.dataset.id); }));
+}
+async function remReload(page){ const {data}=await sb.from("page_reminders").select("*"); PAGE_REMINDERS=data||[];
+  const fn=REM_RENDER[page]; if(fn&&typeof window[fn]==="function") window[fn](); }
+function remEditReminder(id, page){
+  const r=id?(PAGE_REMINDERS||[]).find(x=>String(x.id)===String(id)):null;
+  const pg=r?r.page:page;
+  const body=prompt(r?"Edit the reminder text:":"New reminder — what should it say?", r?r.body:"");
+  if(body===null) return; if(!body.trim()){ alert("The reminder text can't be empty."); return; }
+  const due=prompt("Deadline date — optional, format YYYY-MM-DD (e.g. 2027-01-20). Leave blank for no date:", (r&&r.due_date)?r.due_date:"");
+  if(due===null) return;
+  const dueClean=(due&&due.trim())?due.trim():null;
+  if(dueClean && !/^\d{4}-\d{2}-\d{2}$/.test(dueClean)){ alert("Date must look like 2027-01-20 (year-month-day). Not saved."); return; }
+  (async()=>{
+    const em=(CURRENT_USER&&CURRENT_USER.email)||"HR";
+    const payload={ page:pg, body:body.trim(), due_date:dueClean, updated_at:new Date().toISOString() };
+    let error;
+    if(r){ ({error}=await sb.from("page_reminders").update(payload).eq("id",r.id)); }
+    else { payload.created_by=em; ({error}=await sb.from("page_reminders").insert(payload)); }
+    if(error){ alert("Could not save the reminder: "+error.message); return; }
+    try{ await logChange("reminder",null,pg,r?"Reminder edited":"Reminder added",body.trim().slice(0,120)); }catch(_){}
+    await remReload(pg);
+  })();
+}
+async function remDeleteReminder(id){
+  const r=(PAGE_REMINDERS||[]).find(x=>String(x.id)===String(id)); if(!r) return;
+  if(!confirm('Delete this reminder?\n\n"'+String(r.body||"").slice(0,140)+'"')) return;
+  const {error}=await sb.from("page_reminders").delete().eq("id",id);
+  if(error){ alert("Could not delete: "+error.message); return; }
+  try{ await logChange("reminder",null,r.page,"Reminder deleted",String(r.body||"").slice(0,120)); }catch(_){}
+  await remReload(r.page);
+}
+window.remEditReminder=remEditReminder; window.remDeleteReminder=remDeleteReminder;
+
 /* ---------- AUTH ---------- */
 async function init(){
   const { data:{session} } = await sb.auth.getSession();
@@ -2637,7 +2703,7 @@ function updateNavBadges(){
 }
 async function loadEmployees(){
   await loadUserRoles();   // role overlay first — so all access gating below reflects the latest User Access settings
-  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh, ppf, incd, hmod, sephist, msconf, mpconf, schg] = await Promise.all([
+  const [emp, br, di, ph, oc, ot, ex, ct, pd, cm, ln, mr, sg, cf, me, evl, clg, scs, mcl, mtg, sysset, apay, npa, pol, pack, proc, mros, hnotes, hideas, htasks, xso, cncrn, trf, scl, dh, ppf, incd, hmod, sephist, msconf, mpconf, schg, prem] = await Promise.all([
     sb.from("employees").select("*").order("full_name"),
     sb.from("branches").select("*").order("name"),
     sb.from("disers").select("*").order("name"),
@@ -2679,7 +2745,8 @@ async function loadEmployees(){
     sb.from("separations_history").select("*"),
     sb.from("manning_store_confirm").select("*"),
     sb.from("manning_person_confirm").select("*"),
-    sb.from("store_change_requests").select("*").in("status",["Pending","Confirmed"]).order("requested_at",{ascending:false})
+    sb.from("store_change_requests").select("*").in("status",["Pending","Confirmed"]).order("requested_at",{ascending:false}),
+    sb.from("page_reminders").select("*")
   ]);
   if(emp.error){ alert("Could not load employees: "+emp.error.message); return; }
   EMPLOYEES=emp.data||[];
@@ -2706,6 +2773,7 @@ async function loadEmployees(){
   MEETING_CFG={}; ((sysset&&sysset.data)||[]).forEach(r=>{ MEETING_CFG[r.key]=r.value; });
   AGENCY_PAYROLL=(apay&&apay.data)||[];
   NPAS=(npa&&npa.data)||[];
+  PAGE_REMINDERS=(prem&&prem.data)||[];
   POLICIES=(pol&&pol.data)||[];
   POLICY_ACKS=(pack&&pack.data)||[];
   PROCESSES=(proc&&proc.data)||[];
@@ -5495,7 +5563,7 @@ function renderMovements(){
         <b>Statutory</b> (min-wage / mandated COLA) and <b>Discretionary</b> (merit · promotion · market) each run a
         <b>chosen approval chain</b>: HR always prepares (Grazel), optional middle signatories are added per NPA, and a
         <b>Management</b> approver always signs last. Meal allowance is carried on every pay movement.</div>
-      <div class="note" style="margin:8px 0;background:#fff8e6;border-color:#f0e2b8;color:#6b5a17;">📅 Reminder — NCR-27 2nd tranche: +₱25 → ₱780, effective Jan 20, 2027 (105 staff). Not yet filed; generate nearer the date.</div>
+      ${remindersBar("movements")}
       <div class="actionbar">
         <button class="btn" id="mvNew">＋ New Movement</button>
         ${mvSelCount?`<button class="btn ghost" id="mvTickAll">✓ Tick all to increase · ${mvSelCount}</button>`:""}
@@ -5581,6 +5649,7 @@ function renderMovements(){
   // Owner-only: change the effective date for a whole batch (court/wage-order date moved) — signatures untouched.
   $$("#page-movements .mvEditEff").forEach(el=>el.addEventListener("click",ev=>{ ev.stopPropagation(); mvChangeEffDate(el.dataset.bk, el.dataset.eff||""); }));
   const bCF=$("#mvClearFilter"); if(bCF) bCF.addEventListener("click",e=>{ e.preventDefault(); MV_FILTER=null; renderMovements(); });
+  wireReminders(pg);
 }
 window.renderMovements=renderMovements;
 

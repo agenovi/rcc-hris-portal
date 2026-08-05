@@ -2686,6 +2686,7 @@ function renderDashboard(){
     </div>`;
   const dc=document.getElementById("dashCust"); if(dc) dc.addEventListener("click",customizeDash);
   applyDashPrefs();
+  wireReminders(pg);
 }
 /* legacy KPI-only updater (unused, kept for safety) */
 function renderDashboardKPIs(){

@@ -50,7 +50,9 @@
   <div class="body" id="form" style="display:none;">
     <div class="sec">Who are you</div>
     <label class="req">Full name</label>
-    <input id="name" placeholder="Juan Dela Cruz" autocomplete="name">
+    <input id="name" placeholder="Start typing and pick your name" autocomplete="off" list="nameList">
+    <datalist id="nameList"></datalist>
+    <div class="hint" id="nameHint">Pick your name from the list so your store and group fill in for you. Not on the list? Just type your full name.</div>
     <div class="row2">
       <div><label>Employee No.</label><input id="emp_no" inputmode="numeric" placeholder="e.g. 1248"></div>
       <div><label>Store / branch</label><input id="store" placeholder="e.g. SM San Pablo"></div>
@@ -154,6 +156,23 @@ $("bank_name").addEventListener("change", e=>{
   else { lab.textContent="Number"; inp.placeholder="Choose a method first"; inp.removeAttribute("maxlength"); }
 });
 
+let ROSTER=[];
+const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+// Fill store + employment (+emp no) from the expected list when the typed name matches an invitee.
+function applyRosterMatch(){
+  const hit=ROSTER.find(p=>norm(p.name)===norm($("name").value));
+  const hint=$("nameHint");
+  if(hit){
+    if(hit.store && !$("store").value.trim()) $("store").value=hit.store;
+    if(hit.emp_no && !$("emp_no").value.trim()) $("emp_no").value=hit.emp_no;
+    if(hit.hire_type){ $("hire_type").value=hit.hire_type; }
+    if(hint){ hint.textContent="✓ Found you on the expected list — your store and group are filled in. Change them if anything's off."; hint.style.color="#1e7d43"; }
+  }else if(hint){
+    hint.textContent="Pick your name from the list so your store and group fill in for you. Not on the list? Just type your full name.";
+    hint.style.color="";
+  }
+}
+
 async function init(){
   try{
     const r=await fetch(FN,{ headers:H });
@@ -161,6 +180,14 @@ async function init(){
     if(!j.ok || !j.meeting.open){ $("closed").style.display="block"; if(j.meeting){ $("mtgLabel").textContent=j.meeting.label||"Monthly Sales Meeting"; $("mtgDate").textContent=fmtDate(j.meeting.date); } return; }
     $("mtgLabel").textContent=j.meeting.label||"Monthly Sales Meeting";
     $("mtgDate").textContent=fmtDate(j.meeting.date);
+    ROSTER=Array.isArray(j.roster)?j.roster:[];
+    if(ROSTER.length){
+      $("nameList").innerHTML=ROSTER.map(p=>`<option value="${(p.name||"").replace(/"/g,"&quot;")}">`).join("");
+      $("name").addEventListener("input",applyRosterMatch);
+      $("name").addEventListener("change",applyRosterMatch);
+    }else{
+      const hint=$("nameHint"); if(hint) hint.textContent="Type your full name.";
+    }
     if(j.require_selfie) $("selfieBlock").style.display="block";
     if(j.ip_enforced) $("lockNote").style.display="flex";
     $("form").style.display="block";

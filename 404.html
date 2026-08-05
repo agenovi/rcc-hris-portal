@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785902375";
+window.APP_BUILD="1785905698";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785902375" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785905698" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -3075,6 +3075,8 @@ function loanCoSigners(l){ return (EXT_SIGNOFFS||[]).filter(s=>s.context_type===
 // while an in-portal "Co-sign now" writes "signed" per spec — both must read as signed.
 function loanCoSignerSigned(s){ return String((s&&s.status)||"").toLowerCase()==="signed"; }
 function loanCoSignerDeclined(s){ return String((s&&s.status)||"").toLowerCase()==="declined"; }
+// Grazel's loan co-sign (hr3@, Payroll) requires a PHOTO on file before she may e-sign — no photo, no signature (anj).
+function loanCoSignNeedsPhoto(s){ return !!(s && s.context_type==="loan" && String(s.signer_email||"").toLowerCase()==="hr3@hassarams.com"); }
 function loanCoSignPanelHtml(l){
   const list=loanCoSigners(l);
   if(!list.length) return "";
@@ -3090,9 +3092,15 @@ function loanCoSignPanelHtml(l){
         <div class="tt"><b>${esc(s.signer_role||"")}</b> — ${esc(s.signer_name||"")} ${chip(s)}</div>
         ${signed?`<div class="td" style="color:var(--green);">✓ Signed by ${esc(s.signed_name||s.signer_name||"")}${s.signed_at?" · "+fmtDate(s.signed_at):""}</div>${s.signature_data?`<img src="${esc(s.signature_data)}" alt="signature" style="max-height:64px;margin-top:6px;border:1px solid var(--line);border-radius:6px;background:#fff;">`:""}`:""}
         ${declined&&s.decline_reason?`<div class="td" style="color:var(--red);">Declined: “${esc(s.decline_reason)}”</div>`:""}
-        ${(!signed&&!declined)?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+        ${(!signed&&!declined)?`
+          ${loanCoSignNeedsPhoto(s)?`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:${s.sign_photo?'#eef4ef':'#fdecea'};border:1px solid ${s.sign_photo?'#cfe0d4':'#f1c9c5'};">
+            <div class="esub" style="font-weight:700;margin-bottom:4px;">📷 Photo required before signing ${s.sign_photo?`<span style="color:var(--green);">✓ uploaded</span>`:`<span style="color:#a12622;">— no photo, no signature</span>`}</div>
+            ${s.sign_photo?`<div class="esub">${esc(s.sign_photo.name||'photo')} <button class="btn ghost" type="button" style="font-size:11px;padding:2px 8px;" onclick="openLoanDoc('${esc(s.sign_photo.path)}',this)">View</button></div>`:""}
+            ${canSignNow?`<div style="display:flex;gap:8px;align-items:center;margin-top:5px;"><input type="file" accept="image/*,application/pdf,.pdf" data-lcsphotofile="${s.id}" style="flex:1;font-size:12px;"><button class="btn ghost" type="button" data-lcsphoto="${s.id}" style="font-size:12px;padding:5px 10px;flex:none;">${s.sign_photo?'Replace photo':'Upload photo'}</button></div>`:""}
+          </div>`:""}
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
           <button class="btn ghost" data-lcscopy="${esc(s.token)}" type="button" style="font-size:12px;padding:5px 10px;">🔗 Copy link</button>
-          ${canSignNow?`<button class="btn" data-lcssign="${s.id}" type="button" style="font-size:12px;padding:5px 10px;">✍ Co-sign now</button>`:""}
+          ${canSignNow?`<button class="btn" data-lcssign="${s.id}" type="button" style="font-size:12px;padding:5px 10px;${loanCoSignNeedsPhoto(s)&&!s.sign_photo?'opacity:.5;':''}"${loanCoSignNeedsPhoto(s)&&!s.sign_photo?' title="Upload the photo first"':''}>✍ Co-sign now</button>`:""}
         </div>`:""}
       </div></div>`;
   }).join("");
@@ -4630,8 +4638,21 @@ function openLoan(id){
     const url=signoffUrl(b.dataset.lcscopy);
     try{ await navigator.clipboard.writeText(url); b.textContent="✓ Copied"; setTimeout(()=>b.textContent="🔗 Copy link",1600); }catch(_){ prompt("Copy the co-signing link:", url); }
   }));
+  m.querySelectorAll("[data-lcsphoto]").forEach(b=>b.addEventListener("click",async()=>{
+    const id=b.dataset.lcsphoto; const fi=m.querySelector(`[data-lcsphotofile="${id}"]`);
+    const f=fi&&fi.files&&fi.files[0];
+    if(!f){ alert("Choose a photo or file to upload first."); return; }
+    b.disabled=true; b.textContent="Uploading…";
+    const path=`cosign/${id}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+    const {error:upErr}=await sb.storage.from("loan-docs").upload(path,f,{upsert:true});
+    if(upErr){ alert(upErr.message); b.disabled=false; b.textContent="Upload photo"; return; }
+    const {error}=await sb.from("external_signoffs").update({sign_photo:{path,name:f.name}}).eq("id",id);
+    if(error){ alert(error.message); b.disabled=false; b.textContent="Upload photo"; return; }
+    await loadEmployees(); m.remove(); openLoan(l.id);
+  }));
   m.querySelectorAll("[data-lcssign]").forEach(b=>b.addEventListener("click",()=>{
     const row=(EXT_SIGNOFFS||[]).find(s=>String(s.id)===String(b.dataset.lcssign)); if(!row) return;
+    if(loanCoSignNeedsPhoto(row) && !row.sign_photo){ alert("Upload the required photo before signing — no photo, no signature."); return; }
     captureSignatureModal({ title:"Co-sign this loan",
       subtitle:`${row.signer_role||""} — ${row.signer_name||""} · ${l.loan_ref} ${peso(l.amount)}`, cta:"Sign",
       reviewHtml:"<pre style='white-space:pre-wrap;font-family:sans-serif;font-size:12px;line-height:1.55;margin:0;'>"+esc(buildLoanAgreement(l,l.mgmt_approver||loanApprover(l)))+"</pre>",
@@ -8933,13 +8954,30 @@ function openCosignDoc(id){
     <div style="flex:1;overflow-y:auto;padding:0 22px 4px;">
       <div style="border:1px solid var(--line,#e4eae6);border-radius:10px;padding:14px;background:#fff;">${row.document_html||'<div class="psub">No document content on file.</div>'}</div>
     </div>
+    ${loanCoSignNeedsPhoto(row)?`<div style="margin:10px 22px 0;padding:9px 12px;border-radius:9px;background:${row.sign_photo?'#eef4ef':'#fdecea'};border:1px solid ${row.sign_photo?'#cfe0d4':'#f1c9c5'};">
+      <div style="font-weight:700;font-size:13px;">📷 Photo required before signing ${row.sign_photo?'<span style="color:var(--green);">✓ uploaded</span>':'<span style="color:#a12622;">— no photo, no signature</span>'}</div>
+      ${row.sign_photo?`<div class="psub">${esc(row.sign_photo.name||'photo')} <button class="btn ghost" type="button" style="font-size:11px;padding:2px 8px;" onclick="openLoanDoc('${esc(row.sign_photo.path)}',this)">View</button></div>`:''}
+      <div style="display:flex;gap:8px;align-items:center;margin-top:5px;"><input type="file" accept="image/*,application/pdf,.pdf" id="cosignPhotoFile" style="flex:1;font-size:12px;"><button class="btn ghost" type="button" id="cosignPhotoUp" style="font-size:12px;padding:5px 10px;flex:none;">${row.sign_photo?'Replace photo':'Upload photo'}</button></div>
+    </div>`:''}
     <div style="display:flex;gap:10px;padding:14px 22px;border-top:1px solid var(--line,#e4eae6);">
       <button class="btn ghost" id="cosignClose" type="button" style="margin-left:auto;">Close</button>
       <button class="btn" id="cosignSign" type="button">Add your signature</button>
     </div></div>`;
   m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
   document.getElementById("cosignClose").onclick=()=>m.remove();
+  const cpu=document.getElementById("cosignPhotoUp"); if(cpu) cpu.addEventListener("click",async()=>{
+    const fi=document.getElementById("cosignPhotoFile"); const f=fi&&fi.files&&fi.files[0];
+    if(!f){ alert("Choose a photo or file to upload first."); return; }
+    cpu.disabled=true; cpu.textContent="Uploading…";
+    const path=`cosign/${row.id}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+    const {error:upErr}=await sb.storage.from("loan-docs").upload(path,f,{upsert:true});
+    if(upErr){ alert(upErr.message); cpu.disabled=false; cpu.textContent="Upload photo"; return; }
+    const {error}=await sb.from("external_signoffs").update({sign_photo:{path,name:f.name}}).eq("id",row.id);
+    if(error){ alert(error.message); cpu.disabled=false; cpu.textContent="Upload photo"; return; }
+    await loadEmployees(); m.remove(); openCosignDoc(row.id);
+  });
   document.getElementById("cosignSign").onclick=()=>{
+    if(loanCoSignNeedsPhoto(row) && !row.sign_photo){ alert("Upload the required photo before signing — no photo, no signature."); return; }
     captureSignatureModal({ title:"Sign this document", subtitle:row.context_label||"", cta:"Sign & submit",
       onSign:(data)=>{ if(!data) return;
         sb.from("external_signoffs").update({ status:"Signed", signature_data:data, signed_name:(myName()||row.signer_name||null), signed_at:new Date().toISOString() }).eq("id", row.id).then(async ({error})=>{

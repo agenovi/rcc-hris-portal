@@ -1418,23 +1418,10 @@ function openLoan(id){
       ${loanAppliedLineHtml(l)}
       ${loanProgressHtml(l)}
       ${loanVerdictBadgeHtml(l)}
-      <div class="panel" style="margin-top:0;">
-        <h2>Application</h2>
-        ${phRow("Loan type",loanTypeLabel(l.loan_type))}${phRow("Amount",peso(l.amount))}${phRow("Term",(l.term_months||"—")+" months")}${phRow("Interest rate",loanRatePerMonthLabel(l)+" (flat)")}${phRow("Est. monthly",peso(l.monthly_estimate))}${phRow("Mobile",l.contact_number)}${phRow("Email",l.email)}${phRow("Employee ID",l.employee_id)}${phRow("Position",l.department)}${phRow("Take-home given",l.net_pay?peso(l.net_pay):"—")}${phRow("Purpose",l.purpose)}${phRow("Authorized",l.authorized?"Applied & consented online (RA 8792)":"—")}
-      </div>
-      <div class="panel">
-        <h2 style="font-size:15px;">Employee consent &amp; disclaimer</h2>
-        ${l.authorized
-          ? `<div style="display:inline-block;padding:2px 9px;border-radius:9px;background:#e6f4ea;border:1px solid #bfe0c8;color:#1f6b3a;font-size:11.5px;font-weight:700;margin-bottom:6px;">✓ Consented online (RA 8792)</div>`
-          : `<div style="display:inline-block;padding:2px 9px;border-radius:9px;background:#fbeee6;border:1px solid #ecdca6;color:#8a5a00;font-size:11.5px;font-weight:700;margin-bottom:6px;">Not yet consented</div>`}
-        <div class="psub" style="font-style:italic;line-height:1.5;">“I authorize RCC to deduct the agreed loan amortization from my salary each payroll until fully repaid, and on separation, from the balance of my final pay (subject to Article 113 of the Labor Code). I understand the amount and terms are subject to HR approval. (RA 8792 electronic consent.)”</div>
-      </div>
-      <div class="panel" style="border:2px solid #cfe0d4;">
-        <h2>Eligibility snapshot</h2>
+      <div class="panel" style="border:2px solid #cfe0d4;margin-top:0;">
+        <h2>Who &amp; can they afford it</h2>
         ${loanEligibilityHtml(l)}
-      </div>
-      <div class="panel" style="border:2px solid #cfe0d4;">
-        <h2>Loan history <span style="font-size:12px;font-weight:600;color:var(--muted);">— HR check (PayPlus can't supply this)</span></h2>
+        <div style="font-size:13px;font-weight:700;color:var(--muted);margin:14px 0 4px;">Loan history <span style="font-weight:500;">— HR check (PayPlus can't supply this)</span></div>
         <div class="psub">Previous &amp; still-running loans for this employee. PayPlus doesn't expose loan balances, so HR records them here from the payslip / old ledger. What you enter shows on every future loan review for this person.</div>
         <div id="loanHistBody" style="margin-top:10px;"><div class="psub">Loading history…</div></div>
         <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px;">
@@ -1455,15 +1442,11 @@ function openLoan(id){
           </div>
           <button class="btn" id="lhAdd" style="margin-top:9px;">Add to history</button>
         </div>
-      </div>
-      <div class="panel" style="border:2px solid #cfe0d4;">
-        <h2>Affordability — 15%-of-pay rule</h2>
+        <div style="font-size:13px;font-weight:700;color:var(--muted);margin:14px 0 4px;">Affordability — 15%-of-pay rule</div>
         <div id="loanAfford"><div class="psub">Calculating…</div></div>
       </div>
       <div class="panel">
-        <h2>Repayment schedule</h2>
-        <details>
-          <summary style="cursor:pointer;font-size:13px;font-weight:700;color:#1E3A5F;">Show per-cut-off deductions</summary>
+        <h2>What you're approving</h2>
           <div style="margin-top:10px;">${(()=>{
             const amt=Number(l.amount||0), term=Number(l.term_months||0);
             if(!amt||!term) return `<div class="psub">Needs an amount and term to preview a schedule.</div>`;
@@ -1478,9 +1461,17 @@ function openLoan(id){
             return `<div class="psub" style="margin-bottom:7px;">Based on the <b>requested</b> amount (${peso(amt)} · ${term} mo · ${rate}%/yr = 1%/mo flat). Total payable ${peso(total)} · ${peso(monthly)}/mo · ${peso(perCut)}/cut-off (payroll 15th &amp; end-of-month). ${relNote}</div>
               <table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr style="color:var(--muted);text-align:left;"><th>#</th><th>Cut-off date</th><th style="text-align:right;">Deduction</th><th style="text-align:right;">Balance</th></tr></thead><tbody>${rows}${more}</tbody></table>`;
           })()}</div>
-        </details>
       </div>
-      <div class="panel">
+      <details class="panel" style="">
+        <summary style="cursor:pointer;font-weight:700;color:#1E3A5F;list-style:none;">Paper trail — applicant details, consent, documents, attendance, supervisor</summary>
+        <div style="margin-top:12px;">
+        <div style="font-size:13px;font-weight:700;color:var(--muted);margin:0 0 4px;">Applicant details</div>
+        ${phRow("Mobile",l.contact_number)}${phRow("Email",l.email)}${phRow("Employee ID",l.employee_id)}${phRow("Position",l.department)}${phRow("Purpose",l.purpose)}${phRow("Authorized",l.authorized?"Applied & consented online (RA 8792)":"—")}${(typeof canSeePay==="function"&&canSeePay())?phRow("Take-home given",l.net_pay?peso(l.net_pay):"—"):""}
+        <h2 style="font-size:15px;">Employee consent &amp; disclaimer</h2>
+        ${l.authorized
+          ? `<div style="display:inline-block;padding:2px 9px;border-radius:9px;background:#e6f4ea;border:1px solid #bfe0c8;color:#1f6b3a;font-size:11.5px;font-weight:700;margin-bottom:6px;">✓ Consented online (RA 8792)</div>`
+          : `<div style="display:inline-block;padding:2px 9px;border-radius:9px;background:#fbeee6;border:1px solid #ecdca6;color:#8a5a00;font-size:11.5px;font-weight:700;margin-bottom:6px;">Not yet consented</div>`}
+        <div class="psub" style="font-style:italic;line-height:1.5;">“I authorize RCC to deduct the agreed loan amortization from my salary each payroll until fully repaid, and on separation, from the balance of my final pay (subject to Article 113 of the Labor Code). I understand the amount and terms are subject to HR approval. (RA 8792 electronic consent.)”</div>
         <h2>Required documents <span style="font-size:12px;font-weight:600;color:var(--muted);">— checklist (guidance)</span></h2>
         ${(()=>{
           const t=l.loan_type, list=["Payslip","Valid government ID"];
@@ -1493,12 +1484,8 @@ function openLoan(id){
             ${list.map(d=>`<label style="display:flex;gap:9px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px;cursor:pointer;"><input type="checkbox"> ${esc(d)}</label>`).join("")}
             ${t==="educational"?`<div class="psub" style="margin-top:8px;">Release stays blocked for educational loans until the signed waiver is on file.</div>`:""}`;
         })()}
-      </div>
-      <div class="panel">
         <h2>Recent attendance <span style="font-size:12px;font-weight:600;color:var(--muted);">— last 3 months (PayPlus)</span></h2>
         <div id="loanAtt"><div class="psub">Loading attendance…</div></div>
-      </div>
-      <div class="panel">
         <h2>Supporting documents</h2>
         ${(Array.isArray(l.documents)&&l.documents.length)
           ? l.documents.map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);">
@@ -1522,36 +1509,34 @@ function openLoan(id){
             ${loanNeedsDocs(l)?`<button class="btn ghost" id="loanReqDocs" style="margin-top:8px;">✉ Request documents from applicant</button>`:""}
           </div>`;
         })()}
-      </div>
-      ${l.loan_type==="educational"?`
-      <div class="panel" style="border:2px solid ${l.waiver_signed?'var(--green)':'#e0b400'};">
-        <h2>Educational waiver ${l.waiver_signed?'<span style="color:var(--green);font-size:13px;">✓ signed</span>':'<span style="color:#9a7500;font-size:13px;">— required before release</span>'}</h2>
-        <div class="psub">This loan <b>cannot be released</b> until the student/child has signed the waiver.</div>
-        ${l.waiver_doc?`<div style="margin-top:8px;"><button class="btn ghost" onclick="openLoanDoc('${esc(l.waiver_doc.path)}',this)">View signed waiver</button></div>`:""}
-        <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-top:12px;">Upload the signed waiver</label>
-        <input type="file" id="waiverFile" accept="image/*,application/pdf,.pdf" style="margin-top:4px;">
-        <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13.5px;cursor:pointer;">
-          <input type="checkbox" id="waiverChk" ${l.waiver_signed?"checked":""}> The student/child has signed the waiver
-        </label>
-        <button class="btn" id="waiverSave" style="margin-top:12px;">Save waiver status</button>
-      </div>`:""}
-      ${(l.status==="Approved"||l.status==="Released"||l.agreement_status!=="none")?`
-      <div class="panel" style="border:2px solid ${l.agreement_status==="signed"?'var(--green)':l.agreement_status==="declined"?'#f1c9c5':'#e0b400'};">
-        <h2>Loan agreement ${l.agreement_status==="signed"?'<span style="color:var(--green);font-size:13px;">✓ signed</span>':l.agreement_status==="declined"?'<span style="color:var(--red);font-size:13px;">declined</span>':'<span style="color:#9a7500;font-size:13px;">— awaiting employee signature</span>'}</h2>
-        <div class="psub">Approver: <b>${esc(l.mgmt_approver||loanApprover(l))}</b> · This loan <b>cannot be released</b> until the employee signs the agreement.</div>
-        ${l.agreement_status==="none"
-          ? `<button class="btn" id="loanGenAgr" style="margin-top:10px;">Generate agreement</button>`
-          : `<button class="btn ghost" id="loanViewAgr" style="margin-top:10px;">View agreement</button>
-             ${l.agreement_status==="signed"
-               ? `<div style="margin-top:10px;color:var(--green);font-weight:700;">✓ Signed by ${esc(l.agreement_signer||"")}${l.agreement_signed_at?(" · "+fmtDate(l.agreement_signed_at)):""}</div>${l.agreement_signature?`<img src="${esc(l.agreement_signature)}" alt="signature" style="max-height:80px;margin-top:6px;border:1px solid var(--line);border-radius:6px;background:#fff;">`:""}`
-               : l.agreement_status==="declined"
-                 ? `<div class="note" style="margin-top:10px;">Employee declined: ${esc(l.agreement_decline_reason||"no reason given")}</div>`
-                 : `<label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-top:12px;">Employee signing link — send this to the employee</label>
-                    <div style="display:flex;gap:8px;margin-top:4px;"><input id="agrLink" readonly value="${esc(LOAN_SIGN_BASE+'?ref='+encodeURIComponent(l.loan_ref)+'&t='+encodeURIComponent(l.agreement_token||''))}" style="flex:1;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:12px;">
-                    <button class="btn" id="agrCopy" style="flex:none;">Copy</button></div>
-                    <div class="psub" style="margin-top:6px;">They read &amp; sign on their phone (RA 8792). Once signed, release unlocks.</div>`}`}
-      </div>`:""}
-      <div class="panel">
+        ${l.loan_type==="educational"?`
+        <div class="panel" style="border:2px solid ${l.waiver_signed?'var(--green)':'#e0b400'};">
+          <h2>Educational waiver ${l.waiver_signed?'<span style="color:var(--green);font-size:13px;">✓ signed</span>':'<span style="color:#9a7500;font-size:13px;">— required before release</span>'}</h2>
+          <div class="psub">This loan <b>cannot be released</b> until the student/child has signed the waiver.</div>
+          ${l.waiver_doc?`<div style="margin-top:8px;"><button class="btn ghost" onclick="openLoanDoc('${esc(l.waiver_doc.path)}',this)">View signed waiver</button></div>`:""}
+          <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-top:12px;">Upload the signed waiver</label>
+          <input type="file" id="waiverFile" accept="image/*,application/pdf,.pdf" style="margin-top:4px;">
+          <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13.5px;cursor:pointer;">
+            <input type="checkbox" id="waiverChk" ${l.waiver_signed?"checked":""}> The student/child has signed the waiver
+          </label>
+          <button class="btn" id="waiverSave" style="margin-top:12px;">Save waiver status</button>
+        </div>`:""}
+        ${(l.status==="Approved"||l.status==="Released"||l.agreement_status!=="none")?`
+        <div class="panel" style="border:2px solid ${l.agreement_status==="signed"?'var(--green)':l.agreement_status==="declined"?'#f1c9c5':'#e0b400'};">
+          <h2>Loan agreement ${l.agreement_status==="signed"?'<span style="color:var(--green);font-size:13px;">✓ signed</span>':l.agreement_status==="declined"?'<span style="color:var(--red);font-size:13px;">declined</span>':'<span style="color:#9a7500;font-size:13px;">— awaiting employee signature</span>'}</h2>
+          <div class="psub">Approver: <b>${esc(l.mgmt_approver||loanApprover(l))}</b> · This loan <b>cannot be released</b> until the employee signs the agreement.</div>
+          ${l.agreement_status==="none"
+            ? `<button class="btn" id="loanGenAgr" style="margin-top:10px;">Generate agreement</button>`
+            : `<button class="btn ghost" id="loanViewAgr" style="margin-top:10px;">View agreement</button>
+               ${l.agreement_status==="signed"
+                 ? `<div style="margin-top:10px;color:var(--green);font-weight:700;">✓ Signed by ${esc(l.agreement_signer||"")}${l.agreement_signed_at?(" · "+fmtDate(l.agreement_signed_at)):""}</div>${l.agreement_signature?`<img src="${esc(l.agreement_signature)}" alt="signature" style="max-height:80px;margin-top:6px;border:1px solid var(--line);border-radius:6px;background:#fff;">`:""}`
+                 : l.agreement_status==="declined"
+                   ? `<div class="note" style="margin-top:10px;">Employee declined: ${esc(l.agreement_decline_reason||"no reason given")}</div>`
+                   : `<label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-top:12px;">Employee signing link — send this to the employee</label>
+                      <div style="display:flex;gap:8px;margin-top:4px;"><input id="agrLink" readonly value="${esc(LOAN_SIGN_BASE+'?ref='+encodeURIComponent(l.loan_ref)+'&t='+encodeURIComponent(l.agreement_token||''))}" style="flex:1;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:12px;">
+                      <button class="btn" id="agrCopy" style="flex:none;">Copy</button></div>
+                      <div class="psub" style="margin-top:6px;">They read &amp; sign on their phone (RA 8792). Once signed, release unlocks.</div>`}`}
+        </div>`:""}
         <h2>Supervisor <span style="font-size:12px;font-weight:600;color:var(--muted);">— FYI acknowledgment (non-blocking)</span></h2>
         ${(()=>{
           if(l.supervisor_status==="acknowledged"){ const who=esc(l.supervisor_name||l.supervisor_email||"the supervisor"); return `<div style="padding:9px 12px;border-radius:9px;background:#eef4ef;border:1px solid #cfe0d4;font-size:13px;"><b>${who}</b> — <span style="color:var(--green);font-weight:700;">✓ acknowledged</span>${l.supervisor_performance?(" · "+esc(l.supervisor_performance)):""}${l.supervisor_ack_at?(" · "+fmtDate(l.supervisor_ack_at)):""}${l.supervisor_note?`<div class="esub" style="margin-top:4px;">${esc(l.supervisor_note)}</div>`:""}</div>`; }
@@ -1560,18 +1545,26 @@ function openLoan(id){
         })()}
         ${(l.supervisor_status!=="acknowledged" && !["Approved","Released","Rejected"].includes(l.status) && (myEmail()===String(l.supervisor_email||"").toLowerCase() || isAdminUser()))?`
           <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
-            <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">${l.supervisor_name?"Acknowledge (FYI)":"Name the supervisor &amp; acknowledge (FYI)"}${isAdminUser()&&myEmail()!==String(l.supervisor_email||"").toLowerCase()?" — recording on the supervisor's behalf":""}</label>
+            <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">Name the supervisor who is aware of this loan</label>
             <input id="supName" placeholder="Supervisor name (required)" value="${esc(l.supervisor_name||"")}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;">
             <input id="supEmail" type="email" placeholder="Supervisor email (optional — for their FYI)" value="${esc(l.supervisor_email||"")}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;">
-            <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13.5px;margin-bottom:8px;">
-              <label style="display:flex;gap:5px;align-items:center;cursor:pointer;"><input type="radio" name="supPerf" value="Good" checked> Good</label>
-              <label style="display:flex;gap:5px;align-items:center;cursor:pointer;"><input type="radio" name="supPerf" value="Satisfactory"> Satisfactory</label>
-              <label style="display:flex;gap:5px;align-items:center;cursor:pointer;"><input type="radio" name="supPerf" value="Needs Improvement"> Needs Improvement</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <button class="btn" id="supSaveName">${l.supervisor_name?"Update supervisor name":"Save supervisor name"}</button>
+              <span id="supSavedMsg" class="psub" style="color:var(--green);font-weight:700;display:none;">✓ Saved</span>
             </div>
-            <textarea id="supNote" rows="2" placeholder="Optional note…" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;"></textarea>
-            <button class="btn" id="supAck" style="margin-top:8px;">${l.supervisor_name?"Acknowledge":"Save name &amp; acknowledge"}</button>
+            <div style="margin-top:12px;border-top:1px dashed var(--line);padding-top:10px;">
+              <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">Record the supervisor's acknowledgment${isAdminUser()&&myEmail()!==String(l.supervisor_email||"").toLowerCase()?" (on their behalf)":""} <span style="font-weight:500;">— optional</span></label>
+              <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13.5px;margin-bottom:8px;">
+                <label style="display:flex;gap:5px;align-items:center;cursor:pointer;"><input type="radio" name="supPerf" value="Good" checked> Good</label>
+                <label style="display:flex;gap:5px;align-items:center;cursor:pointer;"><input type="radio" name="supPerf" value="Satisfactory"> Satisfactory</label>
+                <label style="display:flex;gap:5px;align-items:center;cursor:pointer;"><input type="radio" name="supPerf" value="Needs Improvement"> Needs Improvement</label>
+              </div>
+              <textarea id="supNote" rows="2" placeholder="Optional note…" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;"></textarea>
+              <button class="btn ghost" id="supAck" style="margin-top:8px;">Record acknowledgment</button>
+            </div>
           </div>`:""}
-      </div>
+        </div>
+      </details>
       <div class="panel">
         <h2>Status</h2>
         <div class="psub">Current: ${loanStatusPill(l.status)}</div>
@@ -1586,7 +1579,11 @@ function openLoan(id){
           <b style="color:#8a5a00;">Declined with guidance</b>${l.declined_at?(" · "+fmtDate(l.declined_at)):""}${l.reapply_after?` · reapply after <b>${fmtDate(l.reapply_after)}</b>`:""}
           <div class="esub" style="white-space:pre-wrap;margin-top:5px;">${esc(l.decline_reason)}</div>
           <button class="btn ghost" id="loanReprintGuide" style="margin-top:8px;padding:4px 10px;font-size:12px;">View / reprint guidance</button></div>`:""}
-        <textarea id="loanNotes" rows="2" placeholder="HR notes…" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin-top:8px;">${esc(l.hr_notes||"")}</textarea>
+        <textarea id="loanNotes" rows="2" placeholder="HR notes… (this note also travels to HR if you Send back)" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin-top:8px;">${esc(l.hr_notes||"")}</textarea>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+          <button class="btn ghost" id="loanNoteSave" style="font-size:12px;padding:5px 10px;">Save note</button>
+          <span id="loanNoteSaved" class="psub" style="color:var(--green);font-weight:700;display:none;">✓ Saved</span>
+        </div>
         ${(stage.canAct && (l.status==="HR Review"||l.status==="Management"))?`
         <div style="margin-top:10px;padding:11px 13px;border-radius:10px;background:#f4f8f5;border:1px solid #cfe0d4;">
           <div style="font-weight:700;font-size:13px;color:#12352a;">Adjust &amp; approve a workable amount <span class="psub" style="font-weight:500;">— counter-offer instead of sending back</span></div>
@@ -1597,7 +1594,11 @@ function openLoan(id){
           </div>
           <div id="loanAdjOut" class="psub" style="margin-top:8px;line-height:1.5;">Computing…</div>
         </div>`:""}
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+        ${l.status==="Approved"?loanReleasePanelHtml(l):(l.status==="Released"?loanReleasedInfoHtml(l):"")}
+      </div>
+      ${loanCoSignPanelHtml(l)}
+      ${(next&&stage.canAct&&loanIsHrSelfApp(l)&&l.status==="HR Review")?`<div class="psub" style="margin-top:8px;color:#a12622;">HR review skipped — routed to Director (SOP).</div>`:""}
+      <div style="position:sticky;bottom:0;background:#f1f4f2;border-top:1px solid var(--line);padding:12px 0 4px;margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;z-index:5;">
           ${next?(
             isLoanNaturalOwner(l)
             ? `<button class="btn" id="loanAdv">${l.status==="HR Review"?"Send up → Management":l.status==="Management"?"Approve &amp; Sign →":"Advance → "+esc(next)}</button>`
@@ -1614,11 +1615,7 @@ function openLoan(id){
           ${(l.amount&&l.term_months)?`<button class="btn ghost" id="loanAgree" style="color:#1E3A5F;">📄 Computation + Agreement (PDF)</button>`:""}
           ${(l.status==="Approved" && l.mgmt_signature && loanCoSigners(l).length===0 && (isAdminUser()||["relations","payroll","manager"].includes(userRole())))?`<button class="btn" id="loanFwdCosign">Forward for co-signing (Juvy sends)</button>`:""}
           <button class="btn ghost" id="loanClose" style="margin-left:auto;">Close</button>
-        </div>
-        ${(next&&stage.canAct&&loanIsHrSelfApp(l)&&l.status==="HR Review")?`<div class="psub" style="margin-top:8px;color:#a12622;">HR review skipped — routed to Director (SOP).</div>`:""}
-        ${l.status==="Approved"?loanReleasePanelHtml(l):(l.status==="Released"?loanReleasedInfoHtml(l):"")}
       </div>
-      ${loanCoSignPanelHtml(l)}
     </div></div>`;
   $("#loanClose").addEventListener("click",()=>m.remove());
   const _agr=$("#loanAgree"); if(_agr) _agr.addEventListener("click",()=>printLoanAgreement(l));
@@ -2100,17 +2097,39 @@ function openLoan(id){
   // Item 1 — admin's de-emphasized "Advance anyway (override)" runs the exact same advance logic.
   const advOvr=document.getElementById("loanAdvOverride"); if(advOvr) advOvr.addEventListener("click",doLoanAdvance);
   // Supervisor FYI acknowledgment (non-blocking) — visible to the named supervisor or an admin recording on their behalf.
+  const supSaveName=document.getElementById("supSaveName"); if(supSaveName) supSaveName.addEventListener("click",async()=>{
+    const nm=((document.getElementById("supName")||{}).value||"").trim();
+    const em=((document.getElementById("supEmail")||{}).value||"").trim();
+    if(!nm){ const f=document.getElementById("supName"); if(f){ f.focus(); f.style.borderColor="#e0b400"; } alert("Type the supervisor's name first."); return; }
+    supSaveName.disabled=true; supSaveName.textContent="Saving…";
+    const patch={ supervisor_name:nm, supervisor_email:em||null, updated_at:new Date().toISOString() };
+    if(l.supervisor_status!=="acknowledged") patch.supervisor_status="pending";
+    const {error}=await sb.from("loans").update(patch).eq("id",l.id);
+    if(error){ alert(error.message); supSaveName.disabled=false; supSaveName.textContent="Save supervisor name"; return; }
+    await logChange("loan",l.id,l.applicant_name,"Supervisor named (FYI)",nm);
+    const ok=document.getElementById("supSavedMsg"); if(ok) ok.style.display="";
+    await loadEmployees(); m.remove(); openLoan(l.id);
+  });
   const supAck=document.getElementById("supAck"); if(supAck) supAck.addEventListener("click",async()=>{
     const nm=((document.getElementById("supName")||{}).value||"").trim();
     const em=((document.getElementById("supEmail")||{}).value||"").trim();
-    if(!nm){ alert("Please enter the supervisor's name — it must be on record who is aware of and acknowledged this loan."); return; }
+    if(!nm){ const f=document.getElementById("supName"); if(f){ f.focus(); f.style.borderColor="#e0b400"; } alert("Enter the supervisor's name first — it must be on record who acknowledged this loan."); return; }
     const perf=(document.querySelector('input[name="supPerf"]:checked')||{}).value||"Good";
     const note=((document.getElementById("supNote")||{}).value||"").trim()||null;
     supAck.disabled=true; supAck.textContent="Saving…";
     const {error}=await sb.from("loans").update({supervisor_name:nm,supervisor_email:em||null,supervisor_status:"acknowledged",supervisor_performance:perf,supervisor_note:note,supervisor_ack_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",l.id);
-    if(error){ alert(error.message); supAck.disabled=false; supAck.textContent="Acknowledge"; return; }
+    if(error){ alert(error.message); supAck.disabled=false; supAck.textContent="Record acknowledgment"; return; }
     await logChange("loan",l.id,l.applicant_name,"Supervisor acknowledged (FYI)",nm+" · "+perf);
     await loadEmployees(); m.remove(); openLoan(l.id);
+  });
+  const noteSave=document.getElementById("loanNoteSave"); if(noteSave) noteSave.addEventListener("click",async()=>{
+    const v=(document.getElementById("loanNotes")||{}).value||"";
+    noteSave.disabled=true; noteSave.textContent="Saving…";
+    const {error}=await sb.from("loans").update({hr_notes:v,updated_at:new Date().toISOString()}).eq("id",l.id);
+    noteSave.disabled=false; noteSave.textContent="Save note";
+    if(error){ alert(error.message); return; }
+    l.hr_notes=v;
+    const ok=document.getElementById("loanNoteSaved"); if(ok){ ok.style.display=""; setTimeout(()=>{ if(ok) ok.style.display="none"; },2000); }
   });
   // Release is OFF the Director now: Payroll (Grazel) records the PayPlus deduction + marks Released,
   // and only after Accounting (Margie) has uploaded the disbursement proof. Admin can still act as an override.
@@ -2175,10 +2194,11 @@ function openLoan(id){
     await loadEmployees(); m.remove();
   });
   const rej=document.getElementById("loanRej"); if(rej) rej.addEventListener("click",async()=>{
-    const why=prompt("Reject this loan — reason (required):\n\n(e.g. \"already has an active company loan\", \"under the required tenure\", \"documents incomplete\", \"purpose not covered\")");
-    if(why==null) return;                                   // cancelled — no change
-    if(!why.trim()){ alert("A reason is required to reject a loan."); return; }
-    await setLoan({ status:"Rejected", decline_reason:why.trim(), declined_at:new Date().toISOString() });
+    const notesEl=document.getElementById("loanNotes");
+    const why=((notesEl&&notesEl.value)||"").trim();
+    if(!why){ if(notesEl){ notesEl.focus(); notesEl.style.borderColor="#e0b400"; } alert("Write the reason for rejecting in the notes box first — a reason is required and it's kept on record."); return; }
+    if(!confirm("Reject this loan?\n\nReason: “"+why+"”")) return;
+    await setLoan({ status:"Rejected", decline_reason:why, declined_at:new Date().toISOString() });
   });
   const undoRej=document.getElementById("loanUndoRej"); if(undoRej) undoRej.addEventListener("click",async()=>{
     if(!confirm("Undo the rejection and send this loan back to HR Review?")) return;
@@ -2192,14 +2212,15 @@ function openLoan(id){
     await loadEmployees(); m.remove();
   });
   const back=document.getElementById("loanBack"); if(back) back.addEventListener("click",async()=>{
-    const c=prompt("Send back to HR — what should they add or check?\n(e.g. \"attach latest payslip\", \"confirm existing SSS loan balance\", \"missing valid ID\")");
-    if(c==null) return;
-    const stamp=`[Sent back to HR by ${myName()||myEmail()||"reviewer"} · ${fmtDate(new Date().toISOString())}] ${c.trim()}`;
-    const prev=document.getElementById("loanNotes").value;
-    const merged=(prev?prev+"\n":"")+stamp;
+    const notesEl=document.getElementById("loanNotes");
+    const note=((notesEl&&notesEl.value)||"").trim();
+    if(!note){ if(notesEl){ notesEl.focus(); notesEl.style.borderColor="#e0b400"; } alert("Write what HR should add or check in the notes box first — that note travels to HR with the loan when you send it back."); return; }
+    if(!confirm("Send this loan back to HR with your note?\n\n“"+note+"”")) return;
+    back.disabled=true; back.textContent="Sending…";
+    const merged=note+`\n[Sent back to HR by ${myName()||myEmail()||"reviewer"} · ${fmtDate(new Date().toISOString())}]`;
     const {error}=await sb.from("loans").update({status:"HR Review",hr_notes:merged,updated_at:new Date().toISOString()}).eq("id",l.id);
-    if(error){ alert(error.message); return; }
-    await logChange("loan",l.id,l.applicant_name,"Sent back to HR",l.loan_ref+" — "+c.trim().slice(0,80));
+    if(error){ alert(error.message); back.disabled=false; back.textContent="↩ Send back to HR"; return; }
+    await logChange("loan",l.id,l.applicant_name,"Sent back to HR",l.loan_ref+" — "+note.slice(0,80));
     await loadEmployees(); m.remove();
   });
   // Item 1 — Decline with guidance + 3-month cooldown.

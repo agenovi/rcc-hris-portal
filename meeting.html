@@ -55,6 +55,14 @@
       <div><label>Employee No.</label><input id="emp_no" inputmode="numeric" placeholder="e.g. 1248"></div>
       <div><label>Store / branch</label><input id="store" placeholder="e.g. SM San Pablo"></div>
     </div>
+    <label class="req">You are a…</label>
+    <select id="hire_type">
+      <option value="">Choose…</option>
+      <option value="Direct">Direct hire (RCC)</option>
+      <option value="Jell-on">Jell-On agency</option>
+      <option value="M&G">M&amp;G agency</option>
+    </select>
+    <div class="hint">Choose whether you're a direct RCC hire or under an agency. This makes sure your reimbursement is booked to the right group.</div>
 
     <div class="sec">Your reimbursement</div>
     <div class="row2">
@@ -163,8 +171,8 @@ init();
 $("submit").addEventListener("click", async ()=>{
   const msg=$("msg"); msg.className="msg"; msg.style.display="none";
   const req=(id,l)=>{ const v=$(id).value.trim(); if(!v){ msg.className="msg err"; msg.textContent=l+" is required."; msg.style.display="block"; throw 0; } return v; };
-  let name,holder,bank,acct;
-  try{ name=req("name","Full name"); holder=req("account_holder","Account holder name"); bank=req("bank_name","Payout method (GCash or UnionBank)"); acct=req("bank_account_no","Account / GCash number"); }catch(e){ return; }
+  let name,hireType,holder,bank,acct;
+  try{ name=req("name","Full name"); hireType=req("hire_type","Direct / Jell-On / M&G"); holder=req("account_holder","Account holder name"); bank=req("bank_name","Payout method (GCash or UnionBank)"); acct=req("bank_account_no","Account / GCash number"); }catch(e){ return; }
   acct=acct.replace(/[^0-9]/g,""); // digits only
   const bad=(t)=>{ msg.className="msg err"; msg.textContent=t; msg.style.display="block"; };
   if(bank==="GCash" && !/^09\d{9}$/.test(acct)){ bad("GCash number must be exactly 11 digits starting with 09 (e.g. 09171234567). Please check it."); return; }
@@ -172,7 +180,7 @@ $("submit").addEventListener("click", async ()=>{
   if(!$("payout_confirm").checked){ bad("Please tick the box confirming your payout details are correct."); return; }
   const btn=$("submit"); btn.disabled=true; btn.textContent="Signing in…";
   const payload={
-    name, emp_no:$("emp_no").value.trim(), store:$("store").value.trim(),
+    name, hire_type:hireType, emp_no:$("emp_no").value.trim(), store:$("store").value.trim(),
     reimb_transport:$("reimb_transport").value.trim(), reimb_lbc:$("reimb_lbc").value.trim(), route:$("route").value.trim(),
     account_holder:holder, bank_name:bank, bank_account_no:acct,
     ride_pass_b64:ridePassData, ride_pass_type:ridePassType, selfie_b64:selfieData, selfie_type:selfieType

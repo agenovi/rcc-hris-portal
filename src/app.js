@@ -747,8 +747,10 @@ function loanApprover(l){ const t=((l.department||"")+" "+(l.position||"")).toLo
 // Margie (Accounting Officer) signs via her private link. Margie ALSO does the disbursement/release review (below) —
 // she both witnesses the agreement AND uploads the release proof.
 const LOAN_COSIGNERS=[
-  // HR-Officer WITNESS = Juvelyn Belvistre (hr@). Grazel (hr3@, payroll) is NO LONGER a witness — she is the
-  // release RECORDER (payroll deduction), handled separately below. (anj, 2026-08-04)
+  // TWO HR-Officer witnesses (anj, 2026-08-04 — "both"): Grazel Lyn Agulto (hr3@, Payroll — the HR witness on the
+  // paper form) AND Juvelyn Belvistre (hr@, HR Relations — runs the loan). Grazel ALSO records the PayPlus release
+  // deduction separately. Both sign in-portal; Margie (Accounting) signs via her private link.
+  {role:"HR Officer (Payroll)", name:"Grazel Lyn Agulto", email:"hr3@hassarams.com"},
   {role:"HR Officer", name:"Juvelyn Belvistre", email:"hr@hassarams.com"},
   {role:"Accounting Officer", name:"Margie Aliangan", email:"maliangan@hassarams.com"},
 ];
@@ -1183,7 +1185,7 @@ function printLoanAgreement(l){
   // Each signatory's box shows their e-signature inline if signed, else a blank line for wet-signing.
   const _co=(typeof loanCoSigners==="function"?loanCoSigners(l):[]).filter(s=>String((s&&s.status)||"").toLowerCase()==="signed");
   const _coBy=(email)=>_co.find(s=>String((s&&s.signer_email)||"").toLowerCase()===email && s.signature_data);
-  const _hrw=_coBy("hr@hassarams.com"), _mrg=_coBy("maliangan@hassarams.com");   // HR witness = Juvelyn Belvistre (hr@)
+  const _grz=_coBy("hr3@hassarams.com"), _hrw=_coBy("hr@hassarams.com"), _mrg=_coBy("maliangan@hassarams.com");   // witnesses: Grazel (hr3@) + Juvelyn (hr@) + Margie (maliangan@)
   const sigSlot=(name,cap,img,date)=> img
     ? `<div class="sigbox"><img src="${img}" style="max-height:56px;max-width:100%;border-bottom:1px solid #333;background:#fff;"><div class="signame">${name}</div><div class="sigcap">${cap} · <b>e-signed (RA 8792)</b>${date?" · "+E(fmtDate(date)):""}</div></div>`
     : `<div class="sigbox"><div class="sigline"></div><div class="signame">${name}</div><div class="sigcap">${cap} · Date: __________</div></div>`;
@@ -1238,6 +1240,7 @@ function printLoanAgreement(l){
     ${edu?`<div class="sig"><div style="flex:1;min-width:220px;">${sigSlot("","Student/Child · undertaking to repay their share","")}</div></div>`:""}
     <div style="font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#1E3A5F;margin-top:16px;">Witnesseth</div>
     <div class="sig" style="margin-top:6px;">
+      ${sigSlot("GRAZEL LYN AGULTO","Witness · HR Officer (Payroll)",_grz&&_grz.signature_data,_grz&&_grz.signed_at)}
       ${sigSlot("JUVELYN BELVISTRE","Witness · HR Officer",_hrw&&_hrw.signature_data,_hrw&&_hrw.signed_at)}
       ${sigSlot("MARGIE ALIANGAN","Witness · Accounting Officer",_mrg&&_mrg.signature_data,_mrg&&_mrg.signed_at)}
     </div>
@@ -2294,7 +2297,7 @@ function openLoan(id){
   if(fwd) fwd.addEventListener("click",async()=>{
     if(!(l.status==="Approved" && l.mgmt_signature)){ alert("Forward for co-signing is available once the Director has approved & signed this loan."); return; }
     if(loanCoSigners(l).length){ alert("This loan has already been forwarded for co-signing."); return; }
-    if(!confirm("Forward this approved loan to Juvy (HR) and Margie (accounting) for their witness signatures?")) return;
+    if(!confirm("Forward this approved loan to Grazel (HR/Payroll), Juvy (HR), and Margie (Accounting) for their witness signatures?")) return;
     fwd.disabled=true; fwd.textContent="Forwarding…";
     const docHtml="<pre style='white-space:pre-wrap;font-family:sans-serif;font-size:13px;line-height:1.6;'>"+esc(buildLoanAgreement(l,l.mgmt_approver||loanApprover(l)))+"</pre>";
     const rows=LOAN_COSIGNERS.map(cs=>({
@@ -3043,6 +3046,8 @@ const MV_MANAGEMENT=[
 const MV_MGMT_ROLE="Approved by (Management)";
 // Basis of a record: prefer the stored `basis` column, fall back to status inference.
 function mvBasisFor(status){ return status==="memo"?"Operational":((status==="processing"||status==="scheduled")?"Statutory":"Discretionary"); }
+// Sample / demo / training NPA — flagged from its remarks or name so a practice row can never be mistaken for a real personnel action.
+function mvIsDemo(r){ return /\b(sample|demo|test)\b/i.test(String((r&&r.remarks)||""))||/\bdemo\b/i.test(String((r&&r.employee_name)||"")); }
 function mvBasis(r){ if(r&&r.basis){ const b=String(r.basis); return b.charAt(0).toUpperCase()+b.slice(1).toLowerCase(); } return mvBasisFor(r&&r.status); }
 // The ordered chain for a record — from `signers`, or a safe default (Grazel → Anj).
 function mvChain(r){
@@ -3109,6 +3114,7 @@ function renderMovements(){
   const batchCardsHtml=batchArr.map(b=>{ const rows=b.rows, tot=rows.length;
     const ap=rows.filter(r=>r.status==="approved").length, aw=rows.filter(r=>r.status==="awaiting_signoff").length, cx=rows.filter(r=>r.status==="cancelled").length, mo=rows.filter(r=>r.status==="memo").length;
     const eff=rows[0].effective_date, label=mvBatchLabel(rows[0]);
+    const dcount=rows.filter(mvIsDemo).length;
     const awRows=rows.filter(r=>r.status==="awaiting_signoff"); const myTurn=awRows.filter(r=>mvCanSignNow(r)).length;
     const nexts=[...new Set(awRows.map(r=>{ const s=mvNextStep(r); return s?(s.name||s.role||""):""; }).filter(Boolean))];
     const step=myTurn?`▶ <b>Your turn</b> — ${myTurn} to sign`:(aw?`⏳ Waiting on <b>${esc(nexts.join(", ")||"the next signer")}</b>`:(ap===tot?`✓ <b>Complete</b> — all approved`:(cx?`✓ Done — remainder cancelled`:"—")));
@@ -3116,7 +3122,7 @@ function renderMovements(){
     const sel=MV_FILTER===b.key;
     return `<div class="mvbatch" data-bk="${esc(b.key)}" style="cursor:pointer;border:1px solid ${sel?"#2f9e5f":"#e2ebe5"};background:${sel?"#f2faf5":"#fff"};border-radius:11px;padding:12px 14px;margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;">
-        <div style="font-weight:800;color:#12352a;">${esc(label)} <span class="note" style="display:inline;font-weight:600;">— effective ${eff?fmtDate(eff):"—"}</span></div>
+        <div style="font-weight:800;color:#12352a;">${esc(label)}${dcount?` <span class="pill" style="background:#fff3cd;color:#8a6d00;border:1px solid #f0d98a;font-size:9.5px;font-weight:800;letter-spacing:.3px;">⚠ SAMPLE${dcount<tot?" ×"+dcount:""}</span>`:""} <span class="note" style="display:inline;font-weight:600;">— effective ${eff?fmtDate(eff):"—"}</span></div>
         <div class="note" style="display:inline;">${tot} staff${sel?" · ▼ showing below":""}</div></div>
       <div style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:#eef0ef;margin:8px 0 6px;">${seg(ap,"#2f9e5f")}${seg(aw,"#e0a92a")}${seg(cx,"#b9c0c7")}${seg(mo,"#8fa7d8")}</div>
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12.5px;">
@@ -3171,7 +3177,7 @@ function renderMovements(){
           const nextS=mvNextStep(r); const waitName=nextS?(nextS.name?nextS.name+(nextS.role?" ("+nextS.role+")":""):(nextS.role||"another signer")):"";
           return `<tr class="clickable" data-nid="${esc(String(r.id))}">
           <td class="mvchk-cell" style="text-align:center;">${canSign?`<input type="checkbox" class="mvchk" data-nid="${esc(String(r.id))}" data-cur="${curPay}" data-new="${newPay}" data-cat="${esc(mvCat(r))}" data-waiting="${esc(waitName)}" data-cansign="1" checked>`:""}</td>
-          <td><b>${esc(r.employee_name||"—")}</b><div class="esub">${esc(r.current_position||"")}${r.employee_number?" · "+esc(r.employee_number):""}</div></td>
+          <td><b>${esc(r.employee_name||"—")}</b>${mvIsDemo(r)?' <span class="pill" style="background:#fff3cd;color:#8a6d00;border:1px solid #f0d98a;font-size:9.5px;font-weight:800;letter-spacing:.3px;">⚠ SAMPLE</span>':""}<div class="esub">${esc(r.current_position||"")}${r.employee_number?" · "+esc(r.employee_number):""}</div></td>
           <td>${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"—")}<div class="esub">${esc(mvBasis(r))}</div></td>
           <td>${r.effective_date?fmtDate(r.effective_date):"—"}</td>
           <td>${mvStatusPill(r.status)}</td>

@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785940366";
+window.APP_BUILD="1785941181";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785940366" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785941181" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -11371,43 +11371,97 @@ function meetingRosterPanel(viewDate,active){
     </tr>`; }).join("")}
     </tbody></table></div></div>`;
 }
+// Resolve a merchandiser's email from the employee roster (by PayPlus id, else by name). "" if none.
+function mtgEmailFor(row){
+  const emp=String(row.emp_no||"").replace(/\.0$/,"");
+  let e=null;
+  if(emp) e=(EMPLOYEES||[]).find(x=>String(x.employee_id||"").replace(/\.0$/,"")===emp);
+  if(!e) e=(EMPLOYEES||[]).find(x=>mNorm(x.full_name)===mNorm(row.name));
+  return e&&e.email?String(e.email).trim():"";
+}
 function meetingAbsenteePanel(viewDate,active){
   const roster=meetingRosterFor(viewDate); if(!viewDate||!roster.length) return "";
   const label=(active&&active.date===viewDate&&active.label)||(roster[0]&&roster[0].meeting_label)||"Monthly Merchandiser Meeting";
   const absent=roster.filter(r=>r.expected && !mAttended(r))
     .sort((a,b)=>String(a.store||"~").localeCompare(String(b.store||"~"))||String(a.name).localeCompare(String(b.name)));
+  const excused=roster.filter(r=>!r.expected && r.excuse_note && !mAttended(r))
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name)));
   const open=active&&active.open&&active.date===viewDate;
   const firsts=absent.filter(r=>meetingMissHistory(r.emp_no,r.name,viewDate).missed<2 && meetingNoticeState(r,viewDate).state==="none").length;
   const repeats=absent.filter(r=>meetingMissHistory(r.emp_no,r.name,viewDate).missed>=2 && meetingNoticeState(r,viewDate).state==="none").length;
+  const emailable=absent.filter(r=>mtgEmailFor(r) && !r.notice_emailed_at).length;
+  const noEmail=absent.filter(r=>!mtgEmailFor(r)).length;
   return `<div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
       <h2 style="margin:0;">Did not attend · ${fmtDate(viewDate)}</h2>
-      <div class="psub" style="margin:0;"><b>${absent.length}</b> absent of ${roster.filter(r=>r.expected).length} expected</div>
+      <div class="psub" style="margin:0;"><b>${absent.length}</b> absent of ${roster.filter(r=>r.expected).length} expected${excused.length?` · ${excused.length} excused (office informed)`:""}</div>
     </div>
     ${open?`<div class="note" style="margin-top:10px;">Sign-in is still <b>open</b> — close it (top of page) before serving notices, so late sign-ins aren't wrongly flagged absent.</div>`:""}
     ${absent.length?`
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;">
-      ${firsts?`<button class="btn ghost" style="${SBTN}" onclick="mtgReminderAll('${esc(viewDate)}')">Send reminder to all first-time absentees (${firsts})</button>`:""}
-      ${repeats?`<button class="btn" style="${SBTN}" onclick="mtgNteAll('${esc(viewDate)}')">Send NTE to all repeat absentees (${repeats})</button>`:""}
+      ${emailable?`<button class="btn" style="${SBTN}" onclick="mtgEmailNoticeAll('${esc(viewDate)}')">✉ Email notice to all absentees (${emailable})</button>`:""}
+      ${firsts?`<button class="btn ghost" style="${SBTN}" onclick="mtgReminderAll('${esc(viewDate)}')">Print reminder — first-timers (${firsts})</button>`:""}
+      ${repeats?`<button class="btn ghost" style="${SBTN}" onclick="mtgNteAll('${esc(viewDate)}')">NTE for sign-off — repeats (${repeats})</button>`:""}
     </div>
+    ${noEmail?`<div class="psub" style="margin:-4px 0 8px;">${noEmail} absentee${noEmail===1?"":"s"} have no email on file — use <b>Print</b> on their row to serve the notice.</div>`:""}
     <div style="overflow-x:auto;">
-    <table><thead><tr><th>Name</th><th>Store</th><th>Missed</th><th>Notice</th><th style="min-width:230px;">Action</th></tr></thead><tbody>
+    <table><thead><tr><th>Name</th><th>Store</th><th>Missed</th><th style="min-width:280px;">Notice</th></tr></thead><tbody>
     ${absent.map(r=>{ const h=meetingMissHistory(r.emp_no,r.name,viewDate); const repeat=h.missed>=2; const st=meetingNoticeState(r,viewDate);
       const badge=repeat?`<span class="pill" style="background:#fdeaea;color:#a4322a;font-weight:700;">${h.missed}× missed</span>`:`<span class="pill" style="background:#fdf0d9;color:#9a6a00;font-weight:700;">1st miss</span>`;
-      let action;
-      if(st.kind==="nte"){ action = st.state==="signed"
-          ? `<span class="pill active">NTE signed ✓</span> <button class="btn ghost" style="${SBTN}" onclick="mtgPrintSignedNte('${st.sig.id}')">Print signed NTE</button>`
-          : st.state==="declined" ? `<span class="pill awol">NTE declined</span> <button class="btn ghost" style="${SBTN}" onclick="mtgSendNte('${r.id}')">Re-send</button>`
+      const email=mtgEmailFor(r);
+      const emailBtn = r.notice_emailed_at ? `<span class="pill active">✓ emailed</span>`
+        : (email ? `<button class="btn" style="${SBTN}" onclick="mtgEmailNotice('${r.id}')">✉ Email notice</button>`
+                 : `<button class="btn ghost" style="${SBTN}" onclick="mtgSendNte('${r.id}')">Print notice</button> <span class="psub" style="margin:0;">(no email)</span>`);
+      let signoff="";
+      if(st.kind==="nte"){ signoff = st.state==="signed"
+          ? `<span class="pill active">NTE signed ✓</span> <button class="btn ghost" style="${SBTN}" onclick="mtgPrintSignedNte('${st.sig.id}')">Print</button>`
+          : st.state==="declined" ? `<span class="pill awol">NTE declined</span>`
           : `<span class="pill probation">NTE awaiting sign-off</span>`;
-      } else if(st.kind==="reminder"){ action = `<span class="pill active">Reminder sent ✓</span> <button class="btn ghost" style="${SBTN}" onclick="mtgSendReminder('${r.id}')">Reprint</button>${repeat?` <button class="btn" style="${SBTN}" onclick="mtgSendNte('${r.id}')">Escalate to NTE</button>`:""}`;
-      } else if(repeat){ action = `<button class="btn" style="${SBTN}" onclick="mtgSendNte('${r.id}')">Send NTE (repeat)</button> <button class="btn ghost" style="${SBTN}" onclick="mtgSendReminder('${r.id}')">Reminder instead</button>`;
-      } else { action = `<button class="btn ghost" style="${SBTN}" onclick="mtgSendReminder('${r.id}')">Send reminder</button> <button class="btn ghost" style="${SBTN}" onclick="mtgSendNte('${r.id}')">Escalate to NTE</button>`; }
-      return `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.store||"—")}</td><td>${badge}<br><span class="psub" style="margin:0;font-size:11px;">missed ${h.missed} of ${h.expected}</span></td><td>${st.state==="none"?'<span class="psub" style="margin:0;">—</span>':""}</td><td>${action}</td></tr>`;
+      } else if(st.kind==="reminder"){ signoff = `<span class="pill active">Reminder sent ✓</span>`; }
+      const excuseBtn=`<button class="btn ghost" style="${SBTN}" onclick="mtgExcuse('${r.id}')">Office was informed</button>`;
+      return `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.store||"—")}</td>
+        <td>${badge}<br><span class="psub" style="margin:0;font-size:11px;">missed ${h.missed} of ${h.expected}</span></td>
+        <td><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">${emailBtn} ${excuseBtn} ${signoff}</div></td></tr>`;
     }).join("")}
-    </tbody></table></div>`
+    </tbody></table></div>
+    ${excused.length?`<div class="psub" style="margin-top:10px;"><b>Excused (office was informed):</b> ${excused.map(r=>`${esc(r.name)} <a href="#" onclick="mtgUnexcuse('${r.id}');return false;" style="color:#1E3A5F;">↩ undo</a>`).join(" · ")}</div>`:""}`
     : `<div class="placeholder" style="margin-top:12px;"><h2>Everyone expected attended 🎉</h2><p>No absentees for this meeting.</p></div>`}
   </div>`;
 }
+// Mark an absentee excused because the office was informed → drops them off the absentee list + any notice/email.
+window.mtgExcuse=async(id)=>{
+  const row=(MEETING_ROSTER||[]).find(r=>String(r.id)===String(id)); if(!row) return;
+  const note=prompt('Mark "'+row.name+'" excused — the office was informed of this absence. Reason (optional):',"Office was informed"); if(note===null) return;
+  await sb.from("meeting_roster").update({expected:false, excuse_note:note||"Office was informed"}).eq("id",id);
+  row.expected=false; row.excuse_note=note||"Office was informed"; renderMeetings();
+};
+window.mtgUnexcuse=async(id)=>{
+  const row=(MEETING_ROSTER||[]).find(r=>String(r.id)===String(id)); if(!row) return;
+  await sb.from("meeting_roster").update({expected:true, excuse_note:null}).eq("id",id);
+  row.expected=true; row.excuse_note=null; renderMeetings();
+};
+// Email a Notice to Explain to absentees (skips excused; those without an email are printed instead).
+async function mtgSendNoticeEmails(rows,date){
+  const a=meetingActive();
+  const label=(a.date===date&&a.label)||(rows[0]&&rows[0].meeting_label)||"Monthly Merchandiser Meeting";
+  const notices=rows.map(r=>{ const h=meetingMissHistory(r.emp_no,r.name,date); return { email:mtgEmailFor(r), name:r.name, store:r.store||"", missed:h.missed, expected:h.expected }; }).filter(n=>n.email);
+  if(!notices.length){ alert("None of these have an email on file — use Print to serve the notice."); return; }
+  let res;
+  try{ const { data, error } = await sb.functions.invoke("meeting-notice-email", { body:{ meeting_date:date, label, days:MEETING_EXPLAIN_DAYS, noted_by:MEETING_NOTED_BY, notices } }); if(error) throw error; res=data; }
+  catch(e){ alert("Couldn't send right now: "+((e&&e.message)||e)); return; }
+  if(res&&res.no_key){ alert("Email isn't switched on yet.\n\nThe notices are ready to go, but the portal still needs the one-time Resend email key before it can send anything (the same key that turns on all portal emails). Once that's set, this button sends them. For now, use Print on each row to serve the notice."); return; }
+  if(!res||!res.ok){ alert("Couldn't send the notices."); return; }
+  const nowIso=new Date().toISOString(); const sentNames=new Set((res.sentList||[]).map(x=>mNorm(x.name)));
+  for(const r of rows){ if(sentNames.has(mNorm(r.name))){ try{ await sb.from("meeting_roster").update({notice_emailed_at:nowIso}).eq("id",r.id); r.notice_emailed_at=nowIso; }catch(_){}} }
+  alert("Emailed "+res.sent+" notice(s)."+(res.failed?"  "+res.failed+" could not be sent.":"")); renderMeetings();
+}
+window.mtgEmailNotice=(id)=>{ const r=(MEETING_ROSTER||[]).find(x=>String(x.id)===String(id)); if(r) mtgSendNoticeEmails([r],r.meeting_date); };
+window.mtgEmailNoticeAll=(date)=>{
+  const absent=meetingRosterFor(date).filter(r=>r.expected && !mAttended(r) && mtgEmailFor(r) && !r.notice_emailed_at);
+  if(!absent.length){ alert("No absentees with an email left to notify."); return; }
+  if(!confirm("Email a Notice to Explain to "+absent.length+" absentee(s) who have an email on file?\n\nAnyone marked “office was informed” is already excluded. Absentees without an email are skipped — print those from their row.")) return;
+  mtgSendNoticeEmails(absent,date);
+};
 window.mtgReminderAll=async(date)=>{
   const roster=meetingRosterFor(date);
   const list=roster.filter(r=>r.expected && !mAttended(r) && meetingMissHistory(r.emp_no,r.name,date).missed<2 && meetingNoticeState(r,date).state==="none");

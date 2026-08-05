@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785902056";
+window.APP_BUILD="1785902256";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785902056" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785902256" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -9610,6 +9610,11 @@ async function transferSet(t,patch,parent,logMsg){
 function canConfirmStoreManning(){ return isAdminUser() || userRole()==='sales' || canManageStores(); }
 // Full-overview sales (Bryan) may CONFIRM manning only for their OWN cluster; on every other store they can view + request changes (approval-gated) only.
 function canConfirmThisStore(b){ if(userRole()==='sales' && manningFullOverview()) return !!(b && b.sc===scForUser()); return canConfirmStoreManning(); }
+// Classify what an opening is FOR — a store LEAD, a RELIEVER (roving), or a STATIONARY diser — so the shortfall reads at a glance.
+function openingKind(o){ const pos=String((o&&o.position)||"").toLowerCase(); if(/lead|supervisor|coordinator/.test(pos)) return "Lead"; if(String((o&&o.diser_type)||"")==="Roving") return "Reliever"; return "Stationary"; }
+function openingKindPill(k){ const m={Lead:'<span class="pill" style="background:#efe6fb;color:#5a3ea8;">Lead</span>',Reliever:'<span class="pill ag">Reliever</span>',Stationary:'<span class="pill di">Stationary</span>'}; return m[k]||m.Stationary; }
+// Sum needed positions grouped by kind across a list of openings.
+function openingKindTotals(list){ const t={Lead:0,Reliever:0,Stationary:0}; (list||[]).forEach(o=>{ t[openingKind(o)]+=(Number(o.count_needed)||0); }); return t; }
 function canConfirmPerson(){ const r=userRole(); return r==="admin"||r==="payroll"; }
 function scChangeLabel(t){ return ({ahc_stationary:"Approved stationary",ahc_reliever:"Approved reliever",status:"Status",sc:"Sales Coordinator",rename:"Rename",close:"Close store",new:"New store",note:"Note / flag",remove_person:"Remove person",add_person:"Add missing person"})[t]||t; }
 async function manningStoreConfirm(store){
@@ -9797,7 +9802,8 @@ function renderManning(){
     ${manningApprovalsPanel()}
     <div class="panel" style="margin-top:0;">
       <h2>Openings <span class="count-tag">${OPENINGS.length} stores · ${OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0)} positions</span></h2>
-      <div class="psub">Manpower requests you post. These drive the agency links — each agency sees the shortfall + an in-review count, then submits candidates into the pipeline.</div>
+      ${(()=>{ const t=openingKindTotals(OPENINGS); return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 6px;">${t.Lead?`${openingKindPill("Lead")} <b>${t.Lead}</b>&nbsp;lead${t.Lead>1?"s":""}`:""}${t.Reliever?`&nbsp;&nbsp;${openingKindPill("Reliever")} <b>${t.Reliever}</b>&nbsp;reliever${t.Reliever>1?"s":""}`:""}${t.Stationary?`&nbsp;&nbsp;${openingKindPill("Stationary")} <b>${t.Stationary}</b>&nbsp;stationary`:""}</div>`; })()}
+      <div class="psub">Manpower requests you post. These drive the agency links — each agency sees the shortfall + an in-review count, then submits candidates into the pipeline. Each need is tagged <b>Lead / Reliever / Stationary</b>.</div>
       <div class="actionbar">${canPostOpenings()?'<button class="btn" id="opNew">+ Post opening</button> ':''}${canManageStores()?'<button class="btn ghost" id="stNew">+ Add store</button>':''}${!canPostOpenings()?'<span class="psub" style="margin:0;">Openings open automatically when someone resigns. You can view and fill them below.</span>':''}</div>
       ${OPENINGS.length?`<table><thead><tr><th>Store</th><th>SC</th><th>Need</th><th>In review</th><th>Posted</th><th>Deadline</th><th></th></tr></thead><tbody id="opRows"></tbody></table>`:`<div class="psub" style="margin-top:6px;">No open requests yet — click “Post opening”.</div>`}
     </div>
@@ -9830,8 +9836,9 @@ function renderManning(){
       if(o.priority==="Urgent"&&!o.target_fill_date) dl=`<span class="pill awol">Urgent</span>`;
       else if(o.target_fill_date) dl=`${fmtDate(o.target_fill_date)}${overdue?' <span class="pill awol">overdue</span>':''}`;
       else dl=`<span class="note">—</span>`;
-      const dtag=o.diser_type==="Roving"?` <span class="pill ag">Roving</span>${o.second_worksite?`<div style="font-size:11px;color:var(--muted);">+ ${esc(o.second_worksite)}</div>`:""}`:` <span class="pill di">Stationary</span>`;
-      return `<tr><td><b>${esc(o.worksite)}</b>${dtag}<div style="font-size:11px;color:var(--muted);margin-top:2px;">${esc(o.position||"Merchandiser")}</div></td><td>${esc(o.sc||"—")}</td><td>${o.count_needed}</td><td>${opInReview(o.worksite)}</td><td>${o.date_posted?fmtDate(o.date_posted):"—"}</td><td>${dl}</td>
+      const kind=openingKind(o);
+      const dtag=`${openingKindPill(kind)}${(o.diser_type==="Roving"&&o.second_worksite)?`<div style="font-size:11px;color:var(--muted);">+ ${esc(o.second_worksite)}</div>`:""}`;
+      return `<tr><td><b>${esc(o.worksite)}</b> ${dtag}<div style="font-size:11px;color:var(--muted);margin-top:2px;">${esc(o.position||"Merchandiser")}</div></td><td>${esc(o.sc||"—")}</td><td><b>${o.count_needed}</b> ${openingKindPill(kind)}</td><td>${opInReview(o.worksite)}</td><td>${o.date_posted?fmtDate(o.date_posted):"—"}</td><td>${dl}</td>
         <td style="text-align:right;white-space:nowrap;">${canPostOpenings()?`<button class="btn ghost" data-opedit="${o.id}">Edit</button> <button class="btn ghost" data-opclose="${o.id}" style="color:var(--red);border-color:#f1c9c5;">Close</button>`:'<span class="note">—</span>'}</td></tr>`;
     }).join("");
     $$("#opRows [data-opedit]").forEach(b=>b.addEventListener("click",()=>openingForm(MANPOWER.find(o=>o.id===b.dataset.opedit))));

@@ -9137,6 +9137,7 @@ async function mtgSendNoticeEmails(rows,date){
   try{ const { data, error } = await sb.functions.invoke("meeting-notice-email", { body:{ meeting_date:date, label, days:MEETING_EXPLAIN_DAYS, noted_by:MEETING_NOTED_BY, notices } }); if(error) throw error; res=data; }
   catch(e){ alert("Couldn't send right now: "+((e&&e.message)||e)); return; }
   if(res&&res.no_key){ alert("Email isn't switched on yet.\n\nThe notices are ready to go, but the portal still needs the one-time Resend email key before it can send anything (the same key that turns on all portal emails). Once that's set, this button sends them. For now, use Print on each row to serve the notice."); return; }
+  if(res&&res.domain_unverified){ alert("Email is switched on — but right now it can only reach anj@hassarams.com. Our company domain still needs to be verified before the portal can email staff (Richard is setting that up).\n\nFor now, use Print on each row to serve the notice. Staff emails will start working automatically once the domain is verified — nothing else to change here."); return; }
   if(!res||!res.ok){ alert("Couldn't send the notices."); return; }
   const nowIso=new Date().toISOString(); const sentNames=new Set((res.sentList||[]).map(x=>mNorm(x.name)));
   for(const r of rows){ if(sentNames.has(mNorm(r.name))){ try{ await sb.from("meeting_roster").update({notice_emailed_at:nowIso}).eq("id",r.id); r.notice_emailed_at=nowIso; }catch(_){}} }

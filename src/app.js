@@ -5022,6 +5022,22 @@ function storeForm(b){
   });
 }
 window.storeForm=storeForm;
+// In-page confirmation (replaces native confirm(), which some browsers silently block → "click does nothing").
+window.uiConfirm=function(message, opts){
+  opts=opts||{};
+  return new Promise(resolve=>{
+    let m=document.getElementById("uiConfirmModal"); if(!m){ m=document.createElement("div"); m.id="uiConfirmModal"; document.body.appendChild(m); }
+    m.style.cssText="position:fixed;inset:0;z-index:10002;background:rgba(14,50,25,.5);display:flex;align-items:center;justify-content:center;padding:22px;";
+    m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:22px;">
+      <div style="font-size:14.5px;line-height:1.5;color:#1b2430;white-space:pre-wrap;">${esc(message)}</div>
+      <div style="display:flex;gap:10px;margin-top:18px;"><button class="btn ghost" id="uicNo" style="flex:1;">${esc(opts.cancel||'Cancel')}</button><button class="btn" id="uicYes" style="flex:1;${opts.danger?'background:#c0392b;border-color:#c0392b;':''}">${esc(opts.ok||'Confirm')}</button></div>
+    </div>`;
+    const done=(v)=>{ m.remove(); resolve(v); };
+    m.addEventListener("click",e=>{ if(e.target===m) done(false); });
+    document.getElementById("uicNo").addEventListener("click",()=>done(false));
+    document.getElementById("uicYes").addEventListener("click",()=>done(true));
+  });
+};
 // Post / edit an employee's daily rate + allowance (manual — PayPlus doesn't expose pay). Payroll/owners only.
 // Accepts an employee object, or a string (matched to id then employee_id). Saves to employees + logs it.
 window.postRate=function(emp){
@@ -7632,7 +7648,7 @@ function manningApprovalsPanel(){
 }
 async function confirmStoreChange(id){
   const c=STORE_CHANGES.find(x=>String(x.id)===String(id)); if(!c) return;
-  if(!confirm("Confirm this change to "+(c.store||"the store")+" and send it up to Anj for approval?")) return;
+  if(!await uiConfirm("Confirm this change to "+(c.store||"the store")+" and send it up to Anj for approval?",{ok:"Confirm"})) return;
   const {error}=await sb.from("store_change_requests").update({ status:"Confirmed", confirmed_by:myEmail(), confirmed_at:new Date().toISOString() }).eq("id",id);
   if(error){ alert(error.message); return; }
   await loadEmployees(); window.go("manning");
@@ -7706,7 +7722,7 @@ function scRequestStoreChange(b){
 window.scRequestStoreChange=scRequestStoreChange;
 async function approveStoreChange(id){
   const c=STORE_CHANGES.find(x=>String(x.id)===String(id)); if(!c) return;
-  if(!confirm("Approve this change to "+(c.store||"the store")+"?")) return;
+  if(!await uiConfirm("Approve this change to "+(c.store||"the store")+"?\n\nThis applies it to the store.",{ok:"Approve"})) return;
   const br=BRANCHES.find(b=>b.name===c.store);
   const t=c.change_type;
   if(t==='new'){ const name=c.new_value||c.store; if(name) await sb.from("branches").insert({ name, status:"Open" }); }
@@ -7800,11 +7816,14 @@ function renderManning(){
       else dl=`<span class="note">—</span>`;
       const kind=openingKind(o);
       const dtag=`${openingKindPill(kind)}${(o.diser_type==="Roving"&&o.second_worksite)?`<div style="font-size:11px;color:var(--muted);">+ ${esc(o.second_worksite)}</div>`:""}`;
-      return `<tr><td><b>${esc(o.worksite)}</b> ${dtag}<div style="font-size:11px;color:var(--muted);margin-top:2px;">${esc(o.position||"Merchandiser")}</div></td><td>${esc(o.sc||"—")}</td><td><b>${o.count_needed}</b> ${openingKindPill(kind)}</td><td>${opInReview(o.worksite)}</td><td>${o.date_posted?fmtDate(o.date_posted):"—"}</td><td>${dl}</td>
-        <td style="text-align:right;white-space:nowrap;">${canPostOpenings()?`<button class="btn ghost" data-opedit="${o.id}">Edit</button> <button class="btn ghost" data-opclose="${o.id}" style="color:var(--red);border-color:#f1c9c5;">Close</button>`:'<span class="note">—</span>'}</td></tr>`;
+      return `<tr class="op-row" data-id="${o.id}" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;"><td><b>${esc(o.worksite)}</b> ${dtag}<div style="font-size:11px;color:var(--muted);margin-top:2px;">${esc(o.position||"Merchandiser")}</div></td><td>${esc(o.sc||"—")}</td><td><b>${o.count_needed}</b> ${openingKindPill(kind)}</td><td>${opInReview(o.worksite)}</td><td>${o.date_posted?fmtDate(o.date_posted):"—"}</td><td>${dl}</td>
+        <td style="text-align:right;white-space:nowrap;">${canPostOpenings()?`<button class="btn ghost op-edit" data-id="${o.id}">Edit</button> <button class="btn ghost op-close" data-id="${o.id}">Close</button> <button class="btn ghost op-del" data-id="${o.id}" style="color:var(--red);border-color:#f1c9c5;">Delete</button>`:'<span class="note">tap to view</span>'}</td></tr>`;
     }).join("");
-    $$("#opRows [data-opedit]").forEach(b=>b.addEventListener("click",()=>openingForm(MANPOWER.find(o=>o.id===b.dataset.opedit))));
-    $$("#opRows [data-opclose]").forEach(b=>b.addEventListener("click",()=>closeOpening(MANPOWER.find(o=>o.id===b.dataset.opclose))));
+    $$("#opRows .op-edit").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); openingForm(MANPOWER.find(o=>o.id===b.dataset.id)); }));
+    $$("#opRows .op-close").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); closeOpening(MANPOWER.find(o=>o.id===b.dataset.id)); }));
+    $$("#opRows .op-del").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); deleteOpening(MANPOWER.find(o=>o.id===b.dataset.id)); }));
+    // Whole row clickable: posters edit the opening; everyone else opens the store.
+    $$("#opRows .op-row").forEach(tr=>tr.addEventListener("click",()=>{ const o=MANPOWER.find(x=>x.id===tr.dataset.id); if(canPostOpenings()&&o) return openingForm(o); const br=BRANCHES.find(x=>x.name===tr.dataset.ws); if(br) openStore(br); }));
   }
   const paint=()=>{
     const list=(scFilter==="All"?SCs:[scFilter]);
@@ -7913,14 +7932,22 @@ function openingForm(o){
     m.remove(); await loadEmployees();
   });
 }
-function closeOpening(o){
+async function closeOpening(o){
   if(!o) return;
-  if(!confirm("Close the opening for "+o.worksite+"? It will stop showing on the agency links.")) return;
-  sb.from("manpower_requests").update({status:"Filled", updated_at:new Date().toISOString()}).eq("id",o.id).then(async({error})=>{
-    if(error){ alert(error.message); return; }
-    await loadEmployees();
-  });
+  if(!await uiConfirm("Close the opening for "+o.worksite+"?\n\nIt will stop showing on the agency links (use this when the position has been filled).",{ok:"Close opening"})) return;
+  const {error}=await sb.from("manpower_requests").update({status:"Filled", updated_at:new Date().toISOString()}).eq("id",o.id);
+  if(error){ alert(error.message); return; }
+  await loadEmployees(); window.go("manning");
 }
+// Hard-delete an opening (for one added by mistake). Use Close when it was actually filled.
+async function deleteOpening(o){
+  if(!o) return;
+  if(!await uiConfirm("Delete the opening for "+(o.worksite||"this store")+"?\n\nThis removes it entirely. If the position was actually filled, use Close instead so it stays on record.",{ok:"Delete",danger:true})) return;
+  const {error}=await sb.from("manpower_requests").delete().eq("id",o.id);
+  if(error){ alert(error.message); return; }
+  await loadEmployees(); window.go("manning");
+}
+window.deleteOpening=deleteOpening;
 
 /* ---------- GLOBAL SEARCH (topbar) — universal, access-gated ---------- */
 // One bar: type any name/word/ref and it pulls matches from every module the

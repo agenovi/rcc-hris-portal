@@ -10483,10 +10483,6 @@ function phBodyPipeline(){
     <div class="psub" style="margin-top:12px;">Seven stages, left → right (Applied → Hired). Click any card to open the candidate and advance the stage. Onboarding is a separate phase.</div>
     <div class="pipe">${cols}</div>
     <div class="two-col" style="margin-top:14px;">
-      <div class="panel" style="margin-top:0;"><h2>Agency Submissions — the two-way loop</h2>
-        <div class="psub">RCC posts an open slot → Jell-on &amp; M&amp;G propose candidates → RCC approves → candidate enters this pipeline</div>
-        <div class="task"><div class="dot g"></div><div><div class="tt">How it connects</div><div class="td">An approved agency candidate is created here at <b>Applied</b>, with Hire Source = the proposing agency. The agency login only sees its own submissions.</div></div></div>
-      </div>
       <div class="panel" style="margin-top:0;"><h2>Hard Gate — SM / Retail-Ops Acceptance</h2>
         <div class="psub">For consigned (concession) merchandisers, the host store must accept before pre-hire can close</div>
         ${(()=>{ const all=PREHIRE.filter(p=>p.sm_acceptance&&p.sm_acceptance!=="NA"); const acc=all.filter(p=>p.sm_acceptance==="Accepted").length; const pend=all.filter(p=>p.sm_acceptance!=="Accepted"); return (acc?`<div class="psub" style="color:var(--green-dark);margin-bottom:6px;">✓ ${acc} accepted — gate passed, cleared from the list</div>`:"")+(pend.length?pend.map(p=>`<div class="task"><div class="dot ${p.sm_acceptance==='Rejected'?'r':'a'}"></div><div><div class="tt">${esc(p.full_name)} · ${esc(p.worksite||"—")}</div><div class="td">SM acceptance: ${esc(p.sm_acceptance)}</div></div></div>`).join(""):'<div class="psub">Nothing awaiting SM acceptance.</div>'); })()}

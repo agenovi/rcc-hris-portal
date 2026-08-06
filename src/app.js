@@ -128,6 +128,11 @@ const RECRUITER_PAGES=["dashboard","manning","prehire","onboarding","reports"];
 const RELATIONS_PAGES=["dashboard","onboarding","evaluations","exit","compliance","memos","signatures","loans","timekeeping"];
 // HR Manager (Rhel) — oversees the whole department: every page except owner-only Settings.
 const MANAGER_PAGES=["dashboard","employees","branches","prehire","contracts","onboarding","evaluations","loans","exit","manning","compliance","signatures","memos","reports","timekeeping"];
+// REVIEW LOCK: while the portal is under review, Rhel (hr4@) is scoped to ONLY his assigned review modules
+// (+ Dashboard) so he stays focused and can't wander into other modules. Fully reversible — delete this pair to restore.
+// Manning carries Store Transfers & Deployments; Pre-hire carries the Talent Pool; Movements = NPA; Meetings = Merchandiser meeting.
+const REVIEW_PAGES=["dashboard","movements","storemap","evaluations","prehire","meetings"];
+function isReviewLockedUser(){ return ((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()==="hr4@hassarams.com"; }
 // Per-person extra pages on top of their role. Vina = sole bank/gov encoder → needs the Employees directory to enter/correct those numbers (salary stays masked for her).
 const EXTRA_PAGES_BY_EMAIL={ "hr2@hassarams.com":["employees"], "bsabila@hassarams.com":["meetings"] };  // Bryan (SC): Manning + runs the merchandiser Meeting on-site
 function allowedPages(){ const r=userRole(); if(r==="admin") return null;
@@ -140,7 +145,7 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
-function pageAllowed(id){ if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='incidents') return canSeeIncidents(); if(id==='hmo') return canSeeHmo(); if(id==='separations') return canSeeSeparations(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='cosign') return !!CURRENT_USER; if(id==='processes') return isAdminUser(); /* Processes & SOPs locked to admin (anj) — parked while priority modules are worked; removed from HR/Rhel for now */ if(id==='policies'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(isReviewLockedUser()) return REVIEW_PAGES.indexOf(id)!==-1; if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='incidents') return canSeeIncidents(); if(id==='hmo') return canSeeHmo(); if(id==='separations') return canSeeSeparations(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='cosign') return !!CURRENT_USER; if(id==='processes') return isAdminUser(); /* Processes & SOPs locked to admin (anj) — parked while priority modules are worked; removed from HR/Rhel for now */ if(id==='policies'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
@@ -161,6 +166,12 @@ function applyRoleUI(){
     document.querySelectorAll('.nav-item[data-page]').forEach(n=>{ n.style.display=(salesAllow.indexOf(n.getAttribute('data-page'))!==-1)?'':'none'; });
     document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display='none'; });
     const ts=document.querySelector('.topbar .search'); if(ts) ts.style.display='none';
+    return;
+  }
+  // Review lock (Rhel hr4@): show ONLY his assigned review modules + Dashboard; hide everything else.
+  if(isReviewLockedUser()){
+    document.querySelectorAll('.nav-item[data-page]').forEach(n=>{ n.style.display=(REVIEW_PAGES.indexOf(n.getAttribute('data-page'))!==-1)?'':'none'; });
+    document.querySelectorAll('.nav-sec').forEach(s=>{ s.style.display='none'; });
     return;
   }
   const allow=allowedPages(), limited=isLimitedUser();

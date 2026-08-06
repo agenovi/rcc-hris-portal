@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1786009223";
+window.APP_BUILD="1786009458";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1786009223" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1786009458" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -7956,7 +7956,7 @@ function renderOrgChart(){
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
         <div class="kpi"><div class="k-l">Departments</div><div class="k-n">${depts.length}</div></div>
         <div class="kpi"><div class="k-l">Supervisors</div><div class="k-n">${supRefs.size}</div></div>
-        <div class="kpi"><div class="k-l">Active staff</div><div class="k-n">${ACT.length}</div></div>
+        <div class="kpi"><div class="k-l">Active staff</div><div class="k-n">${ACT.filter(e=>e.group_name!=="Leadership").length}</div></div>
         <div class="kpi ${noSup.length?"warn":""}"><div class="k-l">No supervisor set</div><div class="k-n">${noSup.length}</div><div class="k-s">reporting line blank</div></div>
       </div>
       ${(noSup.length||deptsNoHead.length)?`<div class="psub" style="margin:6px 0 0;color:#8a5a1c;">⚠ Data gaps: ${noSup.length?`<b>${noSup.length}</b> staff have no supervisor set`:""}${(noSup.length&&deptsNoHead.length)?" · ":""}${deptsNoHead.length?`<b>${deptsNoHead.length}</b> department${deptsNoHead.length!==1?"s have":" has"} no head assigned (${esc(deptsNoHead.slice(0,6).join(", "))}${deptsNoHead.length>6?"…":""})`:""}. Fill <i>Supervisor</i> / <i>Department head</i> on the employee record to complete the chart.</div>`:""}
@@ -8444,6 +8444,7 @@ function renderConcerns(){
   const byStatus=s=>CONCERNS.filter(c=>c.status===s).length;
   const openOngoing=CONCERNS.filter(c=>["Open","Pending","Ongoing"].includes(c.status)).length;
   const cForSettle=byStatus("For settlement/payment"), cSettled=byStatus("Settled"), cDismissed=byStatus("Dismissed"), cArchived=byStatus("Archived");
+  const cOther=CONCERNS.filter(c=>["Closed","Withdrawn","Awarded"].includes(c.status)).length; // catch-all so every case reconciles to a tile
   const sorted=CONCERNS.slice().sort((a,b)=>{
     const rank=s=>(s==="Open"||s==="Ongoing")?0:1;
     if(rank(a.status)!==rank(b.status)) return rank(a.status)-rank(b.status);
@@ -8464,11 +8465,12 @@ function renderConcerns(){
         <div class="kpi ${soon.length?"warn":""}"><div class="k-l">Hearing ≤ 14 days</div><div class="k-n">${soon.length}</div></div>
         <div class="kpi"><div class="k-l">Exposure (active)</div><div class="k-n" style="font-size:20px;">${exposure?peso(exposure):"—"}</div></div>
       </div>
-      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-top:10px;">
+      <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);margin-top:10px;">
         <div class="kpi"><div class="k-l">For settlement / payment</div><div class="k-n">${cForSettle}</div></div>
         <div class="kpi"><div class="k-l">Settled</div><div class="k-n">${cSettled}</div></div>
         <div class="kpi"><div class="k-l">Dismissed</div><div class="k-n">${cDismissed}</div></div>
         <div class="kpi"><div class="k-l">Archived</div><div class="k-n">${cArchived}</div></div>
+        <div class="kpi"><div class="k-l">Closed / other</div><div class="k-n">${cOther}</div><div class="k-s">Closed · Withdrawn · Awarded</div></div>
       </div>
       <input id="cxSearch" class="search" style="width:100%;margin:12px 0 4px;" placeholder="Search case, employee, forum, counsel…">
       ${CONCERNS.length?`<table style="margin-top:6px;"><thead><tr><th>Case</th><th>Employee</th><th>Type</th><th>Status</th><th>Next hearing</th><th>Exposure</th></tr></thead>

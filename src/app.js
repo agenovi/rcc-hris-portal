@@ -11741,6 +11741,10 @@ async function saveExitCase(x,modal,mode){
   if(release){
     // Separation of duties: the person who APPROVES the amount (Director) is not the releaser. Juvy (HR Relations) records it.
     if(!canReleaseFinalPay()){ document.getElementById("exMsg").textContent="Only HR (Juvy) or the Director can record the final-pay release."; return; }
+    // NO BYPASS — the separation itself must be Director-approved before anything closes, for EVERY case.
+    // A ₱0 net may just be un-keyed figures or an error, so it must NOT self-close. HR can record a release
+    // only AFTER the Director has approved the separation; only the Director's approval flips a person to Separated.
+    if(x.separation_status!=="Approved" && !isAdminUser()){ document.getElementById("exMsg").textContent="The Director must approve this separation first — use “Submit separation for approval”, then the Director approves. A release can only be recorded after that."; return; }
     const netDue=Number(o.net_payable||0);
     // When there's money to pay out, enforce the full evidence chain. A ₱0 case (nothing owed) can just close.
     if(netDue>0){
@@ -11754,7 +11758,7 @@ async function saveExitCase(x,modal,mode){
     const who=(CURRENT_USER&&CURRENT_USER.email)||"HR";
     o.released=true; o.released_at=now; o.released_by=who; o.release_proof=_exReleaseProof.slice(); o.release_signature=_exReleaseSig||null; o.final_pay_release_date=now;
     o.overall_status="Complete"; o.completion_date=now;
-    if(o.separation_status!=="Approved"){ o.separation_status="Approved"; o.separation_approved_by=who; o.separation_approved_at=now; }
+    if(o.separation_status!=="Approved" && isAdminUser()){ o.separation_status="Approved"; o.separation_approved_by=who; o.separation_approved_at=now; }
   }
   const { error } = await sb.from("exit_clearance").update(o).eq("id",x.id);
   if(error){ document.getElementById("exMsg").textContent=error.message; return; }

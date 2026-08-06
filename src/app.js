@@ -6068,6 +6068,10 @@ function renderConcerns(){
   const active=activeCases();
   const soon=CONCERNS.filter(c=>{ const n=daysUntil(c.next_hearing); return n!=null && n>=0 && n<=14 && c.status!=="Closed"&&c.status!=="Settled"&&c.status!=="Dismissed"&&c.status!=="Withdrawn"; });
   const exposure=active.reduce((s,c)=>s+(Number(c.exposure)||0),0);
+  // Status summary counts (Juvy's request) — open & ongoing kept separate from the resolved buckets.
+  const byStatus=s=>CONCERNS.filter(c=>c.status===s).length;
+  const openOngoing=CONCERNS.filter(c=>["Open","Pending","Ongoing"].includes(c.status)).length;
+  const cForSettle=byStatus("For settlement/payment"), cSettled=byStatus("Settled"), cDismissed=byStatus("Dismissed"), cArchived=byStatus("Archived");
   const sorted=CONCERNS.slice().sort((a,b)=>{
     const rank=s=>(s==="Open"||s==="Ongoing")?0:1;
     if(rank(a.status)!==rank(b.status)) return rank(a.status)-rank(b.status);
@@ -6084,9 +6088,15 @@ function renderConcerns(){
         <button class="btn" id="cxNew">＋ New concern / case</button>
       </div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);margin-top:12px;">
-        <div class="kpi ${active.length?"warn":""}"><div class="k-l">Open / Ongoing</div><div class="k-n">${active.length}</div></div>
+        <div class="kpi ${openOngoing?"warn":""}"><div class="k-l">Open &amp; ongoing</div><div class="k-n">${openOngoing}</div></div>
         <div class="kpi ${soon.length?"warn":""}"><div class="k-l">Hearing ≤ 14 days</div><div class="k-n">${soon.length}</div></div>
         <div class="kpi"><div class="k-l">Exposure (active)</div><div class="k-n" style="font-size:20px;">${exposure?peso(exposure):"—"}</div></div>
+      </div>
+      <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-top:10px;">
+        <div class="kpi"><div class="k-l">For settlement / payment</div><div class="k-n">${cForSettle}</div></div>
+        <div class="kpi"><div class="k-l">Settled</div><div class="k-n">${cSettled}</div></div>
+        <div class="kpi"><div class="k-l">Dismissed</div><div class="k-n">${cDismissed}</div></div>
+        <div class="kpi"><div class="k-l">Archived</div><div class="k-n">${cArchived}</div></div>
       </div>
       <input id="cxSearch" class="search" style="width:100%;margin:12px 0 4px;" placeholder="Search case, employee, forum, counsel…">
       ${CONCERNS.length?`<table style="margin-top:6px;"><thead><tr><th>Case</th><th>Employee</th><th>Type</th><th>Status</th><th>Next hearing</th><th>Exposure</th></tr></thead>

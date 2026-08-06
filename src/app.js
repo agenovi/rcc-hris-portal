@@ -1805,6 +1805,9 @@ function openLoan(id){
     const govtRows=rows.filter(r=>r.status==="Active"&&isGovtLoan(r.loan_type));
     const rccOut=rccRows.reduce((s,r)=>s+Number(r.outstanding||0),0);
     const rccMon=rccRows.reduce((s,r)=>s+Number(r.monthly_deduction||0),0);
+    // #5 fix — the headline verdict badge is built before loan history loads, so it can't see an active
+    // company loan. Reflect the clear-first rule up top: if there's an outstanding RCC loan, force RED.
+    if(rccOut>0){ const bv=document.getElementById("loanVerdict"); if(bv){ bv.dataset.lvl="red"; bv.style.background="#fdecea"; bv.style.borderColor="#f1c9c5"; bv.style.color="#a12622"; bv.innerHTML=`<div style="font-size:15px;font-weight:800;">⛔ Not eligible — clear the existing company loan first</div><div style="font-weight:500;font-size:12.5px;margin-top:2px;opacity:.92;">${peso(rccOut)} outstanding on a company loan.</div>`; } }
     const govtOut=govtRows.reduce((s,r)=>s+Number(r.outstanding||0),0);
     const govtMon=govtRows.reduce((s,r)=>s+Number(r.monthly_deduction||0),0);
     // Item 4 — recurrence signal: a previous row of the same loan_type + overlapping purpose/note as THIS request

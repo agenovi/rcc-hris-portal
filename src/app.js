@@ -8671,6 +8671,7 @@ function renderEvaluations(){
 }
 function openEvalForm(empId,type,due){
   const e=EMPLOYEES.find(x=>String(x.id)===String(empId)); if(!e) return;
+  const tpl0=evalTemplateFor(e);
   const recs=EVAL_RECS[type]||["Meets expectations"];
   let m=document.getElementById("evalModal"); if(!m){ m=document.createElement("div"); m.id="evalModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
@@ -8682,7 +8683,9 @@ function openEvalForm(empId,type,due){
     </div>
     <div style="padding:18px 22px 60px;">
       <div class="panel" style="margin-top:0;"><h2>Ratings</h2>
-        ${EVAL_CRITERIA.map((c,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);"><span style="font-size:13.5px;">${c}</span>${ratingSel("ev_r"+i)}</div>`).join("")}
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:0 0 4px;">Evaluation type <span style="font-weight:400;">— auto-selected by role; change if needed</span></label>
+        <select id="ev_tpl" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;background:#fff;margin-bottom:10px;">${Object.keys(EVAL_TEMPLATES).map(k=>`<option value="${k}" ${k===tpl0.key?"selected":""}>${EVAL_TEMPLATES[k].label}</option>`).join("")}</select>
+        <div id="ev_crit"></div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0 2px;"><span style="font-size:13.5px;font-weight:700;">Overall</span>${ratingSel("ev_overall")}</div>
       </div>
       <div class="panel"><h2>Recommendation</h2>
@@ -8694,13 +8697,17 @@ function openEvalForm(empId,type,due){
         <div style="display:flex;gap:10px;"><button class="btn" id="evSave">Save evaluation</button><button class="btn ghost" id="evClose" style="margin-left:auto;">Close</button></div>
       </div>
     </div></div>`;
+  const paintCrit=()=>{ const k=$("#ev_tpl").value; const crit=(EVAL_TEMPLATES[k]||EVAL_TEMPLATES.rankfile).criteria; $("#ev_crit").innerHTML=crit.map((c,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);"><span style="font-size:13.5px;">${esc(c)}</span>${ratingSel("ev_r"+i)}</div>`).join(""); };
+  paintCrit();
+  $("#ev_tpl").addEventListener("change",paintCrit);
   $("#evClose").addEventListener("click",()=>m.remove());
   m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
   $("#evSave").addEventListener("click",async()=>{
     const btn=$("#evSave"); btn.disabled=true; btn.textContent="Saving…";
-    const ratings={}; EVAL_CRITERIA.forEach((c,i)=>{ const val=document.getElementById("ev_r"+i).value; if(val) ratings[c]=Number(val); });
+    const _tk=$("#ev_tpl").value; const _crit=(EVAL_TEMPLATES[_tk]||EVAL_TEMPLATES.rankfile).criteria;
+    const ratings={}; _crit.forEach((c,i)=>{ const el=document.getElementById("ev_r"+i); const val=el?el.value:""; if(val) ratings[c]=Number(val); });
     const ov=document.getElementById("ev_overall").value;
-    const row={ employee_ref:e.id, employee_name:e.full_name, position:e.position||e.department||null, eval_type:type, period_due:due,
+    const row={ employee_ref:e.id, employee_name:e.full_name, position:e.position||e.department||null, eval_type:type, period_due:due, eval_scope:_tk,
       overall_rating: ov?Number(ov):null, ratings, recommendation:document.getElementById("ev_rec").value,
       strengths:evVal("ev_str"), improvements:evVal("ev_imp"), evaluator:evVal("ev_by"), eval_date:evIso(new Date()), is_demo:!!e.is_demo };
     await logChange("evaluation",e.id,e.full_name,"Recorded",EVAL_LABEL[type]+" · "+(row.recommendation||"")+(row.overall_rating?" · "+row.overall_rating+"/5":""));

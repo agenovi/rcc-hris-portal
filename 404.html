@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1786009458";
+window.APP_BUILD="1786010463";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1786009458" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1786010463" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -12975,7 +12975,7 @@ function defaultOnbTasks(c){
   const isSM=/\bSM\b|dept|department/i.test((c.worksite||"")+" "+(c.position||""));
   const t=[
     {task_key:"schedule",   label:"Set Day-1 plan / schedule",                                            owner_role:"HR"},
-    {task_key:"bank",       label:"Open bank account — "+bank+" (begin early)",                            owner_role:"HR / Finance"},
+    {task_key:"bank",       label:"Open bank account — "+bank+" (begin early)",                            owner_role:"HR"},
     {task_key:"gov_forms",  label:"Government registration (SSS R-1A · PhilHealth · Pag-IBIG · BIR 1902)", owner_role:"HR"},
     {task_key:"uniform",    label:"Issue uniform + capture signed deduction authorization",               owner_role:"HR / Admin"},
     {task_key:"orientation",label:"Orientation / product training",                                       owner_role:"HR / Supervisor"}
@@ -13099,7 +13099,7 @@ function openOnboardingCase(id){
           return `<div style="margin:14px 0 4px;font-weight:700;font-size:12.5px;color:var(--green-dark);">${g.label}</div>`+
             items.map(t=>`<div class="task clickable" data-tid="${t.id}" style="cursor:pointer;">
               <div class="dot ${t.status==="Done"?"g":"a"}"></div>
-              <div style="flex:1;"><div class="tt">${esc(t.label)}</div><div class="td">${esc(t.owner_role||"")}</div></div>
+              <div style="flex:1;"><div class="tt">${esc(t.label)}</div><div class="td">${esc(t.owner_role||"")}${t.status==="Done"&&t.done_by?` · <b>signed off:</b> ${esc(onbSignName(t.done_by))}${t.done_at?" · "+fmtDate(t.done_at):""}`:""}</div></div>
               <div class="due ${t.status==="Done"?"g":"a"}">${t.status==="Done"?"✓ Done":"Pending"}</div></div>`).join("");
         }).join("")}
       </div>
@@ -13132,10 +13132,15 @@ function openOnboardingCase(id){
   const cmp=document.getElementById("onbComplete"); if(cmp) cmp.addEventListener("click",()=>completeOnboarding(c));
   $$("#onbModal .task.clickable").forEach(el=>el.addEventListener("click",()=>toggleOnbTask(ts.find(t=>t.id===el.dataset.tid))));
 }
+// Resolve a sign-off email to a readable name (roster name if known, else the email's local part).
+function onbSignName(email){ if(!email) return ""; const e=(typeof EMPLOYEES!=="undefined"?EMPLOYEES:[]).find(x=>String(x.email||"").toLowerCase()===String(email).toLowerCase()); return e?e.full_name:String(email).split("@")[0]; }
 async function toggleOnbTask(t){
   if(!t) return;
-  const ns=t.status==="Done"?"Pending":"Done";
-  const { error } = await sb.from("onboarding_tasks").update({status:ns}).eq("id",t.id);
+  const done=t.status!=="Done"; const ns=done?"Done":"Pending";
+  const who=(CURRENT_USER&&CURRENT_USER.email)||null;
+  // Sign-off: record WHO marked it done + when (accountability), cleared if it's un-ticked back to Pending.
+  const patch=done?{status:ns,done_by:who,done_at:new Date().toISOString()}:{status:ns,done_by:null,done_at:null};
+  const { error } = await sb.from("onboarding_tasks").update(patch).eq("id",t.id);
   if(error){ alert(error.message); return; }
   await loadEmployees(); openOnboardingCase(t.case_id);
 }

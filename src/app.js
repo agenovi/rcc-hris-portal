@@ -144,7 +144,7 @@ const MANAGER_PAGES=["dashboard","employees","branches","prehire","contracts","o
 // REVIEW LOCK: while the portal is under review, Rhel (hr4@) is scoped to ONLY his assigned review modules
 // (+ Dashboard) so he stays focused and can't wander into other modules. Fully reversible — delete this pair to restore.
 // Manning carries Store Transfers & Deployments; Pre-hire carries the Talent Pool; Movements = NPA; Meetings = Merchandiser meeting.
-const REVIEW_PAGES=["dashboard","movements","storemap","evaluations","prehire","meetings"];
+const REVIEW_PAGES=["dashboard","movements","storemap","evaluations","prehire","meetings","positions","orgchart"];
 function isReviewLockedUser(){ return ((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()==="hr4@hassarams.com"; }
 // Per-person extra pages on top of their role. Vina = sole bank/gov encoder → needs the Employees directory to enter/correct those numbers (salary stays masked for her).
 const EXTRA_PAGES_BY_EMAIL={ "hr2@hassarams.com":["employees"], "bsabila@hassarams.com":["meetings"] };  // Bryan (SC): Manning + runs the merchandiser Meeting on-site
@@ -5565,7 +5565,7 @@ window.renderStoremap=renderStoremap;
    Assigned dept heads come from DEPT_HEADS first, then fall back to the old department_head_email logic. */
 function renderOrgChart(){
   const pg=$("#page-orgchart"); if(!pg) return;
-  const canEdit=canEditOrg();
+  const canEdit=isAdminUser();   // org chart edits (heads/supervisors) = Director only; Rhel/HR view + comment
   const ACT=EMPLOYEES.filter(e=>(e.status||"").toLowerCase().startsWith("active"));
   // resolve an email to an active employee's name (else show the raw email)
   const emailToEmp={}; ACT.forEach(e=>{ if(e.email) emailToEmp[String(e.email).toLowerCase()]=e; });
@@ -5655,7 +5655,31 @@ function renderOrgChart(){
         <input id="ocSearch" class="search" style="flex:1;min-width:180px;" placeholder="Search name, department, position…">
       </div>
       <div id="ocBody" style="margin-top:8px;"></div>
+      <div id="ocCommentBox" style="margin-top:12px;"></div>
     </div>`;
+
+  (async()=>{
+    const box=$("#ocCommentBox"); if(!box) return;
+    let list=[]; try{ const {data}=await sb.from("orgchart_comments").select("*").order("created_at",{ascending:false}).limit(30); list=data||[]; }catch(_){ }
+    const who=e=>PERSON_BY_EMAIL[String(e||"").toLowerCase()]||e||"";
+    const items=list.map(c=>`<div style="font-size:12.5px;padding:6px 0;border-top:1px solid #eef2ef;"><b>${esc(who(c.created_by))}</b> <span style="color:#8a96a0;">· ${fmtDate(c.created_at)}</span><br>${esc(c.body||"")}</div>`).join("");
+    box.innerHTML=`<div class="panel" style="margin-top:0;background:#f4f8f5;border:1px solid #dbe4dd;">
+        <div class="subhead">💬 Suggested changes to the org chart</div>
+        <div class="psub" style="margin:2px 0 8px;">The chart is built from PayPlus. Reporting lines and department heads are set by the Director — please note any change you think is needed here.</div>
+        <textarea id="ocCommentInput" rows="2" style="width:100%;padding:8px 10px;border:1px solid #dbe4dd;border-radius:8px;font-family:inherit;font-size:13px;box-sizing:border-box;" placeholder="e.g. Warehouse should report to Pervin"></textarea>
+        <div style="display:flex;gap:8px;margin-top:6px;"><button class="btn" id="ocCommentSend" style="margin-left:auto;">Send suggestion</button></div>
+        <div style="margin-top:8px;">${items||'<span class="note">No suggestions yet.</span>'}</div>
+      </div>`;
+    const b=$("#ocCommentSend");
+    if(b) b.onclick=async()=>{
+      const v=($("#ocCommentInput").value||"").trim(); if(!v) return;
+      b.disabled=true; b.textContent="Sending…";
+      const {error}=await sb.from("orgchart_comments").insert({body:v, created_by:(CURRENT_USER&&CURRENT_USER.email)||null});
+      if(error){ b.disabled=false; b.textContent="Send suggestion"; alert("Could not send: "+error.message); return; }
+      await logChange("orgchart", null, "Org chart", "Suggested change", v.slice(0,80));
+      renderOrgChart();
+    };
+  })();
 
   const paint=()=>{
     const q=(($("#ocSearch")||{}).value||"").trim().toLowerCase();
@@ -5832,7 +5856,7 @@ function ocPickEmployee(title, opts, onChoose){
 }
 // Assign the head of a department → upsert department_heads (HRIS-owned org structure).
 async function ocSetDeptHead(dept){
-  if(!canEditOrg()||!dept) return;
+  if(!isAdminUser()||!dept) return;
   ocPickEmployee("Set head of "+dept, {}, async(emp)=>{
     if(!emp) return;
     const { error } = await sb.from("department_heads").upsert({
@@ -5846,7 +5870,7 @@ async function ocSetDeptHead(dept){
 }
 // Set / replace / clear a person's supervisor → updates the employee row (supervisor_* is HRIS-owned, not synced from PayPlus).
 async function ocSetSupervisor(person){
-  if(!canEditOrg()||!person) return;
+  if(!isAdminUser()||!person) return;
   const hasSup=!!(String(person.supervisor_name||"").trim()||String(person.supervisor_email||"").trim());
   ocPickEmployee("Supervisor for "+(person.full_name||""),
     { allowClear:hasSup, clearLabel:"✕ Clear supervisor"+(person.supervisor_name?" (now: "+person.supervisor_name+")":"") },

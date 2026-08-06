@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1786057728";
+window.APP_BUILD="1786058538";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1786057728" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1786058538" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -5806,10 +5806,10 @@ function mvPickEmployee(){
   document.getElementById("mvPickClose").onclick=()=>m.remove();
   const q=document.getElementById("mvQ"), hits=document.getElementById("mvHits");
   const paint=()=>{ const s=(q.value||"").trim().toLowerCase();
-    let list=(EMPLOYEES||[]).slice().sort((a,b)=>(a.full_name||"").localeCompare(b.full_name||""));
+    let list=(EMPLOYEES||[]).filter(e=>(e.status||'Active')==='Active' && e.group_name!=='Leadership').slice().sort((a,b)=>(a.full_name||"").localeCompare(b.full_name||"")); // only active — separated/disconnected staff can't get a new movement
     if(s) list=list.filter(e=>(e.full_name||"").toLowerCase().includes(s)||String(e.employee_id||"").includes(s));
     list=list.slice(0,20);
-    hits.innerHTML=list.length?list.map(e=>`<div class="task clickable" data-eid="${esc(String(e.id))}" style="cursor:pointer;"><div class="dot ${(e.status||'Active')==='Active'?'g':'r'}"></div><div><div class="tt">${esc(e.full_name)}</div><div class="td">${esc(e.position||"—")} · ${esc(e.worksite||e.department||"—")}${e.employee_id?" · "+esc(e.employee_id):""}</div></div></div>`).join(""):`<div class="psub" style="padding:8px 2px;">${s?"No match.":"Start typing…"}</div>`;
+    hits.innerHTML=list.length?list.map(e=>`<div class="task clickable" data-eid="${esc(String(e.id))}" style="cursor:pointer;"><div class="dot g"></div><div><div class="tt">${esc(e.full_name)}</div><div class="td">${esc(e.position||"—")} · ${esc(e.worksite||e.department||"—")}${e.employee_id?" · "+esc(e.employee_id):""}</div></div></div>`).join(""):`<div class="psub" style="padding:8px 2px;">${s?"No match.":"Start typing…"}</div>`;
     hits.querySelectorAll("[data-eid]").forEach(el=>el.addEventListener("click",()=>{ const e=EMPLOYEES.find(x=>String(x.id)===el.dataset.eid); m.remove(); if(e) openMovementForm(e); }));
   };
   q.addEventListener("input",paint); paint(); q.focus();
@@ -12432,15 +12432,18 @@ function phTileList(phase){
       <div><div style="font-size:19px;font-weight:800;">${esc(titles[phase]||phase)}</div><div style="font-size:12.5px;opacity:.9;">${list.length} candidate${list.length===1?"":"s"} · tap to open</div></div>
       <button id="phTileX" style="background:rgba(255,255,255,.15);border:none;color:#fff;font-size:18px;width:34px;height:34px;border-radius:8px;cursor:pointer;flex-shrink:0;">✕</button>
     </div>
-    <div style="padding:14px 16px 50px;"><input id="phTileSearch" class="search" style="width:100%;margin-bottom:10px;" placeholder="Search name, position, reason…"><div id="phTileRows">${list.length?list.map(phTileRow).join(""):'<div class="psub">None right now.</div>'}</div></div>
+    <div style="padding:14px 16px 50px;">${phase==='REJECTED'?`<select id="phTileReason" class="search" style="width:100%;margin-bottom:8px;"><option value="">All reasons (${list.length})</option>${[...new Set(list.map(c=>String(c.rejection_reason||'No reason recorded').split(' — ')[0].trim()||'No reason recorded'))].sort().map(r=>`<option value="${esc(r)}">${esc(r)} (${list.filter(c=>(String(c.rejection_reason||'No reason recorded').split(' — ')[0].trim()||'No reason recorded')===r).length})</option>`).join('')}</select>`:''}<input id="phTileSearch" class="search" style="width:100%;margin-bottom:10px;" placeholder="Search name, position, reason…"><div id="phTileRows">${list.length?list.map(phTileRow).join(""):'<div class="psub">None right now.</div>'}</div></div>
   </div>`;
+  const baseReason=c=>String(c.rejection_reason||'No reason recorded').split(' — ')[0].trim()||'No reason recorded';
   const wire=()=>{ $$("#phTileRows .clickable").forEach(el=>el.addEventListener("click",()=>{ const c=PREHIRE.find(p=>String(p.id)===el.dataset.id); m.remove(); if(c) openPrehire(c); })); };
   const paint=()=>{ const q=(document.getElementById("phTileSearch").value||"").toLowerCase();
-    const f=list.filter(c=>!q||[c.full_name,c.position,c.hire_source,c.rejection_reason].filter(Boolean).join(" ").toLowerCase().includes(q));
+    const rsel=document.getElementById("phTileReason"); const rv=rsel?rsel.value:"";
+    const f=list.filter(c=>(!rv||baseReason(c)===rv) && (!q||[c.full_name,c.position,c.hire_source,c.rejection_reason].filter(Boolean).join(" ").toLowerCase().includes(q)));
     document.getElementById("phTileRows").innerHTML=f.length?f.map(phTileRow).join(""):'<div class="psub">No match.</div>'; wire(); };
   m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
   document.getElementById("phTileX").addEventListener("click",()=>m.remove());
   document.getElementById("phTileSearch").addEventListener("input",paint);
+  const _rs=document.getElementById("phTileReason"); if(_rs) _rs.addEventListener("change",paint);
   wire();
 }
 window.phTileList=phTileList;
@@ -13243,7 +13246,7 @@ async function advanceToHired(c, modal){
   if(existing){ await setPhase(c,"HIRED"); window.go("onboarding"); openOnboardingCase(existing.id); return; }
   await createOnboardingCase(c);  // creates the case + tasks, sets phase HIRED, opens onboarding
 }
-const REJECT_REASONS=["Did not meet the position qualifications","Incomplete requirements / documents","Failed assessment / interview","Store / Retail-ops did not accept","Position already filled","Withdrew / no longer available","Other"];
+const REJECT_REASONS=["Did not meet position qualifications","Failed / did not attend SM intro","Store / Retail-Ops did not accept (Failed SM)","Failed assessment / interview","Incomplete requirements / documents","Withdrew / backed out","Position already filled","Duplicate entry","Other"];
 function rejectPrehire(c, parentModal){
   let m=document.getElementById("phRejModal"); if(!m){ m=document.createElement("div"); m.id="phRejModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:10000;background:rgba(14,50,25,.5);display:flex;align-items:center;justify-content:center;padding:24px;";

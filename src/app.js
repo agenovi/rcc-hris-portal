@@ -5730,7 +5730,7 @@ window.ocSetSupervisor=ocSetSupervisor;
    (position_profiles). Everyone logged-in VIEWS; only admins + Rhel (canEditOrg) edit. */
 function posKey(pos,dept){ return String(pos||"").trim().toLowerCase()+"||"+String(dept||"").trim().toLowerCase(); }
 function positionProfileFor(pos,dept){ const k=posKey(pos,dept); return POSITION_PROFILES.find(p=>posKey(p.position,p.department)===k)||null; }
-function positionHasJD(p){ if(!p) return false; const t=x=>String(x||"").trim(); const arr=x=>Array.isArray(x)?x.filter(v=>t(v)):[]; return !!(t(p.job_description) || arr(p.key_tasks).length || arr(p.deliverables).length); }
+function positionHasJD(p){ if(!p) return false; const t=x=>String(x||"").trim(); const arr=x=>Array.isArray(x)?x.filter(v=>t(v)):[]; return !!(t(p.job_description) || arr(p.key_tasks).length || arr(p.deliverables).length || arr(p.qualifications).length); }
 // Distinct (position, department) pairs across ACTIVE staff, with headcount + matching profile.
 function positionPairs(){
   const ACT=EMPLOYEES.filter(e=>(e.status||"").toLowerCase().startsWith("active") && e.group_name!=="Leadership" && String(e.position||"").trim());
@@ -5792,6 +5792,7 @@ function openPositionProfile(position, department){
     .sort((a,b)=>(a.full_name||"").localeCompare(b.full_name||""));
   const tasks=Array.isArray(prof&&prof.key_tasks)?prof.key_tasks.filter(t=>String(t||"").trim()):[];
   const delivs=Array.isArray(prof&&prof.deliverables)?prof.deliverables.filter(t=>String(t||"").trim()):[];
+  const quals=Array.isArray(prof&&prof.qualifications)?prof.qualifications.filter(t=>String(t||"").trim()):[];
   const hasJD=positionHasJD(prof);
   const peopleHtml=people.length?people.map(e=>`<span class="pos-person clickable" data-idx="${EMPLOYEES.indexOf(e)}" style="display:inline-block;background:#eef4f0;border:1px solid #d6e3db;border-radius:20px;padding:3px 11px;margin:0 6px 6px 0;font-size:12.5px;color:#155e3f;cursor:pointer;">${esc(e.full_name)}</span>`).join(""):`<span class="note">No active staff in this role.</span>`;
   let m=document.getElementById("posDrawer"); if(!m){ m=document.createElement("div"); m.id="posDrawer"; document.body.appendChild(m); }
@@ -5815,6 +5816,7 @@ function openPositionProfile(position, department){
         ${sec("Job Description", `<div class="psub" style="white-space:pre-wrap;">${prof.job_description?esc(prof.job_description):'<span class="note">—</span>'}</div>`)}
         ${sec("Key Tasks", tasks.length?`<ol style="margin:2px 0 0;padding-left:20px;font-size:13px;color:#2c3b33;line-height:1.6;">${tasks.map(t=>`<li>${esc(t)}</li>`).join("")}</ol>`:`<div class="psub"><span class="note">—</span></div>`)}
         ${sec("Deliverables", delivs.length?`<ul style="margin:2px 0 0;padding-left:20px;font-size:13px;color:#2c3b33;line-height:1.6;">${delivs.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`:`<div class="psub"><span class="note">—</span></div>`)}
+        ${sec("Qualifications", quals.length?`<ul style="margin:2px 0 0;padding-left:20px;font-size:13px;color:#2c3b33;line-height:1.6;">${quals.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`:`<div class="psub"><span class="note">—</span></div>`)}
         ${sec("Reports To", `<div class="psub">${prof.reports_to?esc(prof.reports_to):'<span class="note">—</span>'}</div>`)}
         <div class="psub" style="margin-top:6px;color:#6b7785;">${prof.updated_by?"Last updated by "+esc(prof.updated_by)+(prof.updated_at?" · "+fmtDate(prof.updated_at):""):""}</div>`}
       <div style="display:flex;gap:10px;margin-top:6px;">
@@ -5834,6 +5836,7 @@ function openPositionForm(position, department, existing){
   const p=existing||{};
   const tasksTxt=Array.isArray(p.key_tasks)?p.key_tasks.filter(t=>String(t||"").trim()).join("\n"):"";
   const delivTxt=Array.isArray(p.deliverables)?p.deliverables.filter(t=>String(t||"").trim()).join("\n"):"";
+  const qualsTxt=Array.isArray(p.qualifications)?p.qualifications.filter(t=>String(t||"").trim()).join("\n"):"";
   let m=document.getElementById("posForm"); if(!m){ m=document.createElement("div"); m.id="posForm"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
   const fld="width:100%;padding:9px 11px;border:1px solid var(--line,#dbe4dd);border-radius:8px;background:#fff;font-size:13px;font-family:inherit;box-sizing:border-box;";
@@ -5847,6 +5850,8 @@ function openPositionForm(position, department, existing){
     <textarea id="pfTasks" rows="6" style="${fld}" placeholder="Open and merchandise the store&#10;Submit the daily sales report&#10;…">${esc(tasksTxt)}</textarea>
     <label class="el" style="display:block;margin:12px 0 4px;">Deliverables <span class="note" style="font-weight:400;">— one per line</span></label>
     <textarea id="pfDeliv" rows="4" style="${fld}" placeholder="Daily sales report&#10;Monthly inventory count&#10;…">${esc(delivTxt)}</textarea>
+    <label class="el" style="display:block;margin:12px 0 4px;">Qualifications <span class="note" style="font-weight:400;">— one per line (education, experience, skills)</span></label>
+    <textarea id="pfQuals" rows="4" style="${fld}" placeholder="College graduate (any 4-year course)&#10;At least 1 year warehouse experience&#10;Physically fit — able to lift stock&#10;…">${esc(qualsTxt)}</textarea>
     <label class="el" style="display:block;margin:12px 0 4px;">Reports To</label>
     <input id="pfReports" type="text" style="${fld}" placeholder="e.g. Store Coordinator" value="${esc(p.reports_to||"")}">
     <div id="pfMsg" style="font-size:12.5px;color:#a4322a;margin-top:8px;min-height:16px;"></div>
@@ -5861,11 +5866,12 @@ function openPositionForm(position, department, existing){
     const jd=$("#pfJD").value.trim();
     const tasks=toArr($("#pfTasks").value);
     const delivs=toArr($("#pfDeliv").value);
+    const quals=toArr($("#pfQuals").value);
     const reports=$("#pfReports").value.trim();
     const btn=$("#pfSave"); btn.disabled=true; btn.textContent="Saving…";
     const { error } = await sb.from("position_profiles").upsert({
       position:String(position).trim(), department:String(department||"").trim(),
-      job_description:jd||null, key_tasks:tasks, deliverables:delivs, reports_to:reports||null,
+      job_description:jd||null, key_tasks:tasks, deliverables:delivs, qualifications:quals, reports_to:reports||null,
       updated_by:(CURRENT_USER&&CURRENT_USER.email)||null, updated_at:new Date().toISOString()
     }, { onConflict:"position,department" });
     if(error){ $("#pfMsg").textContent="Could not save: "+error.message; btn.disabled=false; btn.textContent="Save job description"; return; }

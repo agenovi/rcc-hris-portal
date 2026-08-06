@@ -8568,6 +8568,44 @@ async function saveEmployee(id,modal){
 const EVAL_CRITERIA=["Quality of work","Attendance & punctuality","Attitude & teamwork","Job knowledge","Initiative & reliability"];
 const EVAL_RECS={ "regularization":["Regularize","Extend probation","Do not regularize"], "3rd-month":["On track","Needs coaching","At risk"], "5th-month":["On track","Needs coaching","At risk"], "annual":["Exceeds expectations","Meets expectations","Below expectations"] };
 const EVAL_LABEL={ "3rd-month":"2.5-month review","5th-month":"5.5-month review","regularization":"Regularization","annual":"Annual review" };
+// Role-based criteria sets — auto-selected by the person's position. ALL include Attendance & punctuality.
+const EVAL_TEMPLATES={
+  lead:{ label:"Lead / Supervisor / Manager", criteria:[
+    "Attendance & punctuality",
+    "Delivery of results / KPIs (finished outputs, on time)",
+    "Following direction & alignment",
+    "Team leadership & people management",
+    "Communication & reporting",
+    "Judgment & accountability (ownership, no excuses)",
+    "Compliance & standards (HR / DOLE)",
+    "Initiative & improvement" ]},
+  merchandiser:{ label:"Merchandiser / Diser", criteria:[
+    "Attendance & punctuality",
+    "Product knowledge & merchandising",
+    "Sales performance (pushing product / targets)",
+    "Display & housekeeping",
+    "Inventory accuracy & honesty",
+    "Customer service",
+    "Daily reporting / store (SM) compliance",
+    "Meeting attendance",
+    "Attitude & cooperation" ]},
+  rankfile:{ label:"Rank & file / Office / Warehouse", criteria:[
+    "Attendance & punctuality",
+    "Quality & accuracy of work",
+    "Productivity / output",
+    "Job knowledge",
+    "Initiative & reliability",
+    "Following instructions & policy",
+    "Teamwork & cooperation",
+    "Attitude & conduct" ]}
+};
+function evalTemplateFor(emp){
+  const p=String((emp&&emp.position)||"").toLowerCase();
+  const w=String((emp&&emp.worksite)||"").toLowerCase();
+  if(/manager|head|supervisor|coordinator|officer|lead|chief|director|avp|\bvp\b|principal/.test(p)) return Object.assign({key:"lead"},EVAL_TEMPLATES.lead);
+  if(/diser|merchand|promo|dser/.test(p) || /store|concession|spyder|ridelab|gear ?up|sm |gaisano|robinson|mall|outlet/.test(w)) return Object.assign({key:"merchandiser"},EVAL_TEMPLATES.merchandiser);
+  return Object.assign({key:"rankfile"},EVAL_TEMPLATES.rankfile);
+}
 function evAddMonths(d,n){ const x=new Date(d); const day=x.getDate(); x.setMonth(x.getMonth()+n); if(x.getDate()<day) x.setDate(0); return x; }
 function evAddDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function evIso(d){ const p=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
@@ -10056,6 +10094,31 @@ function phLinksBar(){
     <button class="btn ghost" onclick="go('links')" style="flex-shrink:0;">Links to send →</button>
   </div>`;
 }
+// Clickable-KPI drill-down (matches the loan module): a tile opens a searchable list you can tap into.
+// Rejected shows the rejection reason on each row — this is Vina's "let me see rejected records + reasons".
+function phTileRow(c){ const isRej=c.phase==="REJECTED"; return `<div class="task clickable" data-id="${esc(String(c.id))}" style="cursor:pointer;"><div class="dot ${isRej?'r':'a'}"></div><div style="flex:1;min-width:0;"><div class="tt">${esc(c.full_name||"—")}</div><div class="td">${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")}${isRej&&c.rejection_reason?` · <b>${esc(c.rejection_reason)}</b>`:""}</div></div></div>`; }
+function phTileList(phase){
+  const titles={DOCUMENTS:"Awaiting documents",HR_SIGNOFF:"Ready for contract (HR sign-off)",REJECTED:"Rejected — pipeline closed (reasons shown)"};
+  const list=PREHIRE.filter(p=>p.phase===phase).sort((a,b)=>String(a.full_name||"").localeCompare(String(b.full_name||"")));
+  let m=document.getElementById("phTileModal"); if(!m){ m=document.createElement("div"); m.id="phTileModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:520px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#123528,#1F6B52);color:#fff;padding:18px 22px;position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <div><div style="font-size:19px;font-weight:800;">${esc(titles[phase]||phase)}</div><div style="font-size:12.5px;opacity:.9;">${list.length} candidate${list.length===1?"":"s"} · tap to open</div></div>
+      <button id="phTileX" style="background:rgba(255,255,255,.15);border:none;color:#fff;font-size:18px;width:34px;height:34px;border-radius:8px;cursor:pointer;flex-shrink:0;">✕</button>
+    </div>
+    <div style="padding:14px 16px 50px;"><input id="phTileSearch" class="search" style="width:100%;margin-bottom:10px;" placeholder="Search name, position, reason…"><div id="phTileRows">${list.length?list.map(phTileRow).join(""):'<div class="psub">None right now.</div>'}</div></div>
+  </div>`;
+  const wire=()=>{ $$("#phTileRows .clickable").forEach(el=>el.addEventListener("click",()=>{ const c=PREHIRE.find(p=>String(p.id)===el.dataset.id); m.remove(); if(c) openPrehire(c); })); };
+  const paint=()=>{ const q=(document.getElementById("phTileSearch").value||"").toLowerCase();
+    const f=list.filter(c=>!q||[c.full_name,c.position,c.hire_source,c.rejection_reason].filter(Boolean).join(" ").toLowerCase().includes(q));
+    document.getElementById("phTileRows").innerHTML=f.length?f.map(phTileRow).join(""):'<div class="psub">No match.</div>'; wire(); };
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("phTileX").addEventListener("click",()=>m.remove());
+  document.getElementById("phTileSearch").addEventListener("input",paint);
+  wire();
+}
+window.phTileList=phTileList;
 function renderPrehire(){
   const pg=$("#page-prehire"); if(!pg) return;
   const inPipe=PREHIRE.filter(p=>p.phase!=="HIRED"&&p.phase!=="REJECTED"&&p.phase!=="DRAFT"&&p.phase!=="POOLED");  // DRAFT = agency not-yet-submitted; POOLED = talent pool — neither is in RCC's active pipeline
@@ -10076,9 +10139,9 @@ function renderPrehire(){
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
         <div class="kpi" data-gopipe="1" style="cursor:pointer;user-select:none;"><div class="k-l">In Pipeline ▸</div><div class="k-n">${inPipe.length}</div>
           <div class="k-break">${[["","All",inPipe.length],["Direct","Direct",bySrc("Direct")],["Jell-on","Jell-on",bySrc("Jell-on")],["M&G","M&amp;G",bySrc("M&G")]].map(a=>`<span data-psrc="${a[0]}" style="cursor:pointer;user-select:none;${(prehireSrc||"")===a[0]?'background:#dbe7f0;border-radius:7px;':''}">${a[1]}<b>${a[2]}</b></span>`).join("")}</div></div>
-        <div class="kpi warn"><div class="k-l">Documents</div><div class="k-n">${docs}</div><div class="k-s">awaiting uploads</div></div>
-        <div class="kpi"><div class="k-l">HR Sign-off</div><div class="k-n">${ready}</div><div class="k-s">ready for contract</div></div>
-        <div class="kpi ${rejected?'':''}"><div class="k-l">Rejected</div><div class="k-n">${rejected}</div><div class="k-s">pipeline closed</div></div>
+        <div class="kpi warn" data-phtile="DOCUMENTS" style="cursor:pointer;"><div class="k-l">Documents</div><div class="k-n">${docs}</div><div class="k-s">awaiting uploads</div></div>
+        <div class="kpi" data-phtile="HR_SIGNOFF" style="cursor:pointer;"><div class="k-l">HR Sign-off</div><div class="k-n">${ready}</div><div class="k-s">ready for contract</div></div>
+        <div class="kpi" data-phtile="REJECTED" style="cursor:pointer;"><div class="k-l">Rejected</div><div class="k-n">${rejected}</div><div class="k-s">pipeline closed · view reasons</div></div>
       </div>
       ${drafts.length?`<div style="margin-top:10px;padding:9px 12px;background:#fdf6e3;border:1px solid #ecdca6;border-radius:9px;font-size:12.5px;color:#7a5c12;">🟡 <b>${drafts.length}</b> candidate${drafts.length>1?'s':''} saved in agency drafts but <b>not yet submitted to RCC</b> ${(()=>{const bs={};drafts.forEach(d=>{const s=d.hire_source||'Direct';bs[s]=(bs[s]||0)+1;});return '('+Object.entries(bs).map(([s,n])=>esc(s)+' '+n).join(' · ')+')';})()}. They appear in the <b>Agency Draft</b> lane below — the agency must click “Submit to RCC” on their own page before these enter your pipeline.</div>`:""}
       <div class="tabs" id="phTabs" style="margin-top:14px;">
@@ -10099,6 +10162,7 @@ function renderPrehire(){
     const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="prehire.csv";a.click();
   });
   $$("#phTabs .tab").forEach(t=>t.addEventListener("click",()=>{ prehireTab=t.dataset.t; renderPrehire(); }));
+  $$("#page-prehire [data-phtile]").forEach(el=>el.addEventListener("click",()=>phTileList(el.dataset.phtile)));
   $$("#page-prehire [data-psrc]").forEach(el=>el.addEventListener("click",(ev)=>{ ev.stopPropagation(); prehireSrc=(prehireSrc===el.dataset.psrc?null:el.dataset.psrc); prehireTab="pipeline"; renderPrehire(); const pb=document.getElementById("phBody"); if(pb) pb.scrollIntoView({behavior:"smooth",block:"start"}); }));
   $$("#page-prehire [data-gopipe]").forEach(el=>el.addEventListener("click",()=>{ prehireSrc=null; prehireTab="pipeline"; renderPrehire(); const pb=document.getElementById("phBody"); if(pb) pb.scrollIntoView({behavior:"smooth",block:"start"}); }));
   if(prehireTab==="arch") phBodyArch();

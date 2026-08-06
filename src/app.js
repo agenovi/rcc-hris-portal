@@ -5188,7 +5188,8 @@ function openInReview(store){
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
         <div><div style="font-weight:800;font-size:15px;">${esc(p.full_name||'—')}</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px;">${esc(p.position||'')}${p.hire_source?' · '+esc(agency):''}${p.phase?' · '+esc(String(p.phase).replace(/_/g,' ').toLowerCase()):''}</div>
-          ${(p.email||p.phone)?`<div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${esc(p.email||'')}${p.phone?' · '+esc(p.phone):''}</div>`:''}</div>
+          ${(p.email||p.phone)?`<div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${esc(p.email||'')}${p.phone?' · '+esc(p.phone):''}</div>`:''}
+          <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap;">${p.resume_url?`<span class="pill active" style="font-size:10.5px;">✓ Resume attached</span>`:`<span class="pill" style="font-size:10.5px;background:#fdf0d9;color:#9a6a00;">⚠ No resume attached</span>`}${((!p.application||Object.keys(p.application||{}).length===0)&&!p.date_of_birth&&!p.permanent_address)?`<span class="pill" style="font-size:10.5px;background:#fdeaea;color:#a4322a;">Application not completed</span>`:''}</div></div>
         ${p.resume_url?`<a href="${esc(p.resume_url)}" target="_blank" class="btn ghost" style="font-size:11px;padding:3px 9px;flex-shrink:0;">Resume</a>`:''}
       </div>
       <details style="margin-top:10px;"><summary style="cursor:pointer;font-size:12.5px;color:var(--green-dark);font-weight:600;">View applicant details &amp; resume</summary>
@@ -7978,8 +7979,8 @@ function renderManning(){
       ${showAppr?`<div class="msec" data-sec="approvals" style="display:${SEC==='approvals'?'block':'none'};">${manningApprovalsPanel()}</div>`:''}
       <div class="msec" data-sec="openings" style="display:${SEC==='openings'?'block':'none'};">
       <div class="panel" style="margin-top:0;">
-      <h2>Openings <span class="count-tag">${OPENINGS.length} stores · ${OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0)} positions</span></h2>
-      ${(()=>{ const t=openingKindTotals(OPENINGS); return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 6px;">${t.Lead?`${openingKindPill("Lead")} <b>${t.Lead}</b>&nbsp;lead${t.Lead>1?"s":""}`:""}${t.Reliever?`&nbsp;&nbsp;${openingKindPill("Reliever")} <b>${t.Reliever}</b>&nbsp;reliever${t.Reliever>1?"s":""}`:""}${t.Stationary?`&nbsp;&nbsp;${openingKindPill("Stationary")} <b>${t.Stationary}</b>&nbsp;stationary`:""}</div>`; })()}
+      <h2>Openings <span class="count-tag">${OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0)} positions to fill · across ${OPENINGS.length} store${OPENINGS.length===1?'':'s'}</span></h2>
+      ${(()=>{ const t=openingKindTotals(OPENINGS); return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 6px;"><span style="font-size:12px;color:var(--muted);font-weight:600;">By type:</span>${t.Lead?`${openingKindPill("Lead")} <b>${t.Lead}</b>&nbsp;lead${t.Lead>1?"s":""}`:""}${t.Reliever?`&nbsp;&nbsp;${openingKindPill("Reliever")} <b>${t.Reliever}</b>&nbsp;reliever${t.Reliever>1?"s":""}`:""}${t.Stationary?`&nbsp;&nbsp;${openingKindPill("Stationary")} <b>${t.Stationary}</b>&nbsp;stationary`:""}</div>`; })()}
       <div class="psub">Manpower requests you post. These drive the agency links — each agency sees the shortfall + an in-review count, then submits candidates into the pipeline. Each need is tagged <b>Lead / Reliever / Stationary</b>.</div>
       <div class="actionbar">${canPostOpenings()?'<button class="btn" id="opNew">+ Post opening</button> ':''}${canManageStores()?'<button class="btn ghost" id="stNew">+ Add store</button>':''}${!canPostOpenings()?'<span class="psub" style="margin:0;">Openings open automatically when someone resigns. You can view and fill them below.</span>':''}</div>
       ${OPENINGS.length?`<table><thead><tr><th>Store</th><th>SC</th><th>Need</th><th>In review</th><th>Posted</th><th>Deadline</th><th></th></tr></thead><tbody id="opRows"></tbody></table>`:`<div class="psub" style="margin-top:6px;">No open requests yet — click “Post opening”.</div>`}
@@ -9436,21 +9437,22 @@ function meetingAbsenteePanel(viewDate,active){
         <td><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">${emailBtn} ${excuseBtn} ${signoff}</div></td></tr>`;
     }).join("")}
     </tbody></table></div>
-    ${excused.length?`<div class="psub" style="margin-top:10px;"><b>Excused (office was informed):</b> ${excused.map(r=>`${esc(r.name)} <a href="#" onclick="mtgUnexcuse('${r.id}');return false;" style="color:#1E3A5F;">↩ undo</a>`).join(" · ")}</div>`:""}`
+    ${excused.length?`<div class="psub" style="margin-top:10px;"><b>Excused (office was informed):</b><div style="margin-top:4px;">${excused.map(r=>`<div style="padding:2px 0;">${esc(r.name)}${r.excused_by?` <span style="color:var(--muted);">— excused by <b>${esc(String(r.excused_by).split('@')[0])}</b>${r.excused_at?' · '+fmtDate(r.excused_at):''}</span>`:''} <a href="#" onclick="mtgUnexcuse('${r.id}');return false;" style="color:#1E3A5F;">↩ undo</a></div>`).join("")}</div></div>`:""}`
     : `<div class="placeholder" style="margin-top:12px;"><h2>Everyone expected attended 🎉</h2><p>No absentees for this meeting.</p></div>`}
   </div>`;
 }
 // Mark an absentee excused because the office was informed → drops them off the absentee list + any notice/email.
 window.mtgExcuse=async(id)=>{
   const row=(MEETING_ROSTER||[]).find(r=>String(r.id)===String(id)); if(!row) return;
-  const note=prompt('Mark "'+row.name+'" excused — the office was informed of this absence. Reason (optional):',"Office was informed"); if(note===null) return;
-  await sb.from("meeting_roster").update({expected:false, excuse_note:note||"Office was informed"}).eq("id",id);
-  row.expected=false; row.excuse_note=note||"Office was informed"; renderMeetings();
+  const note=prompt('Mark "'+row.name+'" excused — the office was informed of this absence.\n\nYour name is recorded as the person who approved this excuse. Reason (optional):',"Office was informed"); if(note===null) return;
+  const who=myEmail(), when=new Date().toISOString();
+  await sb.from("meeting_roster").update({expected:false, excuse_note:note||"Office was informed", excused_by:who, excused_at:when}).eq("id",id);
+  row.expected=false; row.excuse_note=note||"Office was informed"; row.excused_by=who; row.excused_at=when; renderMeetings();
 };
 window.mtgUnexcuse=async(id)=>{
   const row=(MEETING_ROSTER||[]).find(r=>String(r.id)===String(id)); if(!row) return;
-  await sb.from("meeting_roster").update({expected:true, excuse_note:null}).eq("id",id);
-  row.expected=true; row.excuse_note=null; renderMeetings();
+  await sb.from("meeting_roster").update({expected:true, excuse_note:null, excused_by:null, excused_at:null}).eq("id",id);
+  row.expected=true; row.excuse_note=null; row.excused_by=null; row.excused_at=null; renderMeetings();
 };
 // Email a Notice to Explain to absentees (skips excused; those without an email are printed instead).
 async function mtgSendNoticeEmails(rows,date){

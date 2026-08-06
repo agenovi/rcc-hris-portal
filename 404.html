@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785985365";
+window.APP_BUILD="1785986831";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785985365" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785986831" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -5229,6 +5229,7 @@ function openRecord(e){
         f("Contract Type",e.contract_type,TAGHR)
         +(canSeePay()
           ? f("Daily Rate",e.daily_rate?("₱"+Number(e.daily_rate).toLocaleString()):"",TAGHR)+f("Daily Allowance",e.daily_allowance?("₱"+Number(e.daily_allowance).toLocaleString()):"",TAGHR)
+            +`<div class="efield"><div class="el"></div><div class="ev"><button class="btn ghost" onclick="postRate('${e.id}')" style="font-size:12px;padding:4px 10px;">✎ Post / edit rate</button></div></div>`
           : `<div class="efield"><div class="el">Pay</div><div class="ev"><span class="note">🔒 Restricted — payroll only</span></div></div>`)
         +f("Hire Date",e.hire_date?fmtDate(e.hire_date):"",TAGHR)+f("Regularization Date",e.regularization_date?fmtDate(e.regularization_date):"",TAGHR)+f("End Date",e.end_date?fmtDate(e.end_date):"",TAGHR)+f("End Reason",e.end_reason,TAGHR))}
       ${(()=>{ if(!canSeePay()) return ""; const ap=agencyPayFor(e.employee_id); if(!ap) return ""; return sec(8,"Latest Agency Payroll <span class=\"tag-s auto\">"+esc(ap.agency||"")+"</span>",
@@ -7262,7 +7263,7 @@ const normWorksite=(w)=> WORKSITE_ALIAS[w]||w;
 // Confirmed staff at a store = LIVE PayPlus roster only (active employees whose worksite matches the store). Manning Sheet is retired now that PayPlus is the source.
 function staffAtStore(store){
   return (EMPLOYEES||[]).filter(e=> normWorksite(e.worksite)===store && (e.status||"Active")==="Active")
-    .map(e=>({ name:e.full_name, emp_no:e.employee_id, position:e.position, diser_type:null, hired_by:e.hire_source, status:e.status||"Active", total_rate:e.daily_rate, sub_location:e.sub_location }));
+    .map(e=>({ id:e.id, name:e.full_name, emp_no:e.employee_id, position:e.position, diser_type:null, hired_by:e.hire_source, status:e.status||"Active", total_rate:e.daily_rate, daily_allowance:e.daily_allowance, sub_location:e.sub_location }));
 }
 const chcFor=(store)=> staffAtStore(store).length;
 
@@ -7335,6 +7336,64 @@ function storeForm(b){
   });
 }
 window.storeForm=storeForm;
+// Post / edit an employee's daily rate + allowance (manual — PayPlus doesn't expose pay). Payroll/owners only.
+// Accepts an employee object, or a string (matched to id then employee_id). Saves to employees + logs it.
+window.postRate=function(emp){
+  if(!canSeePay()){ alert("Only payroll / owners can post pay."); return; }
+  const e = (typeof emp==='string')
+    ? ((EMPLOYEES||[]).find(x=>String(x.id)===emp) || (EMPLOYEES||[]).find(x=>String(x.employee_id)===emp))
+    : emp;
+  if(!e){ alert("Couldn't find that employee record."); return; }
+  let m=document.getElementById("rateModal"); if(!m){ m=document.createElement("div"); m.id="rateModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,50,25,.5);display:flex;align-items:center;justify-content:center;padding:22px;";
+  const inStyle="width:100%;padding:11px 12px;border:1.5px solid #dbe4dd;border-radius:9px;font-size:15px;box-sizing:border-box;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:400px;width:100%;padding:22px;">
+    <div style="font-size:17px;font-weight:800;color:var(--green-dark);">Post rate — ${esc(e.full_name)}</div>
+    <div class="psub" style="margin:2px 0 14px;">${esc(e.employee_id||'')}${e.worksite?' · '+esc(e.worksite):''}. Saved to the record and used for final pay, maternity &amp; loan checks.</div>
+    <label style="font-size:12px;font-weight:700;color:#6a766f;">Daily rate (₱)</label>
+    <input id="rate_dr" type="number" min="0" step="0.01" value="${e.daily_rate!=null?e.daily_rate:''}" placeholder="e.g. 645" style="${inStyle}margin:4px 0 12px;">
+    <label style="font-size:12px;font-weight:700;color:#6a766f;">Daily allowance (₱) — leave blank if none</label>
+    <input id="rate_al" type="number" min="0" step="0.01" value="${e.daily_allowance!=null?e.daily_allowance:''}" placeholder="e.g. 100" style="${inStyle}margin:4px 0 6px;">
+    <div id="rateMsg" style="font-size:13px;color:#a4322a;margin:6px 0;min-height:16px;"></div>
+    <div style="display:flex;gap:10px;margin-top:4px;"><button class="btn ghost" id="rateCancel" style="flex:1;">Cancel</button><button class="btn" id="rateSave" style="flex:1;">Save rate</button></div>
+  </div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("rateCancel").addEventListener("click",()=>m.remove());
+  document.getElementById("rateSave").addEventListener("click",async()=>{
+    const dr=(document.getElementById("rate_dr").value||"").trim(), al=(document.getElementById("rate_al").value||"").trim();
+    if(dr===''){ document.getElementById("rateMsg").textContent="Enter the daily rate."; return; }
+    const btn=document.getElementById("rateSave"); btn.disabled=true; btn.textContent="Saving…";
+    const upd={ daily_rate:Number(dr)||0, daily_allowance:(al===''?null:(Number(al)||0)), updated_at:new Date().toISOString() };
+    const {error}=await sb.from("employees").update(upd).eq("id",e.id);
+    if(error){ document.getElementById("rateMsg").textContent=error.message; btn.disabled=false; btn.textContent="Save rate"; return; }
+    try{ await logChange("employee",e.id,e.full_name,"Rate posted","Daily rate → ₱"+upd.daily_rate+(upd.daily_allowance!=null?(" · allowance ₱"+upd.daily_allowance):"")); }catch(_){}
+    m.remove();
+    await loadEmployees();
+    const fresh=(EMPLOYEES||[]).find(x=>String(x.id)===String(e.id));
+    if(document.getElementById("page-employee") && document.getElementById("page-employee").offsetParent!==null && fresh) openRecord(fresh);
+    else { const sm=document.getElementById("storeModal"); if(sm){ sm.remove(); } window.go("manning"); }
+  });
+};
+// Drill-down list behind a Manning number: a side panel of stores → click a store to open it.
+function manningDrill(title, sub, stores){
+  let m=document.getElementById("mnDrill"); if(!m){ m=document.createElement("div"); m.id="mnDrill"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9997;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  const rows=(stores||[]).map(b=>{ const a=(b.ahc_stationary||0)+(b.ahc_reliever||0), c=chcFor(b.name), d=Math.max(0,a-c); const conf=MANNING_SCONF[b.name];
+    return `<tr class="mnd-row" data-bi="${BRANCHES.indexOf(b)}" style="cursor:pointer;"><td><b>${esc(b.name)}</b><div style="font-size:11px;color:var(--muted);">${esc(b.city||'')}${b.sc?' · '+esc(b.sc):''}</div></td><td style="text-align:center;">${a}</td><td style="text-align:center;">${c}</td><td style="text-align:center;">${d>0?`<span class="pill awol">${d}</span>`:`<span class="pill active">0</span>`}</td><td style="text-align:center;">${conf?'<span class="pill active">✓</span>':'<span class="note">—</span>'}</td></tr>`;
+  }).join("");
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+      <div><div style="font-size:19px;font-weight:800;">${esc(title)}</div><div style="font-size:12.5px;opacity:.9;margin-top:3px;">${esc(sub||'')}</div></div>
+      <button id="mnDrillX" style="background:rgba(255,255,255,.15);border:none;color:#fff;font-size:18px;width:34px;height:34px;border-radius:8px;cursor:pointer;flex-shrink:0;">✕</button>
+    </div>
+    <div style="padding:16px 20px 60px;">
+      ${(stores||[]).length?`<table style="width:100%;"><thead><tr><th>Store</th><th style="text-align:center;">AHC</th><th style="text-align:center;">CHC</th><th style="text-align:center;">Short</th><th style="text-align:center;">Conf.</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="psub">Nothing to show here.</div>'}
+    </div>
+  </div>`;
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("mnDrillX").addEventListener("click",()=>m.remove());
+  m.querySelectorAll(".mnd-row").forEach(tr=>tr.addEventListener("click",()=>{ m.remove(); openStore(BRANCHES[+tr.dataset.bi]); }));
+}
 function openStore(b){
   const here=staffAtStore(b.name).sort((a,c)=>(a.name||"").localeCompare(c.name||""));
   const ahc=(b.ahc_stationary||0)+(b.ahc_reliever||0); const chc=here.length; const def=Math.max(0,ahc-chc);
@@ -7359,10 +7418,10 @@ function openStore(b){
             const pc=MANNING_PCONF[String(d.emp_no)];
             const presCell = pc?`<span class="pill active">✓ present · ${pc.confirmed_at?fmtDate(pc.confirmed_at):''}</span>`
               : (d.emp_no?`<button class="btn ghost mn-pconf" data-emp="${esc(d.emp_no)}" style="padding:2px 8px;font-size:11px;">✓ Present</button>`:'<span class="note">—</span>');
-            return `<tr><td><b>${esc(d.name)}</b>${d.sub_location?` <span class="pill di" style="font-size:10px;">also covers ${esc(d.sub_location)}</span>`:''}<div style="font-size:11px;color:var(--muted);">${esc(d.emp_no||"")}</div></td>
+            return `<tr><td><b class="store-emp-link" data-id="${esc(String(d.id||''))}" style="cursor:pointer;color:var(--green-dark);text-decoration:underline;">${esc(d.name)}</b>${d.sub_location?` <span class="pill di" style="font-size:10px;">also covers ${esc(d.sub_location)}</span>`:''}<div style="font-size:11px;color:var(--muted);">${esc(d.emp_no||"")}</div></td>
             <td>${diserSourceBadge(d.hired_by)}</td>
             <td>${esc(d.diser_type||"—")}</td><td>${esc(d.position||"—")}</td>
-            ${canSeePay()?`<td>${d.total_rate?("₱"+Number(d.total_rate).toLocaleString()):"—"}</td>`:''}
+            ${canSeePay()?`<td style="white-space:nowrap;">${d.total_rate?("₱"+Number(d.total_rate).toLocaleString()+" "):""}<button class="btn ghost store-rate" data-id="${esc(String(d.id||''))}" style="padding:2px 7px;font-size:11px;">${d.total_rate?'✎':'＋ rate'}</button></td>`:''}
             <td><span class="pill ${(d.status||'').includes('Probation')?'probation':'active'}">${esc(d.status||"—")}</span></td>
             ${canConfirmPerson()?`<td>${presCell}</td>`:''}</tr>`;
           }).join("")}</tbody></table>`
@@ -7378,6 +7437,9 @@ function openStore(b){
     </div></div>`;
   document.getElementById("storeClose").addEventListener("click",()=>m.remove());
   m.querySelectorAll(".mn-pconf").forEach(btn=>btn.addEventListener("click",()=>manningPersonConfirm(btn.dataset.emp, b)));
+  // Click a person's name → open her full record (info + live attendance). Click ✎/＋rate → post the rate.
+  m.querySelectorAll(".store-emp-link").forEach(el=>el.addEventListener("click",()=>{ const emp=(EMPLOYEES||[]).find(x=>String(x.id)===el.dataset.id); if(emp){ m.remove(); openRecord(emp); } }));
+  m.querySelectorAll(".store-rate").forEach(el=>el.addEventListener("click",(ev)=>{ ev.stopPropagation(); if(el.dataset.id) window.postRate(el.dataset.id); }));
   const _se=document.getElementById("storeEdit"); if(_se) _se.addEventListener("click",()=>storeForm(b));
   const _st=document.getElementById("storeToggle"); if(_st) _st.addEventListener("click",async()=>{
     const closing=b.status!=="Closed"; const ns=closing?"Closed":"Open";
@@ -10017,11 +10079,11 @@ function renderManning(){
       <h2>Manning / Headcount <span class="count-tag">by Sales Coordinator</span></h2>
       <div class="psub">Every Sales Coordinator → their stores → approved vs. confirmed headcount. Store sales and live attendance plug in here once PayPlus and the sales system are connected.</div>
       <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
-        <div class="kpi"><div class="k-l">Sales Coordinators</div><div class="k-n">${SCs.length}</div></div>
-        <div class="kpi"><div class="k-l">Open Stores</div><div class="k-n">${open.length}</div></div>
-        <div class="kpi"><div class="k-l">Approved HC (AHC)</div><div class="k-n">${totAHC}</div></div>
-        <div class="kpi warn"><div class="k-l">Confirmed HC (CHC)</div><div class="k-n">${totCHC}</div><div class="k-s">matched from active list</div></div>
-        <div class="kpi"><div class="k-l">Manning confirmed</div><div class="k-n">${confStores}</div><div class="k-s">of ${open.length} stores</div></div>
+        <div class="kpi mn-kpi" data-k="open" style="cursor:pointer;" title="Tap to see the stores"><div class="k-l">Open Stores ›</div><div class="k-n">${open.length}</div></div>
+        <div class="kpi mn-kpi" data-k="ahc" style="cursor:pointer;" title="Tap to see the breakdown"><div class="k-l">Approved HC (AHC) ›</div><div class="k-n">${totAHC}</div></div>
+        <div class="kpi warn mn-kpi" data-k="chc" style="cursor:pointer;" title="Tap to see the breakdown"><div class="k-l">Confirmed HC (CHC) ›</div><div class="k-n">${totCHC}</div><div class="k-s">matched from active list</div></div>
+        <div class="kpi mn-kpi" data-k="conf" style="cursor:pointer;" title="Tap to see which stores"><div class="k-l">Manning confirmed ›</div><div class="k-n">${confStores}</div><div class="k-s">of ${open.length} stores</div></div>
+        <div class="kpi mn-kpi" data-k="short" style="cursor:pointer;" title="Tap to see the short stores"><div class="k-l">Shortfall ›</div><div class="k-n" style="color:${(totAHC-totCHC)>0?'var(--red)':'var(--green-dark)'}">${Math.max(0,totAHC-totCHC)}</div><div class="k-s">stores needing people</div></div>
       </div>
       ${_sc?'':`<div class="filterbar" id="scChips">
         ${["All",...SCs].map(s=>{ const gone=s!=="All"&&scIsGone(s); return `<div class="chip${s===scFilter?' active':''}" data-sc="${esc(s)}"${gone?' style="color:var(--red);border-color:#f1c9c5;font-weight:700;"':''}>${gone?'● ':''}${esc(s)}${s!=="All"?` (${open.filter(b=>b.sc===s).length})`:""}</div>`; }).join("")}
@@ -10030,6 +10092,16 @@ function renderManning(){
     </div>`;
   const opNewBtn=$("#opNew"); if(opNewBtn) opNewBtn.addEventListener("click",()=>openingForm());
   const stNewBtn=$("#stNew"); if(stNewBtn) stNewBtn.addEventListener("click",()=>storeForm());
+  // Clickable KPI tiles → drill into the store list behind each number.
+  $$("#page-manning .mn-kpi").forEach(k=>k.addEventListener("click",()=>{
+    const all=open.slice().sort((a,b)=>a.name.localeCompare(b.name)); const which=k.dataset.k;
+    const short=(b)=>Math.max(0,(b.ahc_stationary+b.ahc_reliever)-chcFor(b.name));
+    if(which==='open') return manningDrill("Open stores",open.length+" stores",all);
+    if(which==='ahc') return manningDrill("Approved headcount (AHC)","By store, highest first",all.slice().sort((a,b)=>((b.ahc_stationary+b.ahc_reliever)-(a.ahc_stationary+a.ahc_reliever))));
+    if(which==='chc') return manningDrill("Confirmed headcount (CHC)","People matched from the active list",all.slice().sort((a,b)=>chcFor(b.name)-chcFor(a.name)));
+    if(which==='conf'){ const pend=all.filter(b=>!MANNING_SCONF[b.name]); return manningDrill("Manning confirmation",confStores+" of "+open.length+" confirmed · "+pend.length+" to confirm",all.slice().sort((a,b)=>(MANNING_SCONF[a.name]?1:0)-(MANNING_SCONF[b.name]?1:0))); }
+    if(which==='short'){ const s=all.filter(b=>short(b)>0).sort((a,b)=>short(b)-short(a)); return manningDrill("Shortfall — stores needing people",s.length+" stores short",s); }
+  }));
   wireTransfers();
   const opRows=$("#opRows");
   if(opRows){
@@ -11963,7 +12035,7 @@ const SHARE_BASE="https://agenovi.github.io/rcc-hris-portal/";
 function phLinksBar(){
   // Links now live in one hub (Links to Send) — this just points there, so there's only one place to keep updated.
   return `<div style="background:#eef4ef;border:1px solid var(--line);border-radius:10px;padding:11px 14px;margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-    <div style="flex:1;min-width:190px;font-size:12.5px;color:var(--muted);">Application, agency, loan &amp; candidate-survey links now live in one place.</div>
+    <div style="flex:1;min-width:190px;font-size:12.5px;color:var(--muted);">Application, agency &amp; candidate-survey links now live in one place.</div>
     <button class="btn ghost" onclick="go('links')" style="flex-shrink:0;">Links to send →</button>
   </div>`;
 }

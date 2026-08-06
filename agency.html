@@ -108,7 +108,7 @@ function render(){
         <div class="dates">Posted ${fmtD(o.date_posted)} · ${when}</div></div>
       <div class="chips">
         <span class="chip open">${o.open_slots} shortfall</span>
-        <span class="chip rev">${o.in_review} in review${o.my_in_review?` · ${o.my_in_review} ${esc(DATA.agency)}`:""}</span>
+        <span class="chip ${o.in_review>0?'rev':'hir'}">${o.in_review} in review${o.my_in_review?` · ${o.my_in_review} ${esc(DATA.agency)}`:""}</span>
         ${o.hired?`<span class="chip hir">${o.hired} hired</span>`:""}
         ${o.urgent?`<span class="chip urg">Urgent</span>`:""}
       </div>

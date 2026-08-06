@@ -2789,11 +2789,11 @@ function renderEmployeesPage(){
     </div>
     <div class="psub" style="margin:-2px 0 8px;">🔒 Employees can't be added here. A new employee is created only through <b>hire → onboarding</b> and confirmed against PayPlus attendance — this prevents ghost employees.</div>
     <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
-      <div class="kpi"><div class="k-l">Active</div><div class="k-n">${A.length}</div></div>
-      <div class="kpi"><div class="k-l">Head Office</div><div class="k-n">${ho}</div></div>
-      <div class="kpi"><div class="k-l">Warehouse</div><div class="k-n">${wh}</div></div>
-      <div class="kpi"><div class="k-l">Retail</div><div class="k-n">${rt}</div></div>
-      <div class="kpi"><div class="k-l">On Probation</div><div class="k-n">${prob}</div></div>
+      <div class="kpi" data-empf="All" style="cursor:pointer;"><div class="k-l">Active</div><div class="k-n">${A.length}</div></div>
+      <div class="kpi" data-empf="Head Office" style="cursor:pointer;"><div class="k-l">Head Office</div><div class="k-n">${ho}</div></div>
+      <div class="kpi" data-empf="Warehouse" style="cursor:pointer;"><div class="k-l">Warehouse</div><div class="k-n">${wh}</div></div>
+      <div class="kpi" data-empf="Retail" style="cursor:pointer;"><div class="k-l">Retail</div><div class="k-n">${rt}</div></div>
+      <div class="kpi warn" data-empf="Probation" style="cursor:pointer;"><div class="k-l">On Probation</div><div class="k-n">${prob}</div></div>
     </div>
     <div id="sepReviewBox"></div>
     <div class="filterbar" id="empChips">
@@ -2808,6 +2808,7 @@ function renderEmployeesPage(){
   const _addEmp=$("#addEmp"); if(_addEmp) _addEmp.addEventListener("click",()=>openForm(null)); // free-hand add removed (anti-ghost control); creation only via hire→onboarding→PayPlus
   $("#exportEmp").addEventListener("click",exportCSV);
   $$("#empChips .chip").forEach(c=>c.addEventListener("click",()=>{ empFilter=c.dataset.f; renderEmployeesPage(); }));
+  $$("#page-employees [data-empf]").forEach(el=>el.addEventListener("click",()=>{ empFilter=el.dataset.empf; renderEmployeesPage(); }));
   $("#empSearch").addEventListener("input",paintEmpRows);
   paintEmpRows();
   renderSepReview();
@@ -2899,6 +2900,7 @@ async function relieverDel(id,e){
 function empMatchesFilter(e){
   if(empFilter==="All") return true;
   if(empFilter==="Agency") return e.hire_source&&e.hire_source!=="Direct";
+  if(empFilter==="Probation") return e.contract_type==="Probationary";
   return e.group_name===empFilter;
 }
 function hireSourceBadge(e){ const s=(e.hire_source||"").toLowerCase();

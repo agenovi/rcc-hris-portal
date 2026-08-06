@@ -5218,22 +5218,23 @@ function openInReview(store){
   let m=document.getElementById("inReviewModal"); if(!m){ m=document.createElement("div"); m.id="inReviewModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   const card=(p)=>{ const agency=(p.hire_source&&p.hire_source!=='Direct')?p.hire_source:'Direct'; const thread=Array.isArray(p.review_comments)?p.review_comments:[];
+    const scHide=userRole()==="sales"; // Sales Coordinators may comment on fit but must NOT see applicant PII (DOB/address/emergency contact) or resumes
     return `<div style="background:#fff;border:1px solid #e6eaee;border-radius:12px;padding:14px 16px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
         <div><div style="font-weight:800;font-size:15px;">${esc(p.full_name||'—')}</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px;">${esc(p.position||'')}${p.hire_source?' · '+esc(agency):''}${p.phase?' · '+esc(String(p.phase).replace(/_/g,' ').toLowerCase()):''}</div>
-          ${(p.email||p.phone)?`<div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${esc(p.email||'')}${p.phone?' · '+esc(p.phone):''}</div>`:''}
-          <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap;">${p.resume_url?`<span class="pill active" style="font-size:10.5px;">✓ Resume attached</span>`:`<span class="pill" style="font-size:10.5px;background:#fdf0d9;color:#9a6a00;">⚠ No resume attached</span>`}${((!p.application||Object.keys(p.application||{}).length===0)&&!p.date_of_birth&&!p.permanent_address)?`<span class="pill" style="font-size:10.5px;background:#fdeaea;color:#a4322a;">Application not completed</span>`:''}</div></div>
-        ${p.resume_url?`<a href="${esc(p.resume_url)}" target="_blank" class="btn ghost" style="font-size:11px;padding:3px 9px;flex-shrink:0;">Resume</a>`:''}
+          ${(!scHide&&(p.email||p.phone))?`<div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${esc(p.email||'')}${p.phone?' · '+esc(p.phone):''}</div>`:''}
+          <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap;">${!scHide?(p.resume_url?`<span class="pill active" style="font-size:10.5px;">✓ Resume attached</span>`:`<span class="pill" style="font-size:10.5px;background:#fdf0d9;color:#9a6a00;">⚠ No resume attached</span>`):''}${((!p.application||Object.keys(p.application||{}).length===0)&&!p.date_of_birth&&!p.permanent_address)?`<span class="pill" style="font-size:10.5px;background:#fdeaea;color:#a4322a;">Application not completed</span>`:''}</div></div>
+        ${(!scHide&&p.resume_url)?`<a href="${esc(p.resume_url)}" target="_blank" class="btn ghost" style="font-size:11px;padding:3px 9px;flex-shrink:0;">Resume</a>`:''}
       </div>
-      <details style="margin-top:10px;"><summary style="cursor:pointer;font-size:12.5px;color:var(--green-dark);font-weight:600;">View applicant details &amp; resume</summary>
+      ${!scHide?`<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:12.5px;color:var(--green-dark);font-weight:600;">View applicant details &amp; resume</summary>
         <div style="margin-top:8px;font-size:12.5px;line-height:1.55;background:#f8faf8;border:1px solid #e6eaee;border-radius:8px;padding:10px 12px;">
           <div style="margin:1px 0;"><b>Resume:</b> ${p.resume_url?`<a href="${esc(p.resume_url)}" target="_blank" style="color:var(--green-dark);font-weight:600;">Open resume ↗</a>`:'<span style="color:var(--muted);">not attached</span>'}</div>
           ${detRow('Email',p.email)}${detRow('Mobile',p.phone)}${detRow('Date of birth',p.date_of_birth?fmtDate(p.date_of_birth):'')}${detRow('Civil status',p.civil_status)}${detRow('Address',p.current_address||p.permanent_address)}
           ${detRow('Emergency contact',[p.emergency_contact_name,p.emergency_contact_relation,p.emergency_contact_number].filter(Boolean).join(' · '))}
           ${(p.application&&typeof p.application==='object')?Object.entries(p.application).filter(([k,v])=>v&&String(v).trim&&String(v).trim()&&!/resume|photo|signature|token|url|_id$/i.test(k)).map(([k,v])=>detRow(k.replace(/_/g,' '),typeof v==='object'?JSON.stringify(v):v)).join(''):''}
         </div>
-      </details>
+      </details>`:''}
       <div style="margin-top:10px;">
         <div style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:6px;">Comments <span style="font-weight:500;text-transform:none;color:var(--muted);">— HR, the Sales Coordinator &amp; the agency can see these</span></div>
         ${thread.length?thread.map(c=>`<div style="background:#f4f6f4;border-radius:8px;padding:8px 10px;margin-bottom:6px;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;"><b>${esc(cAuthor(c))}</b>${c.at?' · '+fmtDate(c.at):''}</div><div style="font-size:13.5px;white-space:pre-wrap;">${esc(c.text||'')}</div></div>`).join(''):'<div style="font-size:12.5px;color:var(--muted);margin-bottom:6px;">No comments yet.</div>'}

@@ -7967,16 +7967,29 @@ function renderManning(){
   pg.innerHTML=`
     ${_sc?`<div class="panel" style="margin-top:0;background:var(--green-soft,#eef6f0);"><div style="font-weight:700;color:var(--green-dark);">Manning — ${esc(_sc)}'s stores</div><div class="psub" style="margin:2px 0 0;">Confirm the manning for your stores — tick ✓ Confirm on each once it's correct.</div></div>`:''}
     ${remindersBar("manning")}
-    ${manningApprovalsPanel()}
-    <div class="panel" style="margin-top:0;">
+    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+      <div id="mSecRail" style="flex:0 0 168px;min-width:148px;">
+        ${railBtn('headcount','Headcount','')}
+        ${railBtn('openings','Openings',OPENINGS.length||'')}
+        ${railBtn('transfers','Transfers',nTrf||'')}
+        ${showAppr?railBtn('approvals','Approvals',nAppr):''}
+      </div>
+      <div style="flex:1;min-width:280px;">
+      ${showAppr?`<div class="msec" data-sec="approvals" style="display:${SEC==='approvals'?'block':'none'};">${manningApprovalsPanel()}</div>`:''}
+      <div class="msec" data-sec="openings" style="display:${SEC==='openings'?'block':'none'};">
+      <div class="panel" style="margin-top:0;">
       <h2>Openings <span class="count-tag">${OPENINGS.length} stores · ${OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0)} positions</span></h2>
       ${(()=>{ const t=openingKindTotals(OPENINGS); return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 6px;">${t.Lead?`${openingKindPill("Lead")} <b>${t.Lead}</b>&nbsp;lead${t.Lead>1?"s":""}`:""}${t.Reliever?`&nbsp;&nbsp;${openingKindPill("Reliever")} <b>${t.Reliever}</b>&nbsp;reliever${t.Reliever>1?"s":""}`:""}${t.Stationary?`&nbsp;&nbsp;${openingKindPill("Stationary")} <b>${t.Stationary}</b>&nbsp;stationary`:""}</div>`; })()}
       <div class="psub">Manpower requests you post. These drive the agency links — each agency sees the shortfall + an in-review count, then submits candidates into the pipeline. Each need is tagged <b>Lead / Reliever / Stationary</b>.</div>
       <div class="actionbar">${canPostOpenings()?'<button class="btn" id="opNew">+ Post opening</button> ':''}${canManageStores()?'<button class="btn ghost" id="stNew">+ Add store</button>':''}${!canPostOpenings()?'<span class="psub" style="margin:0;">Openings open automatically when someone resigns. You can view and fill them below.</span>':''}</div>
       ${OPENINGS.length?`<table><thead><tr><th>Store</th><th>SC</th><th>Need</th><th>In review</th><th>Posted</th><th>Deadline</th><th></th></tr></thead><tbody id="opRows"></tbody></table>`:`<div class="psub" style="margin-top:6px;">No open requests yet — click “Post opening”.</div>`}
     </div>
-    ${manningTransfersPanel()}
-    ${phLinksBar()}
+      </div>
+      <div class="msec" data-sec="transfers" style="display:${SEC==='transfers'?'block':'none'};">
+      ${manningTransfersPanel()}
+      ${phLinksBar()}
+      </div>
+      <div class="msec" data-sec="headcount" style="display:${SEC==='headcount'?'block':'none'};">
     <div class="panel">
       <h2>Manning / Headcount <span class="count-tag">by Sales Coordinator</span></h2>
       <div class="psub">Every Sales Coordinator → their stores → approved vs. confirmed headcount. Store sales and live attendance plug in here once PayPlus and the sales system are connected.</div>
@@ -7991,7 +8004,15 @@ function renderManning(){
         ${["All",...SCs].map(s=>{ const gone=s!=="All"&&scIsGone(s); return `<div class="chip${s===scFilter?' active':''}" data-sc="${esc(s)}"${gone?' style="color:var(--red);border-color:#f1c9c5;font-weight:700;"':''}>${gone?'● ':''}${esc(s)}${s!=="All"?` (${open.filter(b=>b.sc===s).length})`:""}</div>`; }).join("")}
       </div>`}
       <div id="scBlocks"></div>
+    </div>
+      </div>
+      </div>
     </div>`;
+  $$("#page-manning #mSecRail .mrail").forEach(b=>b.addEventListener("click",()=>{
+    window.MANNING_SEC=b.dataset.sec;
+    pg.querySelectorAll(".msec").forEach(s=>{ s.style.display=(s.dataset.sec===window.MANNING_SEC)?'block':'none'; });
+    $$("#page-manning #mSecRail .mrail").forEach(x=>{ const on=x.dataset.sec===window.MANNING_SEC; x.style.background=on?'#1E3A5F':'transparent'; x.style.color=on?'#fff':'#28313c'; x.style.fontWeight=on?'700':'600'; const bd=x.querySelector('span'); if(bd){ bd.style.background=on?'rgba(255,255,255,.2)':'#e6ecf3'; bd.style.color=on?'#fff':'#41506b'; } });
+  }));
   const opNewBtn=$("#opNew"); if(opNewBtn) opNewBtn.addEventListener("click",()=>openingForm());
   const stNewBtn=$("#stNew"); if(stNewBtn) stNewBtn.addEventListener("click",()=>storeForm());
   // Clickable KPI tiles → drill into the store list behind each number.

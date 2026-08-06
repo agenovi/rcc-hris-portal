@@ -749,11 +749,11 @@ function renderCompliance(){
       <h2>Compliance — IPO Trademarks <span class="count-tag">live</span></h2>
       <div class="psub">Every registered mark needs a <b>Declaration of Actual Use</b> (3rd / 5th / 7th year) and a <b>10-year renewal</b> — missing a DAU can cancel the mark. Source: IPO Trademark Calendar. Dates are year-level; confirm exact dates against the certificates.</div>
       <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);">
-        <div class="kpi ${verify.length?'alert':''}"><div class="k-l">Verify</div><div class="k-n">${verify.length}</div><div class="k-s">deadline passed on file</div></div>
-        <div class="kpi ${dueNow.length?'warn':''}"><div class="k-l">Due ${CY}</div><div class="k-n">${dueNow.length}</div><div class="k-s">DAU / renewals this year</div></div>
-        <div class="kpi"><div class="k-l">Upcoming</div><div class="k-n">${upcoming.length}</div><div class="k-s">${CY+1} onwards</div></div>
-        <div class="kpi"><div class="k-l">Pending Apps</div><div class="k-n">${pending.length}</div><div class="k-s">awaiting IPOPHL</div></div>
-        <div class="kpi"><div class="k-l">Expired</div><div class="k-n">${expired.length}</div><div class="k-s">re-file decisions</div></div>
+        <div class="kpi ${verify.length?'alert':''}" style="cursor:pointer;" onclick="drillCompliance('verify')"><div class="k-l">Verify</div><div class="k-n">${verify.length}</div><div class="k-s">deadline passed on file</div></div>
+        <div class="kpi ${dueNow.length?'warn':''}" style="cursor:pointer;" onclick="drillCompliance('due')"><div class="k-l">Due ${CY}</div><div class="k-n">${dueNow.length}</div><div class="k-s">DAU / renewals this year</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillCompliance('upcoming')"><div class="k-l">Upcoming</div><div class="k-n">${upcoming.length}</div><div class="k-s">${CY+1} onwards</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillCompliance('pending')"><div class="k-l">Pending Apps</div><div class="k-n">${pending.length}</div><div class="k-s">awaiting IPOPHL</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillCompliance('expired')"><div class="k-l">Expired</div><div class="k-n">${expired.length}</div><div class="k-s">re-file decisions</div></div>
       </div>
       ${verify.length?`<h2 style="margin-top:18px;">⚠ Verify with IPO records — deadline on file has passed</h2>
         <div class="psub">These show a renewal/DAU year already past. Either it was filed (update the record) or the mark is at risk.</div>
@@ -3359,9 +3359,9 @@ function renderMovements(){
       </div>
       <input type="file" id="mvUpFile" accept=".xlsx,.xls,.csv" style="display:none;">
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-        <div class="kpi warn"><div class="k-l">Awaiting sign-off</div><div class="k-n">${awaiting}</div><div class="k-s">on the sign chain</div></div>
-        <div class="kpi"><div class="k-l">Approved this month</div><div class="k-n">${apprMonth}</div></div>
-        <div class="kpi"><div class="k-l">For memo</div><div class="k-n">${forMemo}</div><div class="k-s">operational</div></div>
+        <div class="kpi warn" style="cursor:pointer;" onclick="drillMovements('awaiting')"><div class="k-l">Awaiting sign-off</div><div class="k-n">${awaiting}</div><div class="k-s">on the sign chain</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillMovements('approved')"><div class="k-l">Approved this month</div><div class="k-n">${apprMonth}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillMovements('memo')"><div class="k-l">For memo</div><div class="k-n">${forMemo}</div><div class="k-s">operational</div></div>
       </div>
       <div class="psub" style="margin:6px 0 2px;"><b>${R.length}</b> total = <b>${awaiting}</b> awaiting sign-off · <b>${approvedAll}</b> approved${cancelledAll?` · <b>${cancelledAll}</b> cancelled`:""}${forMemo?` · <b>${forMemo}</b> memo`:""}</div>
       ${iCanSign.length?`<div class="note" style="margin:2px 0 6px;background:#fff8e6;border-color:#f0e2b8;color:#6b5a17;">✍ <b>${iCanSign.length}</b> NPA${iCanSign.length>1?"s":""} ${iCanSign.length>1?"are":"is"} waiting on <b>your</b> signature. Use <b>Tick all → Sign the selected</b>.</div>`
@@ -4320,9 +4320,9 @@ function renderPolicies(){
       <div class="psub">Reference library of RCC policies. Everyone can read them here; ${edit?"you can add and update policies.":"only HR management can add or edit."} Policies marked <b>Acknowledgment required</b> ask each employee to read and e-sign.</div>
       ${edit?`<div class="actionbar"><button class="btn" id="polNew">＋ New Policy</button></div>`:""}
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-        <div class="kpi"><div class="k-l">Active policies</div><div class="k-n">${active}</div></div>
-        <div class="kpi"><div class="k-l">Draft</div><div class="k-n">${draft}</div></div>
-        <div class="kpi ${pending?"warn":""}"><div class="k-l">Pending acknowledgments</div><div class="k-n">${pending}</div><div class="k-s">you haven't signed</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillPolicies('active')"><div class="k-l">Active policies</div><div class="k-n">${active}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillPolicies('draft')"><div class="k-l">Draft</div><div class="k-n">${draft}</div></div>
+        <div class="kpi ${pending?"warn":""}" style="cursor:pointer;" onclick="drillPolicies('pending')"><div class="k-l">Pending acknowledgments</div><div class="k-n">${pending}</div><div class="k-s">you haven't signed</div></div>
       </div>
       ${R.length?`<table><thead><tr><th>Policy</th><th>Category</th><th>Version</th><th>Status</th><th>Effective</th><th>Acknowledgment</th></tr></thead><tbody>
         ${R.map(p=>{ const n=polAcksFor(p).length;
@@ -4485,9 +4485,9 @@ function renderProcesses(){
       <div class="psub">Standard operating procedures — the step-by-step of how RCC runs each process. ${edit?"You can add and update SOPs.":"Read-only; HR management maintains these."}</div>
       ${edit?`<div class="actionbar"><button class="btn" id="procNew">＋ New Process</button></div>`:""}
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-        <div class="kpi"><div class="k-l">Active SOPs</div><div class="k-n">${active}</div></div>
-        <div class="kpi"><div class="k-l">Draft</div><div class="k-n">${draft}</div></div>
-        <div class="kpi"><div class="k-l">Total documented</div><div class="k-n">${R.length}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillProcesses('active')"><div class="k-l">Active SOPs</div><div class="k-n">${active}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillProcesses('draft')"><div class="k-l">Draft</div><div class="k-n">${draft}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillProcesses('all')"><div class="k-l">Total documented</div><div class="k-n">${R.length}</div></div>
       </div>
       ${R.length?`<table><thead><tr><th>Process</th><th>Category</th><th>Owner</th><th>Version</th><th>Status</th></tr></thead><tbody>
         ${R.map(p=>`<tr class="clickable" data-prid="${esc(String(p.id))}"><td><b>${esc(p.title||"—")}</b>${p.process_no?`<div class="esub">${esc(p.process_no)}</div>`:""}</td>
@@ -5281,11 +5281,11 @@ function openStore(b){
     </div>
     <div style="padding:18px 22px 60px;">
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-        <div class="kpi"><div class="k-l">Approved (AHC)</div><div class="k-n">${ahc}</div><div class="k-s">${b.ahc_stationary||0} stationary · ${b.ahc_reliever||0} reliever</div></div>
-        <div class="kpi"><div class="k-l">Confirmed (CHC)</div><div class="k-n">${chc}</div><div class="k-s">on file</div></div>
-        <div class="kpi ${def>0?'alert':''}"><div class="k-l">Shortfall</div><div class="k-n">${def}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="(document.getElementById('storePeoplePanel')||{}).scrollIntoView&&document.getElementById('storePeoplePanel').scrollIntoView({behavior:'smooth',block:'start'})"><div class="k-l">Approved (AHC)</div><div class="k-n">${ahc}</div><div class="k-s">${b.ahc_stationary||0} stationary · ${b.ahc_reliever||0} reliever</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="(document.getElementById('storePeoplePanel')||{}).scrollIntoView&&document.getElementById('storePeoplePanel').scrollIntoView({behavior:'smooth',block:'start'})"><div class="k-l">Confirmed (CHC)</div><div class="k-n">${chc}</div><div class="k-s">on file</div></div>
+        <div class="kpi ${def>0?'alert':''}" style="cursor:pointer;" onclick="(document.getElementById('storePeoplePanel')||{}).scrollIntoView&&document.getElementById('storePeoplePanel').scrollIntoView({behavior:'smooth',block:'start'})"><div class="k-l">Shortfall</div><div class="k-n">${def}</div></div>
       </div>
-      <div class="panel" style="margin-top:14px;">
+      <div class="panel" id="storePeoplePanel" style="margin-top:14px;">
         <h2>Merchandisers at this store <span class="count-tag">${here.length}</span></h2>
         <div class="psub">Live from PayPlus — active employees assigned to this worksite. Daily rate is blank until PayPlus exposes pay via the API.</div>
         ${here.length? `<table><thead><tr><th>Name</th><th>Source</th><th>Position</th>${canSeePay()?'<th>Daily Rate</th>':''}<th>Status</th>${canConfirmPerson()?'<th>Present</th>':''}</tr></thead>
@@ -5348,10 +5348,10 @@ function renderBranchesPage(){
       <h2>Worksites — every store</h2>
       <div class="psub">${BRANCHES.length} stores · ${open.length} open · each broken out individually, with its Sales Coordinator</div>
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
-        <div class="kpi"><div class="k-l">Open Stores</div><div class="k-n">${open.length}</div></div>
-        <div class="kpi"><div class="k-l">Concession</div><div class="k-n">${open.filter(b=>b.category==="CN").length}</div></div>
-        <div class="kpi"><div class="k-l">Boutique</div><div class="k-n">${open.filter(b=>b.category==="CO").length}</div></div>
-        <div class="kpi"><div class="k-l">Sales Coordinators</div><div class="k-n">${new Set(open.map(b=>b.sc).filter(x=>x&&x!=='Unassigned')).size}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillWorksites('open')"><div class="k-l">Open Stores</div><div class="k-n">${open.length}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillWorksites('cn')"><div class="k-l">Concession</div><div class="k-n">${open.filter(b=>b.category==="CN").length}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillWorksites('co')"><div class="k-l">Boutique</div><div class="k-n">${open.filter(b=>b.category==="CO").length}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillWorksites('sc')"><div class="k-l">Sales Coordinators</div><div class="k-n">${new Set(open.map(b=>b.sc).filter(x=>x&&x!=='Unassigned')).size}</div></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 4px;">
         <div class="toggle" id="wsToggle" style="display:inline-flex;border:1px solid var(--line,#dbe4dd);border-radius:9px;overflow:hidden;">
@@ -5482,9 +5482,9 @@ function renderStoremap(){
       <h2>Store Mapping</h2>
       <div class="psub">Every store mapped to its Store Coordinator (store lead). ${BRANCHES.length} stores · ${open.length} open · ${scSet.size} coordinators</div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-        <div class="kpi"><div class="k-l">Open Stores</div><div class="k-n">${open.length}</div></div>
-        <div class="kpi"><div class="k-l">Store Coordinators</div><div class="k-n">${scSet.size}</div></div>
-        <div class="kpi ${noLead?"warn":""}"><div class="k-l">Stores w/o a lead</div><div class="k-n">${noLead}</div><div class="k-s">no coordinator on file</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillStoremap('open')"><div class="k-l">Open Stores</div><div class="k-n">${open.length}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillStoremap('sc')"><div class="k-l">Store Coordinators</div><div class="k-n">${scSet.size}</div></div>
+        <div class="kpi ${noLead?"warn":""}" style="cursor:pointer;" onclick="drillStoremap('nolead')"><div class="k-l">Stores w/o a lead</div><div class="k-n">${noLead}</div><div class="k-s">no coordinator on file</div></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 4px;">
         <div class="toggle" id="smToggle" style="display:inline-flex;border:1px solid var(--line,#dbe4dd);border-radius:9px;overflow:hidden;">
@@ -5646,10 +5646,10 @@ function renderOrgChart(){
       <h2>Org Chart</h2>
       <div class="psub">Reporting structure built live from the roster (active staff). The roster stays PayPlus-owned; click any person to open their record.${canEdit?` <b style="color:#1F6B52;">Rhel/admins can assign department heads and supervisors here</b> — this feeds the discretionary NPA approval chain.`:` Reporting lines are read-only for your role.`}</div>
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
-        <div class="kpi"><div class="k-l">Departments</div><div class="k-n">${depts.length}</div></div>
-        <div class="kpi"><div class="k-l">Supervisors</div><div class="k-n">${supRefs.size}</div></div>
-        <div class="kpi"><div class="k-l">Active staff</div><div class="k-n">${ACT.filter(e=>e.group_name!=="Leadership").length}</div></div>
-        <div class="kpi ${noSup.length?"warn":""}"><div class="k-l">No supervisor set</div><div class="k-n">${noSup.length}</div><div class="k-s">reporting line blank</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillOrg('depts')"><div class="k-l">Departments</div><div class="k-n">${depts.length}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillOrg('supervisors')"><div class="k-l">Supervisors</div><div class="k-n">${supRefs.size}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillOrg('active')"><div class="k-l">Active staff</div><div class="k-n">${ACT.filter(e=>e.group_name!=="Leadership").length}</div></div>
+        <div class="kpi ${noSup.length?"warn":""}" style="cursor:pointer;" onclick="drillOrg('nosup')"><div class="k-l">No supervisor set</div><div class="k-n">${noSup.length}</div><div class="k-s">reporting line blank</div></div>
       </div>
       ${(noSup.length||deptsNoHead.length)?`<div class="psub" style="margin:6px 0 0;color:#8a5a1c;">⚠ Data gaps: ${noSup.length?`<b>${noSup.length}</b> staff have no supervisor set`:""}${(noSup.length&&deptsNoHead.length)?" · ":""}${deptsNoHead.length?`<b>${deptsNoHead.length}</b> department${deptsNoHead.length!==1?"s have":" has"} no head assigned (${esc(deptsNoHead.slice(0,6).join(", "))}${deptsNoHead.length>6?"…":""})`:""}. Fill <i>Supervisor</i> / <i>Department head</i> on the employee record to complete the chart.</div>`:""}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 4px;">
@@ -5935,9 +5935,9 @@ function renderPositions(){
       <h2>Positions &amp; Job Descriptions</h2>
       <div class="psub">Job descriptions, key tasks, and deliverables per position. Fill once — applies to everyone in that role. ${canEdit?"Admins/Rhel can edit.":"Read-only for your role."} Roles are derived live from active staff (PayPlus roster); the JD content is HRIS-owned.</div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-        <div class="kpi"><div class="k-l">Distinct positions</div><div class="k-n">${pairs.length}</div><div class="k-s">position · department pairs</div></div>
-        <div class="kpi ${filled.length?'':'warn'}"><div class="k-l">Positions with a JD</div><div class="k-n">${filled.length}</div><div class="k-s">${pairs.length-filled.length} still to fill</div></div>
-        <div class="kpi"><div class="k-l">Staff covered by a JD</div><div class="k-n">${coveredStaff}</div><div class="k-s">of ${totalStaff} active in a role</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillPositions('all')"><div class="k-l">Distinct positions</div><div class="k-n">${pairs.length}</div><div class="k-s">position · department pairs</div></div>
+        <div class="kpi ${filled.length?'':'warn'}" style="cursor:pointer;" onclick="drillPositions('filled')"><div class="k-l">Positions with a JD</div><div class="k-n">${filled.length}</div><div class="k-s">${pairs.length-filled.length} still to fill</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillPositions('covered')"><div class="k-l">Staff covered by a JD</div><div class="k-n">${coveredStaff}</div><div class="k-s">of ${totalStaff} active in a role</div></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 4px;">
         <input id="posSearch" class="search" style="flex:1;min-width:200px;" placeholder="Search position or department…" value="${esc(posSearch)}">
@@ -6153,16 +6153,16 @@ function renderConcerns(){
         <button class="btn" id="cxNew">＋ New concern / case</button>
       </div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);margin-top:12px;">
-        <div class="kpi ${openOngoing?"warn":""}"><div class="k-l">Open &amp; ongoing</div><div class="k-n">${openOngoing}</div></div>
-        <div class="kpi ${soon.length?"warn":""}"><div class="k-l">Hearing ≤ 14 days</div><div class="k-n">${soon.length}</div></div>
-        <div class="kpi"><div class="k-l">Exposure (active)</div><div class="k-n" style="font-size:20px;">${exposure?peso(exposure):"—"}</div></div>
+        <div class="kpi ${openOngoing?"warn":""}" style="cursor:pointer;" onclick="drillConcerns('openongoing')"><div class="k-l">Open &amp; ongoing</div><div class="k-n">${openOngoing}</div></div>
+        <div class="kpi ${soon.length?"warn":""}" style="cursor:pointer;" onclick="drillConcerns('soon')"><div class="k-l">Hearing ≤ 14 days</div><div class="k-n">${soon.length}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillConcerns('exposure')"><div class="k-l">Exposure (active)</div><div class="k-n" style="font-size:20px;">${exposure?peso(exposure):"—"}</div></div>
       </div>
       <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);margin-top:10px;">
-        <div class="kpi"><div class="k-l">For settlement / payment</div><div class="k-n">${cForSettle}</div></div>
-        <div class="kpi"><div class="k-l">Settled</div><div class="k-n">${cSettled}</div></div>
-        <div class="kpi"><div class="k-l">Dismissed</div><div class="k-n">${cDismissed}</div></div>
-        <div class="kpi"><div class="k-l">Archived</div><div class="k-n">${cArchived}</div></div>
-        <div class="kpi"><div class="k-l">Closed / other</div><div class="k-n">${cOther}</div><div class="k-s">Closed · Withdrawn · Awarded</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillConcerns('settle')"><div class="k-l">For settlement / payment</div><div class="k-n">${cForSettle}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillConcerns('settled')"><div class="k-l">Settled</div><div class="k-n">${cSettled}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillConcerns('dismissed')"><div class="k-l">Dismissed</div><div class="k-n">${cDismissed}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillConcerns('archived')"><div class="k-l">Archived</div><div class="k-n">${cArchived}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillConcerns('other')"><div class="k-l">Closed / other</div><div class="k-n">${cOther}</div><div class="k-s">Closed · Withdrawn · Awarded</div></div>
       </div>
       <input id="cxSearch" class="search" style="width:100%;margin:12px 0 4px;" placeholder="Search case, employee, forum, counsel…">
       ${CONCERNS.length?`<table style="margin-top:6px;"><thead><tr><th>Case</th><th>Employee</th><th>Type</th><th>Status</th><th>Next hearing</th><th>Exposure</th></tr></thead>
@@ -6387,10 +6387,10 @@ function renderIncidents(){
         <button class="btn" id="inNew">＋ Log incident</button>
       </div>
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-top:12px;">
-        <div class="kpi"><div class="k-l">Total logged</div><div class="k-n">${total}</div></div>
-        <div class="kpi"><div class="k-l">NTE issued</div><div class="k-n">${nte}</div></div>
-        <div class="kpi ${open?"warn":""}"><div class="k-l">Pending / ongoing</div><div class="k-n">${open}</div></div>
-        <div class="kpi ${repeatPeople?"warn":""}"><div class="k-l">Repeat offenders</div><div class="k-n">${repeatPeople}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillIncidents('all')"><div class="k-l">Total logged</div><div class="k-n">${total}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillIncidents('nte')"><div class="k-l">NTE issued</div><div class="k-n">${nte}</div></div>
+        <div class="kpi ${open?"warn":""}" style="cursor:pointer;" onclick="drillIncidents('open')"><div class="k-l">Pending / ongoing</div><div class="k-n">${open}</div></div>
+        <div class="kpi ${repeatPeople?"warn":""}" style="cursor:pointer;" onclick="drillIncidents('repeat')"><div class="k-l">Repeat offenders</div><div class="k-n">${repeatPeople}</div></div>
       </div>
       <div class="filterbar" id="inFilter" style="margin-top:12px;">
         ${["All",...INCIDENT_STATUSES].map(s=>`<div class="chip${s==="All"?" active":""}" data-st="${esc(s)}">${esc(s)}${s==="All"?` (${total})`:` (${INCIDENTS.filter(i=>(i.status||"").toUpperCase()===s).length})`}</div>`).join("")}
@@ -6655,11 +6655,11 @@ function renderHmo(){
         </div>
       </div>
       <div class="grid kpis" style="grid-template-columns:repeat(5,1fr);margin-top:12px;">
-        <div class="kpi"><div class="k-l">Active members</div><div class="k-n">${active.length}</div><div class="k-s">${depCount} dependent${depCount!==1?"s":""}</div></div>
-        <div class="kpi"><div class="k-l">Total annual premium</div><div class="k-n" style="font-size:19px;">${peso(annual)}</div><div class="k-s">₱${HMO_PREMIUM.toLocaleString()} / head</div></div>
-        <div class="kpi"><div class="k-l">RCC share</div><div class="k-n" style="font-size:19px;color:var(--green-dark,#1f6b3a);">${peso(erTot)}</div></div>
-        <div class="kpi"><div class="k-l">Employee share</div><div class="k-n" style="font-size:19px;">${peso(eeTot)}</div></div>
-        <div class="kpi ${crossings.length?"warn":""}"><div class="k-l">8-yr tier crossings</div><div class="k-n">${crossings.length}</div><div class="k-s">Cat 1 → Cat 2 soon</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillHmo('active')"><div class="k-l">Active members</div><div class="k-n">${active.length}</div><div class="k-s">${depCount} dependent${depCount!==1?"s":""}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillHmo('annual')"><div class="k-l">Total annual premium</div><div class="k-n" style="font-size:19px;">${peso(annual)}</div><div class="k-s">₱${HMO_PREMIUM.toLocaleString()} / head</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillHmo('rcc')"><div class="k-l">RCC share</div><div class="k-n" style="font-size:19px;color:var(--green-dark,#1f6b3a);">${peso(erTot)}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillHmo('ee')"><div class="k-l">Employee share</div><div class="k-n" style="font-size:19px;">${peso(eeTot)}</div></div>
+        <div class="kpi ${crossings.length?"warn":""}" style="cursor:pointer;" onclick="drillHmo('crossings')"><div class="k-l">8-yr tier crossings</div><div class="k-n">${crossings.length}</div><div class="k-s">Cat 1 → Cat 2 soon</div></div>
       </div>
     </div>
 
@@ -6898,10 +6898,10 @@ function renderSeparations(){
         <button class="btn ghost" id="sepExport">Export CSV</button>
       </div>
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);margin-top:12px;">
-        <div class="kpi"><div class="k-l">Total on record</div><div class="k-n">${all.length}</div></div>
-        <div class="kpi"><div class="k-l">Separated this year</div><div class="k-n">${thisYear}</div></div>
-        <div class="kpi ${noClear?"warn":""}"><div class="k-l">Did not process clearance</div><div class="k-n">${noClear}</div></div>
-        <div class="kpi"><div class="k-l">Top reason</div><div class="k-n" style="font-size:14px;line-height:1.25;">${topReason?esc(topReason[0])+" ("+topReason[1]+")":"—"}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillSeparations('all')"><div class="k-l">Total on record</div><div class="k-n">${all.length}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillSeparations('thisyear')"><div class="k-l">Separated this year</div><div class="k-n">${thisYear}</div></div>
+        <div class="kpi ${noClear?"warn":""}" style="cursor:pointer;" onclick="drillSeparations('noclear')"><div class="k-l">Did not process clearance</div><div class="k-n">${noClear}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillSeparations('topreason')"><div class="k-l">Top reason</div><div class="k-n" style="font-size:14px;line-height:1.25;">${topReason?esc(topReason[0])+" ("+topReason[1]+")":"—"}</div></div>
       </div>
       <div class="filterbar" id="sepYears" style="margin-top:12px;">
         <div class="chip active" data-y="All">All years (${all.length})</div>
@@ -7476,9 +7476,9 @@ function renderMemos(){
       <div class="psub">The 7 standard HR letters + a custom memo — generated on RCC letterhead, routed through Signatures, and logged. DOLE twin-notice flow: <b>NTE → (employee explains) → Notice of Decision</b>.</div>
       <div class="actionbar"><button class="btn" id="memoNew">+ New memo</button> <button class="btn ghost" id="chargeNew">+ Charge notice</button>${canManageStores()?' <button class="btn ghost" id="npaNew">+ New NPA</button>':''}</div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-        <div class="kpi"><div class="k-l">Drafts</div><div class="k-n">${drafts.length}</div></div>
-        <div class="kpi warn"><div class="k-l">Awaiting signature</div><div class="k-n">${issued.length}</div></div>
-        <div class="kpi"><div class="k-l">Signed</div><div class="k-n">${signed.length}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillMemos('drafts')"><div class="k-l">Drafts</div><div class="k-n">${drafts.length}</div></div>
+        <div class="kpi warn" style="cursor:pointer;" onclick="drillMemos('issued')"><div class="k-l">Awaiting signature</div><div class="k-n">${issued.length}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillMemos('signed')"><div class="k-l">Signed</div><div class="k-n">${signed.length}</div></div>
       </div>
     </div>
     <div class="panel"><h2>All memos <span class="count-tag">${M.length}</span></h2>
@@ -8643,7 +8643,7 @@ function renderEvaluations(){
   const list=evDueList();
   const due=list.filter(x=>x.bucket==="due"), overdue=list.filter(x=>x.bucket==="overdue"), upcoming=list.filter(x=>x.bucket==="upcoming");
   const noHire=EMPLOYEES.filter(e=>(e.status||"").toLowerCase().startsWith("active")&&!e.hire_date).length;
-  const card=(l,n)=>`<div class="kpi"><div class="k-l">${l}</div><div class="k-n">${n}</div></div>`;
+  const card=(l,n,d)=>`<div class="kpi"${d?` style="cursor:pointer;" onclick="drillEval('${d}')"`:""}><div class="k-l">${l}</div><div class="k-n">${n}</div></div>`;
   const itemRow=(x)=>`<div class="task" style="cursor:pointer;align-items:center;" onclick="openEvalForm('${x.emp.id}','${x.type}','${x.due}')">
       <div class="dot ${x.bucket==='overdue'?'r':(x.bucket==='due'?'a':'g')}"></div>
       <div style="flex:1;min-width:0;"><div class="tt">${esc(x.emp.full_name)}</div><div class="td">${EVAL_LABEL[x.type]} · ${esc(x.emp.position||x.emp.department||"")}</div></div>
@@ -8662,7 +8662,7 @@ function renderEvaluations(){
     <div class="panel" style="margin-top:0;">
       <h2>Evaluations</h2>
       <div class="psub">Auto-computed from each employee's <b>hire date</b>. Probationary reviews (3rd / 5th month + regularization) cover <b>2026 hires only</b> — earlier staff are already past probation. Annual reviews start 2027.${noHire?` <span style="color:#9a6a00;">⚠ ${noHire} active staff have no hire date yet — upload the hires list to include them.</span>`:""}</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px;">${card("Due this month",due.length)}${card("Overdue",overdue.length)}${card("Upcoming 60d",upcoming.length)}${card("Completed",EVALUATIONS.length)}</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px;">${card("Due this month",due.length,"due")}${card("Overdue",overdue.length,"overdue")}${card("Upcoming 60d",upcoming.length,"upcoming")}${card("Completed",EVALUATIONS.length,"completed")}</div>
       ${overdue.length?`<div style="margin-top:12px;padding:10px 12px;background:#eef4ef;border:1px solid var(--line);border-radius:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><div style="flex:1;min-width:190px;font-size:12.5px;color:var(--muted);">Already did some of these <b>on paper</b> before the portal? Clear the backlog so it stops flagging them.</div><button class="btn ghost" onclick="evClearBacklog()" style="flex-shrink:0;">✓ Clear ${overdue.length} overdue as done pre-portal…</button></div>`:""}
     </div>
     ${typeSection("3rd-month","First review · 2.5 months","Early coaching check-in — timed 2 weeks early so a delay still lands by the 3-month mark.")}
@@ -9051,11 +9051,11 @@ function renderMeetings(){
       </div>
     </div>
     <div class="grid kpis" style="grid-template-columns:repeat(${bank?4:2},1fr);margin-top:12px;">
-      <div class="kpi"><div class="k-l">Attended</div><div class="k-n">${rows.length}</div></div>
-      ${bank?`<div class="kpi"><div class="k-l">Transport total</div><div class="k-n" style="font-size:18px;">${mPeso(totT)}</div></div>
-      <div class="kpi"><div class="k-l">LBC total</div><div class="k-n" style="font-size:18px;">${mPeso(totL)}</div></div>
+      <div class="kpi" style="cursor:pointer;" onclick="drillMeetings('attended')"><div class="k-l">Attended</div><div class="k-n">${rows.length}</div></div>
+      ${bank?`<div class="kpi" style="cursor:pointer;" onclick="drillMeetings('transport')"><div class="k-l">Transport total</div><div class="k-n" style="font-size:18px;">${mPeso(totT)}</div></div>
+      <div class="kpi" style="cursor:pointer;" onclick="drillMeetings('lbc')"><div class="k-l">LBC total</div><div class="k-n" style="font-size:18px;">${mPeso(totL)}</div></div>
       <div class="kpi"><div class="k-l">Verified / Paid</div><div class="k-n" style="font-size:18px;">${verified} / ${paid}</div></div>`
-      :`<div class="kpi"><div class="k-l">On venue ✓</div><div class="k-n">${rows.filter(r=>r.ip_ok===true).length}</div></div>`}
+      :`<div class="kpi" style="cursor:pointer;" onclick="drillMeetings('venue')"><div class="k-l">On venue ✓</div><div class="k-n">${rows.filter(r=>r.ip_ok===true).length}</div></div>`}
     </div>
     ${rows.length?`
     <div style="overflow-x:auto;margin-top:12px;">
@@ -9712,9 +9712,9 @@ function renderMaternity(){
       <div class="psub">RA 11210 · computed per <b>DOLE Labor Advisory 01-2019</b>: full pay (daily rate × working days/month × maternity months — <b>normal working days, not attendance</b>) − SSS benefit − contributions = <b>salary differential</b> (taxable, forms part of 13th-month). Employer pays it only when full pay exceeds the SSS benefit. Salary-restricted — you &amp; Grazel only.</div>
       <div class="actionbar"><button class="btn" id="matNew">+ New maternity claim</button></div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-        <div class="kpi"><div class="k-l">Draft</div><div class="k-n">${draft}</div></div>
-        <div class="kpi warn"><div class="k-l">Awaiting sign-off</div><div class="k-n">${awaiting}</div></div>
-        <div class="kpi"><div class="k-l">Approved</div><div class="k-n">${approved}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillMaternity('draft')"><div class="k-l">Draft</div><div class="k-n">${draft}</div></div>
+        <div class="kpi warn" style="cursor:pointer;" onclick="drillMaternity('awaiting')"><div class="k-l">Awaiting sign-off</div><div class="k-n">${awaiting}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillMaternity('approved')"><div class="k-l">Approved</div><div class="k-n">${approved}</div></div>
       </div>
       ${M.length?`<table><thead><tr><th>Employee</th><th>Type</th><th>Days</th><th>Delivery</th><th>Net payable</th><th>Status</th></tr></thead><tbody>
         ${M.map(m=>`<tr class="clickable" data-mid="${esc(m.id)}"><td><b>${esc(m.employee_name)}</b><div class="esub">${esc(m.worksite||"")}</div></td><td>${esc(m.claim_type||"")}${m.solo_parent?" · solo":""}</td><td>${m.leave_days||"—"}</td><td>${m.delivery_date?fmtDate(m.delivery_date):"—"}</td><td>${m.net_payable!=null?peso(m.net_payable):"—"}</td><td><span class="pill ${m.status==="Approved"?"active":(m.status==="Awaiting Sign-off"?"awol":"")}">${esc(m.status||"Draft")}</span></td></tr>`).join("")}
@@ -10064,10 +10064,10 @@ function renderReports(){
     <div class="panel">
       <h2>This month <span class="count-tag">${now.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</span></h2>
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
-        <div class="kpi"><div class="k-l">Applications</div><div class="k-n">${appsMo}</div></div>
-        <div class="kpi"><div class="k-l">Hired</div><div class="k-n">${hiredMo}</div></div>
-        <div class="kpi"><div class="k-l">Openings posted</div><div class="k-n">${postedMo}</div></div>
-        <div class="kpi"><div class="k-l">Openings filled</div><div class="k-n">${filledMo}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillReportsMonth('apps')"><div class="k-l">Applications</div><div class="k-n">${appsMo}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillReportsMonth('hired')"><div class="k-l">Hired</div><div class="k-n">${hiredMo}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillReportsMonth('posted')"><div class="k-l">Openings posted</div><div class="k-n">${postedMo}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillReportsMonth('filled')"><div class="k-l">Openings filled</div><div class="k-n">${filledMo}</div></div>
       </div>
     </div>
     <div class="panel">
@@ -10128,6 +10128,282 @@ function phTileList(phase){
   wire();
 }
 window.phTileList=phTileList;
+
+/* ============================ KPI DRILL-DOWN — make every stat tile open the exact records it counts ============================
+   Shared slide-in list modal (same shape as the global-search results: {label, sub, act?, tone?}).
+   Rows with an act() are clickable → open that record's detail; rows without are informative lists. */
+function kpiDrill(title, items){
+  items=items||[];
+  let m=document.getElementById("kpiDrillModal"); if(!m){ m=document.createElement("div"); m.id="kpiDrillModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  const anyAct=items.some(x=>typeof x.act==="function");
+  const row=(it,i)=>{ const clk=typeof it.act==="function"; return `<div class="task${clk?' clickable':''}" data-i="${i}" style="${clk?'cursor:pointer;':''}"><div class="dot ${it.tone||'a'}"></div><div style="flex:1;min-width:0;"><div class="tt">${esc(it.label||'—')}</div>${it.sub?`<div class="td">${esc(it.sub)}</div>`:''}</div></div>`; };
+  const indexed=items.map((it,i)=>({it,i}));
+  const render=(list)=>list.length?list.map(({it,i})=>row(it,i)).join(""):'<div class="psub">Nothing here right now.</div>';
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:520px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#123528,#1F6B52);color:#fff;padding:18px 22px;position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <div><div style="font-size:19px;font-weight:800;">${esc(title||'')}</div><div style="font-size:12.5px;opacity:.9;">${items.length} item${items.length===1?'':'s'}${anyAct?' · tap to open':''}</div></div>
+      <button id="kpiDrillX" style="background:rgba(255,255,255,.15);border:none;color:#fff;font-size:18px;width:34px;height:34px;border-radius:8px;cursor:pointer;flex-shrink:0;">✕</button>
+    </div>
+    <div style="padding:14px 16px 50px;"><input id="kpiDrillSearch" class="search" style="width:100%;margin-bottom:10px;" placeholder="Search…"><div id="kpiDrillRows">${render(indexed)}</div></div>
+  </div>`;
+  const wire=()=>{ $$("#kpiDrillRows .clickable").forEach(el=>el.addEventListener("click",()=>{ const it=items[+el.dataset.i]; m.remove(); if(it&&typeof it.act==="function"){ try{it.act();}catch(e){} } })); };
+  const paint=()=>{ const q=(document.getElementById("kpiDrillSearch").value||"").toLowerCase(); const f=indexed.filter(({it})=>!q||[it.label,it.sub].filter(Boolean).join(" ").toLowerCase().includes(q)); document.getElementById("kpiDrillRows").innerHTML=render(f); wire(); };
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("kpiDrillX").addEventListener("click",()=>m.remove());
+  document.getElementById("kpiDrillSearch").addEventListener("input",paint);
+  wire();
+}
+window.kpiDrill=kpiDrill;
+
+function drillCompliance(key){
+  const CY=new Date().getFullYear();
+  const tm=(COMPLIANCE||[]).filter(c=>c.kind==="Trademark");
+  const sets={
+    verify:["Verify — deadline passed on file", tm.filter(c=>c.needs_verify)],
+    due:["Due "+CY, tm.filter(c=>c.next_due_year===CY&&!c.needs_verify)],
+    upcoming:["Upcoming renewals / DAU", tm.filter(c=>c.next_due_year>CY&&!c.needs_verify)],
+    pending:["Pending applications", tm.filter(c=>c.status==="PENDING")],
+    expired:["Expired marks", tm.filter(c=>c.status==="EXPIRED")]
+  };
+  const [t,list]=sets[key]||["",[]];
+  kpiDrill(t, list.map(c=>({label:c.name, sub:[c.ref_no,c.authority,c.next_due_year].filter(Boolean).join(" · ")})));
+}
+window.drillCompliance=drillCompliance;
+
+function drillMovements(key){
+  const R=NPAS||[]; const ym=new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0");
+  const sets={
+    awaiting:["Awaiting sign-off", R.filter(r=>r.status==="awaiting_signoff")],
+    approved:["Approved this month", R.filter(r=>r.status==="approved"&&(r.approval_date||"").slice(0,7)===ym)],
+    memo:["For memo (operational)", R.filter(r=>r.status==="memo")]
+  };
+  const [t,list]=sets[key]||["",[]];
+  kpiDrill(t, list.map(r=>({label:r.employee_name||"—", sub:[MV_ACTION_LABEL[r.action_type]||r.action_type,r.npa_id].filter(Boolean).join(" · "), act:()=>openMovementDrawer(r)})));
+}
+window.drillMovements=drillMovements;
+
+function drillPolicies(key){
+  const R=(POLICIES||[]).slice().sort((a,b)=>(a.title||"").localeCompare(b.title||""));
+  const sets={
+    active:["Active policies", R.filter(p=>p.status==="active")],
+    draft:["Draft policies", R.filter(p=>p.status==="draft")],
+    pending:["Pending your acknowledgment", R.filter(p=>p.status==="active"&&p.requires_ack&&!polIAcked(p))]
+  };
+  const [t,list]=sets[key]||["",[]];
+  kpiDrill(t, list.map(p=>({label:p.title||"—", sub:[p.category,p.policy_no,"v"+(p.version||"1")].filter(Boolean).join(" · "), act:()=>openPolicyDrawer(p)})));
+}
+window.drillPolicies=drillPolicies;
+
+function drillProcesses(key){
+  const R=(PROCESSES||[]).slice().sort((a,b)=>(a.title||"").localeCompare(b.title||""));
+  const sets={
+    active:["Active SOPs", R.filter(p=>p.status==="active")],
+    draft:["Draft SOPs", R.filter(p=>p.status==="draft")],
+    all:["All documented processes", R]
+  };
+  const [t,list]=sets[key]||["",[]];
+  kpiDrill(t, list.map(p=>({label:p.title||"—", sub:[p.category,p.owner].filter(Boolean).join(" · "), act:()=>openProcessDrawer(p)})));
+}
+window.drillProcesses=drillProcesses;
+
+function drillWorksites(key){
+  const open=(BRANCHES||[]).filter(b=>b.status==="Open");
+  if(key==="sc"){
+    const map={}; open.forEach(b=>{ const s=(b.sc||"").trim(); if(s&&s!=="Unassigned") (map[s]=map[s]||[]).push(b); });
+    const items=Object.keys(map).sort().map(s=>({label:s, sub:map[s].length+" store"+(map[s].length===1?"":"s")}));
+    kpiDrill("Sales Coordinators", items); return;
+  }
+  const sets={ open:["Open stores", open], cn:["Concession stores", open.filter(b=>b.category==="CN")], co:["Boutique stores", open.filter(b=>b.category==="CO")] };
+  const [t,list]=sets[key]||["",[]];
+  kpiDrill(t, list.map(b=>({label:b.name, sub:["SC "+(b.sc||"—"),b.city].filter(Boolean).join(" · "), act:()=>openStore(b)})));
+}
+window.drillWorksites=drillWorksites;
+
+function drillStoremap(key){
+  const open=(BRANCHES||[]).filter(b=>b.status==="Open");
+  if(key==="sc"){
+    const map={}; (BRANCHES||[]).forEach(b=>{ const s=(b.sc||"").trim(); if(s&&s!=="Unassigned") (map[s]=map[s]||[]).push(b); });
+    kpiDrill("Store Coordinators", Object.keys(map).sort().map(s=>({label:s, sub:map[s].length+" store"+(map[s].length===1?"":"s")}))); return;
+  }
+  if(key==="nolead"){
+    const arr=(BRANCHES||[]).filter(b=>b.status==="Open"&&!((b.sc||"").trim()));
+    kpiDrill("Stores without a lead", arr.map(b=>({label:b.name, sub:[b.city,b.area].filter(Boolean).join(" · "), tone:'r', act:()=>openStore(b)}))); return;
+  }
+  kpiDrill("Open stores", open.map(b=>({label:b.name, sub:["SC "+(b.sc||"—"),b.city].filter(Boolean).join(" · "), act:()=>openStore(b)})));
+}
+window.drillStoremap=drillStoremap;
+
+function drillOrg(key){
+  const ACT=(EMPLOYEES||[]).filter(e=>(e.status||"").toLowerCase().startsWith("active"));
+  if(key==="depts"){
+    const map={}; ACT.forEach(e=>{ const d=(e.department||"").trim(); if(d) map[d]=(map[d]||0)+1; });
+    kpiDrill("Departments", Object.keys(map).sort().map(d=>({label:d, sub:map[d]+" active staff"}))); return;
+  }
+  if(key==="supervisors"){
+    const e2e={}; ACT.forEach(e=>{ if(e.email) e2e[String(e.email).toLowerCase()]=e; });
+    const se=new Set(); ACT.forEach(e=>{ const s=String(e.supervisor_email||"").toLowerCase(); if(s&&e2e[s]) se.add(s); });
+    const sups=[...se].map(s=>e2e[s]).filter(Boolean).sort((a,b)=>(a.full_name||"").localeCompare(b.full_name||""));
+    kpiDrill("Supervisors", sups.map(e=>({label:e.full_name, sub:[e.position,e.department].filter(Boolean).join(" · "), act:()=>openRecord(e)}))); return;
+  }
+  if(key==="nosup"){
+    const arr=ACT.filter(e=>e.group_name!=="Leadership"&&!String(e.supervisor_name||"").trim()&&!String(e.supervisor_email||"").trim()).sort((a,b)=>(a.full_name||"").localeCompare(b.full_name||""));
+    kpiDrill("No supervisor set", arr.map(e=>({label:e.full_name, sub:[e.position,e.department].filter(Boolean).join(" · "), tone:'r', act:()=>openRecord(e)}))); return;
+  }
+  const arr=ACT.filter(e=>e.group_name!=="Leadership").sort((a,b)=>(a.full_name||"").localeCompare(b.full_name||""));
+  kpiDrill("Active staff", arr.map(e=>({label:e.full_name, sub:[e.position,e.department||e.worksite].filter(Boolean).join(" · "), act:()=>openRecord(e)})));
+}
+window.drillOrg=drillOrg;
+
+function drillPositions(key){
+  const pairs=positionPairs();
+  let title, list;
+  if(key==="filled"){ title="Positions with a JD"; list=pairs.filter(p=>positionHasJD(p.profile)); }
+  else if(key==="covered"){ title="Staff covered by a JD"; list=pairs.filter(p=>positionHasJD(p.profile)); }
+  else { title="Distinct positions"; list=pairs.slice(); }
+  list=list.slice().sort((a,b)=>b.headcount-a.headcount||a.position.localeCompare(b.position));
+  kpiDrill(title, list.map(p=>({label:p.position, sub:[p.department,p.headcount+" in role",positionHasJD(p.profile)?"JD ✓":"no JD yet"].filter(Boolean).join(" · "), act:()=>openPositionProfile(p.position,p.department)})));
+}
+window.drillPositions=drillPositions;
+
+function drillConcerns(key){
+  const byStatus=s=>CONCERNS.filter(c=>c.status===s);
+  const soon=CONCERNS.filter(c=>{ const n=daysUntil(c.next_hearing); return n!=null&&n>=0&&n<=14&&!["Closed","Settled","Dismissed","Withdrawn"].includes(c.status); });
+  const sets={
+    openongoing:["Open & ongoing", CONCERNS.filter(c=>["Open","Pending","Ongoing"].includes(c.status))],
+    soon:["Hearing within 14 days", soon],
+    exposure:["Active cases with exposure", activeCases()],
+    settle:["For settlement / payment", byStatus("For settlement/payment")],
+    settled:["Settled", byStatus("Settled")],
+    dismissed:["Dismissed", byStatus("Dismissed")],
+    archived:["Archived", byStatus("Archived")],
+    other:["Closed / Withdrawn / Awarded", CONCERNS.filter(c=>["Closed","Withdrawn","Awarded"].includes(c.status))]
+  };
+  const [t,list]=sets[key]||["",[]];
+  kpiDrill(t, list.map(c=>({label:c.title||"—", sub:[c.case_type,c.employee_name,c.exposure?peso(Number(c.exposure)):null].filter(Boolean).join(" · "), act:()=>openConcern(c)})));
+}
+window.drillConcerns=drillConcerns;
+
+function drillIncidents(key){
+  const rmap=incRepeatMap();
+  let title, list;
+  if(key==="nte"){ title="NTE issued"; list=INCIDENTS.filter(incNteYes); }
+  else if(key==="open"){ title="Pending / ongoing"; list=INCIDENTS.filter(incOpen); }
+  else if(key==="repeat"){ title="Repeat offenders — all their incidents"; list=INCIDENTS.filter(i=>(rmap[(i.person_name||"").trim().toLowerCase()]||0)>1); }
+  else { title="All incidents logged"; list=INCIDENTS.slice(); }
+  list=list.slice().sort((a,b)=>String(b.date_received||"").localeCompare(String(a.date_received||"")));
+  kpiDrill(title, list.map(i=>{ const rc=rmap[(i.person_name||"").trim().toLowerCase()]||0; return {label:i.person_name||i.incident_no||"—", sub:[i.incident_no,i.incident_type,rc>1?rc+"× repeat":null].filter(Boolean).join(" · "), tone:incOpen(i)?'a':'g', act:()=>openIncident(i)}; }));
+}
+window.drillIncidents=drillIncidents;
+
+function drillHmo(key){
+  const principals=HMO_MEMBERS.filter(m=>!hmoIsDep(m));
+  const active=principals.filter(m=>(m.status||"Active")==="Active");
+  let title, list;
+  if(key==="crossings"){ title="8-year tier crossings (Cat 1 → Cat 2 soon)"; list=active.filter(m=>m.tier==="cat1"&&(hmoTenureYears(m)||0)>=7.5); }
+  else { title=({active:"Active members","annual":"Active members (annual premium)",rcc:"Active members (RCC share)",ee:"Active members (employee share)"})[key]||"Active members"; list=active; }
+  list=list.slice().sort((a,b)=>{ const ta=HMO_TIER_ORDER.indexOf(a.tier),tb=HMO_TIER_ORDER.indexOf(b.tier); if(ta!==tb) return ta-tb; return hmoName(a).localeCompare(hmoName(b)); });
+  kpiDrill(title, list.map(m=>{ const T=hmoTier(m); return {label:hmoName(m), sub:[hmoPosition(m),T?T.short+" · "+T.ratio:null].filter(Boolean).join(" · "), tone:m.tier==="cat1"&&(hmoTenureYears(m)||0)>=7.5?'a':'g', act:()=>openHmoMember(m)}; }));
+}
+window.drillHmo=drillHmo;
+
+function drillSeparations(key){
+  const all=SEPARATIONS||[];
+  const yr=String(new Date().getFullYear());
+  let title, list;
+  if(key==="thisyear"){ title="Separated this year"; list=all.filter(s=>sepYear(s)===yr); }
+  else if(key==="noclear"){ title="Did not process clearance"; list=all.filter(s=>String(s.section||"").toLowerCase().includes("did not")); }
+  else if(key==="topreason"){ const rc={}; all.forEach(s=>{ const r=(s.reason||"").trim(); if(r) rc[r]=(rc[r]||0)+1; }); const top=Object.entries(rc).sort((a,b)=>b[1]-a[1])[0]; const rn=top?top[0]:null; title="Top reason"+(rn?" — "+rn:""); list=rn?all.filter(s=>(s.reason||"").trim()===rn):[]; }
+  else { title="All separations on record"; list=all.slice(); }
+  list=list.slice().sort((a,b)=>String(b.date_of_separation||b.date_text||"").localeCompare(String(a.date_of_separation||a.date_text||"")));
+  kpiDrill(title, list.slice(0,400).map(s=>({label:s.employee_name||"—", sub:[s.reason,s.branch,sepYear(s)].filter(Boolean).join(" · ")})));
+}
+window.drillSeparations=drillSeparations;
+
+function drillMemos(key){
+  const M=MEMOS||[];
+  const sets={ drafts:["Draft memos", M.filter(m=>m.status==="Draft")], issued:["Awaiting signature", M.filter(m=>m.status==="Issued")], signed:["Signed memos", M.filter(m=>m.status==="Signed")] };
+  const [t,list]=sets[key]||["",[]];
+  kpiDrill(t, list.map(m=>({label:m.subject_name||m.ref_no||"—", sub:[m.memo_type,m.ref_no].filter(Boolean).join(" · "), act:()=>viewMemo(m.id)})));
+}
+window.drillMemos=drillMemos;
+
+function drillMaternity(key){
+  const M=MATERNITY||[];
+  const sets={ draft:["Draft claims", M.filter(m=>m.status==="Draft")], awaiting:["Awaiting sign-off", M.filter(m=>m.status==="Awaiting Sign-off")], approved:["Approved claims", M.filter(m=>m.status==="Approved")] };
+  const [t,list]=sets[key]||["",[]];
+  kpiDrill(t, list.map(m=>({label:m.employee_name||"—", sub:[m.claim_type,m.net_payable!=null?peso(m.net_payable):null].filter(Boolean).join(" · "), act:()=>openMaternityForm(m)})));
+}
+window.drillMaternity=drillMaternity;
+
+function drillReportsMonth(key){
+  const inMo=d=>{ if(!d) return false; const x=new Date(d), n=new Date(); return x.getFullYear()===n.getFullYear()&&x.getMonth()===n.getMonth(); };
+  if(key==="apps"){ const arr=PREHIRE.filter(p=>inMo(p.created_at)); kpiDrill("Applications this month", arr.map(c=>({label:c.full_name||"—", sub:[c.position,c.hire_source].filter(Boolean).join(" · "), act:()=>openPrehire(c)}))); return; }
+  if(key==="hired"){ const arr=PREHIRE.filter(p=>p.phase==="HIRED"&&inMo(p.updated_at)); kpiDrill("Hired this month", arr.map(c=>({label:c.full_name||"—", sub:[c.position,c.worksite].filter(Boolean).join(" · "), tone:'g', act:()=>openPrehire(c)}))); return; }
+  if(key==="posted"){ const arr=MANPOWER.filter(o=>inMo(o.date_posted)); kpiDrill("Openings posted this month", arr.map(o=>({label:o.position||o.worksite||"Opening", sub:[o.worksite,(o.count_needed||0)+" needed"].filter(Boolean).join(" · ")}))); return; }
+  if(key==="filled"){ const arr=MANPOWER.filter(o=>o.status==="Filled"&&inMo(o.updated_at)); kpiDrill("Openings filled this month", arr.map(o=>({label:o.position||o.worksite||"Opening", sub:[o.worksite].filter(Boolean).join(" · "), tone:'g'}))); return; }
+}
+window.drillReportsMonth=drillReportsMonth;
+
+function drillOnboarding(key){
+  if(key==="tasks"){
+    const arr=(ONBTASKS||[]).filter(t=>t.status!=="Done");
+    kpiDrill("Open onboarding tasks", arr.map(t=>{ const c=(ONBOARDING||[]).find(x=>x.id===t.case_id); return {label:(c&&c.employee_name?c.employee_name+" — ":"")+(t.label||"task"), sub:[c&&c.worksite,t.owner_role].filter(Boolean).join(" · "), tone:'a', act:c?()=>openOnboardingCase(c.id):null}; })); return;
+  }
+  const sets={ active:["Onboarding in progress", (ONBOARDING||[]).filter(c=>c.status!=="Complete")], done:["Completed onboarding", (ONBOARDING||[]).filter(c=>c.status==="Complete")] };
+  const [t,list]=sets[key]||["",[]];
+  kpiDrill(t, list.map(c=>({label:c.employee_name||"—", sub:[c.position,c.worksite].filter(Boolean).join(" · "), tone:key==="done"?'g':'a', act:()=>openOnboardingCase(c.id)})));
+}
+window.drillOnboarding=drillOnboarding;
+
+function drillContracts(key){
+  const C=CONTRACTS||[];
+  let title, list;
+  if(key==="mgmt"){ title="Awaiting Management"; list=C.filter(c=>contractCurrentStep(c)===5); }
+  else if(key==="deploy"){ title="Deployment due within 2 days"; list=C.filter(c=>{ const dl=deployDaysLeft(c); return contractCurrentStep(c)===3&&dl!=null&&dl<=2; }); }
+  else if(key==="exec"){ title="Fully executed"; list=C.filter(c=>contractDoneCount(c)===7); }
+  else { title="Contracts in pipeline"; list=C.filter(c=>contractDoneCount(c)<7&&c.stage!=="REJECTED"&&!c.rejected_at); }
+  kpiDrill(title, list.map(c=>({label:c.employee_name||"—", sub:[c.position,contractDoneCount(c)+"/7 signed"].filter(Boolean).join(" · "), tone:key==="exec"?'g':(key==="deploy"?'r':'a'), act:()=>openContract(c.id)})));
+}
+window.drillContracts=drillContracts;
+
+function drillExit(key){
+  const cases=(EXITCASES||[]).filter(x=>x.overall_status!=="Cancelled");
+  let title, list;
+  if(key==="charges"){ title="Exit cases with charges"; list=cases.filter(x=>EXIT_STAGES.some(s=>x[s.s]==="With Charges")); }
+  else if(key==="done"){ title="Completed exit clearances"; list=cases.filter(x=>x.overall_status==="Complete"); }
+  else { title="Exit clearances in progress"; list=cases.filter(x=>x.overall_status!=="Complete"); }
+  kpiDrill(title, list.map(x=>({label:x.employee_name||"—", sub:[x.separation_type,x.position].filter(Boolean).join(" · "), tone:key==="done"?'g':(key==="charges"?'r':'a'), act:()=>openExitCase(x.id)})));
+}
+window.drillExit=drillExit;
+
+function drillEval(key){
+  if(key==="completed"){ kpiDrill("Completed evaluations", (EVALUATIONS||[]).map(e=>({label:e.employee_name||"—", sub:[EVAL_LABEL[e.eval_type]||e.eval_type,e.recommendation,e.eval_date?fmtDate(e.eval_date):null].filter(Boolean).join(" · "), tone:'g'}))); return; }
+  const list=evDueList();
+  const b={due:"due",overdue:"overdue",upcoming:"upcoming"}[key];
+  const arr=list.filter(x=>x.bucket===b);
+  const titles={due:"Due this month",overdue:"Overdue",upcoming:"Upcoming (60 days)"};
+  kpiDrill(titles[key]||"", arr.map(x=>({label:x.emp.full_name, sub:[EVAL_LABEL[x.type],x.emp.position||x.emp.department||"","due "+fmtDate(x.due)].filter(Boolean).join(" · "), tone:x.bucket==='overdue'?'r':(x.bucket==='due'?'a':'g'), act:()=>openEvalForm(x.emp.id,x.type,x.due)})));
+}
+window.drillEval=drillEval;
+
+function drillMeetings(key){
+  const active=meetingActive();
+  const dates={}; (MEETINGS||[]).forEach(r=>{ const k=r.meeting_date||"—"; dates[k]=dates[k]||{date:r.meeting_date}; });
+  const list=Object.values(dates).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const viewDate=MEETING_VIEW||(active&&active.date)||(list[0]&&list[0].date)||null;
+  const rows=(MEETINGS||[]).filter(r=>String(r.meeting_date)===String(viewDate));
+  const sets={
+    attended:["Attended", rows],
+    venue:["Signed in on venue", rows.filter(r=>r.ip_ok===true)],
+    transport:["Transport reimbursement", rows.filter(r=>Number(r.reimb_transport||0)>0)],
+    lbc:["LBC reimbursement", rows.filter(r=>Number(r.reimb_lbc||0)>0)]
+  };
+  const [t,l]=sets[key]||["",[]];
+  kpiDrill(t, l.map(r=>({label:r.name||"—", sub:[r.emp_no,r.store].filter(Boolean).join(" · ")})));
+}
+window.drillMeetings=drillMeetings;
+
 function renderPrehire(){
   const pg=$("#page-prehire"); if(!pg) return;
   const inPipe=PREHIRE.filter(p=>p.phase!=="HIRED"&&p.phase!=="REJECTED"&&p.phase!=="DRAFT"&&p.phase!=="POOLED");  // DRAFT = agency not-yet-submitted; POOLED = talent pool — neither is in RCC's active pipeline
@@ -10763,9 +11039,9 @@ function renderOnboarding(){
       ${remindersBar("onboarding")}
       <div class="actionbar"><button class="btn" id="onbNew">+ Start onboarding</button></div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-        <div class="kpi"><div class="k-l">In Progress</div><div class="k-n">${active.length}</div></div>
-        <div class="kpi"><div class="k-l">Completed</div><div class="k-n">${done}</div></div>
-        <div class="kpi warn"><div class="k-l">Open Tasks</div><div class="k-n">${pendingTasks}</div><div class="k-s">across all cases</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillOnboarding('active')"><div class="k-l">In Progress</div><div class="k-n">${active.length}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillOnboarding('done')"><div class="k-l">Completed</div><div class="k-n">${done}</div></div>
+        <div class="kpi warn" style="cursor:pointer;" onclick="drillOnboarding('tasks')"><div class="k-l">Open Tasks</div><div class="k-n">${pendingTasks}</div><div class="k-s">across all cases</div></div>
       </div>
       ${ONBOARDING.length? `<table><thead><tr><th>New hire</th><th>Group · Worksite</th><th>Employee ID</th><th>Progress</th><th>Status</th></tr></thead>
         <tbody id="onbRows"></tbody></table>`
@@ -10987,10 +11263,10 @@ function renderContracts(){
       <div class="psub">Seven signatures, in strict order: Recruiter → HR (salary) → Employee → SE (deployment date) → Supervisor → Management → Employee ID. A 5-day deployment window protects the candidate.</div>
       <div class="actionbar"><button class="btn" id="ctNew">+ New contract</button></div>
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
-        <div class="kpi"><div class="k-l">In Pipeline</div><div class="k-n">${inPipe.length}</div></div>
-        <div class="kpi warn"><div class="k-l">Awaiting Management</div><div class="k-n">${awaitingMgmt}</div></div>
-        <div class="kpi ${deployRisk?'alert':''}"><div class="k-l">Deployment Due ≤2d</div><div class="k-n">${deployRisk}</div><div class="k-s">5-day window</div></div>
-        <div class="kpi"><div class="k-l">Fully Executed</div><div class="k-n">${fullyExec}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillContracts('pipe')"><div class="k-l">In Pipeline</div><div class="k-n">${inPipe.length}</div></div>
+        <div class="kpi warn" style="cursor:pointer;" onclick="drillContracts('mgmt')"><div class="k-l">Awaiting Management</div><div class="k-n">${awaitingMgmt}</div></div>
+        <div class="kpi ${deployRisk?'alert':''}" style="cursor:pointer;" onclick="drillContracts('deploy')"><div class="k-l">Deployment Due ≤2d</div><div class="k-n">${deployRisk}</div><div class="k-s">5-day window</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillContracts('exec')"><div class="k-l">Fully Executed</div><div class="k-n">${fullyExec}</div></div>
       </div>
       ${CONTRACTS.length? `<table><thead><tr><th>Employee</th><th>Position</th><th>Stage</th><th>Deployment</th><th>Progress</th></tr></thead>
         <tbody id="ctRows"></tbody></table>`
@@ -11304,9 +11580,9 @@ function renderExit(){
       ${remindersBar("exit")}
       <div class="actionbar"><button class="btn" id="exNew">+ New exit clearance</button></div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
-        <div class="kpi"><div class="k-l">In Progress</div><div class="k-n">${open.length}</div></div>
-        <div class="kpi warn"><div class="k-l">With Charges</div><div class="k-n">${charges}</div><div class="k-s">a dept flagged a charge</div></div>
-        <div class="kpi"><div class="k-l">Completed</div><div class="k-n">${done}</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillExit('open')"><div class="k-l">In Progress</div><div class="k-n">${open.length}</div></div>
+        <div class="kpi warn" style="cursor:pointer;" onclick="drillExit('charges')"><div class="k-l">With Charges</div><div class="k-n">${charges}</div><div class="k-s">a dept flagged a charge</div></div>
+        <div class="kpi" style="cursor:pointer;" onclick="drillExit('done')"><div class="k-l">Completed</div><div class="k-n">${done}</div></div>
       </div>
       <div style="margin-top:10px;padding:10px 12px;background:#f5f7f6;border:1px solid var(--line);border-radius:10px;">
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Turnover ${yr}</div>

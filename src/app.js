@@ -5911,7 +5911,10 @@ function openPositionProfile(position, department){
       <div class="panel" style="margin-top:0;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
           <h2 style="margin:0;">Job description</h2>
-          ${canEdit?`<button class="btn" id="posEdit">✎ Edit</button>`:""}
+          <div style="display:flex;gap:8px;">
+            ${hasJD?`<button class="btn ghost" id="posDownload">⬇ Download JD</button>`:""}
+            ${canEdit?`<button class="btn" id="posEdit">✎ Edit</button>`:""}
+          </div>
         </div>
         <div class="subhead" style="margin-top:10px;">People in this role <span class="sh-note">${people.length}</span></div>
         <div style="margin-top:6px;">${peopleHtml}</div>
@@ -5930,6 +5933,7 @@ function openPositionProfile(position, department){
   m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
   $("#posDrawerClose").onclick=()=>m.remove();
   const eb=$("#posEdit"); if(eb) eb.onclick=()=>openPositionForm(position, department, prof);
+  const db=$("#posDownload"); if(db) db.onclick=()=>printPositionJD(position, department, prof);
   $$("#posDrawer .pos-person").forEach(el=>el.addEventListener("click",()=>{ m.remove(); openRecord(EMPLOYEES[+el.dataset.idx]); }));
 }
 window.openPositionProfile=openPositionProfile;
@@ -5986,6 +5990,56 @@ function openPositionForm(position, department, existing){
   };
 }
 window.openPositionForm=openPositionForm;
+
+// Cohesive, downloadable Job Description on RCC letterhead — pulls every section
+// (Purpose · Key Tasks · Deliverables · Qualifications · Reports To) into one document.
+// Mirrors the NPA/quitclaim letterhead print style. Visible to everyone once a JD exists.
+function printPositionJD(position, department, prof){
+  prof = prof || positionProfileFor(position, department) || {};
+  const arr = x => Array.isArray(x)?x.filter(v=>String(v||"").trim()):[];
+  const tasks=arr(prof.key_tasks), delivs=arr(prof.deliverables), quals=arr(prof.qualifications);
+  const jd=String(prof.job_description||"").trim(), reports=String(prof.reports_to||"").trim();
+  const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  const none=`<p class="none">—</p>`;
+  const ol=items=>items.length?`<ol>${items.map(t=>`<li>${esc(t)}</li>`).join("")}</ol>`:none;
+  const ul=items=>items.length?`<ul>${items.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`:none;
+  const CSS=`
+    *{box-sizing:border-box;} body{font-family:Arial,Helvetica,sans-serif;color:#1F2A37;max-width:760px;margin:22px auto;padding:0 26px;font-size:10.5pt;line-height:1.5;}
+    .hd{display:flex;align-items:center;gap:12px;} .hd img{height:56px;} .hd .co{font-weight:800;font-size:12pt;color:#1B5E20;}
+    .rule{border-bottom:3px solid #1B5E20;margin:6px 0 12px;}
+    .title{text-align:center;font-weight:800;font-size:15pt;letter-spacing:.6px;color:#12352a;margin:2px 0 14px;}
+    .meta{width:100%;border-collapse:collapse;margin:0 0 6px;} .meta td{border:1px solid #9fb0a6;padding:5px 9px;font-size:10pt;} .meta .k{background:#eef4ef;color:#12352a;font-weight:700;width:32%;}
+    h3{font-size:11pt;color:#1B5E20;font-weight:800;border-bottom:1px solid #cfe0d5;padding-bottom:3px;margin:16px 0 7px;letter-spacing:.3px;}
+    p{margin:4px 0;} .none{color:#88968d;} ol,ul{margin:4px 0;padding-left:22px;} li{margin:3px 0;}
+    .ack{margin-top:26px;font-size:9.5pt;color:#33413a;display:flex;flex-direction:column;gap:12px;}
+    .ft{display:flex;justify-content:space-between;align-items:flex-end;border-top:2px solid #1B5E20;margin-top:26px;padding-top:6px;}
+    .ft .tm{font-weight:800;color:#1B5E20;letter-spacing:.5px;font-size:10pt;} .ft .ad{text-align:right;color:#667;font-size:8pt;}
+    .gen{color:#889;font-size:7.5pt;margin-top:4px;text-align:right;}
+    @media print{ body{margin:0 auto;} }`;
+  const body=`
+    <div class="hd"><img src="./rcc_logo.png" onerror="this.style.display='none'"><div class="co">ROSHAN COMMERCIAL CORPORATION</div></div>
+    <div class="rule"></div>
+    <div class="title">JOB DESCRIPTION</div>
+    <table class="meta">
+      <tr><td class="k">Position</td><td>${esc(position)}</td></tr>
+      <tr><td class="k">Department / Unit</td><td>${esc(department||"—")}</td></tr>
+      <tr><td class="k">Reports To</td><td>${esc(reports||"—")}</td></tr>
+    </table>
+    <h3>Purpose &amp; Scope</h3>${jd?`<p>${esc(jd).replace(/\n/g,"<br>")}</p>`:none}
+    <h3>Key Tasks &amp; Responsibilities</h3>${ol(tasks)}
+    <h3>Deliverables</h3>${ul(delivs)}
+    <h3>Qualifications</h3>${ul(quals)}
+    <div class="ack">
+      <div>Prepared / Reviewed by: ______________________________</div>
+      <div>Employee Conforme: ______________________________ &nbsp;·&nbsp; Date: ________________</div>
+    </div>
+    <div class="ft"><div class="tm">THE RIGHT MOVE</div><div class="ad">3rd Floor RCC Center, 104 Shaw Boulevard, Pasig, Manila, 1603, Philippines · +632 86386556</div></div>
+    <div class="gen">Generated ${esc(today)}${prof.updated_by?" · content last updated by "+esc(prof.updated_by):""}</div>`;
+  const w=window.open("","_blank"); if(!w){ alert("Allow pop-ups to download the job description."); return; }
+  w.document.write(`<!DOCTYPE html><html><head><title>Job Description — ${esc(position)}</title><style>${CSS}</style></head><body>${body}<scr`+`ipt>window.print();</scr`+`ipt></body></html>`);
+  w.document.close();
+}
+window.printPositionJD=printPositionJD;
 
 /* ================= CONCERNS & CASES — arbitration + ongoing legal matters (Director/owner only) ================= */
 const CASE_TYPES=["SEnA (DOLE)","NLRC","Voluntary Arbitration","Internal Grievance","Civil","Criminal","Other"];
@@ -7905,6 +7959,11 @@ function renderManning(){
   const confStores=open.filter(b=>MANNING_SCONF[b.name]).length;
   const OPENINGS=MANPOWER.filter(o=>o.status==="Open" && (!_sc || o.sc===_sc));
   const opInReview=(store)=>PREHIRE.filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT","POOLED"].includes(p.phase)).length;
+  const nTrf=(TRANSFERS||[]).filter(t=>['Requested','InEffect'].includes(t.status)).length;
+  const nAppr=(STORE_CHANGES||[]).filter(c=>['Pending','Confirmed'].includes(c.status||'Pending')).length;
+  const showAppr=(isAdminUser()||userRole()==='payroll')&&nAppr>0;
+  const SEC=window.MANNING_SEC||'headcount';
+  const railBtn=(sec,label,badge)=>`<button class="mrail${SEC===sec?' active':''}" data-sec="${sec}" style="display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;border:none;background:${SEC===sec?'#1E3A5F':'transparent'};color:${SEC===sec?'#fff':'#28313c'};font-weight:${SEC===sec?'700':'600'};font-size:13.5px;padding:10px 12px;border-radius:9px;cursor:pointer;margin-bottom:4px;">${esc(label)}${badge?`<span style="font-size:11px;background:${SEC===sec?'rgba(255,255,255,.2)':'#e6ecf3'};color:${SEC===sec?'#fff':'#41506b'};padding:1px 7px;border-radius:10px;">${badge}</span>`:''}</button>`;
   pg.innerHTML=`
     ${_sc?`<div class="panel" style="margin-top:0;background:var(--green-soft,#eef6f0);"><div style="font-weight:700;color:var(--green-dark);">Manning — ${esc(_sc)}'s stores</div><div class="psub" style="margin:2px 0 0;">Confirm the manning for your stores — tick ✓ Confirm on each once it's correct.</div></div>`:''}
     ${remindersBar("manning")}

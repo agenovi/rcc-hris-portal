@@ -3291,8 +3291,8 @@ function mvBatchLabel(r){ const act=MV_ACTION_LABEL[r.action_type]||r.action_typ
 function renderMovements(){
   const pg=$("#page-movements"); if(!pg||!canSeeMovements()) return;
   const R=NPAS||[];
-  let Rf = MV_FILTER ? R.filter(r=>mvBatchKey(r)===MV_FILTER) : R;
-  if(MV_FILTER && !Rf.length){ MV_FILTER=null; Rf=R; }
+  let Rf = MV_FILTER ? R.filter(r=>mvBatchKey(r)===MV_FILTER) : [];   // names stay hidden until a batch card is clicked (no long scroll)
+  if(MV_FILTER && !Rf.length){ MV_FILTER=null; }
   if(MV_MISSING_ONLY){ Rf = Rf.filter(r=>r.status!=="cancelled" && (r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null) && !String(r.notify_email||"").trim()); }
   const now=new Date(), ym=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
   const awaiting=R.filter(r=>r.status==="awaiting_signoff").length;
@@ -3387,7 +3387,7 @@ function renderMovements(){
           <td>${r.effective_date?fmtDate(r.effective_date):"—"}</td>
           <td>${mvStatusPill(r.status)}</td>
           <td>${disc?`<span class="pill ${sc>=tot?"active":(sc>0?"cn":"closed")}">${sc}/${tot} signed</span>`:'<span class="note" style="display:inline;padding:1px 6px;">—</span>'}</td></tr>`; }).join("")}
-      </tbody></table>`:`<div class="psub" style="margin-top:6px;">${MV_MISSING_ONLY?"✓ Every NPA has a staff email on file — nothing to fill.":"No movements filed yet — click “＋ New Movement”."}</div>`}
+      </tbody></table>`:`<div class="psub" style="margin-top:6px;">${MV_MISSING_ONLY?"✓ Every NPA has a staff email on file — nothing to fill.":(R.length?"▸ Click a batch card above to see those people.":"No movements filed yet — click “＋ New Movement”.")}</div>`}
     </div>`;
   const bN=$("#mvNew"); if(bN) bN.addEventListener("click",mvPickEmployee);
   const bB=$("#mvBatch"); if(bB) bB.addEventListener("click",mvBatchStatutory);

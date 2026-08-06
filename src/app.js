@@ -5,6 +5,19 @@
    =========================================================================== */
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.RCC_CONFIG;
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// READ-ONLY ENFORCEMENT — Rhel (hr4@) is view-only. Block every write at the data layer so NO UI action
+// (save/edit/sign/confirm/delete/upload) can mutate data, whichever button renders. Reads (.select) pass through.
+// Scoped strictly to hr4@ — no other user is affected. Reversible: delete this block to restore his edit access.
+(function(){
+  const RO_EMAIL="hr4@hassarams.com";
+  const isRO=()=>{ try{ return ((typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()===RO_EMAIL; }catch(_){ return false; } };
+  const deny=()=>{ const res={data:null,error:{message:"View-only access — you can review but not change records.",code:"READ_ONLY"}};
+    return new Proxy(function(){}, { get(_,p){ if(p==='then') return (resolve)=>resolve(res); if(p==='catch'||p==='finally') return ()=>deny(); return ()=>deny(); } }); };
+  const realFrom=sb.from.bind(sb);
+  sb.from=(t)=>{ const b=realFrom(t); if(isRO()){ ["insert","update","upsert","delete"].forEach(m=>{ b[m]=deny; }); } return b; };
+  if(sb.storage&&sb.storage.from){ const realSF=sb.storage.from.bind(sb.storage);
+    sb.storage.from=(bk)=>{ const s=realSF(bk); if(isRO()){ ["upload","update","remove","move","copy","createSignedUploadUrl"].forEach(m=>{ if(s[m]) s[m]=deny; }); } return s; }; }
+})();
 const $ = (s, r=document) => r.querySelector(s);
 const $$ = (s, r=document) => [...r.querySelectorAll(s)];
 const esc = (s)=> (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));

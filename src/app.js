@@ -5124,6 +5124,52 @@ function manningDrill(title, sub, stores){
   document.getElementById("mnDrillX").addEventListener("click",()=>m.remove());
   m.querySelectorAll(".mnd-row").forEach(tr=>tr.addEventListener("click",()=>{ m.remove(); openStore(BRANCHES[+tr.dataset.bi]); }));
 }
+// Candidates "in review" for a store → review them + leave a comment shared with HR and the agency.
+function openInReview(store){
+  const cands=(PREHIRE||[]).filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT","POOLED"].includes(p.phase))
+    .sort((a,b)=>String(a.full_name||'').localeCompare(String(b.full_name||'')));
+  const canEdit = canPostOpenings() || ["recruiter","relations"].includes(userRole());
+  let m=document.getElementById("inReviewModal"); if(!m){ m=document.createElement("div"); m.id="inReviewModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  const card=(p)=>{ const agency=(p.hire_source&&p.hire_source!=='Direct')?p.hire_source:'Direct';
+    return `<div style="background:#fff;border:1px solid #e6eaee;border-radius:12px;padding:14px 16px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+        <div><div style="font-weight:800;font-size:15px;">${esc(p.full_name||'—')}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;">${esc(p.position||'')}${p.hire_source?' · '+esc(agency):''}${p.phase?' · '+esc(String(p.phase).replace(/_/g,' ').toLowerCase()):''}</div>
+          ${(p.email||p.phone)?`<div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${esc(p.email||'')}${p.phone?' · '+esc(p.phone):''}</div>`:''}</div>
+        ${p.resume_url?`<a href="${esc(p.resume_url)}" target="_blank" class="btn ghost" style="font-size:11px;padding:3px 9px;flex-shrink:0;">Resume</a>`:''}
+      </div>
+      <div style="margin-top:10px;">
+        <div style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Review comment <span style="font-weight:500;text-transform:none;color:var(--muted);">— seen by HR &amp; the agency</span></div>
+        ${canEdit
+          ? `<textarea class="ir-note" data-id="${p.id}" rows="2" placeholder="Add your comment on this candidate…" style="width:100%;padding:9px 11px;border:1.5px solid #dbe4dd;border-radius:9px;font-size:13.5px;box-sizing:border-box;">${esc(p.review_comment||'')}</textarea>
+             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px;gap:8px;">
+               <span class="ir-saved" data-id="${p.id}" style="font-size:11.5px;color:var(--muted);">${p.review_comment_at?('Updated '+fmtDate(p.review_comment_at)+(p.review_comment_by?' · '+esc(String(p.review_comment_by).split('@')[0]):'')):''}</span>
+               <button class="btn ir-save" data-id="${p.id}" style="font-size:12px;padding:4px 12px;">Save comment</button>
+             </div>`
+          : `<div style="font-size:13.5px;white-space:pre-wrap;color:${p.review_comment?'#1b2430':'var(--muted)'};">${p.review_comment?esc(p.review_comment):'No comment yet.'}</div>`}
+      </div>
+    </div>`; };
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:560px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+      <div><div style="font-size:19px;font-weight:800;">In review — ${esc(store)}</div><div style="font-size:12.5px;opacity:.9;margin-top:3px;">${cands.length} candidate${cands.length===1?'':'s'} in the pipeline for this store</div></div>
+      <button id="irX" style="background:rgba(255,255,255,.15);border:none;color:#fff;font-size:18px;width:34px;height:34px;border-radius:8px;cursor:pointer;flex-shrink:0;">✕</button>
+    </div>
+    <div style="padding:16px 18px 60px;">${cands.length?cands.map(card).join(''):'<div class="psub">No candidates in review for this store right now.</div>'}</div>
+  </div>`;
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("irX").addEventListener("click",()=>m.remove());
+  m.querySelectorAll(".ir-save").forEach(btn=>btn.addEventListener("click",async()=>{
+    const id=btn.dataset.id, ta=m.querySelector('.ir-note[data-id="'+id+'"]'); if(!ta) return;
+    const val=ta.value.trim(); btn.disabled=true; btn.textContent="Saving…";
+    const upd={ review_comment:val||null, review_comment_by:myEmail(), review_comment_at:new Date().toISOString() };
+    const {error}=await sb.from("prehire").update(upd).eq("id",id);
+    if(error){ alert(error.message); btn.disabled=false; btn.textContent="Save comment"; return; }
+    const p=(PREHIRE||[]).find(x=>String(x.id)===String(id)); if(p){ p.review_comment=upd.review_comment; p.review_comment_by=upd.review_comment_by; p.review_comment_at=upd.review_comment_at; }
+    btn.disabled=false; btn.textContent="Saved ✓"; const sv=m.querySelector('.ir-saved[data-id="'+id+'"]'); if(sv) sv.textContent="Just now · "+myEmail().split('@')[0]; setTimeout(()=>{ btn.textContent="Save comment"; },1500);
+  }));
+}
+window.openInReview=openInReview;
 function openStore(b){
   const here=staffAtStore(b.name).sort((a,c)=>(a.name||"").localeCompare(c.name||""));
   const ahc=(b.ahc_stationary||0)+(b.ahc_reliever||0); const chc=here.length; const def=Math.max(0,ahc-chc);
@@ -5143,14 +5189,14 @@ function openStore(b){
       <div class="panel" style="margin-top:14px;">
         <h2>Merchandisers at this store <span class="count-tag">${here.length}</span></h2>
         <div class="psub">Live from PayPlus — active employees assigned to this worksite. Daily rate is blank until PayPlus exposes pay via the API.</div>
-        ${here.length? `<table><thead><tr><th>Name</th><th>Source</th><th>Type</th><th>Position</th>${canSeePay()?'<th>Daily Rate</th>':''}<th>Status</th>${canConfirmPerson()?'<th>Present</th>':''}</tr></thead>
+        ${here.length? `<table><thead><tr><th>Name</th><th>Source</th><th>Position</th>${canSeePay()?'<th>Daily Rate</th>':''}<th>Status</th>${canConfirmPerson()?'<th>Present</th>':''}</tr></thead>
           <tbody>${here.map(d=>{
             const pc=MANNING_PCONF[String(d.emp_no)];
             const presCell = pc?`<span class="pill active">✓ present · ${pc.confirmed_at?fmtDate(pc.confirmed_at):''}</span>`
               : (d.emp_no?`<button class="btn ghost mn-pconf" data-emp="${esc(d.emp_no)}" style="padding:2px 8px;font-size:11px;">✓ Present</button>`:'<span class="note">—</span>');
             return `<tr><td><b class="store-emp-link" data-id="${esc(String(d.id||''))}" style="cursor:pointer;color:var(--green-dark);text-decoration:underline;">${esc(d.name)}</b>${d.sub_location?` <span class="pill di" style="font-size:10px;">also covers ${esc(d.sub_location)}</span>`:''}<div style="font-size:11px;color:var(--muted);">${esc(d.emp_no||"")}</div></td>
             <td>${diserSourceBadge(d.hired_by)}</td>
-            <td>${esc(d.diser_type||"—")}</td><td>${esc(d.position||"—")}</td>
+            <td>${esc(d.position||"—")}</td>
             ${canSeePay()?`<td style="white-space:nowrap;">${d.total_rate?("₱"+Number(d.total_rate).toLocaleString()+" "):""}<button class="btn ghost store-rate" data-id="${esc(String(d.id||''))}" style="padding:2px 7px;font-size:11px;">${d.total_rate?'✎':'＋ rate'}</button></td>`:''}
             <td><span class="pill ${(d.status||'').includes('Probation')?'probation':'active'}">${esc(d.status||"—")}</span></td>
             ${canConfirmPerson()?`<td>${presCell}</td>`:''}</tr>`;
@@ -7853,12 +7899,16 @@ function renderManning(){
       else dl=`<span class="note">—</span>`;
       const kind=openingKind(o);
       const dtag=`${openingKindPill(kind)}${(o.diser_type==="Roving"&&o.second_worksite)?`<div style="font-size:11px;color:var(--muted);">+ ${esc(o.second_worksite)}</div>`:""}`;
-      return `<tr class="op-row" data-id="${o.id}" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;"><td><b>${esc(o.worksite)}</b> ${dtag}<div style="font-size:11px;color:var(--muted);margin-top:2px;">${esc(o.position||"Merchandiser")}</div></td><td>${esc(o.sc||"—")}</td><td><b>${o.count_needed}</b> ${openingKindPill(kind)}</td><td>${opInReview(o.worksite)}</td><td>${o.date_posted?fmtDate(o.date_posted):"—"}</td><td>${dl}</td>
+      const nRev=opInReview(o.worksite);
+      const revCell=nRev>0?`<a class="op-review" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;color:var(--green-dark);font-weight:700;text-decoration:underline;">${nRev} — review</a>`:`<span style="color:var(--muted);">0</span>`;
+      return `<tr class="op-row" data-id="${o.id}" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;"><td><b>${esc(o.worksite)}</b> ${dtag}<div style="font-size:11px;color:var(--muted);margin-top:2px;">${esc(o.position||"Merchandiser")}</div></td><td>${esc(o.sc||"—")}</td><td><b>${o.count_needed}</b> ${openingKindPill(kind)}</td><td>${revCell}</td><td>${o.date_posted?fmtDate(o.date_posted):"—"}</td><td>${dl}</td>
         <td style="text-align:right;white-space:nowrap;">${canPostOpenings()?`<button class="btn ghost op-edit" data-id="${o.id}">Edit</button> <button class="btn ghost op-close" data-id="${o.id}">Close</button> <button class="btn ghost op-del" data-id="${o.id}" style="color:var(--red);border-color:#f1c9c5;">Delete</button>`:'<span class="note">tap to view</span>'}</td></tr>`;
     }).join("");
     $$("#opRows .op-edit").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); openingForm(MANPOWER.find(o=>o.id===b.dataset.id)); }));
     $$("#opRows .op-close").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); closeOpening(MANPOWER.find(o=>o.id===b.dataset.id)); }));
     $$("#opRows .op-del").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); deleteOpening(MANPOWER.find(o=>o.id===b.dataset.id)); }));
+    // "N — review" number → open the in-review candidate list + comments (shared with the agency).
+    $$("#opRows .op-review").forEach(a=>a.addEventListener("click",(e)=>{ e.stopPropagation(); openInReview(a.dataset.ws); }));
     // Whole row clickable: posters edit the opening; everyone else opens the store.
     $$("#opRows .op-row").forEach(tr=>tr.addEventListener("click",()=>{ const o=MANPOWER.find(x=>x.id===tr.dataset.id); if(canPostOpenings()&&o) return openingForm(o); const br=BRANCHES.find(x=>x.name===tr.dataset.ws); if(br) openStore(br); }));
   }

@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1785987590";
+window.APP_BUILD="1785991218";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1785987590" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1785991218" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -2515,7 +2515,9 @@ let landed=false;
    Reminder banners you (admin/manager) can add, edit, and delete right on the
    page they belong to — stored in the DB (page_reminders), no code changes. */
 let PAGE_REMINDERS=[];
-const REM_RENDER={movements:"renderMovements", dashboard:"renderDashboard", concerns:"renderConcerns"};
+// page id → its render function (so editing a reminder re-renders that page in place).
+function remRender(page){ const M={movements:renderMovements, dashboard:renderDashboard, concerns:renderConcerns,
+    manning:renderManning, onboarding:renderOnboarding, exit:renderExit, signatures:renderSignatures}; return M[page]; }
 function canEditReminders(){ return canManageStores(); } // Anj + Grazel + Rhel
 function remToneCss(t){ return t==="red"?"background:#fdecea;border-color:#f5c6c2;color:#8a2018;"
   :t==="green"?"background:#eef7f0;border-color:#cfe6d6;color:#12352a;"
@@ -2539,33 +2541,52 @@ function remindersBar(page){
   const add=canEd?`<div style="margin:4px 0 2px;"><a href="#" class="rem-add" data-page="${esc(page)}" style="font-size:12.5px;font-weight:700;color:#1f6b3a;text-decoration:none;">＋ Add a reminder</a></div>`:"";
   return `<div class="rem-bar" data-rempage="${esc(page)}">${items}${add}</div>`;
 }
-// Wire edit/add/delete inside a container — call at the end of each page render.
-function wireReminders(root){ root=root||document;
-  root.querySelectorAll(".rem-add").forEach(el=>el.addEventListener("click",e=>{ e.preventDefault(); remEditReminder(null, el.dataset.page); }));
-  root.querySelectorAll(".rem-edit").forEach(el=>el.addEventListener("click",e=>{ e.preventDefault(); remEditReminder(el.dataset.id); }));
-  root.querySelectorAll(".rem-del").forEach(el=>el.addEventListener("click",e=>{ e.preventDefault(); remDeleteReminder(el.dataset.id); }));
-}
+// Reminder-bar clicks are handled by ONE delegated listener (see below) — no per-page wiring needed.
+function wireReminders(){ /* no-op: a single delegated document listener handles add/edit/delete everywhere */ }
 async function remReload(page){ const {data}=await sb.from("page_reminders").select("*"); PAGE_REMINDERS=data||[];
-  const fn=REM_RENDER[page]; if(fn&&typeof window[fn]==="function") window[fn](); }
+  const fn=remRender(page); if(typeof fn==="function"){ try{ fn(); }catch(_){} } }
+// Add / edit a reminder in a small pop-up with a real calendar date picker (no typing dates).
 function remEditReminder(id, page){
   const r=id?(PAGE_REMINDERS||[]).find(x=>String(x.id)===String(id)):null;
   const pg=r?r.page:page;
-  const body=prompt(r?"Edit the reminder text:":"New reminder — what should it say?", r?r.body:"");
-  if(body===null) return; if(!body.trim()){ alert("The reminder text can't be empty."); return; }
-  const due=prompt("Deadline date — optional, format YYYY-MM-DD (e.g. 2027-01-20). Leave blank for no date:", (r&&r.due_date)?r.due_date:"");
-  if(due===null) return;
-  const dueClean=(due&&due.trim())?due.trim():null;
-  if(dueClean && !/^\d{4}-\d{2}-\d{2}$/.test(dueClean)){ alert("Date must look like 2027-01-20 (year-month-day). Not saved."); return; }
-  (async()=>{
+  const tones=[["amber","Normal"],["red","Urgent"],["blue","Info"],["green","Good news"]];
+  let m=document.getElementById("remModal"); if(!m){ m=document.createElement("div"); m.id="remModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;padding:22px;max-height:90vh;overflow-y:auto;">
+    <h2 style="font-size:17px;color:var(--green-dark);margin-bottom:2px;">${r?"Edit reminder":"New reminder"}</h2>
+    <div class="psub" style="margin-bottom:12px;">Shows as a banner on the <b>${esc(pg||"")}</b> page for the HR team.</div>
+    <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Reminder *</label>
+    <textarea id="remBody" rows="3" placeholder="e.g. Submit SM Q1 2% store charges to Donna" style="width:100%;padding:10px 12px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;margin-bottom:12px;">${esc(r?r.body:"")}</textarea>
+    <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Deadline — optional, pick a date</label>
+    <input type="date" id="remDue" value="${esc((r&&r.due_date)||"")}" style="width:100%;padding:10px 12px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;margin-bottom:12px;">
+    <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Colour / priority</label>
+    <select id="remTone" style="width:100%;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:13.5px;margin-bottom:6px;">
+      ${tones.map(t=>`<option value="${t[0]}"${(r&&r.tone===t[0])||(!r&&t[0]==="amber")?" selected":""}>${t[1]}</option>`).join("")}
+    </select>
+    <div id="remMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
+    <div style="display:flex;gap:10px;margin-top:8px;">
+      <button class="btn ghost" id="remCancel" style="flex:1;">Cancel</button>
+      <button class="btn" id="remSave" style="flex:1;">${r?"Save changes":"Add reminder"}</button>
+    </div>
+  </div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+  document.getElementById("remCancel").onclick=()=>m.remove();
+  document.getElementById("remSave").onclick=async()=>{
+    const body=(document.getElementById("remBody").value||"").trim();
+    const due=(document.getElementById("remDue").value||"").trim()||null;
+    const tone=document.getElementById("remTone").value||"amber";
+    const msg=document.getElementById("remMsg");
+    if(!body){ msg.textContent="Please type the reminder."; return; }
+    const btn=document.getElementById("remSave"); btn.disabled=true; btn.textContent="Saving…";
     const em=(CURRENT_USER&&CURRENT_USER.email)||"HR";
-    const payload={ page:pg, body:body.trim(), due_date:dueClean, updated_at:new Date().toISOString() };
+    const payload={ page:pg, body:body, due_date:due, tone:tone, updated_at:new Date().toISOString() };
     let error;
     if(r){ ({error}=await sb.from("page_reminders").update(payload).eq("id",r.id)); }
     else { payload.created_by=em; ({error}=await sb.from("page_reminders").insert(payload)); }
-    if(error){ alert("Could not save the reminder: "+error.message); return; }
-    try{ await logChange("reminder",null,pg,r?"Reminder edited":"Reminder added",body.trim().slice(0,120)); }catch(_){}
-    await remReload(pg);
-  })();
+    if(error){ msg.textContent="Could not save: "+error.message; btn.disabled=false; btn.textContent=r?"Save changes":"Add reminder"; return; }
+    try{ await logChange("reminder",null,pg,r?"Reminder edited":"Reminder added",body.slice(0,120)); }catch(_){}
+    m.remove(); await remReload(pg);
+  };
 }
 async function remDeleteReminder(id){
   const r=(PAGE_REMINDERS||[]).find(x=>String(x.id)===String(id)); if(!r) return;
@@ -2576,6 +2597,13 @@ async function remDeleteReminder(id){
   await remReload(r.page);
 }
 window.remEditReminder=remEditReminder; window.remDeleteReminder=remDeleteReminder;
+// One delegated handler for every reminder bar on any page — survives all re-renders, no per-page wiring.
+if(typeof document!=="undefined" && !document.__remDelegated){ document.__remDelegated=true;
+  document.addEventListener("click",function(e){ const t=e.target; if(!t||!t.closest) return;
+    const add=t.closest(".rem-add"); if(add){ e.preventDefault(); remEditReminder(null, add.dataset.page); return; }
+    const ed=t.closest(".rem-edit"); if(ed){ e.preventDefault(); remEditReminder(ed.dataset.id); return; }
+    const dl=t.closest(".rem-del"); if(dl){ e.preventDefault(); remDeleteReminder(dl.dataset.id); return; }
+  }); }
 
 /* ---------- AUTH ---------- */
 async function init(){
@@ -8201,6 +8229,7 @@ function renderConcerns(){
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
         <div><h2 style="margin:0;">Concerns &amp; Cases</h2>
           <div class="psub">Arbitration and ongoing legal/labor matters. For Anju Genomal, Juvy (HR Relations) and Rhel (HR Manager).</div></div>
+      ${remindersBar("concerns")}
         <button class="btn" id="cxNew">＋ New concern / case</button>
       </div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);margin-top:12px;">
@@ -9285,6 +9314,7 @@ function renderSignatures(){
     <div class="panel" style="margin-top:0;">
       <h2>Signatures</h2>
       <div class="psub">Your sign-this inbox. RA 8792 compliant · works on mobile + personal email · every signature audit-logged. One place for contracts, memos, advance releases, claim authorizations.</div>
+      ${remindersBar("signatures")}
       <div class="grid kpis" style="grid-template-columns:repeat(4,1fr);">
         <div class="kpi alert clickable" data-jump="pendPanel" style="cursor:pointer;"><div class="k-l">Pending Your Signature</div><div class="k-n">${pend.length}</div></div>
         <div class="kpi warn clickable" data-jump="othPanel" style="cursor:pointer;"><div class="k-l">Sent — Awaiting Others</div><div class="k-n">${oth.length}</div></div>
@@ -10081,6 +10111,7 @@ function renderManning(){
   const opInReview=(store)=>PREHIRE.filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT","POOLED"].includes(p.phase)).length;
   pg.innerHTML=`
     ${_sc?`<div class="panel" style="margin-top:0;background:var(--green-soft,#eef6f0);"><div style="font-weight:700;color:var(--green-dark);">Manning — ${esc(_sc)}'s stores</div><div class="psub" style="margin:2px 0 0;">Confirm the manning for your stores — tick ✓ Confirm on each once it's correct.</div></div>`:''}
+    ${remindersBar("manning")}
     ${manningApprovalsPanel()}
     <div class="panel" style="margin-top:0;">
       <h2>Openings <span class="count-tag">${OPENINGS.length} stores · ${OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0)} positions</span></h2>
@@ -12695,6 +12726,7 @@ function renderOnboarding(){
     <div class="panel" style="margin-top:0;">
       <h2>Onboarding Tasks</h2>
       <div class="psub">Once Hired, each new employee becomes an onboarding case. Tasks are grouped by <b>when they're due</b> — before-start · day-1 · by-2nd-payroll — and adapt by population (iTime for SM; Company vs Mall ID; Union vs China Bank). Auto-flows from Pre-hire.</div>
+      ${remindersBar("onboarding")}
       <div class="actionbar"><button class="btn" id="onbNew">+ Start onboarding</button></div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
         <div class="kpi"><div class="k-l">In Progress</div><div class="k-n">${active.length}</div></div>
@@ -13230,6 +13262,7 @@ function renderExit(){
     <div class="panel" style="margin-top:0;">
       <h2>Exit Clearance</h2>
       <div class="psub">Multi-department sign-off + lawful final-pay computation. On completion, the employee's status flips to Separated. Uniform cost (&lt;6 months) only deducts where the signed contract authorizes it (Art. 113).</div>
+      ${remindersBar("exit")}
       <div class="actionbar"><button class="btn" id="exNew">+ New exit clearance</button></div>
       <div class="grid kpis" style="grid-template-columns:repeat(3,1fr);">
         <div class="kpi"><div class="k-l">In Progress</div><div class="k-n">${open.length}</div></div>

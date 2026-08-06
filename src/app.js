@@ -5128,10 +5128,12 @@ function manningDrill(title, sub, stores){
 function openInReview(store){
   const cands=(PREHIRE||[]).filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT","POOLED"].includes(p.phase))
     .sort((a,b)=>String(a.full_name||'').localeCompare(String(b.full_name||'')));
-  const canEdit = canPostOpenings() || ["recruiter","relations"].includes(userRole());
+  const canComment = canPostOpenings() || ["recruiter","relations","sales"].includes(userRole());
+  const roleLbl=(r)=>({admin:"Director",payroll:"HR (Payroll)",manager:"HR Manager",relations:"HR",recruiter:"Recruiter",sales:"Sales Coordinator",agency:"Agency"})[r]||"HR";
+  const cAuthor=(c)=>(((c.by||"").split("@")[0])||"Someone")+(c.role?" · "+roleLbl(c.role):"");
   let m=document.getElementById("inReviewModal"); if(!m){ m=document.createElement("div"); m.id="inReviewModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
-  const card=(p)=>{ const agency=(p.hire_source&&p.hire_source!=='Direct')?p.hire_source:'Direct';
+  const card=(p)=>{ const agency=(p.hire_source&&p.hire_source!=='Direct')?p.hire_source:'Direct'; const thread=Array.isArray(p.review_comments)?p.review_comments:[];
     return `<div style="background:#fff;border:1px solid #e6eaee;border-radius:12px;padding:14px 16px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
         <div><div style="font-weight:800;font-size:15px;">${esc(p.full_name||'—')}</div>
@@ -5140,14 +5142,10 @@ function openInReview(store){
         ${p.resume_url?`<a href="${esc(p.resume_url)}" target="_blank" class="btn ghost" style="font-size:11px;padding:3px 9px;flex-shrink:0;">Resume</a>`:''}
       </div>
       <div style="margin-top:10px;">
-        <div style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Review comment <span style="font-weight:500;text-transform:none;color:var(--muted);">— seen by HR &amp; the agency</span></div>
-        ${canEdit
-          ? `<textarea class="ir-note" data-id="${p.id}" rows="2" placeholder="Add your comment on this candidate…" style="width:100%;padding:9px 11px;border:1.5px solid #dbe4dd;border-radius:9px;font-size:13.5px;box-sizing:border-box;">${esc(p.review_comment||'')}</textarea>
-             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px;gap:8px;">
-               <span class="ir-saved" data-id="${p.id}" style="font-size:11.5px;color:var(--muted);">${p.review_comment_at?('Updated '+fmtDate(p.review_comment_at)+(p.review_comment_by?' · '+esc(String(p.review_comment_by).split('@')[0]):'')):''}</span>
-               <button class="btn ir-save" data-id="${p.id}" style="font-size:12px;padding:4px 12px;">Save comment</button>
-             </div>`
-          : `<div style="font-size:13.5px;white-space:pre-wrap;color:${p.review_comment?'#1b2430':'var(--muted)'};">${p.review_comment?esc(p.review_comment):'No comment yet.'}</div>`}
+        <div style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:6px;">Comments <span style="font-weight:500;text-transform:none;color:var(--muted);">— HR, the Sales Coordinator &amp; the agency can see these</span></div>
+        ${thread.length?thread.map(c=>`<div style="background:#f4f6f4;border-radius:8px;padding:8px 10px;margin-bottom:6px;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;"><b>${esc(cAuthor(c))}</b>${c.at?' · '+fmtDate(c.at):''}</div><div style="font-size:13.5px;white-space:pre-wrap;">${esc(c.text||'')}</div></div>`).join(''):'<div style="font-size:12.5px;color:var(--muted);margin-bottom:6px;">No comments yet.</div>'}
+        ${canComment?`<textarea class="ir-note" data-id="${p.id}" rows="2" placeholder="Add your comment…" style="width:100%;padding:9px 11px;border:1.5px solid #dbe4dd;border-radius:9px;font-size:13.5px;box-sizing:border-box;"></textarea>
+             <div style="text-align:right;margin-top:5px;"><button class="btn ir-save" data-id="${p.id}" style="font-size:12px;padding:4px 12px;">Add comment</button></div>`:''}
       </div>
     </div>`; };
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:560px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
@@ -5161,12 +5159,14 @@ function openInReview(store){
   document.getElementById("irX").addEventListener("click",()=>m.remove());
   m.querySelectorAll(".ir-save").forEach(btn=>btn.addEventListener("click",async()=>{
     const id=btn.dataset.id, ta=m.querySelector('.ir-note[data-id="'+id+'"]'); if(!ta) return;
-    const val=ta.value.trim(); btn.disabled=true; btn.textContent="Saving…";
-    const upd={ review_comment:val||null, review_comment_by:myEmail(), review_comment_at:new Date().toISOString() };
-    const {error}=await sb.from("prehire").update(upd).eq("id",id);
-    if(error){ alert(error.message); btn.disabled=false; btn.textContent="Save comment"; return; }
-    const p=(PREHIRE||[]).find(x=>String(x.id)===String(id)); if(p){ p.review_comment=upd.review_comment; p.review_comment_by=upd.review_comment_by; p.review_comment_at=upd.review_comment_at; }
-    btn.disabled=false; btn.textContent="Saved ✓"; const sv=m.querySelector('.ir-saved[data-id="'+id+'"]'); if(sv) sv.textContent="Just now · "+myEmail().split('@')[0]; setTimeout(()=>{ btn.textContent="Save comment"; },1500);
+    const val=ta.value.trim(); if(!val){ ta.focus(); return; }
+    btn.disabled=true; btn.textContent="Saving…";
+    const p=(PREHIRE||[]).find(x=>String(x.id)===String(id)); const arr=Array.isArray(p&&p.review_comments)?p.review_comments.slice():[];
+    arr.push({ by:myEmail(), role:userRole(), text:val, at:new Date().toISOString() });
+    const {error}=await sb.from("prehire").update({ review_comments:arr, review_comment:val, review_comment_by:myEmail(), review_comment_at:new Date().toISOString() }).eq("id",id);
+    if(error){ alert(error.message); btn.disabled=false; btn.textContent="Add comment"; return; }
+    if(p) p.review_comments=arr;
+    openInReview(store);
   }));
 }
 window.openInReview=openInReview;

@@ -216,7 +216,7 @@ let prehireSrc=null;
 // Talent Pool — filters for the pooled-candidates list
 let poolFilterPos="", poolFilterScale="", poolFilterPrio="", poolSearch="";
 // Salary scales are one-line editable — tell Claude to change them and they update everywhere.
-const POOL_SALARY_SCALES=["Entry / minimum wage","Daily ₱650–800","Daily ₱800–1,000","Monthly ₱15–20k","Monthly ₱20–30k","Monthly ₱30k+","Not specified"];
+const POOL_SALARY_SCALES=["Entry / minimum wage","Daily ₱650–800","Daily ₱800–1,000","Monthly ₱15–20k","Monthly ₱20–30k","Monthly ₱30k+"]; // "Not specified" removed — a salary is REQUIRED before pooling
 const POOL_PRIORITIES=["High","Medium","Low"];
 const POOL_PRIO_RANK={High:0,Medium:1,Low:2};
 let landed=false;
@@ -10233,7 +10233,7 @@ function poolPrehire(c, parentModal){
     <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin:12px 0 3px;">Priority</label>
     <select id="pl_prio" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;">${POOL_PRIORITIES.map(p=>`<option ${(c.pool_priority||"Medium")===p?"selected":""}>${p}</option>`).join("")}</select>
     <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin:10px 0 3px;">Salary scale</label>
-    <select id="pl_scale" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;">${POOL_SALARY_SCALES.map(s=>`<option ${(c.pool_salary_scale||"Not specified")===s?"selected":""}>${esc(s)}</option>`).join("")}</select>
+    <select id="pl_scale" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;">${(!c.pool_salary_scale||c.pool_salary_scale==="Not specified")?`<option value="" selected>— Select salary (required) —</option>`:""}${POOL_SALARY_SCALES.map(s=>`<option ${c.pool_salary_scale===s?"selected":""}>${esc(s)}</option>`).join("")}</select>
     <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin:10px 0 3px;">Why we're keeping them (optional)</label>
     <textarea id="pl_reason" rows="2" placeholder="e.g. Strong on merchandising, no slot in her area yet" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;">${esc(c.pool_reason||"")}</textarea>
     <div id="plMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
@@ -10242,7 +10242,9 @@ function poolPrehire(c, parentModal){
   m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
   document.getElementById("plCancel").addEventListener("click",()=>m.remove());
   document.getElementById("plGo").addEventListener("click",async()=>{
-    const patch={ pool_priority:v("pl_prio"), pool_salary_scale:v("pl_scale"), pool_reason:v("pl_reason")||null, updated_at:new Date().toISOString() };
+    const _scale=v("pl_scale");
+    if(!_scale || _scale==="Not specified"){ document.getElementById("plMsg").textContent="Set a salary before pooling — pick “Entry / minimum wage” or a specific band. A candidate can't go to the pool without one."; return; }
+    const patch={ pool_priority:v("pl_prio"), pool_salary_scale:_scale, pool_reason:v("pl_reason")||null, updated_at:new Date().toISOString() };
     if(!already){ patch.phase="POOLED"; patch.pooled_at=new Date().toISOString(); patch.pooled_by=myEmail()||null; }
     const { error } = await sb.from("prehire").update(patch).eq("id",c.id);
     if(error){ document.getElementById("plMsg").textContent=error.message; return; }

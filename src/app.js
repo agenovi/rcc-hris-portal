@@ -7992,6 +7992,7 @@ function renderManning(){
   const OPENINGS=MANPOWER.filter(o=>o.status==="Open" && (!_sc || o.sc===_sc));
   const opInReview=(store)=>PREHIRE.filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT","POOLED"].includes(p.phase)).length;
   const nTrf=(TRANSFERS||[]).filter(t=>['Requested','InEffect'].includes(t.status)).length;
+  const nPositions=OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0);
   const nAppr=(STORE_CHANGES||[]).filter(c=>['Pending','Confirmed'].includes(c.status||'Pending')).length;
   const showAppr=(isAdminUser()||userRole()==='payroll')&&nAppr>0;
   const SEC=window.MANNING_SEC||'headcount';
@@ -8002,7 +8003,7 @@ function renderManning(){
     <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
       <div id="mSecRail" style="flex:0 0 168px;min-width:148px;">
         ${railBtn('headcount','Headcount','')}
-        ${railBtn('openings','Openings',OPENINGS.length||'')}
+        ${railBtn('openings','Openings',nPositions||'')}
         ${railBtn('transfers','Transfers',nTrf||'')}
         ${showAppr?railBtn('approvals','Approvals',nAppr):''}
       </div>
@@ -8010,8 +8011,8 @@ function renderManning(){
       ${showAppr?`<div class="msec" data-sec="approvals" style="display:${SEC==='approvals'?'block':'none'};">${manningApprovalsPanel()}</div>`:''}
       <div class="msec" data-sec="openings" style="display:${SEC==='openings'?'block':'none'};">
       <div class="panel" style="margin-top:0;">
-      <h2>Openings <span class="count-tag">${OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0)} positions to fill · across ${OPENINGS.length} store${OPENINGS.length===1?'':'s'}</span></h2>
-      ${(()=>{ const t=openingKindTotals(OPENINGS); return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 6px;"><span style="font-size:12px;color:var(--muted);font-weight:600;">By type:</span>${t.Lead?`${openingKindPill("Lead")} <b>${t.Lead}</b>&nbsp;lead${t.Lead>1?"s":""}`:""}${t.Reliever?`&nbsp;&nbsp;${openingKindPill("Reliever")} <b>${t.Reliever}</b>&nbsp;reliever${t.Reliever>1?"s":""}`:""}${t.Stationary?`&nbsp;&nbsp;${openingKindPill("Stationary")} <b>${t.Stationary}</b>&nbsp;stationary`:""}</div>`; })()}
+      <h2>Openings <span class="count-tag">${nPositions} position${nPositions===1?'':'s'} to fill · across ${OPENINGS.length} store${OPENINGS.length===1?'':'s'}</span></h2>
+      ${(()=>{ const t=openingKindTotals(OPENINGS); const on=window.MANNING_OPKIND; const chip=(k,n,lbl)=>n?`<span class="opkind" data-kind="${k}" title="Tap to show only ${lbl} openings" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;border:1.5px solid ${on===k?'#1E3A5F':'#e2e7ee'};background:${on===k?'#eaf0f6':'#f6f8fb'};">${openingKindPill(k)} <b>${n}</b>&nbsp;${lbl}${(n>1&&lbl!=='stationary')?'s':''}</span>`:''; return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 6px;"><span style="font-size:12px;color:var(--muted);font-weight:600;">By type (tap to filter):</span>${chip('Lead',t.Lead,'lead')}${chip('Reliever',t.Reliever,'reliever')}${chip('Stationary',t.Stationary,'stationary')}${on?`<a class="opkind-clear" style="cursor:pointer;color:var(--green-dark);font-size:12px;font-weight:600;">✕ show all</a>`:''}</div>`; })()}
       <div class="psub">Manpower requests you post. These drive the agency links — each agency sees the shortfall + an in-review count, then submits candidates into the pipeline. Each need is tagged <b>Lead / Reliever / Stationary</b>.</div>
       <div class="actionbar">${canPostOpenings()?'<button class="btn" id="opNew">+ Post opening</button> ':''}${canManageStores()?'<button class="btn ghost" id="stNew">+ Add store</button>':''}${!canPostOpenings()?'<span class="psub" style="margin:0;">Openings open automatically when someone resigns. You can view and fill them below.</span>':''}</div>
       ${OPENINGS.length?`<table><thead><tr><th>Store</th><th>SC</th><th>Need</th><th>In review</th><th>Posted</th><th>Deadline</th><th></th></tr></thead><tbody id="opRows"></tbody></table>`:`<div class="psub" style="margin-top:6px;">No open requests yet — click “Post opening”.</div>`}
@@ -8058,10 +8059,12 @@ function renderManning(){
     if(which==='short'){ const s=all.filter(b=>short(b)>0).sort((a,b)=>short(b)-short(a)); return manningDrill("Shortfall — stores needing people",s.length+" stores short",s); }
   }));
   wireTransfers();
+  $$("#page-manning .opkind").forEach(el=>el.addEventListener("click",()=>{ window.MANNING_OPKIND = window.MANNING_OPKIND===el.dataset.kind?null:el.dataset.kind; renderManning(); }));
+  $$("#page-manning .opkind-clear").forEach(el=>el.addEventListener("click",()=>{ window.MANNING_OPKIND=null; renderManning(); }));
   const opRows=$("#opRows");
   if(opRows){
     const today=new Date(new Date().toDateString());
-    opRows.innerHTML=OPENINGS.map(o=>{
+    opRows.innerHTML=OPENINGS.filter(o=>!window.MANNING_OPKIND||openingKind(o)===window.MANNING_OPKIND).map(o=>{
       const overdue=o.target_fill_date && new Date(o.target_fill_date+"T00:00:00")<today;
       let dl;
       if(o.priority==="Urgent"&&!o.target_fill_date) dl=`<span class="pill awol">Urgent</span>`;

@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1786031618";
+window.APP_BUILD="1786057522";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1786031618" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1786057522" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -5631,6 +5631,7 @@ function renderMovements(){
   const batchCardsHtml=batchArr.map(b=>{ const rows=b.rows, tot=rows.length;
     const ap=rows.filter(r=>r.status==="approved").length, aw=rows.filter(r=>r.status==="awaiting_signoff").length, cx=rows.filter(r=>r.status==="cancelled").length, mo=rows.filter(r=>r.status==="memo").length;
     const eff=rows[0].effective_date, label=mvBatchLabel(rows[0]);
+    const held=!!rows[0].on_hold, holdReason=rows[0].hold_reason||"";
     const dcount=rows.filter(mvIsDemo).length;
     const awRows=rows.filter(r=>r.status==="awaiting_signoff"); const myTurn=awRows.filter(r=>mvCanSignNow(r)).length;
     const nexts=[...new Set(awRows.map(r=>{ const s=mvNextStep(r); return s?(s.name||s.role||""):""; }).filter(Boolean))];
@@ -5639,13 +5640,14 @@ function renderMovements(){
     const sel=MV_FILTER===b.key;
     return `<div class="mvbatch" data-bk="${esc(b.key)}" style="cursor:pointer;border:1px solid ${sel?"#2f9e5f":"#e2ebe5"};background:${sel?"#f2faf5":"#fff"};border-radius:11px;padding:12px 14px;margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;">
-        <div style="font-weight:800;color:#12352a;">${esc(label)}${dcount?` <span class="pill" style="background:#fff3cd;color:#8a6d00;border:1px solid #f0d98a;font-size:9.5px;font-weight:800;letter-spacing:.3px;">⚠ SAMPLE${dcount<tot?" ×"+dcount:""}</span>`:""} <span class="note" style="display:inline;font-weight:600;">— effective ${eff?fmtDate(eff):"—"}</span></div>
+        <div style="font-weight:800;color:#12352a;">${esc(label)}${dcount?` <span class="pill" style="background:#fff3cd;color:#8a6d00;border:1px solid #f0d98a;font-size:9.5px;font-weight:800;letter-spacing:.3px;">⚠ SAMPLE${dcount<tot?" ×"+dcount:""}</span>`:""}${held?` <span class="pill" style="background:#fdecea;color:#a12622;border:1px solid #f1c9c5;font-size:9.5px;font-weight:800;letter-spacing:.3px;">⏸ ON HOLD · indefinite</span>`:""} <span class="note" style="display:inline;font-weight:600;">— effective ${held?"held (no date)":(eff?fmtDate(eff):"—")}</span></div>
         <div class="note" style="display:inline;">${tot} staff${sel?" · ▼ showing below":""}</div></div>
       <div style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:#eef0ef;margin:8px 0 6px;">${seg(ap,"#2f9e5f")}${seg(aw,"#e0a92a")}${seg(cx,"#b9c0c7")}${seg(mo,"#8fa7d8")}</div>
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12.5px;">
         <div style="color:#3a5a48;"><b style="color:#2f9e5f;">${ap}</b> approved · <b style="color:#b5891f;">${aw}</b> awaiting${cx?` · <b style="color:#7a828a;">${cx}</b> cancelled`:""}${mo?` · <b>${mo}</b> memo`:""}</div>
         <div style="color:#12352a;">${step}</div></div>
-      ${canEditEff?`<div style="margin-top:9px;border-top:1px dashed #e2ebe5;padding-top:8px;"><button class="btn ghost mvEditEff" data-bk="${esc(b.key)}" data-eff="${esc(eff||"")}" style="font-size:12px;padding:4px 11px;">📅 Change effective date</button> <span class="note" style="display:inline;">moves all ${tot} — signatures stay</span></div>`:""}
+      ${held?`<div style="margin-top:7px;padding:7px 10px;border-radius:8px;background:#fdecea;border:1px solid #f1c9c5;color:#a12622;font-size:12px;">⏸ <b>On hold — indefinite.</b> ${esc(holdReason)}</div>`:""}
+      ${canEditEff?`<div style="margin-top:9px;border-top:1px dashed #e2ebe5;padding-top:8px;"><button class="btn ${held?"":"ghost"} mvEditEff" data-bk="${esc(b.key)}" data-eff="${esc(eff||"")}" style="font-size:12px;padding:4px 11px;">${held?"🔓 Release — set effective date":"📅 Change effective date"}</button> <span class="note" style="display:inline;">${held?"lifts the hold + sets the date · signatures stay":"moves all "+tot+" — signatures stay"}</span></div>`:""}
       </div>`; }).join("");
   // Batch-wide split by group (Store/Promo Diser vs Head Office/Warehouse) across all pay movements.
   const mvCatCounts=(()=>{ const c={}; R.filter(r=>(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null)).forEach(r=>{ const k=mvCat(r); c[k]=(c[k]||0)+1; }); return c; })();
@@ -5782,7 +5784,7 @@ function mvChangeEffDate(batchKey, curEff){
     if(nd===curEff){ msg.textContent="That's the same date it already has."; return; }
     const btn=document.getElementById("mvEffGo"); btn.disabled=true; btn.textContent="Changing…";
     const ids=rows.map(r=>r.id);
-    const { error }=await sb.from("personnel_actions").update({ effective_date:nd, updated_at:new Date().toISOString() }).in("id",ids);
+    const { error }=await sb.from("personnel_actions").update({ effective_date:nd, on_hold:false, hold_reason:null, held_by:null, held_at:null, updated_at:new Date().toISOString() }).in("id",ids);
     if(error){ msg.textContent="Couldn't change: "+error.message; btn.disabled=false; btn.textContent="Change date for all "+rows.length; return; }
     await logChange("movement",null,label,"Effective date changed",rows.length+" NPA(s) · "+(curEff||"—")+" → "+nd+" · "+reason);
     m.remove(); await loadEmployees(); window.go("movements");

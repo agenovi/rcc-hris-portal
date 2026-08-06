@@ -4979,7 +4979,17 @@ function staffAtStore(store){
   return (EMPLOYEES||[]).filter(e=> normWorksite(e.worksite)===store && (e.status||"Active")==="Active")
     .map(e=>({ id:e.id, name:e.full_name, emp_no:e.employee_id, position:e.position, diser_type:null, hired_by:e.hire_source, status:e.status||"Active", total_rate:e.daily_rate, daily_allowance:e.daily_allowance, sub_location:e.sub_location }));
 }
-const chcFor=(store)=> staffAtStore(store).length;
+// Confirmed headcount at a store = base staff (worksite = store) PLUS relievers based elsewhere who COVER this
+// store (sub_location = store), credited only up to the store's approved reliever slots and only to fill a real
+// gap — so one shared reliever fills the reliever slot at both stores he covers (no false shortfall). (anj 2026-08-06)
+const chcFor=(store)=>{
+  const base=staffAtStore(store).length;
+  const br=(BRANCHES||[]).find(b=>b.name===store); if(!br) return base;
+  const ahc=(br.ahc_stationary||0)+(br.ahc_reliever||0);
+  const cover=(EMPLOYEES||[]).filter(e=>e.sub_location===store && (e.status||"Active")==="Active" && normWorksite(e.worksite)!==store).length;
+  const credit=Math.min(cover, br.ahc_reliever||0, Math.max(0, ahc-base));
+  return base+credit;
+};
 
 /* ---------- STORE DRILL-DOWN (drawer) ---------- */
 function diserSourceBadge(h){ const x=(h||"").toLowerCase();

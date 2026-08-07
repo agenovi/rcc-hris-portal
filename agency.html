@@ -86,16 +86,27 @@ function show(t){ TAB=t; document.getElementById("tabOpen").classList.toggle("se
 function render(){
   const b=document.getElementById("body");
   if(TAB==="mine"){
-    const m=DATA.my_submissions||[];
-    const _inProc=m.filter(x=>!["DRAFT","HIRED","REJECTED"].includes(x.status)).length, _dr=m.filter(x=>x.status==="DRAFT").length, _hi=m.filter(x=>x.status==="HIRED").length, _ns=m.filter(x=>x.status==="REJECTED").length;
-    const _sum=m.length?`<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;"><b>${m.length}</b> total${_dr?` · ${_dr} draft`:""} · <b>${_inProc}</b> in process${_hi?` · ${_hi} hired`:""}${_ns?` · ${_ns} not selected`:""}</div>`:"";
-    b.innerHTML = _sum + (m.length ? `<table><thead><tr><th>Candidate</th><th>Store</th><th>Status</th><th>Submitted</th><th></th></tr></thead><tbody>`+
-      m.map((x,i)=>{
-        const draft=x.status==="DRAFT";
-        const act=draft?`<button class="btn ghost" onclick='editDraft(${i})'>Edit</button> <button class="btn" onclick='shipDraft(${i})'>Submit to RCC</button>`:"";
-        return `<tr><td><b>${esc(x.name)}</b><div style="font-size:11.5px;color:var(--muted);">${esc(x.position||"")}</div></td><td>${esc(x.store||"—")}</td><td><span class="pill"${draft?' style="background:#fdf6e3;color:#8a6a14;"':''}>${esc(statusLabel(x.status))}</span>${x.status==="REJECTED"&&x.reason?`<div class="rsn">${esc(x.reason)}</div>`:""}</td><td style="white-space:nowrap;font-size:12px;color:${x.submitted&&(Date.now()-new Date(x.submitted))/86400000>14?'#c0392b':'var(--muted)'};">${x.submitted?new Date(x.submitted).toLocaleDateString(undefined,{month:'short',day:'numeric'})+' · '+(Math.floor((Date.now()-new Date(x.submitted))/86400000)||0)+'d':'—'}</td><td style="white-space:nowrap;text-align:right;">${act}</td></tr>`;
-      }).join("")+
-      `</tbody></table>` : `<div class="empty">No candidates yet. Open a position and click “Submit a candidate” — it saves as a draft you review before sending to RCC.</div>`);
+    const all=(DATA.my_submissions||[]).filter(x=>!x.hidden);
+    if(!all.length){ b.innerHTML=`<div class="empty">No candidates yet. Open a position and click “Submit a candidate” — it saves as a draft you review before sending to RCC.</div>`; return; }
+    const drafts=all.filter(x=>x.status==="DRAFT");
+    const inProc=all.filter(x=>!["DRAFT","HIRED","REJECTED"].includes(x.status));
+    const hired=all.filter(x=>x.status==="HIRED");
+    const rejected=all.filter(x=>x.status==="REJECTED");
+    const dt=x=>x.submitted?new Date(x.submitted).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'—';
+    const sech=(t,n,extra)=>`<div style="font-weight:800;font-size:14px;color:#12352a;margin:16px 0 6px;">${t} <span style="background:#e6ecf3;color:#41506b;border-radius:10px;font-size:11px;padding:1px 8px;font-weight:700;">${n}</span>${extra?` <span style="font-weight:400;font-size:12px;color:var(--muted);">${extra}</span>`:''}</div>`;
+    const removeBtn=x=>`<button class="btn ghost" style="color:#a12;font-size:12px;padding:4px 10px;" onclick='removeMine(${JSON.stringify(x.id)})'>Remove</button>`;
+    const tbl=(list,statusCell)=>`<table><thead><tr><th>Candidate</th><th>Store</th><th>Status</th><th>Submitted</th><th></th></tr></thead><tbody>`+
+      list.map(x=>`<tr><td><b>${esc(x.name)}</b><div style="font-size:11.5px;color:var(--muted);">${esc(x.position||"")}</div></td><td>${esc(x.store||"—")}</td><td>${statusCell(x)}${x.status==="REJECTED"&&x.reason?`<div class="rsn">${esc(x.reason)}</div>`:""}</td><td style="white-space:nowrap;font-size:12px;color:var(--muted);">${dt(x)}</td><td style="white-space:nowrap;text-align:right;">${x.status==="HIRED"&&x.still_active===false?removeBtn(x):x.status==="REJECTED"?removeBtn(x):""}</td></tr>`).join("")+
+      `</tbody></table>`;
+    let html=`<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:6px;font-size:12.5px;color:var(--muted);">Keep your list tidy — once someone is <b>hired</b> they move to the Hired list below; please <b>remove</b> anyone who has left or wasn't selected.</div>`;
+    html+=sech("In process",inProc.length);
+    html+= inProc.length? tbl(inProc,()=>`<span class="pill">In process</span>`) : `<div style="font-size:12.5px;color:var(--muted);padding:4px 2px;">None in process.</div>`;
+    html+=sech("Hired",hired.length,"— still with RCC?");
+    html+= hired.length? tbl(hired,x=> x.still_active===false?`<span class="pill" style="background:#fdeaea;color:#a4322a;">No longer active — please remove</span>`:x.still_active===true?`<span class="chip hir">Hired · still active ✓</span>`:`<span class="chip hir">Hired</span>`) : `<div style="font-size:12.5px;color:var(--muted);padding:4px 2px;">No hires yet this period.</div>`;
+    if(rejected.length){ html+=sech("Not selected — please remove",rejected.length)+tbl(rejected,()=>`<span class="pill" style="background:#f3f3f3;color:#777;">Not selected</span>`); }
+    if(drafts.length){ html+=sech("Drafts — not yet sent to RCC",drafts.length)+`<table><thead><tr><th>Candidate</th><th>Store</th><th>Status</th><th></th></tr></thead><tbody>`+
+      drafts.map(x=>{ const i=(DATA.my_submissions||[]).indexOf(x); return `<tr><td><b>${esc(x.name)}</b><div style="font-size:11.5px;color:var(--muted);">${esc(x.position||"")}</div></td><td>${esc(x.store||"—")}</td><td><span class="pill" style="background:#fdf6e3;color:#8a6a14;">Draft — not sent</span></td><td style="white-space:nowrap;text-align:right;"><button class="btn ghost" onclick='editDraft(${i})'>Edit</button> <button class="btn" onclick='shipDraft(${i})'>Submit to RCC</button></td></tr>`; }).join("")+`</tbody></table>`; }
+    b.innerHTML=html;
     return;
   }
   const ops=DATA.openings||[];
@@ -165,6 +176,12 @@ function shipDraft(i){
   fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,action:"ship",id:x.id})})
     .then(r=>r.json()).then(d=>{ if(!d.ok){ alert(d.error||"Couldn't submit."); return; } load(); })
     .catch(()=>alert("Couldn't submit. Please try again."));
+}
+function removeMine(id){
+  if(!confirm("Remove this person from your list? They stay on RCC's records — this just tidies your view.")) return;
+  fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,action:"hide",id,hidden:true})})
+    .then(r=>r.json()).then(d=>{ if(!d.ok){ alert(d.error||"Couldn't remove."); return; } load(); })
+    .catch(()=>alert("Couldn't remove. Please try again."));
 }
 function editDraft(i){
   const x=(DATA.my_submissions||[])[i]; if(!x) return;

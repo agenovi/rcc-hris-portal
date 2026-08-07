@@ -70,7 +70,7 @@ const HR_TEAM=[
   {email:"hr4@hassarams.com", name:"Rhel (HR Manager)"},
   {email:"hr3@hassarams.com", name:"Grazel (Payroll)"},
   {email:"hr@hassarams.com", name:"Juvy (HR Relations)"},
-  {email:"hr2@hassarams.com", name:"Vina (Recruitment)"},
+  {email:"hr2@hassarams.com", name:"Mitch (Recruiter)"},
   {email:"richard@hassarams.com", name:"Richard (IT)"}
 ];
 function myEmail(){ return ((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); }
@@ -158,6 +158,28 @@ function allowedPages(){ const r=userRole(); if(r==="admin") return null;
   else base = RECRUITER_PAGES.slice();
   const extra = EXTRA_PAGES_BY_EMAIL[((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase()]||[];
   return base.concat(extra); }
+// Readable page names + a resolver so the owner's Access dashboard can show EXACTLY what each person sees.
+const PAGE_LABELS={dashboard:"Dashboard",manning:"Manning",prehire:"Pre-hire",onboarding:"Onboarding",reports:"Reports",employees:"Employees",timekeeping:"Timekeeping",evaluations:"Evaluations",exit:"Exit clearance",compliance:"Compliance",memos:"Memos/Notices",signatures:"Signatures",loans:"Loans",branches:"Stores",contracts:"Contracts",incidents:"Incidents",concerns:"Concerns & Cases",hmo:"HMO",separations:"Separations",maternity:"Maternity",meetings:"Merch Meeting",movements:"NPA / Movements",govremit:"Gov remittances",cosign:"Documents to Sign",processes:"Processes/SOP",policies:"Policies",desk:"HR Desk",storemap:"Store Mapping",orgchart:"Org Chart",positions:"Positions/JD",links:"Links to Send"};
+function accessPagesFor(role,email){
+  const e=(email||"").toLowerCase();
+  if(role==="admin") return "__ALL__";
+  if(role==="sales") return ["manning"].concat(EXTRA_PAGES_BY_EMAIL[e]||[]);   // scoped: own cluster only
+  if(role==="cosigner") return ["cosign"];                                     // scoped: signing inbox only
+  let base;
+  if(role==="manager") base=MANAGER_PAGES.slice();
+  else if(role==="payroll") base=RECRUITER_PAGES.concat(["employees","timekeeping"]);
+  else if(role==="relations") base=RELATIONS_PAGES.slice();
+  else base=RECRUITER_PAGES.slice();
+  base=base.concat(EXTRA_PAGES_BY_EMAIL[e]||[], ["policies","desk","storemap","orgchart","positions","links","cosign"]);
+  if(["manager","relations","payroll"].includes(role)) base.push("incidents");
+  if(e==="hr@hassarams.com"||e==="hr4@hassarams.com") base.push("concerns");
+  if(role==="payroll") base.push("hmo","maternity");
+  if(["manager","relations"].includes(role)) base.push("separations");
+  if(role==="payroll"||role==="manager"||e===IDS_EDITOR||(typeof MEETING_RUNNERS!=="undefined"&&MEETING_RUNNERS.has&&MEETING_RUNNERS.has(e))) base.push("meetings");
+  if(role==="payroll"||role==="manager") base.push("movements");
+  if(e===IDS_EDITOR||e===IDS_EDITOR_BACKUP) base.push("govremit");
+  return [...new Set(base)];
+}
 function pageAllowed(id){ if(isReviewLockedUser()) return REVIEW_PAGES.indexOf(id)!==-1; if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='incidents') return canSeeIncidents(); if(id==='hmo') return canSeeHmo(); if(id==='separations') return canSeeSeparations(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='cosign') return !!CURRENT_USER; if(id==='processes') return isAdminUser(); /* Processes & SOPs locked to admin (anj) — parked while priority modules are worked; removed from HR/Rhel for now */ if(id==='policies'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
@@ -9092,21 +9114,17 @@ async function renderActivity(){
   const pg=$("#page-activity"); if(!pg||!isAdminUser()) return;
   let urData=[]; try{ urData=(await sb.from("user_roles").select("*")).data||[]; }catch(_){}
   // Build the role matrix from the live config
-  const allEmails=["anj@hassarams.com","sanjay@hassarams.com","hr4@hassarams.com","hr3@hassarams.com","hr@hassarams.com","hr2@hassarams.com"];
-  const roleFor=e=>ROLE_BY_EMAIL[e]||"recruiter";
+  const roleFor=e=>{ const le=(e||"").toLowerCase(); return (urData.find(u=>(u.email||"").toLowerCase()===le)||{}).role || ROLE_BY_EMAIL[le] || "recruiter"; };
+  const emailsSet=new Set([...Object.keys(ROLE_BY_EMAIL), ...urData.map(u=>(u.email||"").toLowerCase()), ...Object.keys(EXTRA_PAGES_BY_EMAIL)]);
   const seesPay=e=>{const r=roleFor(e);return r==="admin"||r==="payroll";};
-  const matrix=allEmails.map(e=>{
-    const r=roleFor(e);
-    const pages = r==="admin" ? "Everything" :
-      (r==="manager" ? "All HR (no Settings)" :
-      (r==="payroll" ? "Recruiting + Employees" :
-      (r==="relations" ? "Onboarding · Exit · Evaluations · Compliance · Memos · Loans" :
-      "Recruiting"+(EXTRA_PAGES_BY_EMAIL[e]?" + "+EXTRA_PAGES_BY_EMAIL[e].join("/"):""))));
+  const matrix=[...emailsSet].filter(Boolean).sort().map(e=>{
+    const r=roleFor(e); const pgs=accessPagesFor(r,e);
+    const pagesHtml = pgs==="__ALL__" ? '<b>Everything (owner)</b>' : (Array.isArray(pgs)&&pgs.length? pgs.map(p=>`<span class="pill" style="background:#eef1f6;color:#41506b;font-size:10.5px;padding:1px 7px;margin:1px 2px 1px 0;display:inline-block;">${esc(PAGE_LABELS[p]||p)}</span>`).join("") : '<span class="note">—</span>');
     return `<tr>
-      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);"><b>${esc(whoName(e))}</b><div class="esub">${esc(e)}</div></td>
-      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);">${esc(ROLE_LABEL[r]||r)}</td>
-      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);">${pages}</td>
-      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);text-align:center;">${seesPay(e)?'<span class="pill di">Yes</span>':'<span class="note">—</span>'}</td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);vertical-align:top;"><b>${esc(whoName(e))}</b><div class="esub">${esc(e)}</div></td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);vertical-align:top;white-space:nowrap;">${esc(ROLE_LABEL[r]||r)}</td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);vertical-align:top;">${pagesHtml}</td>
+      <td style="padding:7px 9px;border-bottom:0.5px solid var(--line);text-align:center;vertical-align:top;">${seesPay(e)?'<span class="pill di">Yes</span>':'<span class="note">—</span>'}</td>
     </tr>`;}).join("");
   // Login history (RPC — owners only)
   let loginRows='<tr><td colspan="5" class="psub" style="padding:8px;">Loading…</td></tr>';

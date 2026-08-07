@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1786073488";
+window.APP_BUILD="1786074153";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1786073488" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1786074153" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -11046,6 +11046,12 @@ function openEvalForm(empId,type,due){
   if(tpl0.key==="merchandiser") CRIT.push({k:"selling",label:"Selling & merchandising"},{k:"inventory",label:"Inventory honesty & store compliance"});
   if(tpl0.key==="lead") CRIT.push({k:"results",label:"Delivers results / KPIs"},{k:"leadership",label:"Leadership & people management"});
   const state={ratings:{},outcome:"",att:null};
+  const _br=(BRANCHES||[]).find(b=>b.name===e.worksite);
+  const _sc=(_br&&_br.sc)||"";
+  const SC_EMAIL=Object.fromEntries(Object.entries(SC_BY_EMAIL).map(([em,nm])=>[nm,em]));
+  const _scEmail=SC_EMAIL[_sc]||"";
+  // Prior evaluations for this person (so a later milestone reviewer sees what the earlier one said)
+  const priorEvals=(EVALUATIONS||[]).filter(ev=>String(ev.employee_ref)===String(e.id) && ev.eval_type!==type).sort((a,b)=>new Date(b.eval_date||b.period_due||0)-new Date(a.eval_date||a.period_due||0));
   let m=document.getElementById("evalModal"); if(!m){ m=document.createElement("div"); m.id="evalModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   const dots=(k)=>`<span class="ev-circ" data-key="${k}" data-val="0" style="white-space:nowrap;">${[1,2,3,4,5].map(n=>`<i class="ev-dot" data-n="${n}" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:2px solid #cbd6cf;background:#fff;margin:0 3px;cursor:pointer;vertical-align:middle;font-size:12px;font-weight:700;font-style:normal;color:#93a29a;">${n}</i>`).join("")}</span>`;
@@ -11057,8 +11063,16 @@ function openEvalForm(empId,type,due){
     <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;z-index:2;">
       <div style="font-size:20px;font-weight:800;">${esc(e.full_name)}</div>
       <div style="font-size:12.5px;opacity:.9;">${EVAL_LABEL[type]} · due ${fmtDate(due)} · ${esc(e.position||e.department||"")} · ${esc(tpl0.label)}</div>
+      <div style="font-size:12px;opacity:.82;margin-top:3px;">Started ${e.hire_date?fmtDate(e.hire_date):"—"} · Branch ${esc(e.worksite||"—")}${_sc?" · SC "+esc(_sc):""}</div>
     </div>
     <div style="padding:18px 22px 60px;">
+      ${priorEvals.length?`<div class="panel" style="margin-top:0;"><details><summary style="cursor:pointer;list-style:none;outline:none;"><span style="font-size:15px;font-weight:800;color:#12352a;">Previous evaluation${priorEvals.length>1?"s":""} <span class="count-tag">${priorEvals.length}</span></span> <span class="psub" style="font-size:12px;">▸ what the earlier reviewer said</span></summary>
+        <div style="margin-top:8px;">${priorEvals.slice(0,3).map(ev=>`<div style="border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:8px;background:#f8faf8;">
+          <div style="font-weight:700;font-size:13px;">${esc(EVAL_LABEL[ev.eval_type]||ev.eval_type)}${ev.eval_date?" · "+fmtDate(ev.eval_date):""}${ev.overall_rating?" · "+ev.overall_rating+"/5":""} · ${esc(ev.recommendation||"—")}${ev.evaluator?" · by "+esc(String(ev.evaluator).split("@")[0]):""}</div>
+          ${ev.strengths?`<div style="font-size:12.5px;margin-top:4px;"><b>Going well:</b> ${esc(ev.strengths)}</div>`:""}
+          ${ev.improvements?`<div style="font-size:12.5px;margin-top:2px;"><b>To improve:</b> ${esc(ev.improvements)}</div>`:""}
+          ${(ev.ratings&&ev.ratings.concern)?`<div style="font-size:12.5px;margin-top:2px;color:#a4322a;"><b>Concern:</b> ${esc(ev.ratings.concern)}</div>`:""}
+        </div>`).join("")}</div></details></div>`:""}
       <div class="panel" style="margin-top:0;"><h2>Facts from the system</h2>
         <div id="ev_att"><div class="psub">Loading attendance…</div></div>
       </div>
@@ -11071,7 +11085,35 @@ function openEvalForm(empId,type,due){
       </div>
       <div class="panel"><h2>Outcome</h2>
         <div id="ev_outrow">${outBtns}</div>
-        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 4px;">Evaluator</label><input id="ev_by" value="${esc((CURRENT_USER&&CURRENT_USER.email)||'')}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;box-sizing:border-box;">
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 4px;">Evaluator(s) — pick a name, the email fills in</label>
+        <div class="psub" style="margin:0 0 6px;">Add up to 3 to send the review / notice to.</div>
+        ${[1,2,3].map(i=>`<div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+          <input list="evNameDL" class="ev-name" data-i="${i}" placeholder="Name${i>1?" (optional)":""}" style="flex:1;min-width:140px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;">
+          <input class="ev-email" id="ev_by${i===1?'':i}" placeholder="email" value="${i===1?esc((CURRENT_USER&&CURRENT_USER.email)||''):''}" style="flex:1;min-width:160px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;">
+        </div>`).join("")}
+        <datalist id="evNameDL">${(EMPLOYEES||[]).filter(x=>x.email&&x.full_name).slice(0,900).map(x=>`<option value="${esc(x.full_name)}">`).join("")}</datalist>
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 4px;">Email of the person being evaluated</label>
+        <input id="ev_target_email" value="${esc(e.email||'')}" placeholder="employee email (to send them the review / notice)" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;box-sizing:border-box;">
+      </div>
+      <div class="panel" id="ev_notice_panel">
+        <h2>Notice to Improve <span class="count-tag">coaching / at-risk</span></h2>
+        <div class="psub" style="margin:-4px 0 8px;">For a “Needs coaching” or weak-attendance probationer — drafts a fair improvement notice (concern → commitment → timeline) you can download or email. Appears automatically when the outcome is coaching/at-risk or attendance is Bad/Terrible.</div>
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:6px 0 4px;">Notices already issued during probation</label>
+        <div id="ev_probnotice" style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="ev-pn" data-v="none" style="border:1.5px solid #cbd6cf;background:#fff;border-radius:20px;padding:5px 14px;font-size:13px;cursor:pointer;">No notice yet</button>
+          <button type="button" class="ev-pn" data-v="with" style="border:1.5px solid #cbd6cf;background:#fff;border-radius:20px;padding:5px 14px;font-size:13px;cursor:pointer;">With notice(s)</button>
+          <input id="ev_pn_note" placeholder="which notice(s) — e.g. attendance NTE 07-15" style="flex:1;min-width:180px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
+        </div>
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:12px 0 4px;">Areas to improve</label>${ta("ev_notice_areas","e.g. Attendance & punctuality — reduce absences and tardiness")}
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 4px;">Employee's commitment to improve</label>${ta("ev_notice_commit","What the employee commits to do")}
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;">
+          <div><div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px;">Improve-by / review date</div><input id="ev_notice_review" type="date" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;"></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <button type="button" class="btn" id="ev_notice_dl">📄 Download / print notice</button>
+          <button type="button" class="btn ghost" id="ev_notice_email">✉ Email to employee</button>
+        </div>
+        <div class="psub" id="ev_notice_msg" style="margin-top:6px;"></div>
       </div>
       <div class="panel" style="background:#0f1f33;color:#fff;"><h2 style="color:#fff;">Scorecard</h2><div id="ev_score"></div></div>
       <div id="evMsg" style="font-size:13px;color:#a4322a;margin:8px 0;"></div>
@@ -11098,9 +11140,29 @@ function openEvalForm(empId,type,due){
     state.outcome=b.dataset.o;
     m.querySelectorAll(".ev-out").forEach(x=>{ x.style.background="#fff"; x.style.color="#33413a"; x.style.borderColor="#cbd6cf"; });
     const col=({on_track:"#1f7a44",coaching:"#8a5a1c",at_risk:"#a4322a"})[b.dataset.o]; b.style.background=col; b.style.color="#fff"; b.style.borderColor=col;
-    paintScore();
+    paintScore(); if(typeof updateNoticeVis==="function") updateNoticeVis();
   }));
   paintScore();
+  // Evaluator name → email auto-fill (datalist of employees with an email on file)
+  const nameEmail={}; (EMPLOYEES||[]).forEach(x=>{ if(x.email&&x.full_name) nameEmail[x.full_name.toLowerCase().trim()]=x.email; });
+  m.querySelectorAll(".ev-name").forEach(inp=>inp.addEventListener("input",()=>{
+    const em=nameEmail[(inp.value||"").toLowerCase().trim()]; const eml=inp.parentElement&&inp.parentElement.querySelector(".ev-email"); if(em&&eml) eml.value=em;
+  }));
+  // Locked reviewer by milestone: 2.5-month (3rd-month) → Vina · 5.5-month (5th-month) / regularization → Juvy
+  (()=>{ const who=({ "3rd-month":"Vina","5th-month":"Juvy","regularization":"Juvy" })[type]; if(!who) return; const n1=m.querySelector('.ev-name[data-i="1"]'), e1=document.getElementById("ev_by"); if(n1){ n1.value=who; n1.readOnly=true; n1.style.background="#f2f5f8"; n1.title="Locked reviewer for this milestone"; const key=who==="Juvy"?"juv":"vina"; const found=Object.entries(nameEmail).find(([k])=>k.includes(key)); if(e1&&found) e1.value=found[1]; } })();
+  // The store's SC is automatically an evaluator (slot 2)
+  (()=>{ if(!_sc) return; const n2=m.querySelector('.ev-name[data-i="2"]'), e2=document.getElementById("ev_by2"); if(n2&&!n2.value){ n2.value=_sc; if(e2&&!e2.value&&_scEmail) e2.value=_scEmail; } })();
+  // Notice-to-Improve panel: visible only for coaching / at-risk or weak attendance
+  const noticePanel=document.getElementById("ev_notice_panel");
+  var updateNoticeVis=()=>{ if(!noticePanel) return; const bad=state.att&&(state.att.band==="Bad"||state.att.band==="Terrible"); const coach=state.outcome==="coaching"||state.outcome==="at_risk"; noticePanel.style.display=(bad||coach)?"":"none"; };
+  updateNoticeVis();
+  (()=>{ const d=new Date(); d.setDate(d.getDate()+30); const el=document.getElementById("ev_notice_review"); if(el&&!el.value) el.value=d.toISOString().slice(0,10); })();
+  let probNotice="none";
+  m.querySelectorAll(".ev-pn").forEach(b=>b.addEventListener("click",()=>{ probNotice=b.dataset.v; m.querySelectorAll(".ev-pn").forEach(x=>{ x.style.background="#fff"; x.style.color="#33413a"; x.style.borderColor="#cbd6cf"; }); const col=b.dataset.v==="with"?"#a4322a":"#1f7a44"; b.style.background=col; b.style.color="#fff"; b.style.borderColor=col; }));
+  const evRecipients=()=>[document.getElementById("ev_target_email"),...m.querySelectorAll(".ev-email")].map(el=>el&&el.value.trim()).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i);
+  state._notice=()=>({ probNotice, probNote:evVal("ev_pn_note"), areas:evVal("ev_notice_areas"), commit:evVal("ev_notice_commit"), review:(document.getElementById("ev_notice_review")||{}).value||"", recipients:evRecipients() });
+  document.getElementById("ev_notice_dl")&&document.getElementById("ev_notice_dl").addEventListener("click",()=>evPrintNotice(e,type,state,state._notice()));
+  document.getElementById("ev_notice_email")&&document.getElementById("ev_notice_email").addEventListener("click",()=>evEmailNotice(e,type,state,state._notice()));
   (async()=>{
     const box=document.getElementById("ev_att"); if(!box) return;
     if(!e.employee_id){ box.innerHTML=`<div class="psub">No PayPlus ID linked — attendance can't be pulled automatically. Verify manually.</div>`; return; }
@@ -11137,7 +11199,7 @@ function openEvalForm(empId,type,due){
         state.att={abs:a,lateMin:lm,utMin:um,lateDays,utDays,equiv,band,edited:(a!==abs0||lm!==Math.round(late0)||um!==Math.round(ut0))};
         const bp=document.getElementById("ev_band"); if(bp) bp.innerHTML=`<div style="padding:5px 13px;border-radius:20px;background:${col};color:#fff;font-weight:800;font-size:13px;">${band} · ${equiv.toFixed(1)}</div>`;
         const sm2=document.getElementById("ev_attsum"); if(sm2) sm2.innerHTML=`Last ${periodMonths} months: <b>${a}</b> absence day(s) + <b>${lm.toFixed(0)}</b> min late (${lateDays.toFixed(1)}d) + <b>${um.toFixed(0)}</b> min undertime (${utDays.toFixed(1)}d) → equivalent <b>${equiv.toFixed(1)}</b>${state.att&&state.att.edited?' <span style="color:#8a5a1c;">· edited</span>':''}`;
-        paintScore();
+        paintScore(); if(typeof updateNoticeVis==="function") updateNoticeVis();
       };
       ["ev_abs","ev_late","ev_ut"].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener("input",recomputeAtt); });
       recomputeAtt();
@@ -11150,7 +11212,7 @@ function openEvalForm(empId,type,due){
     const vals=Object.values(state.ratings); const avg=vals.length?vals.reduce((s,x)=>s+x,0)/vals.length:null;
     const outLbl=({on_track:"On track",coaching:"Needs coaching",at_risk:"At risk / not for regularization"})[state.outcome]||"Recorded";
     const row={ employee_ref:e.id, employee_name:e.full_name, position:e.position||e.department||null, eval_type:type, period_due:due, eval_scope:tpl0.key,
-      overall_rating: avg?Math.round(avg):null, ratings:{criteria:state.ratings, attendance:state.att, concern:evVal("ev_con")}, recommendation:outLbl,
+      overall_rating: avg?Math.round(avg):null, ratings:{criteria:state.ratings, attendance:state.att, concern:evVal("ev_con"), notice:(state._notice?state._notice():null), evaluators:[evVal("ev_by"),evVal("ev_by2"),evVal("ev_by3")].filter(Boolean), branch:e.worksite||null, sc:_sc||null, started:e.hire_date||null}, recommendation:outLbl,
       strengths:evVal("ev_str"), improvements:evVal("ev_imp"), evaluator:evVal("ev_by"), eval_date:evIso(new Date()), is_demo:!!e.is_demo };
     await logChange("evaluation",e.id,e.full_name,"Recorded",EVAL_LABEL[type]+" · "+outLbl+(avg?" · "+avg.toFixed(1)+"/5":"")+(state.att?" · attendance "+state.att.band:""));
     const {error}=await sb.from("evaluations").insert(row);
@@ -11159,6 +11221,42 @@ function openEvalForm(empId,type,due){
   });
 }
 window.openEvalForm=openEvalForm;
+function evAttSummaryText(att){ if(!att) return "attendance on file for the review period"; return `${att.abs} absence day(s), ${Math.round(att.lateMin||0)} min of lates and ${Math.round(att.utMin||0)} min of undertime over the review period (attendance rating: ${att.band})`; }
+function evNoticeHtml(e,type,state,data){
+  const today=new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
+  const rev=data.review?new Date(data.review+"T00:00:00").toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}):"";
+  const prior=data.probNotice==="with"?`This is not the first reminder — prior notice(s) on record: ${esc(data.probNote||"—")}. `:"";
+  return `<div style="font-family:Georgia,'Times New Roman',serif;max-width:720px;margin:0 auto;color:#1a1a1a;">
+    <div style="text-align:center;border-bottom:3px double #12352a;padding-bottom:8px;margin-bottom:16px;"><div style="font-size:20px;font-weight:800;letter-spacing:1px;color:#12352a;">ROSHAN COMMERCIAL CORPORATION</div></div>
+    <div style="text-align:right;font-size:13px;">${today}</div>
+    <div style="margin-top:14px;font-size:14px;line-height:1.6;">
+      <div><b>To:</b> ${esc(e.full_name)}</div>
+      <div><b>Position:</b> ${esc(e.position||"")}${e.worksite?" — "+esc(e.worksite):""}</div>
+      <div style="margin-top:10px;"><b>Re: Notice to Improve — ${esc(EVAL_LABEL[type]||"Performance")} Review</b></div>
+      <p style="margin-top:12px;">This notice follows your ${esc(EVAL_LABEL[type]||"performance")} review. ${prior}Our records show ${evAttSummaryText(state.att)}.</p>
+      ${data.areas?`<p style="margin-top:8px;"><b>Areas to improve:</b><br>${esc(data.areas).replace(/\n/g,"<br>")}</p>`:""}
+      ${data.commit?`<p style="margin-top:8px;"><b>Employee's commitment to improve:</b><br>${esc(data.commit).replace(/\n/g,"<br>")}</p>`:""}
+      <p style="margin-top:8px;">You are expected to show sustained improvement${rev?` by <b>${rev}</b>`:""}, when your performance and attendance will be reviewed again. This notice is issued in good faith to give you the opportunity to improve; it is not a penalty. Please raise any valid reason or supporting document for the concerns noted.</p>
+      <div style="margin-top:36px;display:flex;justify-content:space-between;gap:30px;font-size:13px;">
+        <div style="flex:1;border-top:1px solid #333;padding-top:4px;">Employee — signature over printed name / date</div>
+        <div style="flex:1;border-top:1px solid #333;padding-top:4px;">HR / Immediate Head</div>
+      </div>
+    </div></div>`;
+}
+function evPrintNotice(e,type,state,data){
+  const w=window.open("","_blank","width=820,height=920"); if(!w){ alert("Allow pop-ups to open the printable notice."); return; }
+  w.document.write(`<html><head><title>Notice to Improve — ${esc(e.full_name||"")}</title></head><body style="padding:34px;">${evNoticeHtml(e,type,state,data)}<scr`+`ipt>setTimeout(function(){window.print();},300);</scr`+`ipt></body></html>`);
+  w.document.close();
+  const msg=document.getElementById("ev_notice_msg"); if(msg) msg.textContent="Opened a printable notice — use your browser's Save as PDF to download it.";
+}
+function evEmailNotice(e,type,state,data){
+  const to=(data.recipients||[]).filter(Boolean);
+  if(!to.length){ alert("No email to send to — add the employee's or an evaluator's email first, or use Download / print."); return; }
+  const subj=`Notice to Improve — ${EVAL_LABEL[type]||"Performance"} Review — ${e.full_name||""}`;
+  const body=`Dear ${e.full_name||""},\n\nThis notice follows your ${EVAL_LABEL[type]||"performance"} review. Our records show ${evAttSummaryText(state.att)}.\n\nAreas to improve:\n${data.areas||"—"}\n\nCommitment to improve:\n${data.commit||"—"}\n\nExpected improvement by: ${data.review||"—"}.\n\nThis notice is issued in good faith to give you the chance to improve; it is not a penalty.\n\nHuman Resources\nRoshan Commercial Corporation`;
+  window.open(`mailto:${encodeURIComponent(to.join(","))}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`,"_blank");
+  const msg=document.getElementById("ev_notice_msg"); if(msg) msg.textContent="Opened your email app addressed to "+to.join(", ")+" — review and send.";
+}
 
 /* Interim helper — clear evaluations already done OUTSIDE the portal (on paper / prior record), so the
    auto-generated due list stops flagging them. Records a lightweight, audited "done on file" entry. */

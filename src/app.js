@@ -10605,13 +10605,74 @@ function renderPrehire(){
   else phBodyPipeline();
 }
 
+// A hire is "confirmed" once they're enrolled in PayPlus (they've become a real active employee).
+// Until then they're hired-on-paper but not yet on the payroll system — that's the red flag to chase.
+function phNorm(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim(); }
+function phHiredInfo(c){
+  const onb=(ONBOARDING||[]).find(o=>o.prehire_id===c.id)||null;
+  const eid=(onb&&onb.assigned_employee_id)||c.assigned_employee_id||c.employee_id;
+  const byId = eid && (EMPLOYEES||[]).some(e=>String(e.employee_id||"").replace(/\.0$/,"")===String(eid).replace(/\.0$/,"") && (e.status||"Active")==="Active");
+  const byName = phNorm(c.full_name) && (EMPLOYEES||[]).some(e=>phNorm(e.full_name)===phNorm(c.full_name) && (e.status||"Active")==="Active");
+  return { inPayPlus: !!(byId||byName), onb, uTop:(onb&&(onb.uniform_size_top||onb.uniform_size))||"", uBot:(onb&&onb.uniform_size_bottom)||"" };
+}
+function phUniformCell(inf){ if(inf.uTop||inf.uBot) return `<span class="pill di">${esc(inf.uTop||"—")}</span> / <span class="pill di">${esc(inf.uBot||"—")}</span>`; return `<span class="pill awol">no size</span>`; }
+// The "dashboard of hires of the month" — every hire, whether they're in PayPlus yet, and their uniform sizes.
+let HIRES_ALL=false;
+window.openHiresBoard=()=>{
+  let m=document.getElementById("hiresBoard"); if(!m){ m=document.createElement("div"); m.id="hiresBoard"; document.body.appendChild(m); }
+  const inMo=d=>{ if(!d) return false; const x=new Date(d), n=new Date(); return x.getFullYear()===n.getFullYear()&&x.getMonth()===n.getMonth(); };
+  const all=PREHIRE.filter(p=>p.phase==="HIRED");
+  let list=HIRES_ALL?all:all.filter(p=>inMo(p.updated_at)||inMo(p.created_at));
+  const info=new Map(list.map(c=>[c.id,phHiredInfo(c)]));
+  // pending PayPlus enrolment first (the ones that still need chasing), then most-recent
+  list.sort((a,b)=>{ const ia=info.get(a.id).inPayPlus?1:0, ib=info.get(b.id).inPayPlus?1:0; if(ia!==ib) return ia-ib; return new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0); });
+  const inPP=list.filter(c=>info.get(c.id).inPayPlus).length, pend=list.length-inPP, noSize=list.filter(c=>{const i=info.get(c.id);return !(i.uTop||i.uBot);}).length;
+  const rows=list.map(c=>{ const i=info.get(c.id); return `<tr class="hb-row" data-id="${c.id}" style="cursor:pointer;${i.inPayPlus?'':'background:#fdf1ef;'}">
+    <td><b>${esc(c.full_name)}</b><div style="font-size:11px;color:var(--muted);">${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")}</div></td>
+    <td>${esc(c.worksite||"—")}</td>
+    <td>${i.inPayPlus?'<span class="pill active">✓ in PayPlus</span>':'<span class="pill awol">● not yet — enrol</span>'}</td>
+    <td style="white-space:nowrap;">${phUniformCell(i)}</td>
+    <td style="white-space:nowrap;font-size:12px;color:var(--muted);">${c.updated_at?fmtMDY(c.updated_at):"—"}</td></tr>`; }).join("");
+  m.style.cssText="position:fixed;inset:0;z-index:9997;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
+  m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:680px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
+    <div style="background:linear-gradient(135deg,#12352a,#1E5C3A);color:#fff;padding:18px 22px;position:sticky;top:0;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <div><div style="font-size:19px;font-weight:800;">Hires — ${HIRES_ALL?"all":"this month"}</div>
+          <div style="font-size:12.5px;opacity:.92;margin-top:3px;">${list.length} hired · <b>${inPP}</b> confirmed in PayPlus · <b style="color:#ffd9d2;">${pend}</b> awaiting enrolment${noSize?` · ${noSize} missing a uniform size`:""}</div></div>
+        <button id="hbX" style="background:rgba(255,255,255,.15);border:none;color:#fff;font-size:18px;width:34px;height:34px;border-radius:8px;cursor:pointer;flex-shrink:0;">✕</button>
+      </div>
+      <div style="margin-top:10px;"><button id="hbToggle" style="background:rgba(255,255,255,.15);border:none;color:#fff;font-size:12px;padding:5px 11px;border-radius:8px;cursor:pointer;">${HIRES_ALL?"Show this month only":"Show all hires"}</button></div>
+    </div>
+    <div style="padding:16px 20px 60px;">
+      <div class="psub" style="margin:0 0 10px;">Red rows = <b>hired but not yet in PayPlus</b> — they still need enrolling before they're confirmed. Once in PayPlus they turn green and are done. Uniform = top / bottom size (from their onboarding case).</div>
+      ${list.length?`<table style="width:100%;"><thead><tr><th>Name</th><th>Store</th><th>PayPlus</th><th>Uniform (top/bot)</th><th>Hired</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="psub">No hires in this period.</div>'}
+    </div></div>`;
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  document.getElementById("hbX").addEventListener("click",()=>m.remove());
+  document.getElementById("hbToggle").addEventListener("click",()=>{ HIRES_ALL=!HIRES_ALL; openHiresBoard(); });
+  m.querySelectorAll(".hb-row").forEach(tr=>tr.addEventListener("click",()=>{ m.remove(); openPrehire(PREHIRE.find(p=>String(p.id)===tr.dataset.id)); }));
+};
 function phBodyPipeline(){
   const srcMatch=p=>!prehireSrc || (prehireSrc==="Direct"?(!p.hire_source||p.hire_source==="Direct"):p.hire_source===prehireSrc);
   // DRAFT = agency in-progress submissions (not yet shipped to RCC). Show as the leftmost lane so nothing is hidden.
   const draftPhase={key:"DRAFT",label:"Agency Draft",actor:"agency · not yet submitted"};
   const cols=[draftPhase].concat(PH_PHASES).map(ph=>{
-    const cards=PREHIRE.filter(p=>p.phase===ph.key && srcMatch(p));
+    let cards=PREHIRE.filter(p=>p.phase===ph.key && srcMatch(p));
     if(ph.key==="DRAFT" && cards.length===0) return "";  // hide the draft lane entirely when empty
+    if(ph.key==="HIRED"){
+      // Confirmed (in PayPlus) hires drop to the bottom; the ones still needing enrolment (red) sit on top.
+      const inf=new Map(cards.map(c=>[c.id,phHiredInfo(c)]));
+      cards=cards.slice().sort((a,b)=>{ const ia=inf.get(a.id).inPayPlus?1:0, ib=inf.get(b.id).inPayPlus?1:0; if(ia!==ib) return ia-ib; return new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0); });
+      const inPP=cards.filter(c=>inf.get(c.id).inPayPlus).length, pend=cards.length-inPP;
+      return `<div class="col"><div class="col-h">${ph.label}<span>${inPP} in PayPlus${pend?` · <b style="color:#c0392b;">${pend} to enrol</b>`:""}</span></div>
+        <div style="padding:2px 2px 6px;"><a class="hb-open" style="cursor:pointer;color:var(--green-dark);font-weight:700;font-size:11.5px;">▤ Hires-of-the-month board ›</a></div>
+        ${cards.map(c=>{ const i=inf.get(c.id); return `<div class="ccard clickable" data-id="${c.id}" style="${i.inPayPlus?'':'border-color:#f1c9c5;background:#fdf1ef;'}">
+          <div class="cn">${esc(c.full_name)}</div>
+          <div class="cd">${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")}</div>
+          <div style="font-size:10.5px;margin-top:3px;">${i.inPayPlus?'<span class="pill active">✓ in PayPlus</span>':'<span class="pill awol">● not in PayPlus yet</span>'} <span style="color:var(--muted);">Uniform ${(i.uTop||i.uBot)?esc((i.uTop||"—")+" / "+(i.uBot||"—")):'<b style="color:#c0392b;">no size</b>'}</span></div></div>`; }).join("")
+         || `<div style="font-size:11.5px;color:var(--muted);padding:6px 2px;">—</div>`}
+      </div>`;
+    }
     return `<div class="col"><div class="col-h">${ph.label}<span>${cards.length} · ${esc(ph.actor)}</span></div>
       ${cards.map(c=>`<div class="ccard clickable" data-id="${c.id}" ${ph.key==="HR_SIGNOFF"?'style="border-color:#bcdcc7;background:var(--green-light);"':''}>
         <div class="cn">${esc(c.full_name)}</div>
@@ -10624,12 +10685,16 @@ function phBodyPipeline(){
     ${prehireSrc?`<div style="margin-top:12px;"><span class="pill ag" id="clrSrc" style="cursor:pointer;font-size:12px;">Showing ${esc(prehireSrc)} only · ✕ clear</span></div>`:""}
     <div class="psub" style="margin-top:12px;">Seven stages, left → right (Applied → Hired). Click any card to open the candidate and advance the stage. Onboarding is a separate phase.</div>
     <div class="pipe">${cols}</div>
-    <div class="two-col" style="margin-top:14px;">
-      <div class="panel" style="margin-top:0;"><h2>Hard Gate — SM / Retail-Ops Acceptance</h2>
-        <div class="psub">For consigned (concession) merchandisers, the host store must accept before pre-hire can close</div>
-        ${(()=>{ const all=PREHIRE.filter(p=>p.sm_acceptance&&p.sm_acceptance!=="NA"); const acc=all.filter(p=>p.sm_acceptance==="Accepted").length; const pend=all.filter(p=>p.sm_acceptance!=="Accepted"); return (acc?`<div class="psub" style="color:var(--green-dark);margin-bottom:6px;">✓ ${acc} accepted — gate passed, cleared from the list</div>`:"")+(pend.length?pend.map(p=>`<div class="task"><div class="dot ${p.sm_acceptance==='Rejected'?'r':'a'}"></div><div><div class="tt">${esc(p.full_name)} · ${esc(p.worksite||"—")}</div><div class="td">SM acceptance: ${esc(p.sm_acceptance)}</div></div></div>`).join(""):'<div class="psub">Nothing awaiting SM acceptance.</div>'); })()}
-      </div>
-    </div>
+    ${(()=>{ const all=PREHIRE.filter(p=>p.sm_acceptance&&p.sm_acceptance!=="NA"); const acc=all.filter(p=>p.sm_acceptance==="Accepted").length; const pend=all.filter(p=>p.sm_acceptance!=="Accepted");
+      return `<div class="panel"><details${pend.length?" open":""}><summary style="cursor:pointer;list-style:none;outline:none;">
+        <span style="font-size:16px;font-weight:800;color:#12352a;">Store acceptance ${pend.length?`<span class="count-tag">${pend.length} waiting</span>`:`<span class="pill active">all clear</span>`}</span>
+        <span class="psub" style="font-size:12px;">▸ click to ${pend.length?"see who":"read what this is"}</span></summary>
+        <div style="margin-top:10px;">
+          <div class="psub" style="line-height:1.55;">Some merchandisers work <b>inside a host store</b> (SM, Landmark, etc.) on consignment. Before we can finalise their hire, that store's retail-ops team has to <b>accept them onto their floor</b>. Until that acceptance is recorded, the person <b>cannot be marked Hired</b> — this is the "hard gate". Head-office and warehouse roles aren't store-based, so they skip it (marked <b>NA</b>).</div>
+          ${acc?`<div class="psub" style="color:var(--green-dark);margin:8px 0 4px;">✓ ${acc} already accepted — gate passed, no action needed.</div>`:""}
+          ${pend.length?`<div class="psub" style="margin:8px 0 4px;font-weight:600;">Waiting on store acceptance:</div>`+pend.map(p=>`<div class="task clickable" data-id="${p.id}"><div class="dot ${p.sm_acceptance==='Rejected'?'r':'a'}"></div><div><div class="tt">${esc(p.full_name)} · ${esc(p.worksite||"—")}</div><div class="td">Store acceptance: <b>${esc(p.sm_acceptance)}</b> — open the candidate to record it</div></div></div>`).join(""):'<div class="psub" style="margin-top:8px;">Nothing is waiting on a store right now.</div>'}
+        </div>
+      </details></div>`; })()}
     ${rej.length?`<div class="panel"><details><summary style="cursor:pointer;list-style:none;outline:none;"><span style="font-size:16px;font-weight:800;color:#12352a;">Rejected &amp; closed <span class="count-tag">${rej.length}</span></span> <span class="psub" style="font-size:12px;">▸ grouped by reason — click to expand</span></summary><div style="margin-top:10px;">${(()=>{
       const groups={}; rej.forEach(c=>{ const base=String(c.rejection_reason||"No reason recorded").split(" — ")[0].trim()||"No reason recorded"; (groups[base]=groups[base]||[]).push(c); });
       const order=REJECT_REASONS.concat(["No reason recorded"]);
@@ -10637,6 +10702,7 @@ function phBodyPipeline(){
       return keys.map(k=>`<div style="margin-top:12px;"><div style="font-weight:700;font-size:13px;color:#12352a;border-bottom:1px solid var(--line);padding-bottom:3px;">${esc(k)} <span class="count-tag">${groups[k].length}</span></div>${groups[k].map(c=>{ const note=(c.rejection_reason&&c.rejection_reason.includes(" — "))?c.rejection_reason.split(" — ").slice(1).join(" — "):""; return `<div class="task clickable" data-id="${c.id}"><div class="dot r"></div><div><div class="tt">${esc(c.full_name)}</div><div class="td">${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")}${note?` · <b>${esc(note)}</b>`:""}</div></div></div>`; }).join("")}</div>`).join("");
     })()}</div></details></div>`:""}`;
   $$("#phBody .clickable").forEach(el=>el.addEventListener("click",()=>openPrehire(PREHIRE.find(p=>String(p.id)===el.dataset.id))));
+  $$("#phBody .hb-open").forEach(el=>el.addEventListener("click",(e)=>{ e.stopPropagation(); openHiresBoard(); }));
   const _cs=document.getElementById("clrSrc"); if(_cs) _cs.addEventListener("click",()=>{ prehireSrc=null; renderPrehire(); });
 }
 

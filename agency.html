@@ -54,8 +54,9 @@
   <div class="wrap">
     <div id="candLinkBox" style="background:#eef4ef;border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-bottom:14px;"></div>
     <div class="tabs">
-      <div class="tab sel" id="tabOpen" onclick="show('open')">Open positions</div>
-      <div class="tab" id="tabMine" onclick="show('mine')">My submissions</div>
+      <div class="tab sel" id="tabDash" onclick="show('dash')">Dashboard</div>
+      <div class="tab" id="tabOpen" onclick="show('open')">Open positions</div>
+      <div class="tab" id="tabMine" onclick="show('mine')">My candidates</div>
     </div>
     <div id="body"><div class="empty">Loading…</div></div>
     <div class="foot">You only see open positions and your own submitted candidates. Counts are anonymized. — RCC</div>
@@ -63,8 +64,73 @@
 <script>
 const FN="https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/agency";
 const token=new URLSearchParams(location.search).get("t")||"";
-let DATA={openings:[],my_submissions:[],agency:""}, TAB="open";
+let DATA={openings:[],my_submissions:[],agency:""}, TAB="dash";
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// --- Pipeline (same stages HR uses inside the portal, in plain words for agencies) ---
+const PIPELINE=[
+  {k:"APPLIED",l:"Submitted"},
+  {k:"SCREENING",l:"Screening"},
+  {k:"DOCUMENTS",l:"Documents"},
+  {k:"RECRUITER_REVIEW",l:"Interview & review"},
+  {k:"HR_SIGNOFF",l:"Final approval"},
+  {k:"CONTRACT_SIGNING",l:"Contract"},
+  {k:"HIRED",l:"Hired"}
+];
+const pipeIdx=s=>{ const i=PIPELINE.findIndex(p=>p.k===s); return i<0?0:i; };
+const stageLabel=s=>{ if(s==="DRAFT")return"Draft — not sent"; if(s==="REJECTED")return"Not selected"; if(s==="POOLED")return"Kept for future openings"; return (PIPELINE.find(p=>p.k===s)||{}).l||"In process"; };
+// Horizontal stepper showing exactly where one candidate sits.
+function stepper(status){
+  const cur=pipeIdx(status);
+  return `<div style="display:flex;align-items:flex-start;margin-top:12px;overflow-x:auto;padding-bottom:2px;">`+
+    PIPELINE.map((p,i)=>{
+      const done=i<cur, on=i===cur;
+      const bg=done||on?"#1c6b3f":"#fff", bd=done||on?"#1c6b3f":"#cdd5de", fg=done||on?"#fff":"#9aa5b1";
+      const line=i<PIPELINE.length-1?`<div style="width:20px;height:2px;background:${i<cur?"#1c6b3f":"#e3e8ef"};margin-top:11px;flex-shrink:0;"></div>`:"";
+      return `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:60px;">
+          <div style="width:22px;height:22px;border-radius:50%;background:${bg};border:2px solid ${bd};color:${fg};font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;">${done?"✓":i+1}</div>
+          <div style="font-size:9.5px;text-align:center;margin-top:5px;color:${on?"#12352a":"#9aa5b1"};font-weight:${on?800:600};line-height:1.15;">${p.l}</div>
+        </div>${line}`;
+    }).join("")+`</div>`;
+}
+function dashTile(n,label,col){ return `<div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;">
+  <div style="font-size:26px;font-weight:800;color:${col};line-height:1;">${n}</div>
+  <div style="font-size:12px;color:var(--muted);font-weight:700;margin-top:4px;">${label}</div></div>`; }
+function candCard(x){
+  const dt=x.submitted?new Date(x.submitted).toLocaleDateString(undefined,{month:"short",day:"numeric"}):"";
+  return `<div class="card" style="flex-direction:column;align-items:stretch;gap:0;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;">
+      <div style="min-width:0;"><span class="nm">${esc(x.name)}</span> <span class="loc">${x.store?"· "+esc(x.store):""}${x.position?" · "+esc(x.position):""}</span></div>
+      <span class="chip open">${esc(stageLabel(x.status))}</span>
+    </div>
+    ${stepper(x.status)}
+    ${dt?`<div class="dates" style="margin-top:8px;">Submitted ${dt}</div>`:""}
+  </div>`;
+}
+function renderDash(b){
+  const all=(DATA.my_submissions||[]).filter(x=>!x.hidden);
+  const inProc=all.filter(x=>!["DRAFT","HIRED","REJECTED","POOLED"].includes(x.status));
+  const pooled=all.filter(x=>x.status==="POOLED");
+  const hired=all.filter(x=>x.status==="HIRED");
+  const drafts=all.filter(x=>x.status==="DRAFT");
+  const rejected=all.filter(x=>x.status==="REJECTED");
+  let html=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:16px;">`
+    +dashTile(inProc.length,"In process","#1c6b3f")
+    +dashTile(hired.length,"Hired","#2c6e8f")
+    +dashTile(drafts.length,"Drafts to send",drafts.length?"#8a6a14":"#6B7785")
+    +dashTile(rejected.length,"Not selected","#6B7785")
+    +`</div>`;
+  if(drafts.length){ html+=`<div style="background:var(--amber-bg);border:1px solid #eadfbe;border-radius:11px;padding:11px 14px;margin-bottom:14px;font-size:13px;color:#7a5c10;">
+      You have <b>${drafts.length} draft${drafts.length>1?"s":""}</b> not yet sent to RCC. Open <b>My candidates</b> to review and <b>Submit to RCC</b>.</div>`; }
+  html+=`<div class="grp">Where your candidates are</div>`;
+  if(!inProc.length){ html+=`<div class="empty">No candidates in process right now. Open a position and add a candidate — you'll see their progress here.</div>`; }
+  else html+=inProc.map(candCard).join("");
+  if(pooled.length){ html+=`<div class="grp">Kept for future openings</div>`
+    +pooled.map(x=>`<div class="card"><div style="flex:1;"><span class="nm">${esc(x.name)}</span> <span class="loc">${x.store?"· "+esc(x.store):""}</span></div><span class="chip" style="background:#eef0f5;color:#5a6472;">Talent pool</span></div>`).join(""); }
+  if(hired.length){ html+=`<div class="grp">Hired this period (${hired.length})</div>`
+    +hired.map(x=>`<div class="card"><div style="flex:1;"><span class="nm">${esc(x.name)}</span> <span class="loc">${x.store?"· "+esc(x.store):""}</span></div><span class="chip hir">${x.still_active===false?"Left — please remove":"Hired ✓"}</span></div>`).join(""); }
+  b.innerHTML=html;
+}
 
 async function load(){
   if(!token){ document.getElementById("body").innerHTML='<div class="empty">This link is missing its access code. Please use the link RCC gave you.</div>'; document.getElementById("who").textContent="No access"; return; }
@@ -78,18 +144,24 @@ async function load(){
     const at=document.getElementById("agTitle"); if(at) at.innerHTML=`${esc(d.agency||"Agency")} <span style="font-weight:500;opacity:.8;">— Merchandiser Openings</span>`;
     document.getElementById("who").textContent=`${d.openings.length} stores · ${slots} open positions · ${d.total_active||0} candidates in process · ${myActive} from ${d.agency}`;
     const to=document.getElementById("tabOpen"); if(to) to.textContent=`Open positions (${slots})`;
-    const tm=document.getElementById("tabMine"); if(tm) tm.textContent=`My submissions (${(d.my_submissions||[]).length})`;
+    const tm=document.getElementById("tabMine"); if(tm) tm.textContent=`My candidates (${(d.my_submissions||[]).filter(x=>!x.hidden).length})`;
     render();
   }catch(e){ document.getElementById("body").innerHTML=`<div class="empty">Couldn't load right now. Please try again.</div>`; }
 }
-function show(t){ TAB=t; document.getElementById("tabOpen").classList.toggle("sel",t==="open"); document.getElementById("tabMine").classList.toggle("sel",t==="mine"); render(); }
+function show(t){ TAB=t;
+  document.getElementById("tabDash").classList.toggle("sel",t==="dash");
+  document.getElementById("tabOpen").classList.toggle("sel",t==="open");
+  document.getElementById("tabMine").classList.toggle("sel",t==="mine");
+  render(); }
 function render(){
   const b=document.getElementById("body");
+  if(TAB==="dash"){ renderDash(b); return; }
   if(TAB==="mine"){
     const all=(DATA.my_submissions||[]).filter(x=>!x.hidden);
     if(!all.length){ b.innerHTML=`<div class="empty">No candidates yet. Open a position and click “Submit a candidate” — it saves as a draft you review before sending to RCC.</div>`; return; }
     const drafts=all.filter(x=>x.status==="DRAFT");
-    const inProc=all.filter(x=>!["DRAFT","HIRED","REJECTED"].includes(x.status));
+    const inProc=all.filter(x=>!["DRAFT","HIRED","REJECTED","POOLED"].includes(x.status));
+    const pooled=all.filter(x=>x.status==="POOLED");
     const hired=all.filter(x=>x.status==="HIRED");
     const rejected=all.filter(x=>x.status==="REJECTED");
     const dt=x=>x.submitted?new Date(x.submitted).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'—';
@@ -100,7 +172,8 @@ function render(){
       `</tbody></table>`;
     let html=`<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:6px;font-size:12.5px;color:var(--muted);">Keep your list tidy — once someone is <b>hired</b> they move to the Hired list below; please <b>remove</b> anyone who has left or wasn't selected.</div>`;
     html+=sech("In process",inProc.length);
-    html+= inProc.length? tbl(inProc,()=>`<span class="pill">In process</span>`) : `<div style="font-size:12.5px;color:var(--muted);padding:4px 2px;">None in process.</div>`;
+    html+= inProc.length? tbl(inProc,x=>`<span class="pill" style="background:var(--green-bg);color:var(--green);">${esc(stageLabel(x.status))}</span>`) : `<div style="font-size:12.5px;color:var(--muted);padding:4px 2px;">None in process.</div>`;
+    if(pooled.length){ html+=sech("Kept for future openings",pooled.length)+tbl(pooled,()=>`<span class="pill" style="background:#eef0f5;color:#5a6472;">Talent pool</span>`); }
     html+=sech("Hired",hired.length,"— still with RCC?");
     html+= hired.length? tbl(hired,x=> x.still_active===false?`<span class="pill" style="background:#fdeaea;color:#a4322a;">No longer active — please remove</span>`:x.still_active===true?`<span class="chip hir">Hired · still active ✓</span>`:`<span class="chip hir">Hired</span>`) : `<div style="font-size:12.5px;color:var(--muted);padding:4px 2px;">No hires yet this period.</div>`;
     if(rejected.length){ html+=sech("Not selected — please remove",rejected.length)+tbl(rejected,()=>`<span class="pill" style="background:#f3f3f3;color:#777;">Not selected</span>`); }

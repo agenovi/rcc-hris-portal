@@ -8325,7 +8325,7 @@ function renderManning(){
   const railBtn=(sec,label,badge)=>`<button class="mrail${SEC===sec?' active':''}" data-sec="${sec}" style="display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;border:none;background:${SEC===sec?'#1E3A5F':'transparent'};color:${SEC===sec?'#fff':'#28313c'};font-weight:${SEC===sec?'700':'600'};font-size:13.5px;padding:10px 12px;border-radius:9px;cursor:pointer;margin-bottom:4px;">${esc(label)}${badge?`<span style="font-size:11px;background:${SEC===sec?'rgba(255,255,255,.2)':'#e6ecf3'};color:${SEC===sec?'#fff':'#41506b'};padding:1px 7px;border-radius:10px;">${badge}</span>`:''}</button>`;
   pg.innerHTML=`
     ${_sc?`<div class="panel" style="margin-top:0;background:var(--green-soft,#eef6f0);"><div style="font-weight:700;color:var(--green-dark);">Manning — ${esc(_sc)}'s stores</div><div class="psub" style="margin:2px 0 0;">Confirm the manning for your stores — tick ✓ Confirm on each once it's correct.</div></div>`:''}
-    ${_sc?scStoreUpdates(_sc):remindersBar("manning")}
+    ${_sc?scStoreUpdates(_sc):""}
     <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
       <div id="mSecRail" style="flex:0 0 168px;min-width:148px;">
         ${railBtn('headcount','Headcount','')}

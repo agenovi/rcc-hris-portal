@@ -8790,25 +8790,43 @@ function openEvalForm(empId,type,due){
   (async()=>{
     const box=document.getElementById("ev_att"); if(!box) return;
     if(!e.employee_id){ box.innerHTML=`<div class="psub">No PayPlus ID linked — attendance can't be pulled automatically. Verify manually.</div>`; return; }
+    const periodMonths=({ "3rd-month":3,"5th-month":6,"regularization":6,"annual":12 })[type]||3; // pull the same window the review covers
     const now=new Date(); let ey=now.getFullYear(), em=now.getMonth(); if(em===0){ em=12; ey--; }
-    let sy=ey, sm=em-2; while(sm<1){ sm+=12; sy--; }
+    let sy=ey, sm=em-(periodMonths-1); while(sm<1){ sm+=12; sy--; }
     try{
       const { data:{ session } }=await sb.auth.getSession();
       const url=`${SUPABASE_URL}/functions/v1/payplus-attendance?emp=${encodeURIComponent(e.employee_id)}&y1=${sy}&m1=${sm}&y2=${ey}&m2=${em}`;
       const r=await fetch(url,{ headers:{ Authorization:`Bearer ${session.access_token}`, apikey:SUPABASE_ANON_KEY } });
       const j=await r.json(); const ms=(j.months||[]).filter(x=>x.hasData);
       if(!ms.length){ box.innerHTML=`<div class="note" style="background:#fffaf0;border-color:#f0d9a6;">No PayPlus attendance found (agency/not enrolled, or newly hired) — verify manually.</div>`; return; }
-      const abs=ms.reduce((s,x)=>s+Number(x.absent||0),0);
-      const lateMin=ms.reduce((s,x)=>s+Number(x.lateMinutes||0),0);
-      const lateDays=lateMin/480, equiv=abs+lateDays;
-      const band=equiv<=2?"Good":equiv<=4?"Bad":"Terrible";
-      const col=band==="Good"?"#1f7a44":band==="Bad"?"#8a5a1c":"#a4322a";
-      state.att={abs,lateMin,lateDays,equiv,band};
-      box.innerHTML=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <div style="font-size:13px;">Last 3 months: <b>${abs}</b> absence day(s) + <b>${lateDays.toFixed(1)}</b> day(s) of lates <span class="note">(${lateMin.toFixed(0)} min ÷ 480)</span></div>
-        <div style="padding:5px 13px;border-radius:20px;background:${col};color:#fff;font-weight:800;font-size:13px;">${band} · ${equiv.toFixed(1)}</div>
-      </div><div class="psub" style="margin-top:5px;">Auto-computed from PayPlus. Scale: 0–2 good · 3–4 bad · 5+ terrible.</div>`;
-      paintScore();
+      const abs0=ms.reduce((s,x)=>s+Number(x.absent||0),0);
+      const late0=ms.reduce((s,x)=>s+Number(x.lateMinutes||0),0);
+      const ut0=ms.reduce((s,x)=>s+Number(x.undertimeMinutes||0),0);
+      const inpStyle="width:92px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font-size:14px;text-align:right;box-sizing:border-box;";
+      box.innerHTML=`
+        <div class="psub" style="margin:-2px 0 9px;">Auto-filled from PayPlus (last ${periodMonths} months — the ${esc(EVAL_LABEL[type]||"review")} period) — <b>edit any figure to correct it</b>. Band = absences + (total lates + undertime) ÷ 480 min.</div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;">
+          <div><div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">Absences (days)</div><input id="ev_abs" type="number" min="0" step="0.5" value="${abs0}" style="${inpStyle}"></div>
+          <div><div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">Total lates (min)</div><input id="ev_late" type="number" min="0" step="1" value="${late0.toFixed(0)}" style="${inpStyle}"></div>
+          <div><div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">Undertime (min)</div><input id="ev_ut" type="number" min="0" step="1" value="${ut0.toFixed(0)}" style="${inpStyle}"></div>
+          <div id="ev_band"></div>
+        </div>
+        <div class="psub" id="ev_attsum" style="margin-top:8px;"></div>
+        <div class="psub" style="margin-top:3px;">Scale: 0–2 good · 3–4 bad · 5+ terrible.</div>`;
+      const recomputeAtt=()=>{
+        const a=Math.max(0,Number((document.getElementById("ev_abs")||{}).value)||0);
+        const lm=Math.max(0,Number((document.getElementById("ev_late")||{}).value)||0);
+        const um=Math.max(0,Number((document.getElementById("ev_ut")||{}).value)||0);
+        const lateDays=lm/480, utDays=um/480, equiv=a+lateDays+utDays;
+        const band=equiv<=2?"Good":equiv<=4?"Bad":"Terrible";
+        const col=band==="Good"?"#1f7a44":band==="Bad"?"#8a5a1c":"#a4322a";
+        state.att={abs:a,lateMin:lm,utMin:um,lateDays,utDays,equiv,band,edited:(a!==abs0||lm!==Math.round(late0)||um!==Math.round(ut0))};
+        const bp=document.getElementById("ev_band"); if(bp) bp.innerHTML=`<div style="padding:5px 13px;border-radius:20px;background:${col};color:#fff;font-weight:800;font-size:13px;">${band} · ${equiv.toFixed(1)}</div>`;
+        const sm2=document.getElementById("ev_attsum"); if(sm2) sm2.innerHTML=`Last ${periodMonths} months: <b>${a}</b> absence day(s) + <b>${lm.toFixed(0)}</b> min late (${lateDays.toFixed(1)}d) + <b>${um.toFixed(0)}</b> min undertime (${utDays.toFixed(1)}d) → equivalent <b>${equiv.toFixed(1)}</b>${state.att&&state.att.edited?' <span style="color:#8a5a1c;">· edited</span>':''}`;
+        paintScore();
+      };
+      ["ev_abs","ev_late","ev_ut"].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener("input",recomputeAtt); });
+      recomputeAtt();
     }catch(err){ box.innerHTML=`<div class="note">Couldn't reach PayPlus: ${esc(String(err&&err.message||err))}</div>`; }
   })();
   document.getElementById("evClose").addEventListener("click",()=>m.remove());

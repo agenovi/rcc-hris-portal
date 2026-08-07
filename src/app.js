@@ -8120,6 +8120,17 @@ async function rejectStoreChange(id){
   if(error){ alert(error.message); return; }
   await loadEmployees(); window.go("manning");
 }
+// HR/SC tag a merchandiser opening Urgent (shows on the Manning list AND the agency form). First tag stamps the open-since date.
+window.mnToggleUrgent=async(store)=>{
+  const b=(BRANCHES||[]).find(x=>x.name===store); if(!b) return;
+  const on=!b.opening_urgent;
+  const patch={opening_urgent:on}; if(on&&!b.opening_since) patch.opening_since=new Date().toISOString().slice(0,10);
+  const {error}=await sb.from("branches").update(patch).eq("id",b.id);
+  if(error){ alert(error.message); return; }
+  b.opening_urgent=on; if(patch.opening_since) b.opening_since=patch.opening_since;
+  try{ await logChange("branch",b.id,b.name, on?"Opening marked urgent":"Opening urgency cleared",""); }catch(_){}
+  renderManning();
+};
 function renderManning(){
   const pg=$("#page-manning"); if(!pg) return;
   // Sales Coordinator: lock the whole page to their own cluster — EXCEPT full-overview sales (Bryan), who sees all stores.
@@ -8143,7 +8154,7 @@ function renderManning(){
   open.forEach(b=>{ const s=storeShort(b.name); const a=superOf(b.area||"—"); regShort[a]=(regShort[a]||0)+s; if(s>0) regStores[a]=(regStores[a]||0)+1; });
   const regOrder=[...REGIONS.map(r=>r[0]),...Object.keys(regShort).filter(a=>!REGIONS.some(r=>r[0]===a))].filter(a=>regShort[a]!==undefined);
   // Openings DERIVE from the PayPlus shortfall — one figure everywhere (no hand-posted list). One row per short store.
-  const OPENINGS=open.filter(b=>(!_sc||b.sc===_sc)).map(b=>{ const sp=storeShortSplit(b.name); return { id:'gap-'+b.name, worksite:b.name, sc:b.sc, area:superOf(b.area||"—"), count_needed:sp.total, stationary_need:sp.stationary, reliever_need:sp.reliever, coveredBy:sp.coveredBy, position:'Merchandiser', status:'Open', _derived:true }; }).filter(o=>o.count_needed>0);
+  const OPENINGS=open.filter(b=>(!_sc||b.sc===_sc)).map(b=>{ const sp=storeShortSplit(b.name); return { id:'gap-'+b.name, worksite:b.name, sc:b.sc, area:superOf(b.area||"—"), count_needed:sp.total, stationary_need:sp.stationary, reliever_need:sp.reliever, coveredBy:sp.coveredBy, urgent:!!b.opening_urgent, opening_since:b.opening_since||null, position:'Merchandiser', status:'Open', _derived:true }; }).filter(o=>o.count_needed>0);
   const opInReview=(store)=>PREHIRE.filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT","POOLED"].includes(p.phase)).length;
   const nTrf=(TRANSFERS||[]).filter(t=>['Requested','InEffect'].includes(t.status)).length;
   const nPositions=OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0);
@@ -8245,10 +8256,14 @@ function renderManning(){
       const noteLine=notes.length?`<div style="font-size:11px;color:var(--muted);margin-top:2px;">${notes.join(" · ")}</div>`:"";
       const nRev=opInReview(o.worksite);
       const revCell=nRev>0?`<a class="op-review" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;color:var(--green-dark);font-weight:700;text-decoration:underline;">${nRev} — review</a>`:`<span style="color:var(--muted);">0</span>`;
-      html+=`<tr class="op-row" data-id="${o.id}" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;"><td><b>${esc(o.worksite)}</b>${noteLine}</td><td>${esc(o.sc||"—")}</td><td>${needCell(o)}</td><td>${revCell}</td>
-        <td style="text-align:right;white-space:nowrap;"><span class="note">from PayPlus · tap to view store</span></td></tr>`;
+      const urgentPill=o.urgent?' <span class="pill awol">⚡ Urgent</span>':'';
+      const sinceLine=o.opening_since?`<div style="font-size:10.5px;color:var(--muted);">open since ${fmtDate(o.opening_since)}</div>`:'';
+      const urgentBtn=canManageStores()?`<button class="op-urgent" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;font-size:11px;padding:3px 9px;border-radius:14px;border:1.5px solid ${o.urgent?'#e6a6a0':'#dbe4dd'};background:${o.urgent?'#fdeceb':'#fff'};color:${o.urgent?'#a4322a':'#41506b'};">${o.urgent?'⚡ Urgent ✓':'Mark urgent'}</button>`:'<span class="note">from PayPlus</span>';
+      html+=`<tr class="op-row" data-id="${o.id}" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;"><td><b>${esc(o.worksite)}</b>${urgentPill}${sinceLine}${noteLine}</td><td>${esc(o.sc||"—")}</td><td>${needCell(o)}</td><td>${revCell}</td>
+        <td style="text-align:right;white-space:nowrap;">${urgentBtn}</td></tr>`;
     });
     opRows.innerHTML=html;
+    $$("#opRows .op-urgent").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); mnToggleUrgent(b.dataset.ws); }));
     $$("#opRows .op-edit").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); openingForm(MANPOWER.find(o=>o.id===b.dataset.id)); }));
     $$("#opRows .op-close").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); closeOpening(MANPOWER.find(o=>o.id===b.dataset.id)); }));
     $$("#opRows .op-del").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); deleteOpening(MANPOWER.find(o=>o.id===b.dataset.id)); }));

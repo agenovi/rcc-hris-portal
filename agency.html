@@ -116,12 +116,15 @@ function render(){
   const regName=a=>{ const m=REGIONS.find(r=>r[0]===a); return m?m[1]:(a||"Other"); };
   const regIdx=a=>{ const i=REGIONS.findIndex(r=>r[0]===a); return i<0?99:i; };
   const areas=[...new Set(ops.map(o=>superOf(o.area||"—")))].sort((x,y)=>regIdx(x)-regIdx(y));
+  const fmtD=s=>{ if(!s) return ""; const d=new Date(s+"T00:00:00"); return isNaN(d)?"":d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}); };
   const cardHtml=o=>{
       const s=Number(o.stationary_need||0), r=Number(o.reliever_need||0);
       const needChips=[ s>0?`<span class="chip open">${s} stationary</span>`:"", r>0?`<span class="chip" style="background:#eaf3ff;color:#1f5fa6;">${r} reliever</span>`:"" ].filter(Boolean).join(" ") || `<span class="chip open">${o.open_slots} shortfall</span>`;
-      return `<div class="card">
-      <div style="flex:1;min-width:140px;"><div class="nm">${esc(o.store)}</div>
-        <div class="loc">${esc(o.city||"")}${o.category?" · "+(o.category==="CN"?"Concession":"Boutique"):""}</div></div>
+      const urgent=o.urgent?`<span class="chip urg">⚡ Urgent</span>`:"";
+      const since=o.opening_since?`<div class="loc">Open since ${fmtD(o.opening_since)}</div>`:"";
+      return `<div class="card"${o.urgent?' style="border-color:#e6a6a0;background:#fff7f6;"':''}>
+      <div style="flex:1;min-width:140px;"><div class="nm">${esc(o.store)} ${urgent}</div>
+        <div class="loc">${esc(o.city||"")}${o.category?" · "+(o.category==="CN"?"Concession":"Boutique"):""}</div>${since}</div>
       <div class="chips">
         ${needChips}
         <span class="chip ${o.in_review>0?'rev':'hir'}">${o.in_review} in review${o.my_in_review?` · ${o.my_in_review} ${esc(DATA.agency)}`:""}</span>
@@ -132,8 +135,9 @@ function render(){
   b.innerHTML=areas.map(a=>{
       const rows=ops.filter(o=>superOf(o.area||"—")===a);
       const tot=rows.reduce((n,o)=>n+Number(o.open_slots||0),0);
-      return `<div style="margin:14px 0 6px;font-weight:800;color:#12352a;display:flex;align-items:center;gap:8px;">${esc(regName(a))}<span style="font-weight:600;color:#6b7785;font-size:13px;">· ${tot} to fill · ${rows.length} store${rows.length===1?'':'s'}</span></div>`
-        + rows.map(cardHtml).join("");
+      const urg=rows.filter(o=>o.urgent).length;
+      return `<details open style="margin-bottom:6px;"><summary style="cursor:pointer;list-style:none;outline:none;font-weight:800;color:#12352a;padding:8px 0;">${esc(regName(a))} <span style="font-weight:600;color:#6b7785;font-size:13px;">· ${tot} to fill · ${rows.length} store${rows.length===1?'':'s'}${urg?` · <span style="color:#a4322a;">⚡ ${urg} urgent</span>`:""}</span></summary>`
+        + rows.map(cardHtml).join("") + `</details>`;
     }).join("");
 }
 function statusLabel(p){ if(p==="DRAFT") return "Draft — not sent"; if(p==="HIRED") return "Hired"; if(p==="REJECTED") return "Not selected"; return "In process"; }

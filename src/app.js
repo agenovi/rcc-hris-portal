@@ -9684,10 +9684,11 @@ function renderAgencies(){
             <a class="btn" href="${esc(link)}" target="_blank" style="text-decoration:none;">Open dashboard ↗</a>
           </div>
         </div>
-        <div class="subhead" style="margin-top:12px;">Contracts / placements <span class="sh-note">${withContract} of ${active.length} have a contract type on file</span></div>
-        ${active.length?`<div style="overflow-x:auto;"><table><thead><tr><th>Name</th><th>Store</th><th>Start date</th><th>Contract</th></tr></thead><tbody>
+        <details style="margin-top:12px;"><summary style="cursor:pointer;list-style:none;outline:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span class="subhead" style="display:inline;margin:0;">Contracts / placements</span> <span class="sh-note">${withContract} of ${active.length} have a contract type on file · ▸ show/hide</span></summary>
+        ${active.length?`<div style="overflow-x:auto;margin-top:8px;"><table><thead><tr><th>Name</th><th>Store</th><th>Start date</th><th>Contract</th></tr></thead><tbody>
           ${active.slice(0,300).map(e=>`<tr class="clickable ag-emp" data-id="${e.id}"><td><b>${esc(e.full_name)}</b></td><td>${esc(e.worksite||'—')}</td><td style="white-space:nowrap;">${e.hire_date?fmtDate(e.hire_date):'—'}</td><td>${e.contract_type?'<span class="pill di">'+esc(e.contract_type)+'</span>':'<span class="pill awol">none on file</span>'}</td></tr>`).join('')}
         </tbody></table></div>`:`<div class="psub" style="margin-top:6px;">No active placements from ${esc(ag)} yet.</div>`}
+        </details>
       </div>`;
     }).join('')}`;
   $$("#page-agencies .ag-copy").forEach(b=>b.addEventListener("click",()=>{ if(navigator.clipboard) navigator.clipboard.writeText(b.dataset.link); const t=b.textContent; b.textContent="Copied ✓"; setTimeout(()=>b.textContent=t,1200); }));

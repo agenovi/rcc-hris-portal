@@ -6456,6 +6456,7 @@ window.renderIncidents=renderIncidents;
 function openIncident(i){
   if(!i) return;
   const rc=incRepeatMap()[(i.person_name||"").trim().toLowerCase()]||0;
+  const emp=(EMPLOYEES||[]).find(x=>x.full_name&&typeof phNameMatch==="function"&&phNameMatch(x.full_name,i.person_name));
   const kv=(k,val)=>`<div class="efield"><div class="el">${esc(k)}</div><div class="ev">${val}</div></div>`;
   let m=document.getElementById("inDrawer"); if(!m){ m=document.createElement("div"); m.id="inDrawer"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
@@ -6469,6 +6470,7 @@ function openIncident(i){
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h2 style="margin:0;">Incident</h2>${incStatusPill(i.status)}</div>
         <div class="egrid" style="margin-top:8px;">
           ${kv("Person involved",esc(i.person_name||"—")+(i.person_position?` · ${esc(i.person_position)}`:"")+(rc>1?` <span class="pill" style="background:#fde8e8;color:#a12;font-weight:700;font-size:10px;">repeat · ${rc}×</span>`:""))}
+          ${kv("Start date",emp&&emp.hire_date?fmtDate(emp.hire_date):'<span class="note">— not matched on roster</span>')}
           ${kv("Branch / office",esc(i.branch||"—")+(i.office_type?` · ${esc(i.office_type)}`:""))}
           ${kv("Reported by",esc(i.reporter_name||"—")+(i.reporter_position?` · ${esc(i.reporter_position)}`:""))}
           ${kv("Channel",esc(i.channel||"—"))}
@@ -6478,9 +6480,18 @@ function openIncident(i){
           ${kv("Occurrence",esc(i.incident_count||"—"))}
           ${kv("Action taken",esc(i.action_taken||"—"))}
           ${kv("Date resolved",esc(i.date_resolved||"—"))}
-          ${kv("Person in charge",esc(i.person_incharge||"—"))}
+          ${kv("Handled by / in charge",esc(i.person_incharge||"—"))}
+          ${kv("Logged by (HR)",i.created_by?esc(String(i.created_by).split("@")[0]):"—")}
         </div>
-        ${(Array.isArray(i.attachments)&&i.attachments.length)?`<div style="margin-top:10px;"><div class="subhead" style="margin-bottom:4px;">Attachments <span class="count-tag">${i.attachments.length}</span></div>${i.attachments.map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📎 ${esc(a.name)}</span><button class="btn ghost" style="padding:3px 10px;font-size:12px;flex-shrink:0;" onclick="openLoanDoc('${esc(a.path)}',this)">View</button></div>`).join("")}</div>`:""}
+        <div style="margin-top:10px;">
+          <div class="subhead" style="margin-bottom:4px;">Documents ${(Array.isArray(i.attachments)&&i.attachments.length)?`<span class="count-tag">${i.attachments.length}</span>`:''}</div>
+          ${(Array.isArray(i.attachments)&&i.attachments.length)?i.attachments.map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📎 ${esc(a.name)}</span><button class="btn ghost" style="padding:3px 10px;font-size:12px;flex-shrink:0;" onclick="openLoanDoc('${esc(a.path)}',this)">View</button></div>`).join(""):'<div class="note" style="font-size:12.5px;">No documents attached yet.</div>'}
+          ${canSeeIncidents()?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+            <button class="btn ghost" style="font-size:12px;padding:5px 11px;" onclick="incAttach('${i.id}','NTE')">⬆ Upload NTE</button>
+            <button class="btn ghost" style="font-size:12px;padding:5px 11px;" onclick="incAttach('${i.id}','Incident report')">⬆ Upload incident report</button>
+            <button class="btn ghost" style="font-size:12px;padding:5px 11px;" onclick="incAttach('${i.id}','')">⬆ Other file</button>
+          </div>`:''}
+        </div>
       </div>
       ${i.remarks?`<div class="panel"><div class="subhead">Remarks</div><div style="white-space:pre-wrap;font-size:13.5px;line-height:1.55;color:#22302a;">${esc(i.remarks)}</div></div>`:""}
       <div class="psub" style="margin-top:2px;">${i.updated_at?"Updated "+fmtDate(i.updated_at):(i.created_at?"Created "+fmtDate(i.created_at):"")}${i.created_by?" · "+esc(i.created_by):""}</div>
@@ -6576,6 +6587,20 @@ function openIncidentForm(i){
 }
 window.openIncidentForm=openIncidentForm;
 
+window.incAttach=async(id,tag)=>{
+  const i=(INCIDENTS||[]).find(x=>String(x.id)===String(id)); if(!i) return;
+  const inp=document.createElement("input"); inp.type="file"; inp.accept=".pdf,.jpg,.jpeg,.png,.doc,.docx";
+  inp.onchange=async()=>{ const f=inp.files&&inp.files[0]; if(!f) return;
+    const path="incidents/"+id+"/"+Date.now()+"_"+f.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+    const {error:upErr}=await sb.storage.from("loan-docs").upload(path,f,{upsert:true});
+    if(upErr){ alert("Upload failed: "+upErr.message); return; }
+    const next=Array.isArray(i.attachments)?i.attachments.slice():[]; next.push({name:(tag?tag+" — ":"")+f.name, path, tag:tag||null});
+    const {error}=await sb.from("incidents").update({attachments:next}).eq("id",id);
+    if(error){ alert(error.message); return; }
+    i.attachments=next; openIncident(i);
+  };
+  inp.click();
+};
 async function saveIncident(i,isNew,attachments){
   const val=id=>{ const el=document.getElementById(id); return el?el.value.trim():""; };
   const msg=document.getElementById("infMsg");

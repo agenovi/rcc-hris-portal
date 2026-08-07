@@ -258,8 +258,16 @@ function render(){
       list.map(x=>`<tr><td><b>${esc(x.name)}</b><div style="font-size:11.5px;color:var(--muted);">${esc(x.position||"")}</div></td><td>${esc(x.store||"—")}</td><td>${statusCell(x)}${x.status==="REJECTED"&&x.reason?`<div class="rsn">${esc(x.reason)}</div>`:""}</td><td style="white-space:nowrap;font-size:12px;color:var(--muted);">${dt(x)}</td><td style="white-space:nowrap;text-align:right;">${x.status==="HIRED"&&x.still_active===false?removeBtn(x):x.status==="REJECTED"?removeBtn(x):""}</td></tr>`).join("")+
       `</tbody></table>`;
     let html=`<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:6px;font-size:12.5px;color:var(--muted);">Keep your list tidy — once someone is <b>hired</b> they move to the Hired list below; please <b>remove</b> anyone who has left or wasn't selected.</div>`;
-    html+=sech("In process",inProc.length);
-    html+= inProc.length? tbl(inProc,x=>`<span class="pill" style="background:var(--green-bg);color:var(--green);">${esc(stageLabel(x.status))}</span>`) : `<div style="font-size:12.5px;color:var(--muted);padding:4px 2px;">None in process.</div>`;
+    html+=sech("In process",inProc.length,"— grouped by region");
+    if(inProc.length){
+      const byReg={}; inProc.forEach(x=>{ const r=regionOf(x.area); (byReg[r]=byReg[r]||[]).push(x); });
+      REGION_ORDER.filter(r=>byReg[r]).forEach(r=>{
+        const list=byReg[r];
+        html+=`<details open style="margin-bottom:8px;"><summary style="cursor:pointer;list-style:none;outline:none;font-weight:700;color:#12352a;font-size:13px;padding:6px 2px;">${esc(r)} <span style="font-weight:500;color:var(--muted);">· ${list.length} candidate${list.length===1?"":"s"}</span></summary>`
+          + tbl(list,x=>`<span class="pill" style="background:var(--green-bg);color:var(--green);">${esc(stageLabel(x.status))}</span>`)
+          + `</details>`;
+      });
+    } else { html+=`<div style="font-size:12.5px;color:var(--muted);padding:4px 2px;">None in process.</div>`; }
     if(pooled.length){ html+=sech("Kept for future openings",pooled.length)+tbl(pooled,()=>`<span class="pill" style="background:#eef0f5;color:#5a6472;">Talent pool</span>`); }
     html+=sech("Hired",hired.length,"— still with RCC?");
     html+= hired.length? tbl(hired,x=> x.still_active===false?`<span class="pill" style="background:#fdeaea;color:#a4322a;">No longer active — please remove</span>`:x.still_active===true?`<span class="chip hir">Hired · still active ✓</span>`:`<span class="chip hir">Hired</span>`) : `<div style="font-size:12.5px;color:var(--muted);padding:4px 2px;">No hires yet this period.</div>`;

@@ -5388,7 +5388,7 @@ function openInReview(store){
     const scHide=userRole()==="sales"; // Sales Coordinators may comment on fit but must NOT see applicant PII (DOB/address/emergency contact) or resumes
     return `<div style="background:#fff;border:1px solid #e6eaee;border-radius:12px;padding:14px 16px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
-        <div><div style="font-weight:800;font-size:15px;">${esc(p.full_name||'—')}</div>
+        <div><div style="font-weight:800;font-size:15px;">${esc(p.full_name||'—')}${(thread.length&&(thread[thread.length-1].role==='agency'))?' <span class="pill" style="font-size:10px;background:#fdeaea;color:#a4322a;font-weight:700;">● agency replied — awaiting HR</span>':''}</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px;">${esc(p.position||'')}${p.hire_source?' · '+esc(agency):''}${p.phase?' · '+esc(String(p.phase).replace(/_/g,' ').toLowerCase()):''}</div>
           ${(!scHide&&(p.email||p.phone))?`<div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${esc(p.email||'')}${p.phone?' · '+esc(p.phone):''}</div>`:''}
           <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap;">${!scHide?(p.resume_url?`<span class="pill active" style="font-size:10.5px;">✓ Resume attached</span>`:`<span class="pill" style="font-size:10.5px;background:#fdf0d9;color:#9a6a00;">⚠ No resume attached</span>`):''}${((!p.application||Object.keys(p.application||{}).length===0)&&!p.date_of_birth&&!p.permanent_address)?`<span class="pill" style="font-size:10.5px;background:#fdeaea;color:#a4322a;">Application not completed</span>`:''}</div></div>

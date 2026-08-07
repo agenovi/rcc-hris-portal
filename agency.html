@@ -128,6 +128,22 @@ function waitBlock(x){
       <div style="margin-top:8px;"><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;" onclick='setWaiting(${JSON.stringify(x.id)},"")'>Clear</button></div></div>`;
   return `<div style="margin-top:10px;"><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;" onclick='raiseWaiting(${JSON.stringify(x.id)})'>⚑ Flag: we're waiting on RCC</button></div>`;
 }
+function commentBlock(x){
+  const cs=Array.isArray(x.review_comments)?x.review_comments:[];
+  const last=cs[cs.length-1];
+  const waiting=last && last.role!=="agency";   // RCC/HR spoke last → the agency should reply
+  const thread=cs.length?cs.slice(-6).map(c=>`<div style="background:${c.role==="agency"?"#eef4ef":"#f2f5f8"};border-radius:7px;padding:5px 8px;margin-bottom:4px;font-size:12px;"><b>${c.role==="agency"?esc(DATA.agency||"You"):"RCC"}</b>${c.at?" · "+new Date(c.at).toLocaleDateString(undefined,{month:"short",day:"numeric"}):""}<br>${esc(c.text||"")}</div>`).join(""):'<div style="font-size:12px;color:var(--muted);">No messages yet.</div>';
+  return `<details style="margin-top:8px;" ${waiting?"open":""}><summary style="cursor:pointer;list-style:none;font-size:12.5px;font-weight:700;color:#12352a;">💬 Messages with RCC${cs.length?" ("+cs.length+")":""}${waiting?' <span style="color:#c0392b;">● reply waiting</span>':""}</summary>
+    <div style="margin-top:6px;">${thread}
+      <div style="display:flex;gap:6px;margin-top:6px;"><input id="cmt_${x.id}" placeholder="Reply to RCC…" style="flex:1;padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;"><button class="btn" style="font-size:12px;padding:5px 11px;" onclick="postAgencyComment('${x.id}')">Send</button></div>
+    </div></details>`;
+}
+window.postAgencyComment=function(id){
+  const el=document.getElementById("cmt_"+id); const txt=el?el.value.trim():""; if(!txt) return;
+  fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,action:"comment",id,text:txt})})
+    .then(r=>r.json()).then(d=>{ if(!d.ok){ alert(d.error||"Could not send."); return; } load(); })
+    .catch(()=>alert("Could not send. Please try again."));
+};
 function candCard(x){
   const dt=x.submitted?new Date(x.submitted).toLocaleDateString(undefined,{month:"short",day:"numeric"}):"";
   return `<div class="card" style="flex-direction:column;align-items:stretch;gap:0;${x.waiting_on==="agency"?"border-color:#e6a6a0;background:#fff7f6;":""}">
@@ -138,6 +154,7 @@ function candCard(x){
     ${stepper(x.status)}
     ${dt?`<div class="dates" style="margin-top:8px;">Submitted ${dt}</div>`:""}
     ${waitBlock(x)}
+    ${commentBlock(x)}
   </div>`;
 }
 function grpBar(t,extra){ return `<div style="font-weight:800;color:#12352a;font-size:13.5px;">${t}${extra?` <span style="font-weight:600;color:var(--muted);font-size:12px;">${extra}</span>`:""}</div>`; }

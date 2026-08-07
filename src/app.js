@@ -10608,11 +10608,15 @@ function renderPrehire(){
 // A hire is "confirmed" once they're enrolled in PayPlus (they've become a real active employee).
 // Until then they're hired-on-paper but not yet on the payroll system — that's the red flag to chase.
 function phNorm(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim(); }
+// Order-independent name match — PayPlus stores "Last, First", pre-hire stores "First Last".
+// Match when every word of the shorter name appears in the longer (≥2 shared words), so ordering never matters.
+function phTokens(s){ return [...new Set(String(s||"").toLowerCase().replace(/[^a-z0-9 ]+/g," ").split(/\s+/).filter(w=>w.length>1))]; }
+function phNameMatch(a,b){ const A=phTokens(a),B=phTokens(b); if(A.length<2||B.length<2) return false; const [S,L]=A.length<=B.length?[A,B]:[B,A]; const hit=S.filter(t=>L.includes(t)).length; return hit===S.length && hit>=2; }
 function phHiredInfo(c){
   const onb=(ONBOARDING||[]).find(o=>o.prehire_id===c.id)||null;
   const eid=(onb&&onb.assigned_employee_id)||c.assigned_employee_id||c.employee_id;
   const byId = eid && (EMPLOYEES||[]).some(e=>String(e.employee_id||"").replace(/\.0$/,"")===String(eid).replace(/\.0$/,"") && (e.status||"Active")==="Active");
-  const byName = phNorm(c.full_name) && (EMPLOYEES||[]).some(e=>phNorm(e.full_name)===phNorm(c.full_name) && (e.status||"Active")==="Active");
+  const byName = (EMPLOYEES||[]).some(e=>(e.status||"Active")==="Active" && phNameMatch(e.full_name,c.full_name));
   return { inPayPlus: !!(byId||byName), onb, uTop:(onb&&(onb.uniform_size_top||onb.uniform_size))||"", uBot:(onb&&onb.uniform_size_bottom)||"" };
 }
 function phUniformCell(inf){ if(inf.uTop||inf.uBot) return `<span class="pill di">${esc(inf.uTop||"—")}</span> / <span class="pill di">${esc(inf.uBot||"—")}</span>`; return `<span class="pill awol">no size</span>`; }
@@ -10676,7 +10680,7 @@ function phBodyPipeline(){
     return `<div class="col"><div class="col-h">${ph.label}<span>${cards.length} · ${esc(ph.actor)}</span></div>
       ${cards.map(c=>`<div class="ccard clickable" data-id="${c.id}" ${ph.key==="HR_SIGNOFF"?'style="border-color:#bcdcc7;background:var(--green-light);"':''}>
         <div class="cn">${esc(c.full_name)}</div>
-        <div class="cd">${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")}${c.daily_rate?` · ₱${Number(c.daily_rate).toLocaleString()}/day`:""}${c.assessment_score!=null?` · exam ${c.assessment_score}`:""}${c.sm_acceptance&&c.sm_acceptance!=="NA"?` · SM ${esc(c.sm_acceptance)}`:""}</div>${c.created_at?`<div style="font-size:10.5px;margin-top:3px;color:${(Date.now()-new Date(c.created_at))/86400000>14?'#c0392b':'var(--muted)'};">Submitted ${fmtMDY(c.created_at)} · ${fmtAgo(c.created_at)}</div>`:""}</div>`).join("")
+        <div class="cd">${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")}${c.daily_rate?` · ₱${Number(c.daily_rate).toLocaleString()}/day`:""}${c.assessment_score!=null?` · exam ${c.assessment_score}`:""}${c.sm_acceptance&&c.sm_acceptance!=="NA"?` · SM ${esc(c.sm_acceptance)}`:""}</div>${c.created_at?`<div style="font-size:10.5px;margin-top:3px;color:var(--muted);">Submitted ${fmtMDY(c.created_at)}${(()=>{ const last=c.updated_at||c.created_at; const d=Math.floor((Date.now()-new Date(last))/86400000); return d>14?` · <b style="color:#c0392b;">⏳ ${d}d no movement</b>`:` · ${fmtAgo(c.created_at)}`; })()}</div>`:""}</div>`).join("")
        || `<div style="font-size:11.5px;color:var(--muted);padding:6px 2px;">—</div>`}
     </div>`;
   }).join("");

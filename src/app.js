@@ -5389,7 +5389,7 @@ function openInReview(store){
     const scHide=userRole()==="sales"; // Sales Coordinators may comment on fit but must NOT see applicant PII (DOB/address/emergency contact) or resumes
     return `<div style="background:#fff;border:1px solid #e6eaee;border-radius:12px;padding:14px 16px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
-        <div><div style="font-weight:800;font-size:15px;">${esc(p.full_name||'—')}${(thread.length&&(thread[thread.length-1].role==='agency'))?' <span class="pill" style="font-size:10px;background:#fdeaea;color:#a4322a;font-weight:700;">● agency replied — awaiting HR</span>':''}</div>
+        <div><div style="font-weight:800;font-size:15px;">${esc(p.full_name||'—')}${(thread.length&&(thread[thread.length-1].role==='agency'))?' <span class="pill" style="font-size:10px;background:#fdeaea;color:#a4322a;font-weight:700;">● agency replied — awaiting HR</span>':''}${p.waiting_on==='rcc'?' <span class="pill" style="font-size:10px;background:#fdeaea;color:#a4322a;font-weight:700;">⏳ agency waiting on us</span>':p.waiting_on==='agency'?' <span class="pill" style="font-size:10px;background:#fdf6e3;color:#8a6a14;font-weight:700;">⚠ waiting on agency</span>':''}</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px;">${esc(p.position||'')}${p.hire_source?' · '+esc(agency):''}${p.phase?' · '+esc(String(p.phase).replace(/_/g,' ').toLowerCase()):''}</div>
           ${(!scHide&&(p.email||p.phone))?`<div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${esc(p.email||'')}${p.phone?' · '+esc(p.phone):''}</div>`:''}
           <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap;">${!scHide?(p.resume_url?`<span class="pill active" style="font-size:10.5px;">✓ Resume attached</span>`:`<span class="pill" style="font-size:10.5px;background:#fdf0d9;color:#9a6a00;">⚠ No resume attached</span>`):''}${((!p.application||Object.keys(p.application||{}).length===0)&&!p.date_of_birth&&!p.permanent_address)?`<span class="pill" style="font-size:10.5px;background:#fdeaea;color:#a4322a;">Application not completed</span>`:''}</div></div>
@@ -5403,6 +5403,14 @@ function openInReview(store){
           ${(p.application&&typeof p.application==='object')?Object.entries(p.application).filter(([k,v])=>v&&String(v).trim&&String(v).trim()&&!/resume|photo|signature|token|url|_id$/i.test(k)).map(([k,v])=>detRow(k.replace(/_/g,' '),typeof v==='object'?JSON.stringify(v):v)).join(''):''}
         </div>
       </details>`:''}
+      ${canComment?`<div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        ${p.waiting_on==='agency'&&p.waiting_note?`<span style="font-size:11.5px;color:#8a6a14;flex-basis:100%;">Told the agency: ${esc(p.waiting_note)}</span>`:''}
+        ${p.waiting_on==='rcc'
+          ?`<button class="btn ir-wait" data-id="${p.id}" data-w="" style="font-size:11px;padding:3px 10px;">✓ Handled — clear flag</button><button class="btn ghost ir-wait" data-id="${p.id}" data-w="agency" style="font-size:11px;padding:3px 10px;">Send back to agency</button>`
+          :p.waiting_on==='agency'
+          ?`<button class="btn ghost ir-wait" data-id="${p.id}" data-w="" style="font-size:11px;padding:3px 10px;">Clear "waiting on agency"</button>`
+          :`<button class="btn ghost ir-wait" data-id="${p.id}" data-w="agency" style="font-size:11px;padding:3px 10px;">⚑ Flag: waiting on agency</button>`}
+      </div>`:''}
       <div style="margin-top:10px;">
         <div style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:6px;">Comments <span style="font-weight:500;text-transform:none;color:var(--muted);">— HR, the Sales Coordinator &amp; the agency can see these</span></div>
         ${thread.length?thread.map(c=>`<div style="background:#f4f6f4;border-radius:8px;padding:8px 10px;margin-bottom:6px;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;"><b>${esc(cAuthor(c))}</b>${c.at?' · '+fmtDate(c.at):''}</div><div style="font-size:13.5px;white-space:pre-wrap;">${esc(c.text||'')}</div></div>`).join(''):'<div style="font-size:12.5px;color:var(--muted);margin-bottom:6px;">No comments yet.</div>'}
@@ -5428,6 +5436,17 @@ function openInReview(store){
     const {error}=await sb.from("prehire").update({ review_comments:arr, review_comment:val, review_comment_by:myEmail(), review_comment_at:new Date().toISOString() }).eq("id",id);
     if(error){ alert(error.message); btn.disabled=false; btn.textContent="Add comment"; return; }
     if(p) p.review_comments=arr;
+    openInReview(store);
+  }));
+  m.querySelectorAll(".ir-wait").forEach(btn=>btn.addEventListener("click",async()=>{
+    const id=btn.dataset.id, w=btn.dataset.w||null;
+    let note=null;
+    if(w==='agency'){ note=prompt("What do you need from the agency? This shows as a red flag on their dashboard."); if(note===null) return; }
+    btn.disabled=true;
+    const upd={ waiting_on:w, waiting_note:w?(note||null):null, waiting_at:new Date().toISOString(), waiting_by:myEmail() };
+    const {error}=await sb.from("prehire").update(upd).eq("id",id);
+    if(error){ alert(error.message); btn.disabled=false; return; }
+    const p=(PREHIRE||[]).find(x=>String(x.id)===String(id)); if(p){ p.waiting_on=upd.waiting_on; p.waiting_note=upd.waiting_note; }
     openInReview(store);
   }));
 }

@@ -5221,7 +5221,11 @@ function manningDrill(title, sub, stores){
   m.style.cssText="position:fixed;inset:0;z-index:9997;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   const rows=(stores||[]).map(b=>{ const a=(b.ahc_stationary||0)+(b.ahc_reliever||0), c=chcFor(b.name), sp=storeShortSplit(b.name), d=sp.total; const conf=MANNING_SCONF[b.name];
     const shortCell=d>0?[sp.stationary>0?`<span class="pill di">${sp.stationary} stat</span>`:'',sp.reliever>0?`<span class="pill ag">${sp.reliever} rlv</span>`:''].filter(Boolean).join(' '):`<span class="pill active">0</span>`;
-    return `<tr class="mnd-row" data-bi="${BRANCHES.indexOf(b)}" style="cursor:pointer;"><td><b>${esc(b.name)}</b><div style="font-size:11px;color:var(--muted);">${esc(b.city||'')}${b.sc?' · '+esc(b.sc):''}</div></td><td style="text-align:center;">${a}</td><td style="text-align:center;">${c}</td><td style="text-align:center;white-space:nowrap;">${shortCell}</td><td style="text-align:center;">${conf?'<span class="pill active">✓</span>':'<span class="note">—</span>'}</td></tr>`;
+    // Reliever pairing so a shared reliever isn't sourced twice: who's based here & also covers a 2nd store, and who covers here from elsewhere.
+    const out=relieverSecondStore(b.name), cov=(sp.coveredBy||[]); const rn=[];
+    if(sp.reliever>0){ if(out.length) rn.push(`reliever here also covers <b>${out.map(x=>esc(x.to)).join(", ")}</b>`); if(cov.length) rn.push(`covered from <b>${cov.map(x=>esc(x.from)).join(", ")}</b>`); if(!out.length&&!cov.length) rn.push(`reliever shared with a paired store — confirm the 2nd store before sourcing a new head`); }
+    const relNote=rn.length?`<div style="font-size:10.5px;color:#5a3ea8;margin-top:2px;">↔ ${rn.join(" · ")}</div>`:"";
+    return `<tr class="mnd-row" data-bi="${BRANCHES.indexOf(b)}" style="cursor:pointer;"><td><b>${esc(b.name)}</b><div style="font-size:11px;color:var(--muted);">${esc(b.city||'')}${b.sc?' · '+esc(b.sc):''}</div>${relNote}</td><td style="text-align:center;">${a}</td><td style="text-align:center;">${c}</td><td style="text-align:center;white-space:nowrap;">${shortCell}</td><td style="text-align:center;">${conf?'<span class="pill active">✓</span>':'<span class="note">—</span>'}</td></tr>`;
   }).join("");
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
     <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
@@ -8062,14 +8066,16 @@ function renderManning(){
   const _perShort=open.map(b=>storeShort(b.name));
   const peopleShort=_perShort.reduce((s,n)=>s+n,0), storesShort=_perShort.filter(n=>n>0).length;
   // Shortfall grouped by region (branches.area) — reuses the SAME storeShort, so regions always sum to peopleShort.
-  const REGIONS=[["GMA","Greater Manila"],["NL","North Luzon"],["SL","South Luzon"],["VIS","Visayas"],["MIN","Mindanao"]];
+  // GMA + NL + SL roll up into one "Luzon"; Visayas & Mindanao stand alone (anj 2026-08-07).
+  const superOf=(a)=> (a==="GMA"||a==="NL"||a==="SL")?"Luzon":(a||"Other");
+  const REGIONS=[["Luzon","Luzon"],["VIS","Visayas"],["MIN","Mindanao"]];
   const regNameOf=(a)=>{ const m=REGIONS.find(r=>r[0]===a); return m?m[1]:(a||"Other"); };
-  const areaOf=(store)=>{ const b=open.find(x=>x.name===store); return (b&&b.area)||"—"; };
+  const areaOf=(store)=>{ const b=open.find(x=>x.name===store); return superOf((b&&b.area)||"—"); };
   const regShort={}, regStores={};
-  open.forEach(b=>{ const s=storeShort(b.name); const a=b.area||"—"; regShort[a]=(regShort[a]||0)+s; if(s>0) regStores[a]=(regStores[a]||0)+1; });
+  open.forEach(b=>{ const s=storeShort(b.name); const a=superOf(b.area||"—"); regShort[a]=(regShort[a]||0)+s; if(s>0) regStores[a]=(regStores[a]||0)+1; });
   const regOrder=[...REGIONS.map(r=>r[0]),...Object.keys(regShort).filter(a=>!REGIONS.some(r=>r[0]===a))].filter(a=>regShort[a]!==undefined);
   // Openings DERIVE from the PayPlus shortfall — one figure everywhere (no hand-posted list). One row per short store.
-  const OPENINGS=open.filter(b=>(!_sc||b.sc===_sc)).map(b=>{ const sp=storeShortSplit(b.name); return { id:'gap-'+b.name, worksite:b.name, sc:b.sc, area:b.area||"—", count_needed:sp.total, stationary_need:sp.stationary, reliever_need:sp.reliever, coveredBy:sp.coveredBy, position:'Merchandiser', status:'Open', _derived:true }; }).filter(o=>o.count_needed>0);
+  const OPENINGS=open.filter(b=>(!_sc||b.sc===_sc)).map(b=>{ const sp=storeShortSplit(b.name); return { id:'gap-'+b.name, worksite:b.name, sc:b.sc, area:superOf(b.area||"—"), count_needed:sp.total, stationary_need:sp.stationary, reliever_need:sp.reliever, coveredBy:sp.coveredBy, position:'Merchandiser', status:'Open', _derived:true }; }).filter(o=>o.count_needed>0);
   const opInReview=(store)=>PREHIRE.filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT","POOLED"].includes(p.phase)).length;
   const nTrf=(TRANSFERS||[]).filter(t=>['Requested','InEffect'].includes(t.status)).length;
   const nPositions=OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0);
@@ -8146,7 +8152,7 @@ function renderManning(){
     if(which==='conf'){ const pend=all.filter(b=>!MANNING_SCONF[b.name]); return manningDrill("Manning confirmation",confStores+" of "+open.length+" confirmed · "+pend.length+" to confirm",all.slice().sort((a,b)=>(MANNING_SCONF[a.name]?1:0)-(MANNING_SCONF[b.name]?1:0))); }
     if(which==='short'){ const s=all.filter(b=>short(b)>0).sort((a,b)=>short(b)-short(a)); return manningDrill("Shortfall — stores needing people",peopleShort+" people short · "+s.length+" stores",s); }
   }));
-  $$("#page-manning .mn-reg").forEach(el=>el.addEventListener("click",()=>{ const a=el.dataset.area; const s=open.filter(b=>(b.area||"—")===a && storeShort(b.name)>0).sort((x,y)=>storeShort(y.name)-storeShort(x.name)); manningDrill(regNameOf(a)+" — short stores",(regShort[a]||0)+" people short · "+s.length+" store"+(s.length===1?'':'s'),s); }));
+  $$("#page-manning .mn-reg").forEach(el=>el.addEventListener("click",()=>{ const a=el.dataset.area; const s=open.filter(b=>superOf(b.area||"—")===a && storeShort(b.name)>0).sort((x,y)=>storeShort(y.name)-storeShort(x.name)); manningDrill(regNameOf(a)+" — short stores",(regShort[a]||0)+" people short · "+s.length+" store"+(s.length===1?'':'s'),s); }));
   wireTransfers();
   $$("#page-manning .opkind").forEach(el=>el.addEventListener("click",()=>{ window.MANNING_OPKIND = window.MANNING_OPKIND===el.dataset.kind?null:el.dataset.kind; renderManning(); }));
   $$("#page-manning .opkind-clear").forEach(el=>el.addEventListener("click",()=>{ window.MANNING_OPKIND=null; renderManning(); }));

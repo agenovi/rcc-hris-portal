@@ -93,10 +93,11 @@ function render(){
   }
   const ops=DATA.openings||[];
   if(!ops.length){ b.innerHTML='<div class="empty">No open positions right now. Check back soon.</div>'; return; }
-  const REGIONS=[["GMA","Greater Manila"],["NL","North Luzon"],["SL","South Luzon"],["VIS","Visayas"],["MIN","Mindanao"]];
+  const superOf=a=>(a==="GMA"||a==="NL"||a==="SL")?"Luzon":(a||"Other");
+  const REGIONS=[["Luzon","Luzon"],["VIS","Visayas"],["MIN","Mindanao"]];
   const regName=a=>{ const m=REGIONS.find(r=>r[0]===a); return m?m[1]:(a||"Other"); };
   const regIdx=a=>{ const i=REGIONS.findIndex(r=>r[0]===a); return i<0?99:i; };
-  const areas=[...new Set(ops.map(o=>o.area||"—"))].sort((x,y)=>regIdx(x)-regIdx(y));
+  const areas=[...new Set(ops.map(o=>superOf(o.area||"—")))].sort((x,y)=>regIdx(x)-regIdx(y));
   const cardHtml=o=>{
       const s=Number(o.stationary_need||0), r=Number(o.reliever_need||0);
       const needChips=[ s>0?`<span class="chip open">${s} stationary</span>`:"", r>0?`<span class="chip" style="background:#eaf3ff;color:#1f5fa6;">${r} reliever</span>`:"" ].filter(Boolean).join(" ") || `<span class="chip open">${o.open_slots} shortfall</span>`;
@@ -111,7 +112,7 @@ function render(){
       <button class="btn" onclick='openSubmit(${JSON.stringify(o.store)})'>Submit a candidate</button>
     </div>`; };
   b.innerHTML=areas.map(a=>{
-      const rows=ops.filter(o=>(o.area||"—")===a);
+      const rows=ops.filter(o=>superOf(o.area||"—")===a);
       const tot=rows.reduce((n,o)=>n+Number(o.open_slots||0),0);
       return `<div style="margin:14px 0 6px;font-weight:800;color:#12352a;display:flex;align-items:center;gap:8px;">${esc(regName(a))}<span style="font-weight:600;color:#6b7785;font-size:13px;">· ${tot} to fill · ${rows.length} store${rows.length===1?'':'s'}</span></div>`
         + rows.map(cardHtml).join("");

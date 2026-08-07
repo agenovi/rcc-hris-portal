@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1786091733";
+window.APP_BUILD="1786092518";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1786091733" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1786092518" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -11175,6 +11175,16 @@ const EVAL_TEMPLATES={
     "Teamwork & cooperation",
     "Attitude & conduct" ]}
 };
+// Official RCC scoresheet — 5 areas, each scored 1–5 → raw total /25 → % = total ×100 ÷25.
+// Pass mark = 70%. Rename these 5 labels to match the printed RCC evaluation form if they differ.
+const EVAL_AREAS=[
+  {k:"quality",   label:"Work quality & reliability"},
+  {k:"knowledge", label:"Job knowledge & skills"},
+  {k:"productivity", label:"Productivity & initiative"},
+  {k:"conduct",   label:"Attitude & conduct"},
+  {k:"teamwork",  label:"Teamwork & communication"}
+];
+const EVAL_PASS_PCT=70;
 function evalTemplateFor(emp){
   const p=String((emp&&emp.position)||"").toLowerCase();
   const w=String((emp&&emp.worksite)||"").toLowerCase();
@@ -11248,9 +11258,8 @@ function renderEvaluations(){
 function openEvalForm(empId,type,due){
   const e=EMPLOYEES.find(x=>String(x.id)===String(empId)); if(!e) return;
   const tpl0=evalTemplateFor(e);
-  const CRIT=[{k:"quality",label:"Work quality & reliability"},{k:"conduct",label:"Attitude & conduct"},{k:"teamwork",label:"Teamwork & communication"}];
-  if(tpl0.key==="merchandiser") CRIT.push({k:"selling",label:"Selling & merchandising"},{k:"inventory",label:"Inventory honesty & store compliance"});
-  if(tpl0.key==="lead") CRIT.push({k:"results",label:"Delivers results / KPIs"},{k:"leadership",label:"Leadership & people management"});
+  // Official RCC scoresheet: fixed 5 areas, each /5 → total /25 → % (pass ≥70%).
+  const CRIT=EVAL_AREAS.slice();
   const state={ratings:{},outcome:"",att:null};
   const _br=(BRANCHES||[]).find(b=>b.name===e.worksite);
   const _sc=(_br&&_br.sc)||"";
@@ -11343,13 +11352,19 @@ function openEvalForm(empId,type,due){
       <div style="display:flex;gap:10px;"><button class="btn" id="evSave">Save evaluation</button><button class="btn ghost" id="evClose" style="margin-left:auto;">Close</button></div>
     </div></div>`;
   const paintScore=()=>{
-    const vals=Object.values(state.ratings); const avg=vals.length?vals.reduce((s,x)=>s+x,0)/vals.length:0;
+    // Official RCC scoresheet: 5 areas × /5 = raw total /25 → % = total ×100 ÷25 → pass ≥ 70%.
+    const vals=CRIT.map(c=>Number(state.ratings[c.k])||0); const rated=vals.filter(v=>v>0).length;
+    const total=vals.reduce((s,x)=>s+x,0); const max=CRIT.length*5;
+    const pct=rated?Math.round(total*100/max):0; const pass=pct>=EVAL_PASS_PCT;
+    state.score={total,max,pct,pass,rated};
     const band=state.att?state.att.band:null;
     const bandCol=band==="Good"?"#7ee0a8":band==="Bad"?"#f0c674":band==="Terrible"?"#f0928a":"#9fb0bf";
     const outLbl=({regularize:"For Regularization",assess_5th:"For Assessment on 5th month",eoc:"EOC / Replacement"})[state.outcome]||"—";
     const el=document.getElementById("ev_score"); if(!el) return;
     el.innerHTML=`<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;">
-      <div><div style="font-size:11px;opacity:.75;">Performance avg</div><div style="font-size:26px;font-weight:800;">${vals.length?avg.toFixed(1)+" / 5":"—"}</div></div>
+      <div><div style="font-size:11px;opacity:.75;">Score (${CRIT.length} areas × 5)</div><div style="font-size:26px;font-weight:800;">${rated?total+" / "+max:"—"}</div></div>
+      <div><div style="font-size:11px;opacity:.75;">Percentage</div><div style="font-size:26px;font-weight:800;color:${rated?(pass?"#7ee0a8":"#f0928a"):"#9fb0bf"};">${rated?pct+"%":"—"}</div></div>
+      <div><div style="font-size:11px;opacity:.75;">Result (pass ≥${EVAL_PASS_PCT}%)</div><div style="font-size:17px;font-weight:800;margin-top:3px;color:${rated?(pass?"#7ee0a8":"#f0928a"):"#fff"};">${rated?(pass?"PASSED":"BELOW "+EVAL_PASS_PCT+"%"):"—"}</div></div>
       <div><div style="font-size:11px;opacity:.75;">Attendance</div><div style="font-size:22px;font-weight:800;color:${bandCol};">${band||"—"}${state.att?` · ${state.att.equiv.toFixed(1)}`:""}</div></div>
       <div><div style="font-size:11px;opacity:.75;">Outcome</div><div style="font-size:17px;font-weight:800;margin-top:3px;">${outLbl}</div></div>
     </div>`;
@@ -11442,11 +11457,13 @@ function openEvalForm(empId,type,due){
     // EOC = end of contract → the person is being let go and their position re-opens. Confirm before recording.
     if(state.outcome==="eoc" && !confirm("This recommends END OF CONTRACT (EOC / Replacement) for "+e.full_name+".\n\nThat means not continuing them — their position will need to be re-opened in Manning. Record this recommendation?")) return;
     btn.disabled=true; btn.textContent="Saving…";
-    const vals=Object.values(state.ratings); const avg=vals.length?vals.reduce((s,x)=>s+x,0)/vals.length:null;
+    // Official scoresheet total: 5 areas × /5 = /25 → % → pass ≥70%.
+    const sc=state.score||{}; const total=sc.total||0, max=sc.max||(CRIT.length*5), pct=sc.pct||0, pass=!!sc.pass;
     const row={ employee_ref:e.id, employee_name:e.full_name, position:e.position||e.department||null, eval_type:type, period_due:due, eval_scope:tpl0.key,
-      overall_rating: avg?Math.round(avg):null, ratings:{criteria:state.ratings, attendance:state.att, concern:evVal("ev_con"), notice:(state._notice?state._notice():null), evaluators:[evVal("ev_by"),evVal("ev_by2"),evVal("ev_by3")].filter(Boolean), branch:e.worksite||null, sc:_sc||null, started:e.hire_date||null}, recommendation:outLbl,
+      overall_rating: pct?Math.round(total/CRIT.length):null, score_total:total, score_max:max, score_pct:pct, score_pass:pass,
+      ratings:{criteria:state.ratings, score:{total,max,pct,pass,pass_mark:EVAL_PASS_PCT}, attendance:state.att, concern:evVal("ev_con"), notice:(state._notice?state._notice():null), evaluators:[evVal("ev_by"),evVal("ev_by2"),evVal("ev_by3")].filter(Boolean), branch:e.worksite||null, sc:_sc||null, started:e.hire_date||null}, recommendation:outLbl,
       strengths:evVal("ev_str"), improvements:evVal("ev_imp"), evaluator:evVal("ev_by"), eval_date:evIso(new Date()), is_demo:!!e.is_demo };
-    await logChange("evaluation",e.id,e.full_name,"Recorded",EVAL_LABEL[type]+" · "+outLbl+(avg?" · "+avg.toFixed(1)+"/5":"")+(state.att?" · attendance "+state.att.band:""));
+    await logChange("evaluation",e.id,e.full_name,"Recorded",EVAL_LABEL[type]+" · "+outLbl+(pct?" · "+total+"/"+max+" ("+pct+"%) "+(pass?"pass":"below"):"")+(state.att?" · attendance "+state.att.band:""));
     const {error}=await sb.from("evaluations").insert(row);
     if(error){ document.getElementById("evMsg").textContent=error.message; btn.disabled=false; btn.textContent="Save evaluation"; return; }
     m.remove(); await loadEmployees();

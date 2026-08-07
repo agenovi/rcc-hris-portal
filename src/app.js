@@ -9153,6 +9153,7 @@ function renderMeetings(){
   const on=(id,ev,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener(ev,fn); };
   on("mtgCopyLink","click",()=>{ if(navigator.clipboard) navigator.clipboard.writeText(MEETING_SIGNIN_URL); const b=document.getElementById("mtgCopyLink"); if(b){ const t=b.textContent; b.textContent="Copied ✓"; setTimeout(()=>b.textContent=t,1200); } });
   on("mtgPick","change",e=>{ MEETING_VIEW=e.target.value; renderMeetings(); });
+  on("mtgPickRoster","change",e=>{ MEETING_VIEW=e.target.value; renderMeetings(); });
   on("mtgExport","click",()=>meetingExport(rows,viewDate));
   on("mtgGcashFile","click",()=>meetingBankFiles(rows,viewDate,"GCash"));
   on("mtgUbFile","click",()=>meetingBankFiles(rows,viewDate,"UB"));
@@ -9337,6 +9338,16 @@ function meetingReimbPanel(rows, viewDate){
 /* ---- MEETING: expected roster · absentees · graduated notice · regular-attendance tracker ---- */
 const MEETING_EXPLAIN_DAYS=5;
 const MEETING_NOTED_BY="Anj Genomal"; // merchandisers = retail; Director notes disciplinary notices
+// Agency merchandisers (Jell-on / M&G) are employed by the agency, not RCC — their meeting-absence
+// notices go to the AGENCY contact, never to the merchandiser directly. Fill an address to enable sending;
+// until then those notices are Print-only and clearly tagged "→ agency".
+const MEETING_AGENCY_EMAILS={ "Jell-on":"", "M&G":"" };
+// Where an absentee's notice should be addressed.
+function mtgNoticeRoute(row){
+  const ag=mAgencyOf(row);
+  if(ag==="Jell-on"||ag==="M&G") return { via:"agency", agency:ag, email:(MEETING_AGENCY_EMAILS[ag]||"").trim() };
+  return { via:"direct", agency:null, email:mtgEmailFor(row) };
+}
 function mNorm(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim(); }
 function mPersonKey(emp_no,name){ return (emp_no?String(emp_no):"")+"|"+mNorm(name); }
 // Did this roster person sign in at their meeting? Match on emp_no when both have it, else on name.
@@ -9557,9 +9568,15 @@ function meetingRosterPanel(viewDate,active){
       ${uploadBtn("⬆ Upload expected list (Excel / CSV)")}
       <span id="mtgRosterStatus" class="psub" style="margin-left:10px;"></span></div>`; }
   const sorted=roster.slice().sort((a,b)=>String(a.store||"~").localeCompare(String(b.store||"~"))||String(a.name).localeCompare(String(b.name)));
+  const mtgDates=[...new Set([...(MEETINGS||[]).map(r=>String(r.meeting_date)),...(MEETING_ROSTER||[]).map(r=>String(r.meeting_date))].filter(d=>d&&d!=="null"&&d!=="undefined"))].sort((a,b)=>b.localeCompare(a));
+  const mtgLabelOf=(dt)=>{ const m=(MEETINGS||[]).find(r=>String(r.meeting_date)===dt)||(MEETING_ROSTER||[]).find(r=>String(r.meeting_date)===dt); return (m&&m.meeting_label)||"Meeting"; };
+  const meetingDD = mtgDates.length ? `<select id="mtgPickRoster" style="${MSEL}">${mtgDates.map(dt=>`<option value="${esc(dt)}"${dt===String(viewDate)?" selected":""}>${esc(mtgLabelOf(dt))} · ${esc(fmtDate(dt))}</option>`).join("")}</select>` : "";
   return `<div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-      <h2 style="margin:0;">Expected roster · ${fmtDate(viewDate)}</h2>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <h2 style="margin:0;">Expected roster</h2>
+        ${meetingDD||`<span style="font-weight:700;">· ${fmtDate(viewDate)}</span>`}
+      </div>
       <div class="psub" style="margin:0;"><b>${expected.length}</b> expected${roster.length!==expected.length?` · ${roster.length-expected.length} excused`:""} · ${roster.length} on file</div>
     </div>
     <div class="psub">Uploaded invite list for this meeting. Untick anyone not required — they won't be counted as absent. ${uploadBtn("⬆ Replace list (re-upload)",true)} <span id="mtgRosterStatus" class="psub" style="margin-left:6px;"></span></div>
@@ -9590,8 +9607,9 @@ function meetingAbsenteePanel(viewDate,active){
   const open=active&&active.open&&active.date===viewDate;
   const firsts=absent.filter(r=>meetingMissHistory(r.emp_no,r.name,viewDate).missed<2 && meetingNoticeState(r,viewDate).state==="none").length;
   const repeats=absent.filter(r=>meetingMissHistory(r.emp_no,r.name,viewDate).missed>=2 && meetingNoticeState(r,viewDate).state==="none").length;
-  const emailable=absent.filter(r=>mtgEmailFor(r) && !r.notice_emailed_at).length;
-  const noEmail=absent.filter(r=>!mtgEmailFor(r)).length;
+  const emailable=absent.filter(r=>mtgNoticeRoute(r).email && !r.notice_emailed_at).length;
+  const noEmail=absent.filter(r=>!mtgNoticeRoute(r).email).length;
+  const agencyAbsent=absent.filter(r=>mtgNoticeRoute(r).via==="agency").length;
   return `<div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
       <h2 style="margin:0;">Did not attend · ${fmtDate(viewDate)}</h2>
@@ -9604,15 +9622,19 @@ function meetingAbsenteePanel(viewDate,active){
       ${firsts?`<button class="btn ghost" style="${SBTN}" onclick="mtgReminderAll('${esc(viewDate)}')">Print reminder — first-timers (${firsts})</button>`:""}
       ${repeats?`<button class="btn ghost" style="${SBTN}" onclick="mtgNteAll('${esc(viewDate)}')">NTE for sign-off — repeats (${repeats})</button>`:""}
     </div>
+    ${agencyAbsent?`<div class="psub" style="margin:-4px 0 8px;">${agencyAbsent} absentee${agencyAbsent===1?" is an":"s are"} agency merchandiser${agencyAbsent===1?"":"s"} — their notice is addressed to the <b>agency</b> (Jell-on / M&G), not the person. ${(MEETING_AGENCY_EMAILS["Jell-on"]||MEETING_AGENCY_EMAILS["M&G"])?"":"Add each agency's email in the code once, then these send automatically; for now use Print and forward to the agency."}</div>`:""}
     ${noEmail?`<div class="psub" style="margin:-4px 0 8px;">${noEmail} absentee${noEmail===1?"":"s"} have no email on file — use <b>Print</b> on their row to serve the notice.</div>`:""}
     <div style="overflow-x:auto;">
     <table><thead><tr><th>Name</th><th>Store</th><th>Missed</th><th style="min-width:280px;">Notice</th></tr></thead><tbody>
     ${absent.map(r=>{ const h=meetingMissHistory(r.emp_no,r.name,viewDate); const repeat=h.missed>=2; const st=meetingNoticeState(r,viewDate);
       const badge=repeat?`<span class="pill" style="background:#fdeaea;color:#a4322a;font-weight:700;">${h.missed}× missed</span>`:`<span class="pill" style="background:#fdf0d9;color:#9a6a00;font-weight:700;">1st miss</span>`;
-      const email=mtgEmailFor(r);
-      const emailBtn = r.notice_emailed_at ? `<span class="pill active">✓ emailed</span>`
-        : (email ? `<button class="btn" style="${SBTN}" onclick="mtgEmailNotice('${r.id}')">✉ Email notice</button>`
-                 : `<button class="btn ghost" style="${SBTN}" onclick="mtgSendNte('${r.id}')">Print notice</button> <span class="psub" style="margin:0;">(no email)</span>`);
+      const route=mtgNoticeRoute(r);
+      const emailBtn = r.notice_emailed_at
+        ? `<span class="pill active">✓ ${route.via==="agency"?"sent to "+esc(route.agency):"emailed"}</span>`
+        : (route.email
+            ? `<button class="btn" style="${SBTN}" onclick="mtgEmailNotice('${r.id}')">✉ Email ${route.via==="agency"?esc(route.agency):"notice"}</button>`
+            : `<button class="btn ghost" style="${SBTN}" onclick="mtgSendNte('${r.id}')">Print notice</button> <span class="psub" style="margin:0;">${route.via==="agency"?"(hand to "+esc(route.agency)+")":"(no email)"}</span>`);
+      const routeTag = route.via==="agency" ? ` <span class="pill" style="background:#eef1f6;color:#41506b;" title="Agency merchandiser — notice goes to ${esc(route.agency)}, not the person directly.">via ${esc(route.agency)}</span>` : "";
       let signoff="";
       if(st.kind==="nte"){ signoff = st.state==="signed"
           ? `<span class="pill active">NTE signed ✓</span> <button class="btn ghost" style="${SBTN}" onclick="mtgPrintSignedNte('${st.sig.id}')">Print</button>`
@@ -9620,7 +9642,7 @@ function meetingAbsenteePanel(viewDate,active){
           : `<span class="pill probation">NTE awaiting sign-off</span>`;
       } else if(st.kind==="reminder"){ signoff = `<span class="pill active">Reminder sent ✓</span>`; }
       const excuseBtn=`<button class="btn ghost" style="${SBTN}" onclick="mtgExcuse('${r.id}')">Office was informed</button>`;
-      return `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.store||"—")}</td>
+      return `<tr><td><b>${esc(r.name)}</b>${routeTag}</td><td>${esc(r.store||"—")}</td>
         <td>${badge}<br><span class="psub" style="margin:0;font-size:11px;">missed ${h.missed} of ${h.expected}</span></td>
         <td><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">${emailBtn} ${excuseBtn} ${signoff}</div></td></tr>`;
     }).join("")}
@@ -9646,7 +9668,7 @@ window.mtgUnexcuse=async(id)=>{
 async function mtgSendNoticeEmails(rows,date){
   const a=meetingActive();
   const label=(a.date===date&&a.label)||(rows[0]&&rows[0].meeting_label)||"Monthly Merchandiser Meeting";
-  const notices=rows.map(r=>{ const h=meetingMissHistory(r.emp_no,r.name,date); return { email:mtgEmailFor(r), name:r.name, store:r.store||"", missed:h.missed, expected:h.expected }; }).filter(n=>n.email);
+  const notices=rows.map(r=>{ const h=meetingMissHistory(r.emp_no,r.name,date); const rt=mtgNoticeRoute(r); return { email:rt.email, name:r.name, store:r.store||"", missed:h.missed, expected:h.expected, via:rt.via, agency:rt.agency }; }).filter(n=>n.email);
   if(!notices.length){ alert("None of these have an email on file — use Print to serve the notice."); return; }
   let res;
   try{ const { data, error } = await sb.functions.invoke("meeting-notice-email", { body:{ meeting_date:date, label, days:MEETING_EXPLAIN_DAYS, noted_by:MEETING_NOTED_BY, notices } }); if(error) throw error; res=data; }
@@ -9660,9 +9682,10 @@ async function mtgSendNoticeEmails(rows,date){
 }
 window.mtgEmailNotice=(id)=>{ const r=(MEETING_ROSTER||[]).find(x=>String(x.id)===String(id)); if(r) mtgSendNoticeEmails([r],r.meeting_date); };
 window.mtgEmailNoticeAll=(date)=>{
-  const absent=meetingRosterFor(date).filter(r=>r.expected && !mAttended(r) && mtgEmailFor(r) && !r.notice_emailed_at);
+  const absent=meetingRosterFor(date).filter(r=>r.expected && !mAttended(r) && mtgNoticeRoute(r).email && !r.notice_emailed_at);
   if(!absent.length){ alert("No absentees with an email left to notify."); return; }
-  if(!confirm("Email a Notice to Explain to "+absent.length+" absentee(s) who have an email on file?\n\nAnyone marked “office was informed” is already excluded. Absentees without an email are skipped — print those from their row.")) return;
+  const agN=absent.filter(r=>mtgNoticeRoute(r).via==="agency").length;
+  if(!confirm("Email a Notice to Explain for "+absent.length+" absentee(s)?"+(agN?"\n\n"+agN+" of these are agency merchandisers — their notice goes to the agency (Jell-on / M&G), not the person.":"")+"\n\nAnyone marked “office was informed” is already excluded. Absentees without an email are skipped — print those from their row.")) return;
   mtgSendNoticeEmails(absent,date);
 };
 window.mtgReminderAll=async(date)=>{

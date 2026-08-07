@@ -8680,45 +8680,99 @@ function renderEvaluations(){
 function openEvalForm(empId,type,due){
   const e=EMPLOYEES.find(x=>String(x.id)===String(empId)); if(!e) return;
   const tpl0=evalTemplateFor(e);
-  const recs=EVAL_RECS[type]||["Meets expectations"];
+  const CRIT=[{k:"quality",label:"Work quality & reliability"},{k:"conduct",label:"Attitude & conduct"},{k:"teamwork",label:"Teamwork & communication"}];
+  if(tpl0.key==="merchandiser") CRIT.push({k:"selling",label:"Selling & merchandising"},{k:"inventory",label:"Inventory honesty & store compliance"});
+  if(tpl0.key==="lead") CRIT.push({k:"results",label:"Delivers results / KPIs"},{k:"leadership",label:"Leadership & people management"});
+  const state={ratings:{},outcome:"",att:null};
   let m=document.getElementById("evalModal"); if(!m){ m=document.createElement("div"); m.id="evalModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
-  const ratingSel=(id)=>`<select id="${id}" style="padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:13px;background:#fff;"><option value="">—</option>${[5,4,3,2,1].map(n=>`<option value="${n}">${n} — ${["","Poor","Fair","Good","Very good","Excellent"][n]}</option>`).join("")}</select>`;
+  const dots=(k)=>`<span class="ev-circ" data-key="${k}" data-val="0" style="white-space:nowrap;">${[1,2,3,4,5].map(n=>`<i class="ev-dot" data-n="${n}" style="display:inline-block;width:20px;height:20px;border-radius:50%;border:2px solid #cbd6cf;background:#fff;margin:0 2px;cursor:pointer;vertical-align:middle;"></i>`).join("")}</span>`;
+  const critRow=(c)=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="font-size:13.5px;">${esc(c.label)}</span>${dots(c.k)}</div>`;
+  const OUTC=[["on_track","On track","#1f7a44"],["coaching","Needs coaching","#8a5a1c"],["at_risk","At risk / not for regularization","#a4322a"]];
+  const outBtns=OUTC.map(o=>`<button type="button" class="ev-out" data-o="${o[0]}" style="border:1.5px solid #cbd6cf;background:#fff;color:#33413a;padding:8px 13px;border-radius:20px;font-size:12.5px;cursor:pointer;margin:0 6px 6px 0;">${o[1]}</button>`).join("");
+  const ta=(id,ph)=>`<textarea id="${id}" rows="2" placeholder="${ph}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;box-sizing:border-box;"></textarea>`;
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:560px;height:100%;overflow-y:auto;">
-    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;">
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;z-index:2;">
       <div style="font-size:20px;font-weight:800;">${esc(e.full_name)}</div>
-      <div style="font-size:12.5px;opacity:.9;">${EVAL_LABEL[type]} · due ${fmtDate(due)} · ${esc(e.position||e.department||"")}</div>
+      <div style="font-size:12.5px;opacity:.9;">${EVAL_LABEL[type]} · due ${fmtDate(due)} · ${esc(e.position||e.department||"")} · ${esc(tpl0.label)}</div>
     </div>
     <div style="padding:18px 22px 60px;">
-      <div class="panel" style="margin-top:0;"><h2>Ratings</h2>
-        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:0 0 4px;">Evaluation type <span style="font-weight:400;">— auto-selected by role; change if needed</span></label>
-        <select id="ev_tpl" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;background:#fff;margin-bottom:10px;">${Object.keys(EVAL_TEMPLATES).map(k=>`<option value="${k}" ${k===tpl0.key?"selected":""}>${EVAL_TEMPLATES[k].label}</option>`).join("")}</select>
-        <div id="ev_crit"></div>
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0 2px;"><span style="font-size:13.5px;font-weight:700;">Overall</span>${ratingSel("ev_overall")}</div>
+      <div class="panel" style="margin-top:0;"><h2>Facts from the system</h2>
+        <div id="ev_att"><div class="psub">Loading attendance…</div></div>
       </div>
-      <div class="panel"><h2>Recommendation</h2>
-        <select id="ev_rec" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:#fff;">${recs.map(r=>`<option>${r}</option>`).join("")}</select>
-        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:12px 0 4px;">Strengths</label><textarea id="ev_str" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;"></textarea>
-        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 4px;">Areas to improve</label><textarea id="ev_imp" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;"></textarea>
-        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 4px;">Evaluator</label><input id="ev_by" value="${esc((CURRENT_USER&&CURRENT_USER.email)||'')}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;">
-        <div id="evMsg" style="font-size:13px;color:#a4322a;margin:8px 0;"></div>
-        <div style="display:flex;gap:10px;"><button class="btn" id="evSave">Save evaluation</button><button class="btn ghost" id="evClose" style="margin-left:auto;">Close</button></div>
+      <div class="panel"><h2>Assessment</h2>
+        <div class="psub" style="margin:-4px 0 8px;">Tap a circle to rate — 1 low → 5 high.</div>
+        ${CRIT.map(critRow).join("")}
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:12px 0 4px;">What's going well</label>${ta("ev_str","One real example")}
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 4px;">What needs to improve</label>${ta("ev_imp","One real example")}
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 4px;">Any concern (attendance / honesty / conduct)</label>${ta("ev_con","Leave blank if none")}
       </div>
+      <div class="panel"><h2>Outcome</h2>
+        <div id="ev_outrow">${outBtns}</div>
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 4px;">Evaluator</label><input id="ev_by" value="${esc((CURRENT_USER&&CURRENT_USER.email)||'')}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;box-sizing:border-box;">
+      </div>
+      <div class="panel" style="background:#0f1f33;color:#fff;"><h2 style="color:#fff;">Scorecard</h2><div id="ev_score"></div></div>
+      <div id="evMsg" style="font-size:13px;color:#a4322a;margin:8px 0;"></div>
+      <div style="display:flex;gap:10px;"><button class="btn" id="evSave">Save evaluation</button><button class="btn ghost" id="evClose" style="margin-left:auto;">Close</button></div>
     </div></div>`;
-  const paintCrit=()=>{ const k=$("#ev_tpl").value; const crit=(EVAL_TEMPLATES[k]||EVAL_TEMPLATES.rankfile).criteria; $("#ev_crit").innerHTML=crit.map((c,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);"><span style="font-size:13.5px;">${esc(c)}</span>${ratingSel("ev_r"+i)}</div>`).join(""); };
-  paintCrit();
-  $("#ev_tpl").addEventListener("change",paintCrit);
-  $("#evClose").addEventListener("click",()=>m.remove());
+  const paintScore=()=>{
+    const vals=Object.values(state.ratings); const avg=vals.length?vals.reduce((s,x)=>s+x,0)/vals.length:0;
+    const band=state.att?state.att.band:null;
+    const bandCol=band==="Good"?"#7ee0a8":band==="Bad"?"#f0c674":band==="Terrible"?"#f0928a":"#9fb0bf";
+    const outLbl=({on_track:"On track",coaching:"Needs coaching",at_risk:"At risk"})[state.outcome]||"—";
+    const el=document.getElementById("ev_score"); if(!el) return;
+    el.innerHTML=`<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;">
+      <div><div style="font-size:11px;opacity:.75;">Performance avg</div><div style="font-size:26px;font-weight:800;">${vals.length?avg.toFixed(1)+" / 5":"—"}</div></div>
+      <div><div style="font-size:11px;opacity:.75;">Attendance</div><div style="font-size:22px;font-weight:800;color:${bandCol};">${band||"—"}${state.att?` · ${state.att.equiv.toFixed(1)}`:""}</div></div>
+      <div><div style="font-size:11px;opacity:.75;">Outcome</div><div style="font-size:17px;font-weight:800;margin-top:3px;">${outLbl}</div></div>
+    </div>`;
+  };
+  m.querySelectorAll(".ev-circ").forEach(sp=>sp.querySelectorAll(".ev-dot").forEach(dot=>dot.addEventListener("click",()=>{
+    const n=Number(dot.dataset.n); sp.dataset.val=String(n);
+    sp.querySelectorAll(".ev-dot").forEach(d=>{ const on=Number(d.dataset.n)<=n; d.style.background=on?"#1f7a44":"#fff"; d.style.borderColor=on?"#1f7a44":"#cbd6cf"; });
+    state.ratings[sp.dataset.key]=n; paintScore();
+  })));
+  m.querySelectorAll(".ev-out").forEach(b=>b.addEventListener("click",()=>{
+    state.outcome=b.dataset.o;
+    m.querySelectorAll(".ev-out").forEach(x=>{ x.style.background="#fff"; x.style.color="#33413a"; x.style.borderColor="#cbd6cf"; });
+    const col=({on_track:"#1f7a44",coaching:"#8a5a1c",at_risk:"#a4322a"})[b.dataset.o]; b.style.background=col; b.style.color="#fff"; b.style.borderColor=col;
+    paintScore();
+  }));
+  paintScore();
+  (async()=>{
+    const box=document.getElementById("ev_att"); if(!box) return;
+    if(!e.employee_id){ box.innerHTML=`<div class="psub">No PayPlus ID linked — attendance can't be pulled automatically. Verify manually.</div>`; return; }
+    const now=new Date(); let ey=now.getFullYear(), em=now.getMonth(); if(em===0){ em=12; ey--; }
+    let sy=ey, sm=em-2; while(sm<1){ sm+=12; sy--; }
+    try{
+      const { data:{ session } }=await sb.auth.getSession();
+      const url=`${SUPABASE_URL}/functions/v1/payplus-attendance?emp=${encodeURIComponent(e.employee_id)}&y1=${sy}&m1=${sm}&y2=${ey}&m2=${em}`;
+      const r=await fetch(url,{ headers:{ Authorization:`Bearer ${session.access_token}`, apikey:SUPABASE_ANON_KEY } });
+      const j=await r.json(); const ms=(j.months||[]).filter(x=>x.hasData);
+      if(!ms.length){ box.innerHTML=`<div class="note" style="background:#fffaf0;border-color:#f0d9a6;">No PayPlus attendance found (agency/not enrolled, or newly hired) — verify manually.</div>`; return; }
+      const abs=ms.reduce((s,x)=>s+Number(x.absent||0),0);
+      const lateMin=ms.reduce((s,x)=>s+Number(x.lateMinutes||0),0);
+      const lateDays=lateMin/480, equiv=abs+lateDays;
+      const band=equiv<=2?"Good":equiv<=4?"Bad":"Terrible";
+      const col=band==="Good"?"#1f7a44":band==="Bad"?"#8a5a1c":"#a4322a";
+      state.att={abs,lateMin,lateDays,equiv,band};
+      box.innerHTML=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div style="font-size:13px;">Last 3 months: <b>${abs}</b> absence day(s) + <b>${lateDays.toFixed(1)}</b> day(s) of lates <span class="note">(${lateMin.toFixed(0)} min ÷ 480)</span></div>
+        <div style="padding:5px 13px;border-radius:20px;background:${col};color:#fff;font-weight:800;font-size:13px;">${band} · ${equiv.toFixed(1)}</div>
+      </div><div class="psub" style="margin-top:5px;">Auto-computed from PayPlus. Scale: 0–2 good · 3–4 bad · 5+ terrible.</div>`;
+      paintScore();
+    }catch(err){ box.innerHTML=`<div class="note">Couldn't reach PayPlus: ${esc(String(err&&err.message||err))}</div>`; }
+  })();
+  document.getElementById("evClose").addEventListener("click",()=>m.remove());
   m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
-  $("#evSave").addEventListener("click",async()=>{
-    const btn=$("#evSave"); btn.disabled=true; btn.textContent="Saving…";
-    const _tk=$("#ev_tpl").value; const _crit=(EVAL_TEMPLATES[_tk]||EVAL_TEMPLATES.rankfile).criteria;
-    const ratings={}; _crit.forEach((c,i)=>{ const el=document.getElementById("ev_r"+i); const val=el?el.value:""; if(val) ratings[c]=Number(val); });
-    const ov=document.getElementById("ev_overall").value;
-    const row={ employee_ref:e.id, employee_name:e.full_name, position:e.position||e.department||null, eval_type:type, period_due:due, eval_scope:_tk,
-      overall_rating: ov?Number(ov):null, ratings, recommendation:document.getElementById("ev_rec").value,
+  document.getElementById("evSave").addEventListener("click",async()=>{
+    const btn=document.getElementById("evSave"); btn.disabled=true; btn.textContent="Saving…";
+    const vals=Object.values(state.ratings); const avg=vals.length?vals.reduce((s,x)=>s+x,0)/vals.length:null;
+    const outLbl=({on_track:"On track",coaching:"Needs coaching",at_risk:"At risk / not for regularization"})[state.outcome]||"Recorded";
+    const row={ employee_ref:e.id, employee_name:e.full_name, position:e.position||e.department||null, eval_type:type, period_due:due, eval_scope:tpl0.key,
+      overall_rating: avg?Math.round(avg):null, ratings:{criteria:state.ratings, attendance:state.att, concern:evVal("ev_con")}, recommendation:outLbl,
       strengths:evVal("ev_str"), improvements:evVal("ev_imp"), evaluator:evVal("ev_by"), eval_date:evIso(new Date()), is_demo:!!e.is_demo };
-    await logChange("evaluation",e.id,e.full_name,"Recorded",EVAL_LABEL[type]+" · "+(row.recommendation||"")+(row.overall_rating?" · "+row.overall_rating+"/5":""));
+    await logChange("evaluation",e.id,e.full_name,"Recorded",EVAL_LABEL[type]+" · "+outLbl+(avg?" · "+avg.toFixed(1)+"/5":"")+(state.att?" · attendance "+state.att.band:""));
     const {error}=await sb.from("evaluations").insert(row);
     if(error){ document.getElementById("evMsg").textContent=error.message; btn.disabled=false; btn.textContent="Save evaluation"; return; }
     m.remove(); await loadEmployees();

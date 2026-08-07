@@ -9674,6 +9674,49 @@ function renderAgencies(){
   $$("#page-agencies .ag-copy").forEach(b=>b.addEventListener("click",()=>{ if(navigator.clipboard) navigator.clipboard.writeText(b.dataset.link); const t=b.textContent; b.textContent="Copied ✓"; setTimeout(()=>b.textContent=t,1200); }));
   $$("#page-agencies .ag-emp").forEach(r=>r.addEventListener("click",()=>{ const e=(EMPLOYEES||[]).find(x=>String(x.id)===r.dataset.id); if(e&&typeof openRecord==="function") openRecord(e); }));
 }
+// Collapse each panel from its heading — robust to headings nested inside a header row (hides every
+// direct child of the panel except the one that contains the h2).
+function meetingCollapse(root){
+  root.querySelectorAll(".panel").forEach(p=>{
+    if(p.dataset.mcoll) return; p.dataset.mcoll="1";
+    const h=p.querySelector("h2"); if(!h) return;
+    let hdr=h; while(hdr.parentElement && hdr.parentElement!==p) hdr=hdr.parentElement;
+    h.style.cursor="pointer"; h.style.userSelect="none";
+    const caret=document.createElement("span"); caret.style.cssText="float:right;font-size:12px;font-weight:400;color:var(--muted);margin-left:8px;"; h.appendChild(caret);
+    const others=[...p.children].filter(c=>c!==hdr);
+    let collapsed=false;
+    const apply=()=>{ caret.textContent=collapsed?"▸ show":"▾ hide"; others.forEach(c=>c.style.display=collapsed?"none":""); };
+    apply();
+    h.addEventListener("click",(e)=>{ if(e.target.closest("a,button,select,input,textarea")) return; collapsed=!collapsed; apply(); });
+  });
+}
+// Reorganise the meeting page into a left section menu (Set up · Attendance · Absentees · Reimbursement · Log)
+// so only one panel shows at a time — kills the long scroll / wasted space. Panels are MOVED, so all wiring stays intact.
+function meetingSectionize(pg){
+  if(!pg || pg.querySelector("#mtgSecRail")) return;
+  const panels=[...pg.children].filter(el=>el.classList && el.classList.contains("panel"));
+  if(panels.length<2) return;
+  const titleOf=p=>{ const h=p.querySelector("h2"); return h?h.textContent:""; };
+  const secFor=t=>{ if(/Did not attend|absent/i.test(t)) return "absent"; if(/Reimbursement/i.test(t)) return "reimb"; if(/Regular attendance|\bLog\b/i.test(t)) return "log"; if(/^\s*Attendance/i.test(t)) return "attend"; return "setup"; };
+  const SECTIONS=[["setup","Set up & roster"],["attend","Attendance"],["absent","Absentees"],["reimb","Reimbursement"],["log","Log"]];
+  const qr=pg.querySelector('img[alt="Sign-in QR"]'); if(qr){ qr.setAttribute("width","96"); qr.setAttribute("height","96"); qr.style.width="96px"; qr.style.height="96px"; }
+  const wrap=document.createElement("div"); wrap.style.cssText="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;";
+  const rail=document.createElement("div"); rail.id="mtgSecRail"; rail.style.cssText="flex:0 0 170px;min-width:150px;";
+  const body=document.createElement("div"); body.style.cssText="flex:1;min-width:280px;";
+  const conts={}; SECTIONS.forEach(([k])=>{ const c=document.createElement("div"); c.className="msec"; c.dataset.sec=k; conts[k]=c; body.appendChild(c); });
+  const present=new Set();
+  panels.forEach(p=>{ const k=secFor(titleOf(p)); present.add(k); conts[k].appendChild(p); });
+  const shown=SECTIONS.filter(([k])=>present.has(k)||k==="setup").map(([k])=>k);
+  if(!shown.includes(window.MEETING_SEC)) window.MEETING_SEC=shown[0]||"setup";
+  Object.entries(conts).forEach(([k,c])=>{ c.style.display=(k===window.MEETING_SEC)?"block":"none"; });
+  const railBtn=(k,label)=>{ const on=k===window.MEETING_SEC; return `<button class="mtgrail" data-sec="${k}" style="display:block;width:100%;text-align:left;border:none;background:${on?'#1E3A5F':'transparent'};color:${on?'#fff':'#28313c'};font-weight:${on?'700':'600'};font-size:13.5px;padding:10px 12px;border-radius:9px;cursor:pointer;margin-bottom:4px;">${esc(label)}</button>`; };
+  rail.innerHTML=SECTIONS.filter(([k])=>present.has(k)||k==="setup").map(([k,l])=>railBtn(k,l)).join("");
+  wrap.appendChild(rail); wrap.appendChild(body); pg.appendChild(wrap);
+  meetingCollapse(body);
+  rail.querySelectorAll(".mtgrail").forEach(b=>b.addEventListener("click",()=>{ window.MEETING_SEC=b.dataset.sec;
+    body.querySelectorAll(".msec").forEach(s=>s.style.display=(s.dataset.sec===window.MEETING_SEC)?"block":"none");
+    rail.querySelectorAll(".mtgrail").forEach(x=>{ const on=x.dataset.sec===window.MEETING_SEC; x.style.background=on?'#1E3A5F':'transparent'; x.style.color=on?'#fff':'#28313c'; x.style.fontWeight=on?'700':'600'; }); }));
+}
 function renderMeetings(){
   const pg=$("#page-meetings"); if(!pg||!canRunMeetings()) return;
   const active=meetingActive(), ips=meetingAllowedIPs(), cfgAllowed=canConfigMeetings(), bank=canSeeMeetingBank();
@@ -9791,7 +9834,7 @@ function renderMeetings(){
     await sb.from("meeting_attendance").update({status, verified_by:(CURRENT_USER&&CURRENT_USER.email)||null}).eq("id",id);
     const row=MEETINGS.find(x=>String(x.id)===String(id)); if(row) row.status=status;
   }));
-  evalCollapsible(pg);   // every panel on the meeting page folds from its heading
+  meetingSectionize(pg);   // left section menu + per-panel collapse
 }
 function meetingOpenDialog(){
   const a=meetingActive();

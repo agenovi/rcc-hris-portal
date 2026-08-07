@@ -8039,7 +8039,8 @@ function renderManning(){
   // Shortfall stated explicitly: people short = per-store sum of max(0, AHC−present) (surplus stores can't cancel short ones); stores short = how many stores that spans.
   const _perShort=open.map(b=>Math.max(0,(b.ahc_stationary+b.ahc_reliever)-chcFor(b.name)));
   const peopleShort=_perShort.reduce((s,n)=>s+n,0), storesShort=_perShort.filter(n=>n>0).length;
-  const OPENINGS=MANPOWER.filter(o=>o.status==="Open" && (!_sc || o.sc===_sc));
+  // Openings DERIVE from the PayPlus shortfall — one figure everywhere (no hand-posted list). One row per short store.
+  const OPENINGS=open.filter(b=>(!_sc||b.sc===_sc)).map(b=>{ const need=Math.max(0,(b.ahc_stationary+b.ahc_reliever)-chcFor(b.name)); return { id:'gap-'+b.name, worksite:b.name, sc:b.sc, count_needed:need, position:'Merchandiser', diser_type:(b.ahc_stationary===0&&b.ahc_reliever>0)?'Roving':null, status:'Open', date_posted:null, target_fill_date:null, _derived:true }; }).filter(o=>o.count_needed>0);
   const opInReview=(store)=>PREHIRE.filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT","POOLED"].includes(p.phase)).length;
   const nTrf=(TRANSFERS||[]).filter(t=>['Requested','InEffect'].includes(t.status)).length;
   const nPositions=OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0);
@@ -8063,9 +8064,9 @@ function renderManning(){
       <div class="panel" style="margin-top:0;">
       <h2>Openings <span class="count-tag">${nPositions} position${nPositions===1?'':'s'} to fill · across ${OPENINGS.length} store${OPENINGS.length===1?'':'s'}</span></h2>
       ${(()=>{ const t=openingKindTotals(OPENINGS); const on=window.MANNING_OPKIND; const chip=(k,n,lbl)=>n?`<span class="opkind" data-kind="${k}" title="Tap to show only ${lbl} openings" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;border:1.5px solid ${on===k?'#1E3A5F':'#e2e7ee'};background:${on===k?'#eaf0f6':'#f6f8fb'};">${openingKindPill(k)} <b>${n}</b>&nbsp;${lbl}${(n>1&&lbl!=='stationary')?'s':''}</span>`:''; return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 6px;"><span style="font-size:12px;color:var(--muted);font-weight:600;">By type (tap to filter):</span>${chip('Lead',t.Lead,'lead')}${chip('Reliever',t.Reliever,'reliever')}${chip('Stationary',t.Stationary,'stationary')}${on?`<a class="opkind-clear" style="cursor:pointer;color:var(--green-dark);font-size:12px;font-weight:600;">✕ show all</a>`:''}</div>`; })()}
-      <div class="psub">Manpower requests you post. These drive the agency links — each agency sees the shortfall + an in-review count, then submits candidates into the pipeline. Each need is tagged <b>Lead / Reliever / Stationary</b>.</div>
-      <div class="actionbar">${canPostOpenings()?'<button class="btn" id="opNew">+ Post opening</button> ':''}${canManageStores()?'<button class="btn ghost" id="stNew">+ Add store</button>':''}${!canPostOpenings()?'<span class="psub" style="margin:0;">Openings open automatically when someone resigns. You can view and fill them below.</span>':''}</div>
-      ${OPENINGS.length?`<table><thead><tr><th>Store</th><th>SC</th><th>Need</th><th>In review</th><th>Posted</th><th>Deadline</th><th></th></tr></thead><tbody id="opRows"></tbody></table>`:`<div class="psub" style="margin-top:6px;">No open requests yet — click “Post opening”.</div>`}
+      <div class="psub">Live gap from <b>PayPlus</b> — every open store where approved headcount exceeds who's actually there. Not hand-posted, so it always matches the Shortfall. Drives the agency links.</div>
+      <div class="actionbar">${canManageStores()?'<button class="btn ghost" id="stNew">+ Add store</button>':''} <span class="psub" style="margin:0;">Openings update automatically from PayPlus — nothing to post.</span></div>
+      ${OPENINGS.length?`<table><thead><tr><th>Store</th><th>SC</th><th>Need</th><th>In review</th><th></th></tr></thead><tbody id="opRows"></tbody></table>`:`<div class="psub" style="margin-top:6px;">✓ No gap — every open store is fully manned per PayPlus.</div>`}
     </div>
       </div>
       <div class="msec" data-sec="transfers" style="display:${SEC==='transfers'?'block':'none'};">
@@ -8124,8 +8125,8 @@ function renderManning(){
       const dtag=`${openingKindPill(kind)}${(o.diser_type==="Roving"&&o.second_worksite)?`<div style="font-size:11px;color:var(--muted);">+ ${esc(o.second_worksite)}</div>`:""}`;
       const nRev=opInReview(o.worksite);
       const revCell=nRev>0?`<a class="op-review" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;color:var(--green-dark);font-weight:700;text-decoration:underline;">${nRev} — review</a>`:`<span style="color:var(--muted);">0</span>`;
-      return `<tr class="op-row" data-id="${o.id}" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;"><td><b>${esc(o.worksite)}</b> ${dtag}<div style="font-size:11px;color:var(--muted);margin-top:2px;">${esc(o.position||"Merchandiser")}</div></td><td>${esc(o.sc||"—")}</td><td><b>${o.count_needed}</b> ${openingKindPill(kind)}</td><td>${revCell}</td><td>${o.date_posted?fmtDate(o.date_posted):"—"}</td><td>${dl}</td>
-        <td style="text-align:right;white-space:nowrap;">${canPostOpenings()?`<button class="btn ghost op-edit" data-id="${o.id}">Edit</button> <button class="btn ghost op-close" data-id="${o.id}">Close</button> <button class="btn ghost op-del" data-id="${o.id}" style="color:var(--red);border-color:#f1c9c5;">Delete</button>`:'<span class="note">tap to view</span>'}</td></tr>`;
+      return `<tr class="op-row" data-id="${o.id}" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;"><td><b>${esc(o.worksite)}</b> ${dtag}<div style="font-size:11px;color:var(--muted);margin-top:2px;">${esc(o.position||"Merchandiser")}</div></td><td>${esc(o.sc||"—")}</td><td><b>${o.count_needed}</b> ${openingKindPill(kind)}</td><td>${revCell}</td>
+        <td style="text-align:right;white-space:nowrap;"><span class="note">from PayPlus · tap to view store</span></td></tr>`;
     }).join("");
     $$("#opRows .op-edit").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); openingForm(MANPOWER.find(o=>o.id===b.dataset.id)); }));
     $$("#opRows .op-close").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); closeOpening(MANPOWER.find(o=>o.id===b.dataset.id)); }));
@@ -8133,7 +8134,7 @@ function renderManning(){
     // "N — review" number → open the in-review candidate list + comments (shared with the agency).
     $$("#opRows .op-review").forEach(a=>a.addEventListener("click",(e)=>{ e.stopPropagation(); openInReview(a.dataset.ws); }));
     // Whole row clickable: posters edit the opening; everyone else opens the store.
-    $$("#opRows .op-row").forEach(tr=>tr.addEventListener("click",()=>{ const o=MANPOWER.find(x=>x.id===tr.dataset.id); if(canPostOpenings()&&o) return openingForm(o); const br=BRANCHES.find(x=>x.name===tr.dataset.ws); if(br) openStore(br); }));
+    $$("#opRows .op-row").forEach(tr=>tr.addEventListener("click",()=>{ const br=BRANCHES.find(x=>x.name===tr.dataset.ws); if(br) openStore(br); }));
   }
   const paint=()=>{
     const list=(scFilter==="All"?SCs:[scFilter]);

@@ -9137,6 +9137,21 @@ function openEvalForm(empId,type,due){
     if(error){ document.getElementById("evMsg").textContent=error.message; btn.disabled=false; btn.textContent="Save evaluation"; return; }
     m.remove(); await loadEmployees();
   });
+  evalCollapsible(m);
+}
+// Every panel in the evaluation form folds from its heading (Facts, Assessment, Recommendation, Notice, Scorecard).
+function evalCollapsible(m){
+  if(!m) return;
+  m.querySelectorAll(".panel > h2").forEach(h=>{
+    if(h.dataset.coll) return; h.dataset.coll="1"; const p=h.parentElement;
+    h.style.cursor="pointer"; h.style.userSelect="none";
+    const dark=/#0f1f33/.test(p.getAttribute("style")||"");
+    const caret=document.createElement("span"); caret.style.cssText="float:right;font-size:12px;font-weight:400;margin-left:8px;color:"+(dark?"rgba(255,255,255,.7)":"var(--muted)")+";";
+    h.appendChild(caret);
+    const apply=(c)=>{ caret.textContent=c?"▸ show":"▾ hide"; [...p.children].forEach(ch=>{ if(ch!==h) ch.style.display=c?"none":""; }); };
+    let collapsed=false; apply(false);
+    h.addEventListener("click",(e)=>{ if(e.target.closest("a,button,select,input,textarea,.ev-dot,.ev-out")) return; collapsed=!collapsed; apply(collapsed); });
+  });
 }
 window.openEvalForm=openEvalForm;
 function evAttSummaryText(att){ if(!att) return "attendance on file for the review period"; return `${att.abs} absence day(s), ${Math.round(att.lateMin||0)} min of lates and ${Math.round(att.utMin||0)} min of undertime over the review period (attendance rating: ${att.band})`; }

@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1786064436";
+window.APP_BUILD="1786068972";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1786064436" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1786068972" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -7338,6 +7338,24 @@ const chcFor=(store)=>{
 // SINGLE definition of a store's manpower shortfall — people, per store. EVERY place that shows a shortfall
 // (headline tile, per-SC card, openings, agency feed) must call THIS, so no two figures can ever diverge again.
 const storeShort=(store)=>{ const b=(BRANCHES||[]).find(x=>x.name===store); if(!b) return 0; return Math.max(0,(b.ahc_stationary||0)+(b.ahc_reliever||0)-chcFor(store)); };
+// Split a store's shortfall into STATIONARY vs RELIEVER slots (so "2 short" isn't ambiguous). Home staff fill
+// stationary slots first; any surplus home staff + covering relievers fill reliever slots. The two ALWAYS sum
+// back to storeShort(), so the region/headline totals never move. Also reports the covering relievers + their
+// home ("second store") so a shared reliever is visible instead of confusing.
+const storeShortSplit=(store)=>{
+  const br=(BRANCHES||[]).find(b=>b.name===store); if(!br) return {stationary:0,reliever:0,total:0};
+  const base=staffAtStore(store).length;
+  const ahcS=br.ahc_stationary||0, ahcR=br.ahc_reliever||0;
+  const cover=(EMPLOYEES||[]).filter(e=>e.sub_location===store && (e.status||"Active")==="Active" && normWorksite(e.worksite)!==store);
+  const credit=Math.min(cover.length, ahcR, Math.max(0,(ahcS+ahcR)-base));
+  const stationary=Math.max(0, ahcS-base);
+  const relieverFilled=Math.min(ahcR, credit + Math.max(0, base-ahcS));
+  const reliever=Math.max(0, ahcR-relieverFilled);
+  const coveredBy=cover.slice(0,3).map(e=>({name:e.full_name, from:normWorksite(e.worksite)}));
+  return {stationary, reliever, total:stationary+reliever, base, credit, coveredBy};
+};
+// Relievers BASED at this store who also rove to a second store (their sub_location) — that second store is what anj wants shown.
+const relieverSecondStore=(store)=> (EMPLOYEES||[]).filter(e=> normWorksite(e.worksite)===store && (e.status||"Active")==="Active" && e.sub_location && e.sub_location!==store).map(e=>({name:e.full_name, to:e.sub_location}));
 
 /* ---------- STORE DRILL-DOWN (drawer) ---------- */
 function diserSourceBadge(h){ const x=(h||"").toLowerCase();
@@ -7515,8 +7533,9 @@ window.openPersonCard=function(emp){
 function manningDrill(title, sub, stores){
   let m=document.getElementById("mnDrill"); if(!m){ m=document.createElement("div"); m.id="mnDrill"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9997;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
-  const rows=(stores||[]).map(b=>{ const a=(b.ahc_stationary||0)+(b.ahc_reliever||0), c=chcFor(b.name), d=Math.max(0,a-c); const conf=MANNING_SCONF[b.name];
-    return `<tr class="mnd-row" data-bi="${BRANCHES.indexOf(b)}" style="cursor:pointer;"><td><b>${esc(b.name)}</b><div style="font-size:11px;color:var(--muted);">${esc(b.city||'')}${b.sc?' · '+esc(b.sc):''}</div></td><td style="text-align:center;">${a}</td><td style="text-align:center;">${c}</td><td style="text-align:center;">${d>0?`<span class="pill awol">${d}</span>`:`<span class="pill active">0</span>`}</td><td style="text-align:center;">${conf?'<span class="pill active">✓</span>':'<span class="note">—</span>'}</td></tr>`;
+  const rows=(stores||[]).map(b=>{ const a=(b.ahc_stationary||0)+(b.ahc_reliever||0), c=chcFor(b.name), sp=storeShortSplit(b.name), d=sp.total; const conf=MANNING_SCONF[b.name];
+    const shortCell=d>0?[sp.stationary>0?`<span class="pill di">${sp.stationary} stat</span>`:'',sp.reliever>0?`<span class="pill ag">${sp.reliever} rlv</span>`:''].filter(Boolean).join(' '):`<span class="pill active">0</span>`;
+    return `<tr class="mnd-row" data-bi="${BRANCHES.indexOf(b)}" style="cursor:pointer;"><td><b>${esc(b.name)}</b><div style="font-size:11px;color:var(--muted);">${esc(b.city||'')}${b.sc?' · '+esc(b.sc):''}</div></td><td style="text-align:center;">${a}</td><td style="text-align:center;">${c}</td><td style="text-align:center;white-space:nowrap;">${shortCell}</td><td style="text-align:center;">${conf?'<span class="pill active">✓</span>':'<span class="note">—</span>'}</td></tr>`;
   }).join("");
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
     <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;position:sticky;top:0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
@@ -10172,7 +10191,7 @@ function canConfirmThisStore(b){ if(userRole()==='sales' && manningFullOverview(
 function openingKind(o){ const pos=String((o&&o.position)||"").toLowerCase(); if(/lead|supervisor|coordinator/.test(pos)) return "Lead"; if(String((o&&o.diser_type)||"")==="Roving") return "Reliever"; return "Stationary"; }
 function openingKindPill(k){ const m={Lead:'<span class="pill" style="background:#efe6fb;color:#5a3ea8;">Lead</span>',Reliever:'<span class="pill ag">Reliever</span>',Stationary:'<span class="pill di">Stationary</span>'}; return m[k]||m.Stationary; }
 // Sum needed positions grouped by kind across a list of openings.
-function openingKindTotals(list){ const t={Lead:0,Reliever:0,Stationary:0}; (list||[]).forEach(o=>{ t[openingKind(o)]+=(Number(o.count_needed)||0); }); return t; }
+function openingKindTotals(list){ const t={Lead:0,Reliever:0,Stationary:0}; (list||[]).forEach(o=>{ if(o.stationary_need!=null||o.reliever_need!=null){ t.Stationary+=Number(o.stationary_need)||0; t.Reliever+=Number(o.reliever_need)||0; } else { t[openingKind(o)]+=(Number(o.count_needed)||0); } }); return t; }
 function canConfirmPerson(){ const r=userRole(); return r==="admin"||r==="payroll"; }
 function scChangeLabel(t){ return ({ahc_stationary:"Approved stationary",ahc_reliever:"Approved reliever",status:"Status",sc:"Sales Coordinator",rename:"Rename",close:"Close store",new:"New store",note:"Note / flag",remove_person:"Remove person",add_person:"Add missing person"})[t]||t; }
 async function manningStoreConfirm(store){
@@ -10356,8 +10375,15 @@ function renderManning(){
   // Shortfall stated explicitly: people short = per-store sum of max(0, AHC−present) (surplus stores can't cancel short ones); stores short = how many stores that spans.
   const _perShort=open.map(b=>storeShort(b.name));
   const peopleShort=_perShort.reduce((s,n)=>s+n,0), storesShort=_perShort.filter(n=>n>0).length;
+  // Shortfall grouped by region (branches.area) — reuses the SAME storeShort, so regions always sum to peopleShort.
+  const REGIONS=[["GMA","Greater Manila"],["NL","North Luzon"],["SL","South Luzon"],["VIS","Visayas"],["MIN","Mindanao"]];
+  const regNameOf=(a)=>{ const m=REGIONS.find(r=>r[0]===a); return m?m[1]:(a||"Other"); };
+  const areaOf=(store)=>{ const b=open.find(x=>x.name===store); return (b&&b.area)||"—"; };
+  const regShort={}, regStores={};
+  open.forEach(b=>{ const s=storeShort(b.name); const a=b.area||"—"; regShort[a]=(regShort[a]||0)+s; if(s>0) regStores[a]=(regStores[a]||0)+1; });
+  const regOrder=[...REGIONS.map(r=>r[0]),...Object.keys(regShort).filter(a=>!REGIONS.some(r=>r[0]===a))].filter(a=>regShort[a]!==undefined);
   // Openings DERIVE from the PayPlus shortfall — one figure everywhere (no hand-posted list). One row per short store.
-  const OPENINGS=open.filter(b=>(!_sc||b.sc===_sc)).map(b=>{ const need=storeShort(b.name); return { id:'gap-'+b.name, worksite:b.name, sc:b.sc, count_needed:need, position:'Merchandiser', diser_type:(b.ahc_stationary===0&&b.ahc_reliever>0)?'Roving':null, status:'Open', date_posted:null, target_fill_date:null, _derived:true }; }).filter(o=>o.count_needed>0);
+  const OPENINGS=open.filter(b=>(!_sc||b.sc===_sc)).map(b=>{ const sp=storeShortSplit(b.name); return { id:'gap-'+b.name, worksite:b.name, sc:b.sc, area:b.area||"—", count_needed:sp.total, stationary_need:sp.stationary, reliever_need:sp.reliever, coveredBy:sp.coveredBy, position:'Merchandiser', status:'Open', _derived:true }; }).filter(o=>o.count_needed>0);
   const opInReview=(store)=>PREHIRE.filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT","POOLED"].includes(p.phase)).length;
   const nTrf=(TRANSFERS||[]).filter(t=>['Requested','InEffect'].includes(t.status)).length;
   const nPositions=OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0);
@@ -10401,6 +10427,14 @@ function renderManning(){
         <div class="kpi mn-kpi" data-k="conf" style="cursor:pointer;" title="Tap to see which stores"><div class="k-l">Manning confirmed ›</div><div class="k-n">${confStores}</div><div class="k-s">of ${open.length} stores — an SC ticked ✓</div></div>
         <div class="kpi mn-kpi" data-k="short" style="cursor:pointer;" title="Tap to see the short stores"><div class="k-l">Shortfall ›</div><div class="k-n" style="color:${peopleShort>0?'var(--red)':'var(--green-dark)'}">${peopleShort}</div><div class="k-s">people short · across ${storesShort} store${storesShort===1?'':'s'}</div></div>
       </div>
+      ${peopleShort>0?`<div style="margin:10px 0 2px;">
+        <div class="psub" style="margin:0 0 6px;font-weight:600;">Shortfall by region <span style="font-weight:400;">— sums to ${peopleShort}</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${regOrder.map(a=>{ const n=regShort[a]||0; return `<span class="mn-reg" data-area="${esc(a)}" title="Tap to see ${esc(regNameOf(a))}'s short stores" style="cursor:pointer;display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:20px;border:1.5px solid ${n>0?'#f1c9c5':'#dbe7de'};background:${n>0?'#fdf1ef':'#eef6f0'};">
+            <b>${esc(a)}</b><span style="color:${n>0?'var(--red)':'var(--green-dark)'};font-weight:700;">${n}</span><span style="font-size:11px;color:var(--muted);">${n>0?(regStores[a]||0)+' store'+((regStores[a]||0)===1?'':'s'):'full'}</span>
+          </span>`; }).join("")}
+        </div>
+      </div>`:''}
       ${_sc?'':`<div class="filterbar" id="scChips">
         ${["All",...SCs].map(s=>{ const gone=s!=="All"&&scIsGone(s); return `<div class="chip${s===scFilter?' active':''}" data-sc="${esc(s)}"${gone?' style="color:var(--red);border-color:#f1c9c5;font-weight:700;"':''}>${gone?'● ':''}${esc(s)}${s!=="All"?` (${open.filter(b=>b.sc===s).length})`:""}</div>`; }).join("")}
       </div>`}
@@ -10424,27 +10458,37 @@ function renderManning(){
     if(which==='ahc') return manningDrill("Approved headcount (AHC)","By store, highest first",all.slice().sort((a,b)=>((b.ahc_stationary+b.ahc_reliever)-(a.ahc_stationary+a.ahc_reliever))));
     if(which==='chc') return manningDrill("Confirmed headcount (CHC)","People matched from the active list",all.slice().sort((a,b)=>chcFor(b.name)-chcFor(a.name)));
     if(which==='conf'){ const pend=all.filter(b=>!MANNING_SCONF[b.name]); return manningDrill("Manning confirmation",confStores+" of "+open.length+" confirmed · "+pend.length+" to confirm",all.slice().sort((a,b)=>(MANNING_SCONF[a.name]?1:0)-(MANNING_SCONF[b.name]?1:0))); }
-    if(which==='short'){ const s=all.filter(b=>short(b)>0).sort((a,b)=>short(b)-short(a)); return manningDrill("Shortfall — stores needing people",s.length+" stores short",s); }
+    if(which==='short'){ const s=all.filter(b=>short(b)>0).sort((a,b)=>short(b)-short(a)); return manningDrill("Shortfall — stores needing people",peopleShort+" people short · "+s.length+" stores",s); }
   }));
+  $$("#page-manning .mn-reg").forEach(el=>el.addEventListener("click",()=>{ const a=el.dataset.area; const s=open.filter(b=>(b.area||"—")===a && storeShort(b.name)>0).sort((x,y)=>storeShort(y.name)-storeShort(x.name)); manningDrill(regNameOf(a)+" — short stores",(regShort[a]||0)+" people short · "+s.length+" store"+(s.length===1?'':'s'),s); }));
   wireTransfers();
   $$("#page-manning .opkind").forEach(el=>el.addEventListener("click",()=>{ window.MANNING_OPKIND = window.MANNING_OPKIND===el.dataset.kind?null:el.dataset.kind; renderManning(); }));
   $$("#page-manning .opkind-clear").forEach(el=>el.addEventListener("click",()=>{ window.MANNING_OPKIND=null; renderManning(); }));
   const opRows=$("#opRows");
   if(opRows){
-    const today=new Date(new Date().toDateString());
-    opRows.innerHTML=OPENINGS.filter(o=>!window.MANNING_OPKIND||openingKind(o)===window.MANNING_OPKIND).map(o=>{
-      const overdue=o.target_fill_date && new Date(o.target_fill_date+"T00:00:00")<today;
-      let dl;
-      if(o.priority==="Urgent"&&!o.target_fill_date) dl=`<span class="pill awol">Urgent</span>`;
-      else if(o.target_fill_date) dl=`${fmtDate(o.target_fill_date)}${overdue?' <span class="pill awol">overdue</span>':''}`;
-      else dl=`<span class="note">—</span>`;
-      const kind=openingKind(o);
-      const dtag=`${openingKindPill(kind)}${(o.diser_type==="Roving"&&o.second_worksite)?`<div style="font-size:11px;color:var(--muted);">+ ${esc(o.second_worksite)}</div>`:""}`;
+    const OPK=window.MANNING_OPKIND; // 'Stationary' | 'Reliever' | null
+    const shown=OPENINGS.filter(o=> !OPK || (OPK==='Stationary'?(o.stationary_need>0):OPK==='Reliever'?(o.reliever_need>0):true))
+      .sort((a,b)=> regOrder.indexOf(a.area)-regOrder.indexOf(b.area) || String(a.worksite).localeCompare(String(b.worksite)));
+    const needCell=(o)=>{ const parts=[]; const s=OPK==='Reliever'?0:o.stationary_need, r=OPK==='Stationary'?0:o.reliever_need;
+      if(s>0) parts.push(`<span class="pill di">${s} stationary</span>`); if(r>0) parts.push(`<span class="pill ag">${r} reliever</span>`);
+      return parts.join(" ")||`<span class="note">—</span>`; };
+    let html="", curReg=null;
+    shown.forEach(o=>{
+      if(o.area!==curReg){ curReg=o.area; const rs=shown.filter(x=>x.area===curReg); const rTot=rs.reduce((n,x)=>n+((OPK==='Reliever'?0:x.stationary_need)+(OPK==='Stationary'?0:x.reliever_need)),0);
+        html+=`<tr style="background:#eef3f8;"><td colspan="5" style="font-weight:800;color:#1E3A5F;padding:7px 10px;">${esc(regNameOf(curReg))} <span style="font-weight:600;color:var(--muted);">· ${rTot} to fill · ${rs.length} store${rs.length===1?'':'s'}</span></td></tr>`;
+      }
+      const second=relieverSecondStore(o.worksite); // relievers based here who also rove to a 2nd store
+      const cover=(o.coveredBy||[]);
+      const notes=[];
+      if(cover.length) notes.push(`covered in part by ${cover.map(c=>esc(c.name.split(",")[0])+" (from "+esc(c.from)+")").join(", ")}`);
+      if(second.length) notes.push(`reliever here also at ${second.map(s=>esc(s.to)).join(", ")}`);
+      const noteLine=notes.length?`<div style="font-size:11px;color:var(--muted);margin-top:2px;">${notes.join(" · ")}</div>`:"";
       const nRev=opInReview(o.worksite);
       const revCell=nRev>0?`<a class="op-review" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;color:var(--green-dark);font-weight:700;text-decoration:underline;">${nRev} — review</a>`:`<span style="color:var(--muted);">0</span>`;
-      return `<tr class="op-row" data-id="${o.id}" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;"><td><b>${esc(o.worksite)}</b> ${dtag}<div style="font-size:11px;color:var(--muted);margin-top:2px;">${esc(o.position||"Merchandiser")}</div></td><td>${esc(o.sc||"—")}</td><td><b>${o.count_needed}</b> ${openingKindPill(kind)}</td><td>${revCell}</td>
+      html+=`<tr class="op-row" data-id="${o.id}" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;"><td><b>${esc(o.worksite)}</b>${noteLine}</td><td>${esc(o.sc||"—")}</td><td>${needCell(o)}</td><td>${revCell}</td>
         <td style="text-align:right;white-space:nowrap;"><span class="note">from PayPlus · tap to view store</span></td></tr>`;
-    }).join("");
+    });
+    opRows.innerHTML=html;
     $$("#opRows .op-edit").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); openingForm(MANPOWER.find(o=>o.id===b.dataset.id)); }));
     $$("#opRows .op-close").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); closeOpening(MANPOWER.find(o=>o.id===b.dataset.id)); }));
     $$("#opRows .op-del").forEach(b=>b.addEventListener("click",(e)=>{ e.stopPropagation(); deleteOpening(MANPOWER.find(o=>o.id===b.dataset.id)); }));

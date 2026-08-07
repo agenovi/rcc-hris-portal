@@ -5260,7 +5260,7 @@ function staffNotesPanel(e){
   const side=staffSide();
   const scNotes=notes.filter(n=>(n.role||'')==='SC'), hrNotes=notes.filter(n=>(n.role||'')!=='SC');
   return `<div class="panel"><h2 style="margin:0 0 2px;">Notes &amp; reviews <span style="font-size:12px;font-weight:600;color:var(--muted);">— HR &amp; SC kept separate</span></h2>
-    <div style="display:flex;gap:18px;flex-wrap:wrap;margin:6px 0 10px;font-size:12px;color:var(--muted);align-items:center;">
+    <div style="display:flex;gap:44px;flex-wrap:wrap;margin:6px 0 10px;font-size:12px;color:var(--muted);align-items:center;">
       <span>HR rating: <span id="snStarHr">${staffStarsHtml(e.id,'hr',stars.hr,side==='hr')}</span></span>
       <span>SC rating: <span id="snStarSc">${staffStarsHtml(e.id,'sc',stars.sc,side==='sc')}</span></span>
     </div>
@@ -7950,11 +7950,11 @@ function manningTransfersPanel(){
      <td>${transferStatusPill(t.status)}${t.status==='InEffect'&&t.before_by?`<div style="font-size:10.5px;color:var(--muted);margin-top:2px;">✓ before: ${esc(t.before_by)}</div>`:''}</td>
    </tr>`).join('');
   return `<div class="panel">
-     <h2>Store Transfers &amp; Deployments <span class="count-tag">${active.length} active</span></h2>
+     <h2>Store movement <span class="count-tag">${active.length} active</span></h2>
      <div class="psub">Move an employee to another store for a set period. <b>The SC raises the request → the store head confirms before (agrees to receive) → after the period the store head confirms the person was there</b> — that attestation is the proof for payroll / reliever credit. Worksite stays owned by PayPlus; once completed, update the assignment in PayPlus.</div>
      <details open style="margin:8px 0;"><summary style="cursor:pointer;font-size:12.5px;color:var(--green-dark);font-weight:600;">Each SC's private move-request link — Copy &amp; send to them</summary>${scLinksBlock()}</details>
-     <div class="actionbar"><button class="btn" id="trfNew">+ New transfer request</button> <span class="psub" style="margin:0;align-self:center;">or record one on the SC's behalf</span></div>
-     ${active.length?`<table><thead><tr><th>Employee</th><th>From → To</th><th>Period</th><th>Requested by (SC)</th><th>Status</th></tr></thead><tbody>${rowsHtml(active)}</tbody></table>`:`<div class="psub" style="margin-top:6px;">No active transfer requests. Click “New transfer request”.</div>`}
+     <div class="actionbar"><button class="btn" id="trfNew">+ New store movement</button> <span class="psub" style="margin:0;align-self:center;">${userRole()==='sales'?'move one of your staff to another store — HR confirms it':"or record one on the SC's behalf"}</span></div>
+     ${active.length?`<table><thead><tr><th>Employee</th><th>From → To</th><th>Period</th><th>Requested by (SC)</th><th>Status</th></tr></thead><tbody>${rowsHtml(active)}</tbody></table>`:`<div class="psub" style="margin-top:6px;">No active store movements. Click “New store movement”.</div>`}
      ${done.length?`<div class="subhead" style="margin-top:16px;">Recent — completed / closed</div><table><thead><tr><th>Employee</th><th>From → To</th><th>Period</th><th>Requested by (SC)</th><th>Status</th></tr></thead><tbody>${rowsHtml(done)}</tbody></table>`:''}
    </div>`;
 }
@@ -8330,7 +8330,7 @@ function renderManning(){
       <div id="mSecRail" style="flex:0 0 168px;min-width:148px;">
         ${railBtn('headcount','Headcount','')}
         ${railBtn('openings','Openings',nPositions||'')}
-        ${railBtn('transfers','Transfers',nTrf||'')}
+        ${railBtn('transfers','Store movement',nTrf||'')}
         ${showAppr?railBtn('approvals','Approvals',nAppr):''}
       </div>
       <div style="flex:1;min-width:280px;">

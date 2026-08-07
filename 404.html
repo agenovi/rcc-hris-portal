@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1786113831";
+window.APP_BUILD="1786114387";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1786113831" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1786114387" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -11994,7 +11994,6 @@ function renderAgencies(){
     ${agencies.map(ag=>{
       const active=(EMPLOYEES||[]).filter(e=>(e.hire_source||'')===ag && (e.status||'Active')==='Active').sort((a,b)=>(a.full_name||'').localeCompare(b.full_name||''));
       const link=SHARE_BASE+"agency.html?t="+(AGENCY_LINKS[ag]||'');
-      const withContract=active.filter(e=>e.contract_type).length;
       return `<div class="panel">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
           <h2 style="margin:0;">${esc(ag)} <span class="count-tag">${active.length} active placement${active.length===1?'':'s'}</span></h2>
@@ -12003,9 +12002,9 @@ function renderAgencies(){
             <a class="btn" href="${esc(link)}" target="_blank" style="text-decoration:none;">Open dashboard ↗</a>
           </div>
         </div>
-        <details style="margin-top:12px;"><summary style="cursor:pointer;list-style:none;outline:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span class="subhead" style="display:inline;margin:0;">Contracts / placements</span> <span class="sh-note">${withContract} of ${active.length} have a contract type on file · ▸ show/hide</span></summary>
-        ${active.length?`<div style="overflow-x:auto;margin-top:8px;"><table><thead><tr><th>Name</th><th>Store</th><th>Start date</th><th>Contract</th></tr></thead><tbody>
-          ${active.slice(0,300).map(e=>`<tr class="clickable ag-emp" data-id="${e.id}"><td><b>${esc(e.full_name)}</b></td><td>${esc(e.worksite||'—')}</td><td style="white-space:nowrap;">${e.hire_date?fmtDate(e.hire_date):'—'}</td><td>${e.contract_type?'<span class="pill di">'+esc(e.contract_type)+'</span>':'<span class="pill awol">none on file</span>'}</td></tr>`).join('')}
+        <details style="margin-top:12px;"><summary style="cursor:pointer;list-style:none;outline:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span class="subhead" style="display:inline;margin:0;">Placements</span> <span class="sh-note">${active.length} active placement${active.length===1?'':'s'} · ▸ show/hide</span></summary>
+        ${active.length?`<div style="overflow-x:auto;margin-top:8px;"><table><thead><tr><th>Name</th><th>Store</th><th>Start date</th></tr></thead><tbody>
+          ${active.slice(0,300).map(e=>`<tr class="clickable ag-emp" data-id="${e.id}"><td><b>${esc(e.full_name)}</b></td><td>${esc(e.worksite||'—')}</td><td style="white-space:nowrap;">${e.hire_date?fmtDate(e.hire_date):'—'}</td></tr>`).join('')}
         </tbody></table></div>`:`<div class="psub" style="margin-top:6px;">No active placements from ${esc(ag)} yet.</div>`}
         </details>
       </div>`;
@@ -14284,8 +14283,51 @@ function defaultOnbTasks(c){
   t.push({task_key:"id_badge",   label:"Issue "+idBadge,              owner_role:"HR"});
   return t.map((x,i)=>Object.assign({sort_order:i+1},x));
 }
+/* ===== SMID renewals — SM department-store IDs. The ID is valid ~1 year; the renewal
+   window opens 45 days before the 12-month expiry (≈ the 11th month from start). anj 2026-08-07. ===== */
+let SMID_RENEWALS=[];
+async function loadSmid(){ try{ const {data}=await sb.from("smid_renewals").select("*"); SMID_RENEWALS=data||[]; }catch(_){ SMID_RENEWALS=[]; } }
+function smidIsSM(e){ return /\bSM\b|dept|department/i.test((e.worksite||"")+" "+(e.position||"")); }
+function smidAddMonths(d,n){ const x=new Date(d); const day=x.getDate(); x.setMonth(x.getMonth()+n); if(x.getDate()<day) x.setDate(0); return x; }
+function smidList(){
+  const today=new Date(); today.setHours(0,0,0,0); const out=[];
+  (EMPLOYEES||[]).filter(e=>(e.status||"Active")==="Active" && e.hire_date && smidIsSM(e)).forEach(e=>{
+    const hire=new Date(e.hire_date+"T00:00:00"); if(isNaN(hire)) return;
+    const mine=(SMID_RENEWALS||[]).filter(r=>String(r.employee_ref)===String(e.id)).sort((a,b)=>new Date(b.valid_until)-new Date(a.valid_until));
+    const validUntil = mine.length ? new Date(mine[0].valid_until+"T00:00:00") : smidAddMonths(hire,12);
+    const days=Math.round((validUntil-today)/86400000);
+    const bucket = days<0 ? "overdue" : (days<=45 ? "due" : "upcoming");
+    out.push({e, validUntil, days, bucket, renewals:mine.length});
+  });
+  out.sort((a,b)=>a.validUntil-b.validUntil);
+  return out;
+}
+async function smidMarkRenewed(empId){
+  const e=(EMPLOYEES||[]).find(x=>String(x.id)===String(empId)); if(!e) return;
+  const iso=d=>d.toISOString().slice(0,10); const today=new Date(); const vu=smidAddMonths(today,12);
+  if(!confirm(`Record ${e.full_name}'s SMID as renewed today?\nNext expiry will be set to ${iso(vu)} (+12 months).`)) return;
+  const {error}=await sb.from("smid_renewals").insert({ employee_ref:String(e.id), employee_name:e.full_name, worksite:e.worksite||null, renewed_on:iso(today), valid_until:iso(vu), created_by:(CURRENT_USER&&CURRENT_USER.email)||null });
+  if(error){ alert(error.message); return; }
+  try{ await logChange("smid", e.id, e.full_name, "SMID renewed", "valid until "+iso(vu)); }catch(_){}
+  await loadSmid(); renderOnboarding();
+}
+window.smidMarkRenewed=smidMarkRenewed;
+function smidPanelHtml(){
+  const list=smidList(); if(!list.length) return "";
+  const overdue=list.filter(x=>x.bucket==="overdue"), due=list.filter(x=>x.bucket==="due"), upcoming=list.filter(x=>x.bucket==="upcoming");
+  const flagged=overdue.concat(due);
+  const chip=(x)=>{ const c = x.bucket==="overdue" ? ["#a4322a","#fdecea",(-x.days)+"d overdue"] : ["#8a5a1c","#fdf6e3",x.days+"d left"]; return `<span class="pill" style="background:${c[1]};color:${c[0]};font-weight:700;">${c[2]}</span>`; };
+  const row=(x)=>`<tr><td><b>${esc(x.e.full_name)}</b> <span class="psub" style="margin:0;">· ${x.renewals?("renewed "+x.renewals+"×"):"first ID"}</span></td><td>${esc(x.e.worksite||"—")}</td><td style="white-space:nowrap;">${fmtDate(x.validUntil.toISOString().slice(0,10))}</td><td>${chip(x)}</td><td style="text-align:right;"><button class="btn ghost" style="padding:4px 10px;font-size:12px;" onclick="smidMarkRenewed('${x.e.id}')">Mark renewed</button></td></tr>`;
+  return `<div class="panel"><details${flagged.length?" open":""}><summary style="cursor:pointer;list-style:none;outline:none;"><span style="font-size:16px;font-weight:800;color:#12352a;">SMID renewals <span class="count-tag">${flagged.length} due</span></span> <span class="psub" style="font-size:12px;">▸ SM department-store IDs · renew in the 11th month (45-day notice)</span></summary>
+    <div style="margin-top:8px;">
+    <div class="psub">SM store IDs are valid ~1 year; the renewal window opens <b>45 days before expiry</b> (about the 11th month from the start date). ${overdue.length?`<b style="color:var(--red);">${overdue.length} lapsed</b> · `:""}${due.length?`<b style="color:#8a5a1c;">${due.length} due soon</b> · `:""}${upcoming.length} upcoming. Click <b>Mark renewed</b> when the ID is reissued — it sets the next expiry +12 months.</div>
+    ${flagged.length?`<table><thead><tr><th>Employee</th><th>Store</th><th>ID expires</th><th>Status</th><th></th></tr></thead><tbody>${flagged.map(row).join("")}</tbody></table>`:`<div class="psub" style="margin-top:6px;">No SMIDs due in the next 45 days ✓</div>`}
+    ${upcoming.length?`<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:12.5px;color:var(--muted);list-style:none;outline:none;">▸ Upcoming (${upcoming.length}) — not due yet</summary><table style="margin-top:6px;"><thead><tr><th>Employee</th><th>Store</th><th>ID expires</th><th>Status</th><th></th></tr></thead><tbody>${upcoming.map(row).join("")}</tbody></table></details>`:""}
+    </div></details></div>`;
+}
 function renderOnboarding(){
   const pg=$("#page-onboarding"); if(!pg) return;
+  if(!window._smidLoaded){ window._smidLoaded=true; loadSmid().then(()=>{ if($("#page-onboarding")) renderOnboarding(); }); }
   const active=ONBOARDING.filter(c=>c.status!=="Complete");
   const done=ONBOARDING.filter(c=>c.status==="Complete").length;
   const pendingTasks=ONBTASKS.filter(t=>t.status!=="Done").length;
@@ -14320,7 +14362,8 @@ function renderOnboarding(){
           <td>${r.c.uniform_size_bottom?`<span class="pill di">${esc(r.c.uniform_size_bottom)}</span>`:'<span class="pill awol">no size</span>'}</td>
           <td>${r.sent?`<span class="pill active">Sent ✓</span>${r.sentAt?` <span class="psub" style="margin:0;">${fmtDate(r.sentAt)}</span>`:''}`:'<span class="pill probation">To send</span>'}</td></tr>`).join("")}
         </tbody></table></div></details></div>`;
-    })()}`;
+    })()}
+    ${smidPanelHtml()}`;
   $("#onbNew").addEventListener("click",pickPrehireForOnboarding);
   const rows=$("#onbRows");
   if(rows){

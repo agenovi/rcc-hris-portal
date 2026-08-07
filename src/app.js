@@ -130,6 +130,8 @@ const MEETING_BANK_EXTRA=new Set(["bsabila@hassarams.com"]);  // Bryan (SC) — 
 function canSeeMeetingBank(){ const r=userRole(); const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return r==="admin"||r==="payroll"||e===IDS_EDITOR||MEETING_BANK_EXTRA.has(e); }
 // Personnel Movement / NPA module = Anj + Grazel(payroll) + Rhel(manager) — the people who prepare/route/approve movements.
 function canSeeMovements(){ const r=userRole(); return r==="admin"||r==="payroll"||r==="manager"; }
+// Evaluations = ONLY the two milestone evaluators (Vina hr2@ = 2.5-mo, Juvy hr@ = 5.5-mo/regularization) + admins. No one else (anj, 2026-08-07). Rhel keeps it via his temporary review-lock while he reviews the module.
+function canSeeEvaluations(){ const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return isAdminUser()||e==="hr@hassarams.com"||e==="hr2@hassarams.com"; }
 // Concerns & Cases (arbitration / legal-labor matters) = Anj/Sanjay (admin) + Juvy (HR Relations, hr@) + Rhel (HR Manager, hr4@) — they handle these. Explicit emails on purpose: Richard (also "manager", IT reviewer) is excluded.
 function canSeeConcerns(){ const e=((CURRENT_USER&&CURRENT_USER.email)||"").toLowerCase(); return isAdminUser()||e==="hr@hassarams.com"||e==="hr4@hassarams.com"; }
 // Org Chart editing = admins + Rhel (HR Manager, hr4@). Reporting lines / dept heads are HRIS-owned org structure (NOT the PayPlus roster), so they're safe to edit here. Everyone else = read-only.
@@ -178,9 +180,12 @@ function accessPagesFor(role,email){
   if(role==="payroll"||role==="manager"||e===IDS_EDITOR||(typeof MEETING_RUNNERS!=="undefined"&&MEETING_RUNNERS.has&&MEETING_RUNNERS.has(e))) base.push("meetings");
   if(role==="payroll"||role==="manager") base.push("movements");
   if(e===IDS_EDITOR||e===IDS_EDITOR_BACKUP) base.push("govremit");
+  // Evaluations = only the two milestone evaluators (Vina hr2@ / Juvy hr@) — strip it from every other role, add it for Vina.
+  if(e!=="hr@hassarams.com"&&e!=="hr2@hassarams.com") base=base.filter(p=>p!=="evaluations");
+  else if(e==="hr2@hassarams.com") base.push("evaluations");
   return [...new Set(base)];
 }
-function pageAllowed(id){ if(isReviewLockedUser()) return REVIEW_PAGES.indexOf(id)!==-1; if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='incidents') return canSeeIncidents(); if(id==='hmo') return canSeeHmo(); if(id==='separations') return canSeeSeparations(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='cosign') return !!CURRENT_USER; if(id==='processes') return isAdminUser(); /* Processes & SOPs locked to admin (anj) — parked while priority modules are worked; removed from HR/Rhel for now */ if(id==='policies'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
+function pageAllowed(id){ if(isReviewLockedUser()) return REVIEW_PAGES.indexOf(id)!==-1; if(id==='parking') return ((CURRENT_USER&&CURRENT_USER.email)||'').toLowerCase()==='anj@hassarams.com'; if(id==='activity') return isAdminUser(); if(id==='demodata') return isAdminUser(); if(id==='concerns') return canSeeConcerns(); if(id==='evaluations') return canSeeEvaluations(); if(id==='incidents') return canSeeIncidents(); if(id==='hmo') return canSeeHmo(); if(id==='separations') return canSeeSeparations(); if(id==='maternity') return canSeePay(); if(id==='meetings') return canRunMeetings(); if(id==='movements') return canSeeMovements(); if(id==='govremit') return canEditIds(); if(id==='cosign') return !!CURRENT_USER; if(id==='processes') return isAdminUser(); /* Processes & SOPs locked to admin (anj) — parked while priority modules are worked; removed from HR/Rhel for now */ if(id==='policies'||id==='desk'||id==='storemap'||id==='orgchart'||id==='positions'||id==='links') return !!CURRENT_USER; const a=allowedPages(); return !a || a.indexOf(id)!==-1; }
 // Policies & Processes = reference library: every logged-in HR VIEWS; only admin/manager create/edit.
 function canEditPolicies(){ const r=userRole(); return r==="admin"||r==="manager"; }
 window.isLimitedUser=isLimitedUser; window.pageAllowed=pageAllowed;
@@ -220,6 +225,7 @@ function applyRoleUI(){
     if(pg==='movements'){ n.style.display=canSeeMovements()?'':'none'; return; } // Movements/NPA = Anj/Grazel/Rhel
     if(pg==='govremit'){ n.style.display=canEditIds()?'':'none'; return; } // Gov't Remittances = gov-ID owners (Anj/Vina/Grazel)
     if(pg==='concerns'){ n.style.display=canSeeConcerns()?'':'none'; return; } // Concerns & Cases = Anj + Juvy (hr@) + Rhel (hr4@) — they handle arbitration/legal
+    if(pg==='evaluations'){ n.style.display=canSeeEvaluations()?'':'none'; return; } // Evaluations = the two milestone evaluators (Vina/Juvy) + admins only
     if(pg==='processes'){ n.style.display=isAdminUser()?'':'none'; return; } // Processes & SOPs = admin (anj) only for now — parked/locked, hidden from HR/Rhel
     if(pg==='policies'||pg==='desk'||pg==='orgchart'||pg==='positions'||pg==='links'||pg==='cosign'){ n.style.display=CURRENT_USER?'':'none'; return; } // Policies, HR Desk, Org Chart, Positions & JD, Links, Documents to Sign = every logged-in HR
     n.style.display=(allow&&allow.indexOf(pg)===-1)?'none':'';
@@ -3542,7 +3548,7 @@ function mvPickEmployee(){
   q.addEventListener("input",paint); paint(); q.focus();
 }
 
-function openMovementForm(e){
+function openMovementForm(e,preset){
   let m=document.getElementById("mvModal"); if(!m){ m=document.createElement("div"); m.id="mvModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:540px;width:100%;padding:22px;max-height:92vh;overflow-y:auto;">
@@ -3555,6 +3561,13 @@ function openMovementForm(e){
     ${fld("mv_eff","Effective date *","","date")}
     <div id="mv_chain" style="margin:2px 0 10px;"></div>
     <div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Remarks / justification</label><textarea id="mv_remarks" rows="2" style="width:100%;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:13.5px;"></textarea></div>
+    <div style="margin-bottom:10px;background:#f7faf8;border:1px solid #e2e7e4;border-radius:9px;padding:10px 12px;">
+      <label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Immediate supervisor — consent (not an approval)</label>
+      <input id="mv_sup_name" placeholder="Supervisor's name" value="${esc(e.supervisor_name||"")}" autocomplete="off" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;margin-top:6px;"><input type="checkbox" id="mv_sup_consent" style="width:16px;height:16px;"> Supervisor is aware of and consents to this action</label>
+      <input id="mv_sup_note" placeholder="Optional note from the supervisor" autocomplete="off" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:12.5px;margin-top:6px;">
+      <div class="psub" style="margin:4px 0 0;">Records that the immediate supervisor is aware — it does <b>not</b> gate the approval chain.</div>
+    </div>
     <div style="margin-bottom:10px;background:#f7faf8;border:1px solid #e2e7e4;border-radius:9px;padding:10px 12px;">
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;"><input type="checkbox" id="mv_notify" style="width:16px;height:16px;"> Notify the employee by email</label>
       <div class="psub" style="margin:4px 0 6px;">Optional — DOLE doesn't require notifying the employee of a salary movement (e.g. a minimum-wage increase). Tick only if you want to send them a copy.</div>
@@ -3679,6 +3692,7 @@ function openMovementForm(e){
       current_daily_rate:nv("mv_dr_c"), new_daily_rate:nv("mv_dr_n"), current_allowance:nv("mv_al_c"), new_allowance:nv("mv_al_n"),
       meal_allowance:nv("mv_ml_c"), new_meal_allowance:nv("mv_ml_n"), new_schedule:v("mv_sch_n")||null,
       effective_date:eff, remarks:remarkParts.join(" · "), status, basis:basis.toLowerCase(), signers,
+      supervisor_name:v("mv_sup_name")||null, supervisor_consent:!!(document.getElementById("mv_sup_consent")&&document.getElementById("mv_sup_consent").checked), supervisor_note:v("mv_sup_note")||null,
       notify_employee:notify, notify_email:notify?notifyEmail:null,
       prepared_by:(CURRENT_USER&&CURRENT_USER.email)||"HR", created_by:(CURRENT_USER&&CURRENT_USER.id)||null };
     const btn=document.getElementById("mvGo"); btn.disabled=true; btn.textContent="Filing…";
@@ -3688,6 +3702,12 @@ function openMovementForm(e){
     m.remove(); await loadEmployees(); window.go("movements");
   });
   paintExtra(); paintBasis();
+  // Pre-set the type/basis when opened from another module (e.g. Evaluations → Regularization NPA).
+  if(preset){
+    const ty=document.getElementById("mv_type"); if(ty&&preset.type){ ty.value=preset.type; paintExtra(); }
+    const ba=document.getElementById("mv_basis"); if(ba&&preset.basis){ ba.value=preset.basis; paintBasis(); }
+    if(preset.remarks){ const rm=document.getElementById("mv_remarks"); if(rm) rm.value=preset.remarks; }
+  }
 }
 window.openMovementForm=openMovementForm;
 
@@ -3913,12 +3933,29 @@ function captureSignatureModal(opts){
 // Sign one step of a discretionary NPA — reuses the canvas draw widget.
 function mvSignStep(r,step){
   if(!step) return;
+  // Signatories see the OLD → NEW figures for the action they're approving, on the sign screen itself.
+  const P=(typeof mvPeso==="function")?mvPeso:(x=>x==null?"—":"₱"+Number(x).toLocaleString());
+  const _hasPay=(r.current_daily_rate!=null||r.new_daily_rate!=null||r.current_allowance!=null||r.new_allowance!=null||r.meal_allowance!=null||r.new_meal_allowance!=null);
+  const _tot=(dr,al,ml)=>((Number(dr)||0)+(Number(al)||0)+(Number(ml)||0));
+  const _prow=(lbl,c,n)=>`<tr><td style="padding:2px 0;color:#6a766f;">${lbl}</td><td style="text-align:right;">${P(c)}</td><td style="text-align:center;color:#9fb0a6;">→</td><td style="text-align:right;font-weight:700;">${P(n)}</td></tr>`;
+  const nonPay=[];
+  if(r.new_position) nonPay.push(["Position",r.current_position||"—",r.new_position]);
+  if(r.new_department) nonPay.push(["Department",r.department||"—",r.new_department]);
+  if(r.new_location) nonPay.push(["Branch / location",r.worksite||r.department||"—",r.new_location]);
+  const payBlock=(_hasPay||nonPay.length)?`<div style="border:1px solid #e2e7e4;border-radius:9px;padding:10px 12px;margin:2px 0 10px;background:#f7faf8;">
+      <div style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">What you're approving — old → new</div>
+      <table style="width:100%;font-size:12.5px;border-collapse:collapse;">
+        ${nonPay.map(x=>`<tr><td style="padding:2px 0;color:#6a766f;">${esc(x[0])}</td><td colspan="3" style="text-align:right;">${esc(x[1])} <span style="color:#9fb0a6;">→</span> <b>${esc(x[2])}</b></td></tr>`).join("")}
+        ${_hasPay?`${_prow("Daily rate",r.current_daily_rate,r.new_daily_rate)}${_prow("Allowance",r.current_allowance,r.new_allowance)}${(r.meal_allowance!=null||r.new_meal_allowance!=null)?_prow("Meal allowance",r.meal_allowance,r.new_meal_allowance):""}<tr style="border-top:1px solid #d6e0d9;"><td style="padding:4px 0;font-weight:700;">Total / day</td><td style="text-align:right;font-weight:700;">${P(_tot(r.current_daily_rate,r.current_allowance,r.meal_allowance))}</td><td style="text-align:center;color:#9fb0a6;">→</td><td style="text-align:right;font-weight:800;color:#1f7a44;">${P(_tot(r.new_daily_rate,r.new_allowance,r.new_meal_allowance))}</td></tr>`:""}
+      </table></div>`:"";
   let m=document.getElementById("mvSignModal"); if(!m){ m=document.createElement("div"); m.id="mvSignModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
   m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
     <div style="font-size:10.5px;font-weight:800;letter-spacing:1.6px;color:#6B7785;">NOTICE OF PERSONNEL ACTION · ${esc(r.npa_id||"")}</div>
     <div style="font-size:18px;font-weight:800;color:#12352a;margin:2px 0 3px;">${esc(step.role)} — sign to advance</div>
     <div class="psub" style="margin-bottom:8px;">${esc(r.employee_name||"")} · ${esc(MV_ACTION_LABEL[r.action_type]||r.action_type||"")} · effective ${r.effective_date?fmtDate(r.effective_date):"—"}. Step ${step.seq} of ${mvChain(r).length}.</div>
+    ${payBlock}
+    ${r.supervisor_name?`<div class="psub" style="margin:-2px 0 8px;">Immediate supervisor: <b>${esc(r.supervisor_name)}</b>${r.supervisor_consent?' · <span style="color:#1f7a44;">consent on record</span>':""}${r.supervisor_note?` — “${esc(r.supervisor_note)}”`:""}</div>`:""}
     <div style="font-size:12px;color:#6B7785;margin-bottom:6px;"><b>Upload your signature image</b> or draw it below. RA 8792 e-signature · timestamped + recorded against your account.</div>
     <canvas id="mvPad" width="480" height="150" style="width:100%;height:150px;border:1px dashed #b9c4cf;border-radius:10px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
     <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
@@ -5099,6 +5136,7 @@ function storeForm(b){
     ${fld("st_name","Store name *",b.name)}
     <div class="form-grid">${fld("st_city","City",b.city)}${fld("st_area","Area",b.area)}</div>
     ${fld("st_sc","Sales Coordinator",b.sc)}
+    ${fld("st_email","Store email (for auto-sending NTEs)",b.email,"email")}
     <div class="form-grid">${sel("st_cat","Type",["CO","CN"],b.category||"CO")}${sel("st_status","Status",["Open","Closed","Under Renovation","No Manning","Pending"],b.status||"Open")}</div>
     <div class="form-grid">${fld("st_ahcs","Approved stationary",b.ahc_stationary??0,"number")}${fld("st_ahcr","Approved reliever",b.ahc_reliever??0,"number")}</div>
     <div class="psub" style="margin:2px 0 6px;">CO = Boutique · CN = Concession. Approved headcount = how many this store should have.</div>
@@ -5113,7 +5151,7 @@ function storeForm(b){
   document.getElementById("stCancel").addEventListener("click",()=>m.remove());
   document.getElementById("stSave").addEventListener("click",async()=>{
     const name=v("st_name"); if(!name){ document.getElementById("stMsg").textContent="Store name is required."; return; }
-    const payload={ name, city:v("st_city"), area:v("st_area"), sc:v("st_sc"), category:v("st_cat"), status:v("st_status"),
+    const payload={ name, city:v("st_city"), area:v("st_area"), sc:v("st_sc"), email:v("st_email")||null, category:v("st_cat"), status:v("st_status"),
       ahc_stationary:nv("st_ahcs")||0, ahc_reliever:nv("st_ahcr")||0, is_demo:demoChecked("st_isdemo") };
     if(!admin){
       const reason=v("st_reason");
@@ -5123,6 +5161,7 @@ function storeForm(b){
       else {
         if((b.name||"")!==name) reqs.push({ change_type:"rename", old_value:b.name||"", new_value:name });
         if((b.sc||"")!==(payload.sc||"")) reqs.push({ change_type:"sc", old_value:b.sc||"", new_value:payload.sc||"" });
+        if((b.email||"")!==(payload.email||"")) reqs.push({ change_type:"email", old_value:b.email||"", new_value:payload.email||"" });
         if((b.status||"")!==(payload.status||"")) reqs.push({ change_type:"status", old_value:b.status||"", new_value:payload.status });
         if((b.ahc_stationary||0)!=payload.ahc_stationary) reqs.push({ change_type:"ahc_stationary", old_value:String(b.ahc_stationary||0), new_value:String(payload.ahc_stationary) });
         if((b.ahc_reliever||0)!=payload.ahc_reliever) reqs.push({ change_type:"ahc_reliever", old_value:String(b.ahc_reliever||0), new_value:String(payload.ahc_reliever) });
@@ -6533,10 +6572,12 @@ function openIncident(i){
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h2 style="margin:0;">Incident</h2>${incStatusPill(i.status)}</div>
         <div class="egrid" style="margin-top:8px;">
           ${kv("Person involved",esc(i.person_name||"—")+(i.person_position?` · ${esc(i.person_position)}`:"")+(rc>1?` <span class="pill" style="background:#fde8e8;color:#a12;font-weight:700;font-size:10px;">repeat · ${rc}×</span>`:""))}
-          ${kv("Start date",emp&&emp.hire_date?fmtDate(emp.hire_date):'<span class="note">— not matched on roster</span>')}
+          ${kv("Date of hire",(i.date_hire||(emp&&emp.hire_date))?fmtDate(i.date_hire||emp.hire_date):'<span class="note">—</span>')}
           ${kv("Branch / office",esc(i.branch||"—")+(i.office_type?` · ${esc(i.office_type)}`:""))}
+          ${kv("SC involved",esc(i.sc_involved||"—"))}
           ${kv("Reported by",esc(i.reporter_name||"—")+(i.reporter_position?` · ${esc(i.reporter_position)}`:""))}
-          ${kv("Channel",esc(i.channel||"—"))}
+          ${kv("Channel",esc(i.channel||"—")+(i.channel_email?` · ${esc(i.channel_email)}`:""))}
+          ${i.contact_info?kv("Contact info",esc(i.contact_info)):""}
           ${kv("Date of incident",esc(i.date_incident||"—"))}
           ${kv("Date received by HR",i.date_received?fmtDate(i.date_received):"—")}
           ${kv("NTE issued",incNteYes(i)?"Yes"+(i.nte_date&&i.nte_date!=="-"?` · ${esc(i.nte_date)}`:""):"No")}
@@ -6560,6 +6601,7 @@ function openIncident(i){
       <div class="psub" style="margin-top:2px;">${i.updated_at?"Updated "+fmtDate(i.updated_at):(i.created_at?"Created "+fmtDate(i.created_at):"")}${i.created_by?" · "+esc(i.created_by):""}</div>
       <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
         <button class="btn" id="inEdit">Edit</button>
+        <button class="btn ghost" id="inNteStore">✉ Email NTE to store</button>
         <button class="btn ghost" id="inDel" style="color:#a12;border-color:#e9b9b9;">Delete</button>
         <button class="btn ghost" id="inCloseBtn" style="margin-left:auto;">Close</button>
       </div>
@@ -6568,8 +6610,26 @@ function openIncident(i){
   document.getElementById("inCloseBtn").onclick=()=>m.remove();
   document.getElementById("inEdit").onclick=()=>{ m.remove(); openIncidentForm(i); };
   document.getElementById("inDel").onclick=()=>deleteIncident(i);
+  document.getElementById("inNteStore").onclick=()=>incEmailStoreNte(i);
 }
 window.openIncident=openIncident;
+
+// Email the store the notice-to-explain for this incident. Uses the store's email
+// (branches.email) via the mail client — works today without the Resend domain.
+function incEmailStoreNte(i){
+  const b=(BRANCHES||[]).find(x=>x.name&&i.branch&&x.name.toLowerCase()===String(i.branch).toLowerCase());
+  const to=(b&&b.email)||"";
+  if(!to){ alert(`No email on file for “${i.branch||"this store"}”.\n\nAdd it on the store record (Manning → open the store → Edit → Store email), then try again.`); return; }
+  const subj=`Notice to Explain — ${i.incident_type||"Incident"}${i.incident_no?" ("+i.incident_no+")":""} — ${i.person_name||""}`;
+  const body=`To: ${i.branch||""}\n\nPlease be informed of the following incident requiring a written explanation:\n\n`+
+    `• Person involved: ${i.person_name||"—"}${i.person_position?" ("+i.person_position+")":""}\n`+
+    `• Type: ${i.incident_type||"—"}\n`+
+    `• Date of incident: ${i.date_incident||"—"}\n`+
+    `• Details: ${i.remarks||"—"}\n\n`+
+    `Kindly submit a written explanation within 48 hours of receipt.\n\nHuman Resources\nRoshan Commercial Corporation`;
+  window.open(`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`,"_blank");
+}
+window.incEmailStoreNte=incEmailStoreNte;
 
 function openIncidentForm(i){
   const isNew=!i; i=i||{};
@@ -6591,6 +6651,10 @@ function openIncidentForm(i){
       ${fld("Date of incident",inp("infIncDate",i.date_incident,"e.g. 07/17/2026"))}
       ${fld("Channel",sel("infChannel",INCIDENT_CHANNELS,i.channel,true))}
     </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div id="infChEmailWrap" style="display:${(i.channel||"").toUpperCase()==="EMAIL"?"block":"none"};margin-bottom:10px;"><div style="font-size:11.5px;font-weight:700;color:#4a5560;margin-bottom:3px;">Email address (source)</div>${inp("infChannelEmail",i.channel_email,"who emailed it in","email")}</div>
+      ${fld("Contact info",inp("infContact",i.contact_info,"phone / email of the source"))}
+    </div>
     <div style="border-top:1px solid #eef1f0;margin:6px 0 10px;"></div>
     ${fld("Person involved",`<input id="infPerson" list="infEmpList" value="${i.person_name?esc(i.person_name):""}" placeholder="Search employee…" style="width:100%;padding:8px 10px;border:1px solid #cdd6cf;border-radius:8px;font-size:13.5px;"><datalist id="infEmpList">${empList.map(n=>`<option value="${esc(n)}"></option>`).join("")}</datalist>`)}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -6598,6 +6662,10 @@ function openIncidentForm(i){
       ${fld("Office type",sel("infOffice",INCIDENT_OFFICE_TYPES,i.office_type,true))}
     </div>
     ${fld("Branch",inp("infBranch",i.branch,"e.g. SPYDER URDANETA"))}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      ${fld("Date of hire",inp("infHire",i.date_hire,"","date"))}
+      ${fld("Sales coordinator (SC) involved",inp("infSc",i.sc_involved,"SC for this store"))}
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       ${fld("Reported by",inp("infReporter",i.reporter_name,"reporter name"))}
       ${fld("Reporter position",inp("infReporterPos",i.reporter_position,""))}
@@ -6625,6 +6693,22 @@ function openIncidentForm(i){
   </div>`;
   m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
   document.getElementById("infCancel").onclick=()=>m.remove();
+  // Channel = EMAIL → reveal the email-address field
+  (()=>{ const ch=document.getElementById("infChannel"), wrap=document.getElementById("infChEmailWrap");
+    if(ch&&wrap) ch.addEventListener("change",()=>{ wrap.style.display=(ch.value||"").toUpperCase()==="EMAIL"?"block":"none"; }); })();
+  // Pick a person → auto-fill hire date, branch and the store's SC
+  const scForBranch=(bn)=>{ const b=(BRANCHES||[]).find(x=>x.name&&bn&&x.name.toLowerCase()===String(bn).toLowerCase()); return (b&&b.sc)||""; };
+  (()=>{ const pn=document.getElementById("infPerson"); if(!pn) return;
+    pn.addEventListener("change",()=>{
+      const emp=(EMPLOYEES||[]).find(e=>e.full_name===pn.value); if(!emp) return;
+      const h=document.getElementById("infHire"); if(h&&!h.value&&emp.hire_date) h.value=emp.hire_date;
+      const b=document.getElementById("infBranch"); if(b&&!b.value&&emp.worksite) b.value=emp.worksite;
+      const pos=document.getElementById("infPersonPos"); if(pos&&!pos.value&&(emp.position||emp.department)) pos.value=emp.position||emp.department;
+      const sc=document.getElementById("infSc"); const scn=scForBranch((b&&b.value)||emp.worksite); if(sc&&!sc.value&&scn) sc.value=scn;
+    });
+  })();
+  (()=>{ const b=document.getElementById("infBranch"); if(!b) return;
+    b.addEventListener("change",()=>{ const sc=document.getElementById("infSc"); const scn=scForBranch(b.value); if(sc&&!sc.value&&scn) sc.value=scn; }); })();
   let inAttach = Array.isArray(i.attachments)?i.attachments.slice():[];
   const key = i.id || ("new-"+Math.random().toString(36).slice(2,9));
   const renderAttach=()=>{ const w=document.getElementById("infFileList"); if(!w) return;
@@ -6669,11 +6753,22 @@ async function saveIncident(i,isNew,attachments){
   const msg=document.getElementById("infMsg");
   const person=val("infPerson"), no=val("infNo");
   if(!person && !no){ if(msg) msg.textContent="Enter at least an incident no. or the person involved."; return; }
+  // Can't mark DONE / CLOSE until the full record is complete
+  const status=(val("infStatus")||"PENDING").toUpperCase();
+  if(status==="DONE"||status==="CLOSE"){
+    const need=[["infRemarks","occurrence / details"],["infAction","action taken"],["infIncDate","date of incident"],["infResolved","date resolved"],["infIncharge","person in charge"],["infPerson","person involved"]];
+    const missing=need.filter(([id])=>!val(id)).map(([,l])=>l);
+    if(missing.length){ if(msg){ msg.style.color="#a12"; msg.textContent=`Can't set “${status}” yet — fill: ${missing.join(", ")}.`; } return; }
+  }
   const matched=(EMPLOYEES||[]).find(e=>e.full_name===person);
   const payload={
     incident_no:no||null,
     date_received:val("infReceived")||null,
     date_incident:val("infIncDate")||null,
+    date_hire:val("infHire")||null,
+    sc_involved:val("infSc")||null,
+    contact_info:val("infContact")||null,
+    channel_email:val("infChannelEmail")||null,
     month_year: val("infReceived") ? (function(){ try{ const d=new Date(val("infReceived")); return d.toLocaleString("en-US",{month:"short"})+"-"+d.getFullYear(); }catch(_){ return null; } })() : (i.month_year||null),
     channel:val("infChannel")||null,
     reporter_name:val("infReporter")||null,
@@ -7971,7 +8066,7 @@ function openingKindPill(k){ const m={Lead:'<span class="pill" style="background
 // Sum needed positions grouped by kind across a list of openings.
 function openingKindTotals(list){ const t={Lead:0,Reliever:0,Stationary:0}; (list||[]).forEach(o=>{ if(o.stationary_need!=null||o.reliever_need!=null){ t.Stationary+=Number(o.stationary_need)||0; t.Reliever+=Number(o.reliever_need)||0; } else { t[openingKind(o)]+=(Number(o.count_needed)||0); } }); return t; }
 function canConfirmPerson(){ const r=userRole(); return r==="admin"||r==="payroll"; }
-function scChangeLabel(t){ return ({ahc_stationary:"Approved stationary",ahc_reliever:"Approved reliever",status:"Status",sc:"Sales Coordinator",rename:"Rename",close:"Close store",new:"New store",note:"Note / flag",remove_person:"Remove person",add_person:"Add missing person"})[t]||t; }
+function scChangeLabel(t){ return ({ahc_stationary:"Approved stationary",ahc_reliever:"Approved reliever",status:"Status",sc:"Sales Coordinator",email:"Store email",rename:"Rename",close:"Close store",new:"New store",note:"Note / flag",remove_person:"Remove person",add_person:"Add missing person"})[t]||t; }
 async function manningStoreConfirm(store){
   const {error}=await sb.from("manning_store_confirm").upsert({ store, confirmed_by:myEmail(), confirmed_at:new Date().toISOString() }, { onConflict:"store" });
   if(error){ alert(error.message); return; }
@@ -8125,6 +8220,7 @@ async function approveStoreChange(id){
     else if(t==='ahc_reliever') upd.ahc_reliever=Number(c.new_value)||0;
     else if(t==='status') upd.status=c.new_value;
     else if(t==='sc') upd.sc=c.new_value;
+    else if(t==='email') upd.email=c.new_value||null;
     else if(t==='rename') upd.name=c.new_value;
     else if(t==='close') upd.status='Closed';
     if(Object.keys(upd).length){ const {error}=await sb.from("branches").update(upd).eq("id",br.id); if(error){ alert(error.message); return; } }
@@ -8911,6 +9007,12 @@ function openEvalForm(empId,type,due){
         </div>
         <div class="psub" id="ev_notice_msg" style="margin-top:6px;"></div>
       </div>
+      ${(type==='5th-month'||type==='regularization')?`<div class="panel" id="ev_reg_panel">
+        <h2>Regularization decision <span class="count-tag">→ NPA</span></h2>
+        <div class="psub" style="margin:-4px 0 8px;">If ${esc((e.full_name||"this employee").split(",").slice(-1)[0].trim())} is recommended for regularization, create the NPA here — it routes for signatures (Grazel → Management) and stamps the effective date. Decide on or before the 6-month probation ends.</div>
+        <button type="button" class="btn" id="ev_reg_npa">✔ Recommend &amp; create Regularization NPA →</button>
+        <div class="psub" style="margin-top:6px;color:#8a5a1c;">RCC policy: do not regularize at the 3rd month (except a Christmas early-window of 15 days–1 month). Next review falls 6 months after regularization.</div>
+      </div>`:""}
       <div class="panel" style="background:#0f1f33;color:#fff;"><h2 style="color:#fff;">Scorecard</h2><div id="ev_score"></div></div>
       <div id="evMsg" style="font-size:13px;color:#a4322a;margin:8px 0;"></div>
       <div style="display:flex;gap:10px;"><button class="btn" id="evSave">Save evaluation</button><button class="btn ghost" id="evClose" style="margin-left:auto;">Close</button></div>
@@ -8959,10 +9061,16 @@ function openEvalForm(empId,type,due){
   state._notice=()=>({ probNotice, probNote:evVal("ev_pn_note"), areas:evVal("ev_notice_areas"), commit:evVal("ev_notice_commit"), review:(document.getElementById("ev_notice_review")||{}).value||"", recipients:evRecipients() });
   document.getElementById("ev_notice_dl")&&document.getElementById("ev_notice_dl").addEventListener("click",()=>evPrintNotice(e,type,state,state._notice()));
   document.getElementById("ev_notice_email")&&document.getElementById("ev_notice_email").addEventListener("click",()=>evEmailNotice(e,type,state,state._notice()));
+  // Regularization → NPA hand-off (5th-month / regularization eval): opens the NPA form pre-set to Regularization → routes for signatures.
+  document.getElementById("ev_reg_npa")&&document.getElementById("ev_reg_npa").addEventListener("click",()=>{
+    m.remove();
+    if(typeof openMovementForm==="function") openMovementForm(e,{type:"Regularization",basis:"Discretionary",remarks:"Regularization following "+(EVAL_LABEL[type]||"evaluation")});
+    else alert("Open the NPA / Personnel Actions page to file the regularization.");
+  });
   (async()=>{
     const box=document.getElementById("ev_att"); if(!box) return;
     if(!e.employee_id){ box.innerHTML=`<div class="psub">No PayPlus ID linked — attendance can't be pulled automatically. Verify manually.</div>`; return; }
-    const periodMonths=({ "3rd-month":3,"5th-month":6,"regularization":6,"annual":12 })[type]||3; // pull the same window the review covers
+    const periodMonths=({ "3rd-month":3,"5th-month":5,"regularization":6,"annual":12 })[type]||3; // pull the same window the review covers
     const now=new Date(); let ey=now.getFullYear(), em=now.getMonth(); if(em===0){ em=12; ey--; }
     let sy=ey, sm=em-(periodMonths-1); while(sm<1){ sm+=12; sy--; }
     try{
@@ -11642,13 +11750,13 @@ function openOnboardingCase(id){
         <div class="kpi"><div class="k-l">Deployment</div><div class="k-n" style="font-size:18px;">${c.deployment_date?fmtDate(c.deployment_date):"—"}</div></div>
       </div>
       ${!c.assigned_employee_id?`<button class="btn" id="onbAssignId" style="margin-top:12px;">Enter PayPlus Employee ID →</button>`:""}
-      <div class="panel" style="margin-top:14px;"><h2>Uniform</h2>
+      ${(c.group_name==="Head Office"||c.group_name==="Warehouse")?"":`<div class="panel" style="margin-top:14px;"><h2>Uniform</h2>
         <div class="psub">Top &amp; bottom sizes drive the send-out list. Mark the "Issue uniform" task done once it's sent.</div>
         <div style="display:flex;gap:12px;">
           <div style="flex:1;">${sel("onb_usize_top","Top size",["","XS","S","M","L","XL","2XL","3XL"],(c.uniform_size_top||c.uniform_size)||"")}</div>
           <div style="flex:1;">${sel("onb_usize_bot","Bottom size",["","XS","S","M","L","XL","2XL","3XL","26","28","30","32","34","36","38","40","42","44","46"],c.uniform_size_bottom||"")}</div>
         </div>
-      </div>
+      </div>`}
       ${issuedItemsPanel(c)}
       <div class="panel" style="margin-top:14px;"><h2>Onboarding checklist</h2>
         <div class="psub">Grouped by <b>when it's due</b> relative to the start date. Tap a task to mark it done. Bank &amp; ID set by group; iTime shows only for SM department-store hires; government registration stays early (legal deadlines).</div>

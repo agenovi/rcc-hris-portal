@@ -126,7 +126,7 @@ function waitBlock(x){
   if(w==="rcc") return `<div style="background:var(--amber-bg);border:1px solid #eadfbe;border-radius:9px;padding:9px 11px;margin-top:10px;font-size:12.5px;color:#7a5c10;">
       <b>⏳ Waiting on RCC.</b>${x.waiting_note?` ${esc(x.waiting_note)}`:""}
       <div style="margin-top:8px;"><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;" onclick='setWaiting(${JSON.stringify(x.id)},"")'>Clear</button></div></div>`;
-  return `<div style="margin-top:10px;"><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;" onclick='raiseWaiting(${JSON.stringify(x.id)})'>⚑ Flag: we're waiting on RCC</button></div>`;
+  return `<div style="margin-top:10px;"><button class="btn ghost" style="width:auto;padding:5px 11px;font-size:11.5px;color:var(--muted);" onclick='raiseWaiting(${JSON.stringify(x.id)})'>⚑ Waiting on RCC? Tap to flag</button></div>`;
 }
 function commentBlock(x){
   const cs=Array.isArray(x.review_comments)?x.review_comments:[];
@@ -184,6 +184,7 @@ function renderDash(b){
 
   // --- In process, grouped by region (collapsible) ---
   html+=`<div class="grp">Where your candidates are</div>`;
+  if(inProc.length){ html+=`<div style="font-size:11.5px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:9px;padding:8px 11px;margin-bottom:8px;">The numbered steps show <b>progress in the pipeline</b>. A <b style="color:#c0392b;">🚩 red flag</b> means <b>RCC needs something from you</b> — please action it. An <b style="color:#8a6a14;">⏳ amber flag</b> means <b>you've told RCC you're waiting</b> on them. Tap “Waiting on RCC? Tap to flag” on any candidate to raise one.</div>`; }
   if(!inProc.length){ html+=`<div class="empty">No candidates in process right now. Open a position and add a candidate — you'll see their progress here.</div>`; }
   else {
     const byReg={}; inProc.forEach(x=>{ const r=regionOf(x.area); (byReg[r]=byReg[r]||[]).push(x); });
@@ -226,9 +227,9 @@ async function load(){
     if(d.error){ document.getElementById("body").innerHTML=`<div class="empty">${esc(d.error)}</div>`; document.getElementById("who").textContent="No access"; return; }
     DATA=d;
     const slots=(d.openings||[]).reduce((s,o)=>s+(Number(o.open_slots)||0),0);
-    const myActive=(d.my_submissions||[]).filter(x=>!["DRAFT","HIRED","REJECTED"].includes(x.status)).length;
+    const myActive=(d.my_submissions||[]).filter(x=>!["DRAFT","HIRED","REJECTED","POOLED"].includes(x.status)).length;
     const at=document.getElementById("agTitle"); if(at) at.innerHTML=`${esc(d.agency||"Agency")} <span style="font-weight:500;opacity:.8;">— Agency Dashboard</span>`;
-    document.getElementById("who").textContent=`${d.openings.length} stores · ${slots} open positions · ${d.total_active||0} candidates in process · ${myActive} from ${d.agency}`;
+    document.getElementById("who").textContent=`${d.openings.length} stores hiring · ${slots} open positions · ${myActive} of your candidates in process`;
     const to=document.getElementById("tabOpen"); if(to) to.textContent=`Open positions (${slots})`;
     const tm=document.getElementById("tabMine"); if(tm) tm.textContent=`My candidates (${(d.my_submissions||[]).filter(x=>!x.hidden).length})`;
     render();

@@ -9756,6 +9756,7 @@ function renderMeetings(){
     await sb.from("meeting_attendance").update({status, verified_by:(CURRENT_USER&&CURRENT_USER.email)||null}).eq("id",id);
     const row=MEETINGS.find(x=>String(x.id)===String(id)); if(row) row.status=status;
   }));
+  evalCollapsible(pg);   // every panel on the meeting page folds from its heading
 }
 function meetingOpenDialog(){
   const a=meetingActive();

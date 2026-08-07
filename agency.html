@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>RCC Merchandiser Openings</title>
+<title>RCC Agency Dashboard</title>
 <style>
   :root{--navy:#1E3A5F;--navy-d:#142a45;--ink:#1F2A37;--muted:#6B7785;--line:#E3E8EF;--bg:#F4F6F8;--gold:#c8a86a;
     --green:#1c6b3f;--green-bg:#e8f2eb;--amber:#8a6a14;--amber-bg:#fdf6e3;}
@@ -46,7 +46,7 @@
 <body>
   <div class="top" style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;">
     <div style="min-width:0;">
-      <h1 id="agTitle" style="margin:0;line-height:1.1;">Merchandiser Openings</h1>
+      <h1 id="agTitle" style="margin:0;line-height:1.1;">Agency Dashboard</h1>
       <div class="s" id="who">Loading…</div>
     </div>
     <div style="text-align:right;flex-shrink:0;font-size:12px;opacity:.85;line-height:1.3;white-space:nowrap;">recruiting for<br><b style="font-size:14px;">RCC</b><div style="font-size:10px;opacity:.8;">Roshan Commercial Corp.</div></div>
@@ -96,17 +96,42 @@ function stepper(status){
 function dashTile(n,label,col){ return `<div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;">
   <div style="font-size:26px;font-weight:800;color:${col};line-height:1;">${n}</div>
   <div style="font-size:12px;color:var(--muted);font-weight:700;margin-top:4px;">${label}</div></div>`; }
+// Region grouping — same buckets as Open positions (Luzon = GMA/NL/SL).
+function regionOf(a){ if(!a) return "Other"; if(["GMA","NL","SL","Luzon"].includes(a)) return "Luzon"; if(["VIS","Visayas"].includes(a)) return "Visayas"; if(["MIN","Mindanao"].includes(a)) return "Mindanao"; return "Other"; }
+const REGION_ORDER=["Luzon","Visayas","Mindanao","Other"];
+function monthKey(x){ const s=x.hire_date||x.submitted; if(!s) return "0000-00"; const d=new Date(s); if(isNaN(d)) return "0000-00"; return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function monthLabel(mk){ const p=mk.split("-"); const d=new Date(Number(p[0]),Number(p[1])-1,1); return isNaN(d)?mk:d.toLocaleDateString(undefined,{month:"long",year:"numeric"}); }
+// Who's the ball with? Toggle from the agency side.
+function setWaiting(id,waiting,note){
+  fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,action:"waiting",id,waiting,note:note||""})})
+    .then(r=>r.json()).then(d=>{ if(!d.ok){ alert(d.error||"Couldn't update."); return; } load(); })
+    .catch(()=>alert("Couldn't update. Please try again."));
+}
+function raiseWaiting(id){ const note=prompt("What are you waiting on RCC for? (optional — e.g. interview schedule, decision)"); if(note===null) return; setWaiting(id,"rcc",note||""); }
+function waitBlock(x){
+  const w=x.waiting_on;
+  if(w==="agency") return `<div style="background:#fdecea;border:1px solid #f1c3bd;border-radius:9px;padding:9px 11px;margin-top:10px;font-size:12.5px;color:#a4322a;">
+      <b>⚠ RCC is waiting on you.</b>${x.waiting_note?` ${esc(x.waiting_note)}`:" Please action this candidate."}
+      <div style="margin-top:8px;"><button class="btn" style="width:auto;padding:6px 12px;font-size:12px;" onclick='setWaiting(${JSON.stringify(x.id)},"rcc")'>✓ Done — back to RCC</button></div></div>`;
+  if(w==="rcc") return `<div style="background:var(--amber-bg);border:1px solid #eadfbe;border-radius:9px;padding:9px 11px;margin-top:10px;font-size:12.5px;color:#7a5c10;">
+      <b>⏳ Waiting on RCC.</b>${x.waiting_note?` ${esc(x.waiting_note)}`:""}
+      <div style="margin-top:8px;"><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;" onclick='setWaiting(${JSON.stringify(x.id)},"")'>Clear</button></div></div>`;
+  return `<div style="margin-top:10px;"><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;" onclick='raiseWaiting(${JSON.stringify(x.id)})'>⚑ Flag: we're waiting on RCC</button></div>`;
+}
 function candCard(x){
   const dt=x.submitted?new Date(x.submitted).toLocaleDateString(undefined,{month:"short",day:"numeric"}):"";
-  return `<div class="card" style="flex-direction:column;align-items:stretch;gap:0;">
+  return `<div class="card" style="flex-direction:column;align-items:stretch;gap:0;${x.waiting_on==="agency"?"border-color:#e6a6a0;background:#fff7f6;":""}">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;">
       <div style="min-width:0;"><span class="nm">${esc(x.name)}</span> <span class="loc">${x.store?"· "+esc(x.store):""}${x.position?" · "+esc(x.position):""}</span></div>
       <span class="chip open">${esc(stageLabel(x.status))}</span>
     </div>
     ${stepper(x.status)}
     ${dt?`<div class="dates" style="margin-top:8px;">Submitted ${dt}</div>`:""}
+    ${waitBlock(x)}
   </div>`;
 }
+function grpBar(t,extra){ return `<div style="font-weight:800;color:#12352a;font-size:13.5px;">${t}${extra?` <span style="font-weight:600;color:var(--muted);font-size:12px;">${extra}</span>`:""}</div>`; }
+function sectionDetails(title,extra,inner,open){ return `<details ${open?"open":""} style="margin:12px 0 4px;"><summary style="cursor:pointer;list-style:none;outline:none;padding:6px 0;">${grpBar(title,extra)}</summary>${inner}</details>`; }
 function renderDash(b){
   const all=(DATA.my_submissions||[]).filter(x=>!x.hidden);
   const inProc=all.filter(x=>!["DRAFT","HIRED","REJECTED","POOLED"].includes(x.status));
@@ -114,21 +139,55 @@ function renderDash(b){
   const hired=all.filter(x=>x.status==="HIRED");
   const drafts=all.filter(x=>x.status==="DRAFT");
   const rejected=all.filter(x=>x.status==="REJECTED");
-  let html=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:16px;">`
+  const waitThem=inProc.filter(x=>x.waiting_on==="agency").length; // RCC waiting on the agency
+  const hiredActive=hired.filter(x=>x.still_active!==false).length;
+  const retention=hired.length?Math.round(hiredActive/hired.length*100):0;
+
+  let html=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:14px;">`
     +dashTile(inProc.length,"In process","#1c6b3f")
-    +dashTile(hired.length,"Hired","#2c6e8f")
+    +dashTile(waitThem,"RCC waiting on you",waitThem?"#c0392b":"#6B7785")
+    +dashTile(hired.length?retention+"%":"—","Retention (active hires)","#2c6e8f")
     +dashTile(drafts.length,"Drafts to send",drafts.length?"#8a6a14":"#6B7785")
-    +dashTile(rejected.length,"Not selected","#6B7785")
     +`</div>`;
-  if(drafts.length){ html+=`<div style="background:var(--amber-bg);border:1px solid #eadfbe;border-radius:11px;padding:11px 14px;margin-bottom:14px;font-size:13px;color:#7a5c10;">
+
+  if(waitThem){ html+=`<div style="background:#fdecea;border:1px solid #f1c3bd;border-radius:11px;padding:11px 14px;margin-bottom:12px;font-size:13px;color:#a4322a;">
+      <b>⚠ RCC is waiting on you for ${waitThem} candidate${waitThem>1?"s":""}.</b> Look for the red flags below and action them.</div>`; }
+  if(drafts.length){ html+=`<div style="background:var(--amber-bg);border:1px solid #eadfbe;border-radius:11px;padding:11px 14px;margin-bottom:12px;font-size:13px;color:#7a5c10;">
       You have <b>${drafts.length} draft${drafts.length>1?"s":""}</b> not yet sent to RCC. Open <b>My candidates</b> to review and <b>Submit to RCC</b>.</div>`; }
+
+  // --- In process, grouped by region (collapsible) ---
   html+=`<div class="grp">Where your candidates are</div>`;
   if(!inProc.length){ html+=`<div class="empty">No candidates in process right now. Open a position and add a candidate — you'll see their progress here.</div>`; }
-  else html+=inProc.map(candCard).join("");
-  if(pooled.length){ html+=`<div class="grp">Kept for future openings</div>`
-    +pooled.map(x=>`<div class="card"><div style="flex:1;"><span class="nm">${esc(x.name)}</span> <span class="loc">${x.store?"· "+esc(x.store):""}</span></div><span class="chip" style="background:#eef0f5;color:#5a6472;">Talent pool</span></div>`).join(""); }
-  if(hired.length){ html+=`<div class="grp">Hired this period (${hired.length})</div>`
-    +hired.map(x=>`<div class="card"><div style="flex:1;"><span class="nm">${esc(x.name)}</span> <span class="loc">${x.store?"· "+esc(x.store):""}</span></div><span class="chip hir">${x.still_active===false?"Left — please remove":"Hired ✓"}</span></div>`).join(""); }
+  else {
+    const byReg={}; inProc.forEach(x=>{ const r=regionOf(x.area); (byReg[r]=byReg[r]||[]).push(x); });
+    REGION_ORDER.filter(r=>byReg[r]).forEach(r=>{
+      const list=byReg[r]; const wt=list.filter(x=>x.waiting_on==="agency").length;
+      html+=sectionDetails(esc(r),`· ${list.length}${wt?` · <span style="color:#c0392b;">⚠ ${wt} need you</span>`:""}`, list.map(candCard).join(""), true);
+    });
+  }
+
+  // --- Hired, by month, with retention (collapsible) ---
+  if(hired.length){
+    html+=`<div class="grp">Hired · retention ${retention}% (${hiredActive} of ${hired.length} still active)</div>`;
+    const byMonth={}; hired.forEach(x=>{ const k=monthKey(x); (byMonth[k]=byMonth[k]||[]).push(x); });
+    Object.keys(byMonth).sort((a,z)=>z.localeCompare(a)).forEach(mk=>{
+      const list=byMonth[mk]; const act=list.filter(x=>x.still_active!==false).length;
+      const rows=list.map(x=>{ const active=x.still_active!==false;
+        const hd=x.hire_date?new Date(x.hire_date).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}):"";
+        return `<div class="card"><div style="flex:1;min-width:0;"><span class="nm">${esc(x.name)}</span> <span class="loc">${x.store?"· "+esc(x.store):""}${hd?" · hired "+hd:""}</span></div>
+          <span class="chip" style="${active?"background:var(--green-bg);color:var(--green);":"background:#fdeaea;color:#a4322a;"}">${active?"Active ✓":"No longer active"}</span></div>`; }).join("");
+      html+=sectionDetails(esc(monthLabel(mk)),`· ${list.length} hired · ${act} active`, rows, false);
+    });
+  }
+
+  // --- Kept for future openings (collapsible) ---
+  if(pooled.length){ html+=sectionDetails("Kept for future openings",`· ${pooled.length}`,
+     pooled.map(x=>`<div class="card"><div style="flex:1;"><span class="nm">${esc(x.name)}</span> <span class="loc">${x.store?"· "+esc(x.store):""}</span></div><span class="chip" style="background:#eef0f5;color:#5a6472;">Talent pool</span></div>`).join(""), false); }
+
+  // --- Not selected (collapsible) ---
+  if(rejected.length){ html+=sectionDetails("Not selected",`· ${rejected.length}`,
+     rejected.map(x=>`<div class="card"><div style="flex:1;min-width:0;"><span class="nm">${esc(x.name)}</span> <span class="loc">${x.store?"· "+esc(x.store):""}</span>${x.reason?`<div class="rsn">${esc(x.reason)}</div>`:""}</div><span class="chip" style="background:#f3f3f3;color:#777;">Not selected</span></div>`).join(""), false); }
+
   b.innerHTML=html;
 }
 
@@ -141,7 +200,7 @@ async function load(){
     DATA=d;
     const slots=(d.openings||[]).reduce((s,o)=>s+(Number(o.open_slots)||0),0);
     const myActive=(d.my_submissions||[]).filter(x=>!["DRAFT","HIRED","REJECTED"].includes(x.status)).length;
-    const at=document.getElementById("agTitle"); if(at) at.innerHTML=`${esc(d.agency||"Agency")} <span style="font-weight:500;opacity:.8;">— Merchandiser Openings</span>`;
+    const at=document.getElementById("agTitle"); if(at) at.innerHTML=`${esc(d.agency||"Agency")} <span style="font-weight:500;opacity:.8;">— Agency Dashboard</span>`;
     document.getElementById("who").textContent=`${d.openings.length} stores · ${slots} open positions · ${d.total_active||0} candidates in process · ${myActive} from ${d.agency}`;
     const to=document.getElementById("tabOpen"); if(to) to.textContent=`Open positions (${slots})`;
     const tm=document.getElementById("tabMine"); if(tm) tm.textContent=`My candidates (${(d.my_submissions||[]).filter(x=>!x.hidden).length})`;

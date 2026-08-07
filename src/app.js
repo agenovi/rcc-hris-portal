@@ -2848,7 +2848,7 @@ function renderEmployeesPage(){
     </div>
     <input id="empSearch" class="search" style="width:100%;margin-bottom:12px;" placeholder="Search name, position, worksite, department…">
     <table>
-      <thead><tr><th>Name</th><th>Job Title</th><th>Store / Concession</th><th>Worksite</th><th>Type</th><th>Status</th></tr></thead>
+      <thead><tr><th>Name</th><th>Job Title</th><th>Store / Concession</th><th>Worksite</th><th>Start date</th><th>Type</th><th>Status</th></tr></thead>
       <tbody id="empRows"></tbody>
     </table>
     <div id="empCount" style="font-size:12px;color:var(--muted);margin-top:10px;"></div>`;
@@ -2969,7 +2969,7 @@ function paintEmpRows(){
   rows.innerHTML=list.slice(0,400).map((e,i)=>`
     <tr class="clickable" data-idx="${EMPLOYEES.indexOf(e)}">
       <td><b>${esc(e.full_name)}</b></td><td>${esc(e.position||"—")}</td><td>${esc(deriveConcession(e))}</td>
-      <td>${esc(e.worksite||"—")}</td><td>${typePill(e)}</td><td>${statusPill(e.status)}</td></tr>`).join("");
+      <td>${esc(e.worksite||"—")}</td><td style="white-space:nowrap;">${e.hire_date?fmtDate(e.hire_date):'<span class="note">—</span>'}</td><td>${typePill(e)}</td><td>${statusPill(e.status)}</td></tr>`).join("");
   $("#empCount").textContent=`Showing ${Math.min(list.length,400)} of ${list.length} matching · ${EMPLOYEES.length} total`;
   $$("#empRows tr").forEach(tr=>tr.addEventListener("click",()=>openRecord(EMPLOYEES[+tr.dataset.idx])));
 }
@@ -8448,7 +8448,7 @@ function renderManning(){
           <div style="text-align:center;"><div class="sc-l">Stores</div><div class="sc-n">${stores.length}</div></div>
           <div style="text-align:center;"><div class="sc-l">Approved</div><div class="sc-n">${ahc}</div></div>
           <div style="text-align:center;"><div class="sc-l">Confirmed</div><div class="sc-n">${chc}</div></div>
-          <div style="text-align:center;"><div class="sc-l">Shortfall (people)</div><div class="sc-n" style="color:${def>0?'var(--red)':'var(--green-dark)'}">${def}</div><div style="font-size:10px;color:var(--muted);">across ${defStores} store${defStores===1?'':'s'}</div></div>
+          <div style="text-align:center;"><div class="sc-l">Shortfall</div><div class="sc-n" style="color:${def>0?'var(--red)':'var(--green-dark)'}">${def}</div><div style="font-size:10px;color:var(--muted);">across ${defStores} store${defStores===1?'':'s'}</div></div>
           ${canManageStores()?`<button class="btn ghost" data-scstatus="${esc(sc)}" style="flex-shrink:0;font-size:11px;color:var(--muted);border-color:var(--line,#dbe4dd);padding:4px 9px;">SC status</button>`:""}
         </div>
         <details ${list.length>1?'':'open'} class="sc-stores"><summary style="cursor:pointer;padding:9px 2px;font-weight:600;color:var(--green-dark);font-size:13px;list-style:revert;">${stores.length} store${stores.length===1?'':'s'}${list.length>1?' — tap to view':''}</summary>

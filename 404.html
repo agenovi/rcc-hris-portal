@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1786070073";
+window.APP_BUILD="1786070729";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1786070073" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1786070729" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -12931,9 +12931,12 @@ function phHiredInfo(c){
   const eid=(onb&&onb.assigned_employee_id)||c.assigned_employee_id||c.employee_id;
   const byId = eid && (EMPLOYEES||[]).some(e=>String(e.employee_id||"").replace(/\.0$/,"")===String(eid).replace(/\.0$/,"") && (e.status||"Active")==="Active");
   const byName = (EMPLOYEES||[]).some(e=>(e.status||"Active")==="Active" && phNameMatch(e.full_name,c.full_name));
-  return { inPayPlus: !!(byId||byName), onb, uTop:(onb&&(onb.uniform_size_top||onb.uniform_size))||"", uBot:(onb&&onb.uniform_size_bottom)||"" };
+  const grp=deriveGroup(c.department)||(onb&&onb.group_name)||"";
+  const uniformNA=(grp==="Head Office"||grp==="Warehouse");  // HO / warehouse don't wear a uniform
+  const ut=onb?(ONBTASKS||[]).find(t=>t.case_id===onb.id&&t.task_key==="uniform"):null;
+  return { inPayPlus: !!(byId||byName), onb, uniformNA, uTop:(onb&&(onb.uniform_size_top||onb.uniform_size))||"", uBot:(onb&&onb.uniform_size_bottom)||"", uSentAt:(ut&&ut.status==="Done"&&ut.done_at)||"" };
 }
-function phUniformCell(inf){ if(inf.uTop||inf.uBot) return `<span class="pill di">${esc(inf.uTop||"—")}</span> / <span class="pill di">${esc(inf.uBot||"—")}</span>`; return `<span class="pill awol">no size</span>`; }
+function phUniformCell(inf){ if(inf.uniformNA) return `<span class="pill" style="background:#eef1f6;color:#41506b;">N/A — no uniform</span>`; if(inf.uTop||inf.uBot) return `<span class="pill di">${esc(inf.uTop||"—")}</span> / <span class="pill di">${esc(inf.uBot||"—")}</span>${inf.uSentAt?` <span class="psub" style="margin:0;">sent ${fmtDate(inf.uSentAt)}</span>`:''}`; return `<span class="pill awol">no size</span>`; }
 // The "dashboard of hires of the month" — every hire, whether they're in PayPlus yet, and their uniform sizes.
 let HIRES_ALL=false;
 window.openHiresBoard=()=>{
@@ -12944,7 +12947,7 @@ window.openHiresBoard=()=>{
   const info=new Map(list.map(c=>[c.id,phHiredInfo(c)]));
   // pending PayPlus enrolment first (the ones that still need chasing), then most-recent
   list.sort((a,b)=>{ const ia=info.get(a.id).inPayPlus?1:0, ib=info.get(b.id).inPayPlus?1:0; if(ia!==ib) return ia-ib; return new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0); });
-  const inPP=list.filter(c=>info.get(c.id).inPayPlus).length, pend=list.length-inPP, noSize=list.filter(c=>{const i=info.get(c.id);return !(i.uTop||i.uBot);}).length;
+  const inPP=list.filter(c=>info.get(c.id).inPayPlus).length, pend=list.length-inPP, noSize=list.filter(c=>{const i=info.get(c.id);return !i.uniformNA && !(i.uTop||i.uBot);}).length;
   const rows=list.map(c=>{ const i=info.get(c.id); return `<tr class="hb-row" data-id="${c.id}" style="cursor:pointer;${i.inPayPlus?'':'background:#fdf1ef;'}">
     <td><b>${esc(c.full_name)}</b><div style="font-size:11px;color:var(--muted);">${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")}</div></td>
     <td>${esc(c.worksite||"—")}</td>
@@ -12987,7 +12990,7 @@ function phBodyPipeline(){
         ${cards.map(c=>{ const i=inf.get(c.id); return `<div class="ccard clickable" data-id="${c.id}" style="${i.inPayPlus?'':'border-color:#f1c9c5;background:#fdf1ef;'}">
           <div class="cn">${esc(c.full_name)}</div>
           <div class="cd">${esc(c.position||"—")} · ${esc(c.hire_source||"Direct")}</div>
-          <div style="font-size:10.5px;margin-top:3px;">${i.inPayPlus?'<span class="pill active">✓ in PayPlus</span>':'<span class="pill awol">● not in PayPlus yet</span>'} <span style="color:var(--muted);">Uniform ${(i.uTop||i.uBot)?esc((i.uTop||"—")+" / "+(i.uBot||"—")):'<b style="color:#c0392b;">no size</b>'}</span></div></div>`; }).join("")
+          <div style="font-size:10.5px;margin-top:3px;">${i.inPayPlus?'<span class="pill active">✓ in PayPlus</span>':'<span class="pill awol">● not in PayPlus yet</span>'} <span style="color:var(--muted);">Uniform ${i.uniformNA?'N/A':((i.uTop||i.uBot)?esc((i.uTop||"—")+" / "+(i.uBot||"—"))+(i.uSentAt?' · sent '+fmtDate(i.uSentAt):''):'<b style="color:#c0392b;">no size</b>')}</span></div></div>`; }).join("")
          || `<div style="font-size:11.5px;color:var(--muted);padding:6px 2px;">—</div>`}
       </div>`;
     }
@@ -13549,10 +13552,10 @@ function defaultOnbTasks(c){
   const t=[
     {task_key:"schedule",   label:"Set Day-1 plan / schedule",                                            owner_role:"HR"},
     {task_key:"bank",       label:"Open bank account — "+bank+" (begin early)",                            owner_role:"HR"},
-    {task_key:"gov_forms",  label:"Government registration (SSS R-1A · PhilHealth · Pag-IBIG · BIR 1902)", owner_role:"HR"},
-    {task_key:"uniform",    label:"Issue uniform + capture signed deduction authorization",               owner_role:"HR / Admin"},
-    {task_key:"orientation",label:"Orientation / product training",                                       owner_role:"HR / Supervisor"}
+    {task_key:"gov_forms",  label:"Government registration (SSS R-1A · PhilHealth · Pag-IBIG · BIR 1902)", owner_role:"HR"}
   ];
+  if(!isHOWH) t.push({task_key:"uniform", label:"Issue uniform + capture signed deduction authorization", owner_role:"HR / Admin"}); // no uniform for Head Office / Warehouse
+  t.push({task_key:"orientation",label:"Orientation / product training", owner_role:"HR / Supervisor"});
   if(isSM) t.push({task_key:"itime",label:"iTime enrollment (SM department store)",owner_role:"HR"});
   t.push({task_key:"payplus",    label:"Encode in PayPlus",           owner_role:"Payroll"});
   t.push({task_key:"employee_id",label:"Assign Employee ID (PayPlus)",owner_role:"HR"});
@@ -13579,21 +13582,22 @@ function renderOnboarding(){
         <tbody id="onbRows"></tbody></table>`
         : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1E3A5F" stroke-width="2"><path d="M3 12l5 5L21 5"/></svg></div><h2>No onboarding cases yet</h2><p>Click “Start onboarding” to create a case from a pre-hire who has reached the contract stage.</p></div>`}
     </div>
-    ${(()=>{ // Uniform send-out list — every hire's size + whether the uniform's been issued
-      const rows=ONBOARDING.map(c=>{ const ut=ONBTASKS.find(t=>t.case_id===c.id&&t.task_key==="uniform"); return {c, sent:ut&&ut.status==="Done"}; });
+    ${(()=>{ // Uniform send-out list — retail/store hires only (Head Office & Warehouse don't wear a uniform)
+      const rows=ONBOARDING.filter(c=>!(c.group_name==="Head Office"||c.group_name==="Warehouse")).map(c=>{ const ut=ONBTASKS.find(t=>t.case_id===c.id&&t.task_key==="uniform"); return {c, sent:ut&&ut.status==="Done", sentAt:(ut&&ut.done_at)||""}; });
       const uTop=c=>c.uniform_size_top||c.uniform_size||"";
       const needSizeFn=c=>!uTop(c)||!c.uniform_size_bottom;
       const pend=rows.filter(r=>!r.sent).length, needSize=rows.filter(r=>needSizeFn(r.c)).length;
       if(!rows.length) return "";
-      return `<div class="panel"><h2>Uniform send-out list <span class="count-tag">${pend} to send</span></h2>
-        <div class="psub">Every hire's top &amp; bottom size and whether their uniform's gone out. ${needSize?`<b style="color:var(--red);">${needSize} still need a size recorded</b> (open the case → Uniform).`:"All sizes recorded ✓"} Mark "Issue uniform" done in the case once sent.</div>
+      return `<div class="panel"><details><summary style="cursor:pointer;list-style:none;outline:none;"><span style="font-size:16px;font-weight:800;color:#12352a;">Uniform send-out list <span class="count-tag">${pend} to send</span></span> <span class="psub" style="font-size:12px;">▸ retail/store hires only — click to open</span></summary>
+        <div style="margin-top:8px;">
+        <div class="psub">Top &amp; bottom size and whether the uniform's gone out (Head Office &amp; Warehouse are excluded — no uniform). ${needSize?`<b style="color:var(--red);">${needSize} still need a size recorded</b> (open the case → Uniform).`:"All sizes recorded ✓"} Mark "Issue uniform" done in the case once sent — the date is captured.</div>
         <table><thead><tr><th>Hire</th><th>Worksite</th><th>Position</th><th>Top</th><th>Bottom</th><th>Uniform</th></tr></thead><tbody>
         ${rows.sort((a,b)=>(a.sent?1:0)-(b.sent?1:0)).map(r=>`<tr class="clickable" data-uid="${r.c.id}">
           <td><b>${esc(r.c.employee_name)}</b></td><td>${esc(r.c.worksite||"—")}</td><td>${esc(r.c.position||"—")}</td>
           <td>${uTop(r.c)?`<span class="pill di">${esc(uTop(r.c))}</span>`:'<span class="pill awol">no size</span>'}</td>
           <td>${r.c.uniform_size_bottom?`<span class="pill di">${esc(r.c.uniform_size_bottom)}</span>`:'<span class="pill awol">no size</span>'}</td>
-          <td>${r.sent?'<span class="pill active">Sent ✓</span>':'<span class="pill probation">To send</span>'}</td></tr>`).join("")}
-        </tbody></table></div>`;
+          <td>${r.sent?`<span class="pill active">Sent ✓</span>${r.sentAt?` <span class="psub" style="margin:0;">${fmtDate(r.sentAt)}</span>`:''}`:'<span class="pill probation">To send</span>'}</td></tr>`).join("")}
+        </tbody></table></div></details></div>`;
     })()}`;
   $("#onbNew").addEventListener("click",pickPrehireForOnboarding);
   const rows=$("#onbRows");

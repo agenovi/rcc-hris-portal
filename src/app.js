@@ -8349,7 +8349,6 @@ function renderManning(){
       </div>
       <div class="msec" data-sec="transfers" style="display:${SEC==='transfers'?'block':'none'};">
       ${manningTransfersPanel()}
-      ${phLinksBar()}
       </div>
       <div class="msec" data-sec="headcount" style="display:${SEC==='headcount'?'block':'none'};">
     <div class="panel">

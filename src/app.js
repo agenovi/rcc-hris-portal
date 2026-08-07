@@ -591,6 +591,7 @@ async function loadEmployees(){
   renderHmo();
   renderSeparations();
   renderMeetings();
+  renderAgencies();
   renderDemoData();
   renderTimekeeping();
   renderGovRemit();
@@ -9645,6 +9646,34 @@ async function reloadMeetings(){
 }
 let MEETING_VIEW=null; // selected meeting_date to view; null = active/latest
 
+// Agencies module — per-agency dashboard link + the contracts of the people they've placed. (anj 2026-08-07)
+const AGENCY_LINKS={"Jell-on":"3a28000c77be400f97c1d2e36c9b416e","M&G":"60fc360932f049dd851131dccbd185af"};
+function renderAgencies(){
+  const pg=$("#page-agencies"); if(!pg) return;
+  const agencies=["Jell-on","M&G"];
+  pg.innerHTML=`<div class="panel" style="margin-top:0;"><h2>Agencies</h2>
+      <div class="psub">Jell-on &amp; M&amp;G — their private dashboard link and the people they've placed. Agencies recruit merchandisers only; they never see the rest of the portal.</div></div>
+    ${agencies.map(ag=>{
+      const active=(EMPLOYEES||[]).filter(e=>(e.hire_source||'')===ag && (e.status||'Active')==='Active').sort((a,b)=>(a.full_name||'').localeCompare(b.full_name||''));
+      const link=SHARE_BASE+"agency.html?t="+(AGENCY_LINKS[ag]||'');
+      const withContract=active.filter(e=>e.contract_type).length;
+      return `<div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+          <h2 style="margin:0;">${esc(ag)} <span class="count-tag">${active.length} active placement${active.length===1?'':'s'}</span></h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn ghost ag-copy" data-link="${esc(link)}">Copy dashboard link</button>
+            <a class="btn" href="${esc(link)}" target="_blank" style="text-decoration:none;">Open dashboard ↗</a>
+          </div>
+        </div>
+        <div class="subhead" style="margin-top:12px;">Contracts / placements <span class="sh-note">${withContract} of ${active.length} have a contract type on file</span></div>
+        ${active.length?`<div style="overflow-x:auto;"><table><thead><tr><th>Name</th><th>Store</th><th>Start date</th><th>Contract</th></tr></thead><tbody>
+          ${active.slice(0,300).map(e=>`<tr class="clickable ag-emp" data-id="${e.id}"><td><b>${esc(e.full_name)}</b></td><td>${esc(e.worksite||'—')}</td><td style="white-space:nowrap;">${e.hire_date?fmtDate(e.hire_date):'—'}</td><td>${e.contract_type?'<span class="pill di">'+esc(e.contract_type)+'</span>':'<span class="pill awol">none on file</span>'}</td></tr>`).join('')}
+        </tbody></table></div>`:`<div class="psub" style="margin-top:6px;">No active placements from ${esc(ag)} yet.</div>`}
+      </div>`;
+    }).join('')}`;
+  $$("#page-agencies .ag-copy").forEach(b=>b.addEventListener("click",()=>{ if(navigator.clipboard) navigator.clipboard.writeText(b.dataset.link); const t=b.textContent; b.textContent="Copied ✓"; setTimeout(()=>b.textContent=t,1200); }));
+  $$("#page-agencies .ag-emp").forEach(r=>r.addEventListener("click",()=>{ const e=(EMPLOYEES||[]).find(x=>String(x.id)===r.dataset.id); if(e&&typeof openRecord==="function") openRecord(e); }));
+}
 function renderMeetings(){
   const pg=$("#page-meetings"); if(!pg||!canRunMeetings()) return;
   const active=meetingActive(), ips=meetingAllowedIPs(), cfgAllowed=canConfigMeetings(), bank=canSeeMeetingBank();

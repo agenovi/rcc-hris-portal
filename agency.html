@@ -44,7 +44,13 @@
   .foot{font-size:12px;color:var(--muted);margin-top:18px;text-align:center;}
 </style></head>
 <body>
-  <div class="top"><h1>RCC Merchandiser Openings</h1><div class="s" id="who">Loading…</div></div>
+  <div class="top" style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;">
+    <div style="min-width:0;">
+      <h1 id="agTitle" style="margin:0;line-height:1.1;">Merchandiser Openings</h1>
+      <div class="s" id="who">Loading…</div>
+    </div>
+    <div style="text-align:right;flex-shrink:0;font-size:12px;opacity:.85;line-height:1.3;white-space:nowrap;">recruiting for<br><b style="font-size:14px;">RCC</b><div style="font-size:10px;opacity:.8;">Roshan Commercial Corp.</div></div>
+  </div>
   <div class="wrap">
     <div id="candLinkBox" style="background:#eef4ef;border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-bottom:14px;"></div>
     <div class="tabs">
@@ -69,7 +75,8 @@ async function load(){
     DATA=d;
     const slots=(d.openings||[]).reduce((s,o)=>s+(Number(o.open_slots)||0),0);
     const myActive=(d.my_submissions||[]).filter(x=>!["DRAFT","HIRED","REJECTED"].includes(x.status)).length;
-    document.getElementById("who").textContent=`${d.agency} · ${d.openings.length} stores · ${slots} open positions · ${d.total_active||0} candidates in process · ${myActive} from ${d.agency}`;
+    const at=document.getElementById("agTitle"); if(at) at.innerHTML=`${esc(d.agency||"Agency")} <span style="font-weight:500;opacity:.8;">— Merchandiser Openings</span>`;
+    document.getElementById("who").textContent=`${d.openings.length} stores · ${slots} open positions · ${d.total_active||0} candidates in process · ${myActive} from ${d.agency}`;
     const to=document.getElementById("tabOpen"); if(to) to.textContent=`Open positions (${slots})`;
     const tm=document.getElementById("tabMine"); if(tm) tm.textContent=`My submissions (${(d.my_submissions||[]).length})`;
     render();

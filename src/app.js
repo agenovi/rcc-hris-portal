@@ -9668,7 +9668,19 @@ window.mtgUnexcuse=async(id)=>{
 async function mtgSendNoticeEmails(rows,date){
   const a=meetingActive();
   const label=(a.date===date&&a.label)||(rows[0]&&rows[0].meeting_label)||"Monthly Merchandiser Meeting";
-  const notices=rows.map(r=>{ const h=meetingMissHistory(r.emp_no,r.name,date); const rt=mtgNoticeRoute(r); return { email:rt.email, name:r.name, store:r.store||"", missed:h.missed, expected:h.expected, via:rt.via, agency:rt.agency }; }).filter(n=>n.email);
+  // Direct hires get an individual notice; agency merchandisers are grouped into ONE summary email per agency.
+  const notices=[]; const agencyGroups={};
+  for(const r of rows){
+    const rt=mtgNoticeRoute(r); if(!rt.email) continue;
+    const h=meetingMissHistory(r.emp_no,r.name,date);
+    if(rt.via==="agency"){
+      const key=rt.agency+"|"+rt.email;
+      (agencyGroups[key]=agencyGroups[key]||{email:rt.email,agency:rt.agency,via:"agency",people:[]}).people.push({name:r.name,store:r.store||"",missed:h.missed,expected:h.expected});
+    } else {
+      notices.push({ email:rt.email, name:r.name, store:r.store||"", missed:h.missed, expected:h.expected, via:"direct" });
+    }
+  }
+  Object.values(agencyGroups).forEach(g=>notices.push(g));
   if(!notices.length){ alert("None of these have an email on file — use Print to serve the notice."); return; }
   let res;
   try{ const { data, error } = await sb.functions.invoke("meeting-notice-email", { body:{ meeting_date:date, label, days:MEETING_EXPLAIN_DAYS, noted_by:MEETING_NOTED_BY, notices } }); if(error) throw error; res=data; }
@@ -9684,8 +9696,9 @@ window.mtgEmailNotice=(id)=>{ const r=(MEETING_ROSTER||[]).find(x=>String(x.id)=
 window.mtgEmailNoticeAll=(date)=>{
   const absent=meetingRosterFor(date).filter(r=>r.expected && !mAttended(r) && mtgNoticeRoute(r).email && !r.notice_emailed_at);
   if(!absent.length){ alert("No absentees with an email left to notify."); return; }
-  const agN=absent.filter(r=>mtgNoticeRoute(r).via==="agency").length;
-  if(!confirm("Email a Notice to Explain for "+absent.length+" absentee(s)?"+(agN?"\n\n"+agN+" of these are agency merchandisers — their notice goes to the agency (Jell-on / M&G), not the person.":"")+"\n\nAnyone marked “office was informed” is already excluded. Absentees without an email are skipped — print those from their row.")) return;
+  const agRows=absent.filter(r=>mtgNoticeRoute(r).via==="agency");
+  const agencies=[...new Set(agRows.map(r=>mtgNoticeRoute(r).agency))];
+  if(!confirm("Email a Notice to Explain for "+absent.length+" absentee(s)?"+(agRows.length?"\n\n"+agRows.length+" are agency merchandisers — grouped into ONE summary email to each agency ("+agencies.join(", ")+"), not sent to them individually.":"")+"\n\nAnyone marked “office was informed” is already excluded. Absentees without an email are skipped — print those from their row.")) return;
   mtgSendNoticeEmails(absent,date);
 };
 window.mtgReminderAll=async(date)=>{

@@ -2624,7 +2624,9 @@ function renderDashboard(){
   const totAHC=open.reduce((s,b)=>s+b.ahc_stationary+b.ahc_reliever,0);
   const totCHC=open.reduce((s,b)=>s+chcFor(b.name),0);
   const merchDef=Math.max(0,totAHC-totCHC);
-  const _openMR=MANPOWER.filter(o=>o.status==="Open"); const openSlots=_openMR.reduce((s,o)=>s+(Number(o.count_needed)||0),0), openStores=_openMR.length;
+  // Open Positions = the SAME PayPlus shortfall the Manning page shows (storeShort), NOT the old hand-posted list — one figure everywhere.
+  const _openBr=BRANCHES.filter(b=>b.status==="Open"); const _dashShort=_openBr.map(b=>storeShort(b.name));
+  const openSlots=_dashShort.reduce((s,n)=>s+n,0), openStores=_dashShort.filter(n=>n>0).length;
   // composition
   const byGroup={"Head Office":ho,"Warehouse":wh,"Retail":rt};
   const byDept={}; A.filter(e=>e.group_name==="Head Office").forEach(e=>{const d=e.department||"—";byDept[d]=(byDept[d]||0)+1;});
@@ -5342,7 +5344,8 @@ function openInReview(store){
 window.openInReview=openInReview;
 function openStore(b){
   const here=staffAtStore(b.name).sort((a,c)=>(a.name||"").localeCompare(c.name||""));
-  const ahc=(b.ahc_stationary||0)+(b.ahc_reliever||0); const chc=here.length; const def=Math.max(0,ahc-chc);
+  // CHC & shortfall use chcFor/storeShort (base + reliever coverage) so this store card matches the Manning page exactly.
+  const ahc=(b.ahc_stationary||0)+(b.ahc_reliever||0); const chc=chcFor(b.name); const def=storeShort(b.name);
   let m=document.getElementById("storeModal"); if(!m){ m=document.createElement("div"); m.id="storeModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:600px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">

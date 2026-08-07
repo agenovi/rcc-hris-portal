@@ -63,7 +63,17 @@
   </div>
 <script>
 const FN="https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/agency";
+const SB="https://jtfkpmvievetihhfdmqb.supabase.co";
+const ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0ZmtwbXZpZXZldGloaGZkbXFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwODA1MTksImV4cCI6MjA5MTY1NjUxOX0.ozphoaGT7jVKr3NGmqQC1wMj5lp7MvVfdqO2HZWMl6k";
 const token=new URLSearchParams(location.search).get("t")||"";
+async function uploadResume(file){
+  if(!file) return null;
+  if(file.size>15*1024*1024) throw new Error("Resume is over 15 MB — attach a smaller file.");
+  const path=Date.now()+"-"+Math.random().toString(36).slice(2,8)+"/"+file.name.replace(/[^\w.\-]+/g,"_");
+  const up=await fetch(SB+"/storage/v1/object/prehire-docs/"+path,{method:"POST",headers:{apikey:ANON,Authorization:"Bearer "+ANON,"x-upsert":"true"},body:file});
+  if(!up.ok) throw new Error("Resume upload failed.");
+  return {path, name:file.name};
+}
 let DATA={openings:[],my_submissions:[],agency:""}, TAB="dash";
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
@@ -237,7 +247,7 @@ function render(){
     html+= hired.length? tbl(hired,x=> x.still_active===false?`<span class="pill" style="background:#fdeaea;color:#a4322a;">No longer active — please remove</span>`:x.still_active===true?`<span class="chip hir">Hired · still active ✓</span>`:`<span class="chip hir">Hired</span>`) : `<div style="font-size:12.5px;color:var(--muted);padding:4px 2px;">No hires yet this period.</div>`;
     if(rejected.length){ html+=sech("Not selected — please remove",rejected.length)+tbl(rejected,()=>`<span class="pill" style="background:#f3f3f3;color:#777;">Not selected</span>`); }
     if(drafts.length){ html+=sech("Drafts — not yet sent to RCC",drafts.length)+`<table><thead><tr><th>Candidate</th><th>Store</th><th>Status</th><th></th></tr></thead><tbody>`+
-      drafts.map(x=>{ const i=(DATA.my_submissions||[]).indexOf(x); return `<tr><td><b>${esc(x.name)}</b><div style="font-size:11.5px;color:var(--muted);">${esc(x.position||"")}</div></td><td>${esc(x.store||"—")}</td><td><span class="pill" style="background:#fdf6e3;color:#8a6a14;">Draft — not sent</span></td><td style="white-space:nowrap;text-align:right;"><button class="btn ghost" onclick='editDraft(${i})'>Edit</button> <button class="btn" onclick='shipDraft(${i})'>Submit to RCC</button></td></tr>`; }).join("")+`</tbody></table>`; }
+      drafts.map(x=>{ const i=(DATA.my_submissions||[]).indexOf(x); return `<tr><td><b>${esc(x.name)}</b><div style="font-size:11.5px;color:var(--muted);">${esc(x.position||"")}</div></td><td>${esc(x.store||"—")}</td><td><span class="pill" style="background:#fdf6e3;color:#8a6a14;">Draft — not sent</span></td><td style="white-space:nowrap;text-align:right;"><button class="btn ghost" onclick='editDraft(${i})'>Edit</button> <button class="btn ghost" style="color:#a12;" onclick='deleteDraft(${i})'>Delete</button> <button class="btn" onclick='shipDraft(${i})'>Submit to RCC</button></td></tr>`; }).join("")+`</tbody></table>`; }
     b.innerHTML=html;
     return;
   }
@@ -284,6 +294,7 @@ function openSubmit(store){
     <label>Position</label><input id="s_pos" value="Merchandiser">
     <label>Contact number</label><input id="s_contact">
     <label>Email (optional)</label><input id="s_email" type="email">
+    <label>Résumé / CV (optional — PDF or photo)</label><input id="s_resume" type="file" accept="image/*,application/pdf,.pdf,.doc,.docx">
     <label>Notes (optional)</label><textarea id="s_notes" rows="2"></textarea>
     <div class="msg" id="s_msg"></div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
@@ -296,14 +307,16 @@ function openSubmit(store){
     if(!name){ msg.style.color="#c0392b"; msg.textContent="Candidate name is required."; return; }
     const btn=document.getElementById("s_save"); btn.disabled=true; btn.textContent="Saving…";
     try{
+      let resume=null; const rf=document.getElementById("s_resume");
+      if(rf&&rf.files&&rf.files[0]){ msg.style.color="#6b7785"; msg.textContent="Uploading résumé…"; resume=await uploadResume(rf.files[0]); }
       const r=await fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-        token, action:"submit", name, store,
+        token, action:"submit", name, store, resume,
         position:document.getElementById("s_pos").value, contact:document.getElementById("s_contact").value, email:document.getElementById("s_email").value, notes:document.getElementById("s_notes").value })});
       const d=await r.json();
       if(!d.ok){ btn.disabled=false; btn.textContent="Save as draft"; msg.style.color="#c0392b"; msg.textContent=d.error||"Couldn't save. Try again."; return; }
-      msg.style.color="#1c6b3f"; msg.textContent="✓ Saved as a draft. Review it under “My submissions”, then Submit to RCC.";
+      msg.style.color="#1c6b3f"; msg.textContent="✓ Saved as a draft. Review it under “My candidates”, then Submit to RCC.";
       setTimeout(()=>{ m.remove(); TAB="mine"; load(); }, 1500);
-    }catch(e){ btn.disabled=false; btn.textContent="Save as draft"; msg.style.color="#c0392b"; msg.textContent="Couldn't save. Try again."; }
+    }catch(e){ btn.disabled=false; btn.textContent="Save as draft"; msg.style.color="#c0392b"; msg.textContent=(e&&e.message)||"Couldn't save. Try again."; }
   };
 }
 function shipDraft(i){
@@ -318,6 +331,13 @@ function removeMine(id){
   fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,action:"hide",id,hidden:true})})
     .then(r=>r.json()).then(d=>{ if(!d.ok){ alert(d.error||"Couldn't remove."); return; } load(); })
     .catch(()=>alert("Couldn't remove. Please try again."));
+}
+function deleteDraft(i){
+  const x=(DATA.my_submissions||[])[i]; if(!x) return;
+  if(!confirm("Permanently delete “"+x.name+"”?\n\nThis draft hasn't been sent to RCC, so it will be removed completely.")) return;
+  fetch(FN,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,action:"delete",id:x.id})})
+    .then(r=>r.json()).then(d=>{ if(!d.ok){ alert(d.error||"Couldn't delete."); return; } load(); })
+    .catch(()=>alert("Couldn't delete. Please try again."));
 }
 function editDraft(i){
   const x=(DATA.my_submissions||[])[i]; if(!x) return;

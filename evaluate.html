@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="robots" content="noindex">
+<title>RCC — Confidential Evaluation</title>
+<style>
+  :root{ --green:#1F6B52; --green2:#175a44; --line:#e4ece8; --ink:#17241f; --mut:#65746d; --red:#c0392b; --bg:#f2f6f3; --star:#f4b400; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  .wrap{ max-width:520px; margin:0 auto; min-height:100vh; background:#fff; }
+  .top{ background:var(--green); color:#fff; padding:22px 20px 24px; }
+  .brand{ font-weight:800; letter-spacing:.6px; font-size:13px; opacity:.9; }
+  .top h1{ margin:9px 0 2px; font-size:21px; font-weight:700; line-height:1.25; }
+  .top .sub{ font-size:13px; opacity:.9; margin-top:4px; }
+  .body{ padding:18px 18px 44px; }
+  .anon{ background:#eef7f1; border:1px solid #cfe6d8; color:#175a44; border-radius:12px; padding:12px 14px; font-size:13px; line-height:1.5; margin-bottom:6px; }
+  .subject{ margin:18px 0 6px; padding:14px; border:1.5px solid var(--line); border-radius:13px; background:#fafcfb; }
+  .subject .lbl{ font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; color:var(--mut); }
+  .subject .nm{ font-size:19px; font-weight:800; margin-top:3px; }
+  .subject .ws{ font-size:13px; color:var(--mut); margin-top:2px; }
+  .q{ margin:20px 0 6px; }
+  .q .qt{ font-size:15px; font-weight:600; margin-bottom:9px; line-height:1.4; }
+  .stars{ display:flex; gap:8px; }
+  .star{ font-size:36px; line-height:1; cursor:pointer; color:#d8e0db; transition:transform .08s, color .1s; user-select:none; }
+  .star.on{ color:var(--star); }
+  .star:active{ transform:scale(1.15); }
+  .scalehint{ display:flex; justify-content:space-between; font-size:11px; color:var(--mut); margin-top:6px; }
+  label{ display:block; font-size:14px; font-weight:600; margin:22px 0 6px; }
+  textarea{ width:100%; padding:13px 12px; font-size:16px; border:1.5px solid var(--line); border-radius:12px; background:#fff; color:var(--ink); min-height:96px; resize:vertical; font-family:inherit; }
+  textarea:focus{ outline:none; border-color:var(--green2); }
+  .btn{ width:100%; margin-top:26px; padding:16px; font-size:16px; font-weight:800; color:#fff; background:var(--green); border:none; border-radius:14px; cursor:pointer; }
+  .btn:disabled{ opacity:.5; }
+  .msg{ text-align:center; padding:40px 24px; }
+  .msg .big{ font-size:46px; }
+  .msg h2{ margin:12px 0 6px; font-size:20px; }
+  .msg p{ color:var(--mut); font-size:14px; line-height:1.5; }
+  .err{ color:var(--red); font-size:13px; margin-top:10px; text-align:center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">ROSHAN COMMERCIAL CORPORATION</div>
+    <h1 id="ttl">Confidential Evaluation</h1>
+    <div class="sub" id="sub">Your answers are anonymous.</div>
+  </div>
+  <div class="body" id="body">
+    <div class="msg"><div class="big">⏳</div><p>Loading…</p></div>
+  </div>
+</div>
+
+<script>
+const FN = "https://jtfkpmvievetihhfdmqb.supabase.co/functions/v1/blind-eval";
+const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0ZmtwbXZpZXZldGloaGZkbXFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwODA1MTksImV4cCI6MjA5MTY1NjUxOX0.ozphoaGT7jVKr3NGmqQC1wMj5lp7MvVfdqO2HZWMl6k";
+const H = { "apikey": ANON, "Authorization": "Bearer " + ANON, "Content-Type": "application/json" };
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const token = new URLSearchParams(location.search).get("e") || "";
+const ratings = {};
+let questions = [];
+
+function stateMsg(big, title, text){
+  document.getElementById("body").innerHTML =
+    `<div class="msg"><div class="big">${big}</div><h2>${esc(title)}</h2><p>${esc(text)}</p></div>`;
+}
+
+function starRow(qi){
+  let h = `<div class="stars" data-qi="${qi}">`;
+  for(let s=1; s<=5; s++) h += `<span class="star" data-s="${s}">★</span>`;
+  h += `</div><div class="scalehint"><span>1 · low</span><span>5 · high</span></div>`;
+  return h;
+}
+
+function paint(meta){
+  document.getElementById("ttl").textContent = meta.title || "Confidential Evaluation";
+  let h = `<div class="anon">🔒 This is anonymous. We never record your name, email, or device — only your ratings. Results are pooled with everyone else's and shown to management only after enough people respond.</div>`;
+  h += `<div class="subject"><div class="lbl">You are rating</div><div class="nm">${esc(meta.subject_name)}</div>`;
+  if(meta.subject_position || meta.subject_worksite){
+    h += `<div class="ws">${[meta.subject_position, meta.subject_worksite].filter(Boolean).map(esc).join(" · ")}</div>`;
+  }
+  h += `</div>`;
+  questions.forEach((q, i) => {
+    h += `<div class="q"><div class="qt">${i+1}. ${esc(q)}</div>${starRow(i)}</div>`;
+  });
+  h += `<label>Anything you'd like to add? (optional)</label><textarea id="cmt" placeholder="Your comment stays anonymous."></textarea>`;
+  h += `<button class="btn" id="submit">Submit my evaluation</button><div class="err" id="err"></div>`;
+  document.getElementById("body").innerHTML = h;
+
+  document.querySelectorAll(".stars").forEach(row => {
+    const qi = row.dataset.qi;
+    row.querySelectorAll(".star").forEach(st => {
+      st.addEventListener("click", () => {
+        const v = Number(st.dataset.s);
+        ratings[qi] = v;
+        row.querySelectorAll(".star").forEach(x => x.classList.toggle("on", Number(x.dataset.s) <= v));
+      });
+    });
+  });
+  document.getElementById("submit").addEventListener("click", submit);
+}
+
+async function submit(){
+  const btn = document.getElementById("submit");
+  const err = document.getElementById("err");
+  err.textContent = "";
+  const comment = (document.getElementById("cmt").value || "").trim();
+  if(Object.keys(ratings).length === 0 && !comment){
+    err.textContent = "Please tap at least one star, or leave a comment.";
+    return;
+  }
+  btn.disabled = true; btn.textContent = "Submitting…";
+  try{
+    const r = await fetch(FN, { method:"POST", headers:H, body: JSON.stringify({ token, ratings, comment }) });
+    const j = await r.json().catch(()=>({}));
+    if(r.ok && j.ok){
+      stateMsg("✅", "Thank you", "Your evaluation was submitted anonymously. You can close this page.");
+    } else if(j.error === "closed"){
+      stateMsg("🔒", "This evaluation is closed", "It's no longer accepting responses. Thank you.");
+    } else {
+      throw new Error(j.error || "Something went wrong");
+    }
+  }catch(e){
+    btn.disabled = false; btn.textContent = "Submit my evaluation";
+    err.textContent = "Couldn't submit — please check your connection and try again.";
+  }
+}
+
+async function load(){
+  if(!token){ stateMsg("⚠️", "Invalid link", "This evaluation link is missing its code. Please ask for a fresh link."); return; }
+  try{
+    const r = await fetch(FN + "?e=" + encodeURIComponent(token), { headers: H });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok || j.error){
+      if(r.status === 404) stateMsg("⚠️", "Not found", "This evaluation link isn't valid. Please ask for a fresh link.");
+      else throw new Error(j.error || "error");
+      return;
+    }
+    if(j.status !== "open"){ stateMsg("🔒", "This evaluation is closed", "It's no longer accepting responses. Thank you."); return; }
+    questions = Array.isArray(j.questions) ? j.questions : [];
+    document.getElementById("sub").textContent = "Your answers are anonymous — please be honest.";
+    paint(j);
+  }catch(e){
+    stateMsg("⚠️", "Couldn't load", "Please check your connection and reopen the link.");
+  }
+}
+load();
+</script>
+</body>
+</html>

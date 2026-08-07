@@ -2768,6 +2768,23 @@ function renderDashboard(){
   const dc=document.getElementById("dashCust"); if(dc) dc.addEventListener("click",customizeDash);
   applyDashPrefs();
   wireReminders(pg);
+  dashCollapsible();
+}
+// Every dashboard panel collapses from its heading (click to hide/show); the choice is remembered per person so a
+// section you don't need stays folded. Keeps the dashboard from feeling overwhelming.
+function dashCollapsible(){
+  const pg=document.getElementById("page-dashboard"); if(!pg) return;
+  let state={}; try{ state=JSON.parse(localStorage.getItem("rcc_dash_collapsed")||"{}"); }catch(_){}
+  pg.querySelectorAll(".panel").forEach((p,i)=>{
+    const h=p.querySelector(":scope > h2"); if(!h||h.dataset.coll) return; h.dataset.coll="1";
+    const key=(h.textContent||"").replace(/\s+/g," ").trim().slice(0,44)||("panel"+i);
+    h.style.cursor="pointer"; h.style.userSelect="none";
+    const caret=document.createElement("span"); caret.style.cssText="float:right;color:var(--muted);font-size:13px;font-weight:400;margin-left:8px;";
+    h.appendChild(caret);
+    const apply=(c)=>{ caret.textContent=c?"▸ show":"▾ hide"; [...p.children].forEach(ch=>{ if(ch!==h) ch.style.display=c?"none":""; }); };
+    let collapsed=!!state[key]; apply(collapsed);
+    h.addEventListener("click",(e)=>{ if(e.target.closest("a,button,select,input")) return; collapsed=!collapsed; apply(collapsed); state[key]=collapsed; try{ localStorage.setItem("rcc_dash_collapsed",JSON.stringify(state)); }catch(_){}} );
+  });
 }
 /* legacy KPI-only updater (unused, kept for safety) */
 function renderDashboardKPIs(){

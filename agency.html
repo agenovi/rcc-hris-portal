@@ -93,27 +93,29 @@ function render(){
   }
   const ops=DATA.openings||[];
   if(!ops.length){ b.innerHTML='<div class="empty">No open positions right now. Check back soon.</div>'; return; }
-  const fmtD=s=>{ if(!s) return ""; const d=new Date(s+"T00:00:00"); return isNaN(d)?"":d.toLocaleDateString(undefined,{month:"short",day:"numeric"}); };
-  const today=new Date(new Date().toDateString());
-  b.innerHTML=ops.map(o=>{
-      const overdue=o.target_fill_date && new Date(o.target_fill_date+"T00:00:00")<today;
-      let when;
-      if(o.priority==="Urgent" && !o.target_fill_date) when=`<span class="od">Urgent — needed now</span>`;
-      else if(o.target_fill_date) when=`<span class="${overdue?'od':''}">Fill by ${fmtD(o.target_fill_date)}${overdue?" · overdue":""}</span>`;
-      else when=`Open`;
+  const REGIONS=[["GMA","Greater Manila"],["NL","North Luzon"],["SL","South Luzon"],["VIS","Visayas"],["MIN","Mindanao"]];
+  const regName=a=>{ const m=REGIONS.find(r=>r[0]===a); return m?m[1]:(a||"Other"); };
+  const regIdx=a=>{ const i=REGIONS.findIndex(r=>r[0]===a); return i<0?99:i; };
+  const areas=[...new Set(ops.map(o=>o.area||"—"))].sort((x,y)=>regIdx(x)-regIdx(y));
+  const cardHtml=o=>{
+      const s=Number(o.stationary_need||0), r=Number(o.reliever_need||0);
+      const needChips=[ s>0?`<span class="chip open">${s} stationary</span>`:"", r>0?`<span class="chip" style="background:#eaf3ff;color:#1f5fa6;">${r} reliever</span>`:"" ].filter(Boolean).join(" ") || `<span class="chip open">${o.open_slots} shortfall</span>`;
       return `<div class="card">
-      <div style="flex:1;min-width:140px;"><div class="nm">${esc(o.store)}${o.diser_type==="Roving"?` <span style="font-size:11px;font-weight:600;color:#8a6a14;background:#fdf6e3;padding:1px 7px;border-radius:8px;">Roving</span>`:""}</div>
-        <div class="loc">${esc(o.city||"")}${o.area?" · "+esc(o.area):""}${o.category?" · "+(o.category==="CN"?"Concession":"Boutique"):""}</div>
-        ${o.diser_type==="Roving"&&o.second_worksite?`<div class="loc" style="color:#8a6a14;">Roving — also covers ${esc(o.second_worksite)}</div>`:""}
-        <div class="dates">Posted ${fmtD(o.date_posted)} · ${when}</div></div>
+      <div style="flex:1;min-width:140px;"><div class="nm">${esc(o.store)}</div>
+        <div class="loc">${esc(o.city||"")}${o.category?" · "+(o.category==="CN"?"Concession":"Boutique"):""}</div></div>
       <div class="chips">
-        <span class="chip open">${o.open_slots} shortfall</span>
+        ${needChips}
         <span class="chip ${o.in_review>0?'rev':'hir'}">${o.in_review} in review${o.my_in_review?` · ${o.my_in_review} ${esc(DATA.agency)}`:""}</span>
         ${o.hired?`<span class="chip hir">${o.hired} hired</span>`:""}
-        ${o.urgent?`<span class="chip urg">Urgent</span>`:""}
       </div>
       <button class="btn" onclick='openSubmit(${JSON.stringify(o.store)})'>Submit a candidate</button>
-    </div>`;}).join("");
+    </div>`; };
+  b.innerHTML=areas.map(a=>{
+      const rows=ops.filter(o=>(o.area||"—")===a);
+      const tot=rows.reduce((n,o)=>n+Number(o.open_slots||0),0);
+      return `<div style="margin:14px 0 6px;font-weight:800;color:#12352a;display:flex;align-items:center;gap:8px;">${esc(regName(a))}<span style="font-weight:600;color:#6b7785;font-size:13px;">· ${tot} to fill · ${rows.length} store${rows.length===1?'':'s'}</span></div>`
+        + rows.map(cardHtml).join("");
+    }).join("");
 }
 function statusLabel(p){ if(p==="DRAFT") return "Draft — not sent"; if(p==="HIRED") return "Hired"; if(p==="REJECTED") return "Not selected"; return "In process"; }
 

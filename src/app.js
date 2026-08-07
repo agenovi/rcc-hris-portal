@@ -8948,7 +8948,10 @@ function openEvalForm(empId,type,due){
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   const dots=(k)=>`<span class="ev-circ" data-key="${k}" data-val="0" style="white-space:nowrap;">${[1,2,3,4,5].map(n=>`<i class="ev-dot" data-n="${n}" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:2px solid #cbd6cf;background:#fff;margin:0 3px;cursor:pointer;vertical-align:middle;font-size:12px;font-weight:700;font-style:normal;color:#93a29a;">${n}</i>`).join("")}</span>`;
   const critRow=(c)=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="font-size:13.5px;">${esc(c.label)}</span>${dots(c.k)}</div>`;
-  const OUTC=[["regularize","For Regularization","#1f7a44"],["assess_5th","For Assessment on 5th month","#8a5a1c"],["eoc","EOC / Replacement","#a4322a"]];
+  // 3rd-month (2.5-mo) review can't regularize yet — options are continue-to-5th-month or EOC. Regularization only appears from the 5th-month/regularization review.
+  const OUTC = (type==="3rd-month")
+    ? [["assess_5th","Continue — assess at 5th month","#1f7a44"],["eoc","EOC / Replacement","#a4322a"]]
+    : [["regularize","For Regularization","#1f7a44"],["assess_5th","For Assessment on 5th month","#8a5a1c"],["eoc","EOC / Replacement","#a4322a"]];
   const outBtns=OUTC.map(o=>`<button type="button" class="ev-out" data-o="${o[0]}" style="border:1.5px solid #cbd6cf;background:#fff;color:#33413a;padding:8px 13px;border-radius:20px;font-size:12.5px;cursor:pointer;margin:0 6px 6px 0;">${o[1]}</button>`).join("");
   const ta=(id,ph)=>`<textarea id="${id}" rows="2" placeholder="${ph}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;box-sizing:border-box;"></textarea>`;
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:560px;height:100%;overflow-y:auto;">

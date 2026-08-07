@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1786079093";
+window.APP_BUILD="1786079455";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1786079093" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1786079455" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -13175,6 +13175,64 @@ window.openHiresBoard=()=>{
   document.getElementById("hbToggle").addEventListener("click",()=>{ HIRES_ALL=!HIRES_ALL; openHiresBoard(); });
   m.querySelectorAll(".hb-row").forEach(tr=>tr.addEventListener("click",()=>{ m.remove(); openPrehire(PREHIRE.find(p=>String(p.id)===tr.dataset.id)); }));
 };
+// Head Office / Warehouse pending hires — INTERNAL only (never shown to agencies; agency board reads the merchandiser shortfall only).
+function officeOpenings(){ return (MANPOWER||[]).filter(o=>o.diser_type==="Office" && o.status!=="Filled"); }
+function officeOpeningsPanel(){
+  const list=officeOpenings().sort((a,b)=>String(a.target_fill_date||"~").localeCompare(String(b.target_fill_date||"~")));
+  const canAdd=(typeof canPostOpenings==="function")&&canPostOpenings();
+  const total=list.reduce((s,o)=>s+(Number(o.count_needed)||1),0);
+  return `<div class="panel"><details open><summary style="cursor:pointer;list-style:none;outline:none;">
+      <span style="font-size:16px;font-weight:800;color:#12352a;">Head Office &amp; Warehouse — pending hires <span class="count-tag">${total}</span></span>
+      <span class="psub" style="font-size:12px;">▸ internal — not shared with agencies · emailed weekly</span></summary>
+    <div style="margin-top:8px;">
+      <div class="psub">Vacancies you're recruiting for at Head Office / Warehouse. Agencies never see this — they only recruit merchandisers. ${canAdd?'':'<span style="color:var(--muted);">(view only)</span>'}</div>
+      ${canAdd?`<div class="actionbar"><button class="btn ghost" onclick="officeOpeningForm(null)">+ Add office opening</button></div>`:""}
+      ${list.length?`<table><thead><tr><th>Position</th><th>Where</th><th>Need</th><th>Target</th><th>Posted</th>${canAdd?"<th></th>":""}</tr></thead><tbody>
+        ${list.map(o=>{ const overdue=o.target_fill_date && new Date(o.target_fill_date+"T00:00:00")<new Date(new Date().toDateString());
+          return `<tr><td><b>${esc(o.position||"—")}</b>${o.priority==="Urgent"?' <span class="pill awol">Urgent</span>':""}${o.notes?`<div style="font-size:11px;color:var(--muted);">${esc(o.notes)}</div>`:""}</td>
+          <td>${esc(o.worksite||"Head Office")}</td><td><b>${o.count_needed||1}</b></td>
+          <td style="white-space:nowrap;">${o.target_fill_date?fmtDate(o.target_fill_date)+(overdue?' <span class="pill awol">overdue</span>':''):'<span class="note">—</span>'}</td>
+          <td style="white-space:nowrap;font-size:12px;color:var(--muted);">${o.date_posted?fmtDate(o.date_posted):"—"}${o.posted_by?"<br>"+esc(String(o.posted_by).split("@")[0]):""}</td>
+          ${canAdd?`<td style="white-space:nowrap;text-align:right;"><button class="btn ghost" style="font-size:11px;padding:3px 8px;" onclick="officeOpeningForm('${o.id}')">Edit</button> <button class="btn ghost" style="font-size:11px;padding:3px 8px;color:var(--green-dark);" onclick="officeOpeningFill('${o.id}')">Mark filled</button></td>`:""}</tr>`; }).join("")}
+      </tbody></table>`:`<div class="psub" style="margin-top:6px;">No pending Head Office / Warehouse hires. ${canAdd?'Add one with “+ Add office opening”.':''}</div>`}
+    </div></details></div>`;
+}
+window.officeOpeningForm=(id)=>{
+  const o=id?(MANPOWER||[]).find(x=>String(x.id)===String(id)):null;
+  let m=document.getElementById("offOpModal"); if(!m){ m=document.createElement("div"); m.id="offOpModal"; document.body.appendChild(m); }
+  m.style.cssText="position:fixed;inset:0;z-index:10000;background:rgba(14,50,25,.5);display:flex;align-items:center;justify-content:center;padding:24px;";
+  const f=(id2,ph,val,type)=>`<input id="${id2}" ${type?`type="${type}"`:""} placeholder="${ph}" value="${esc(val||"")}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:14px;box-sizing:border-box;">`;
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:440px;width:100%;padding:22px;">
+    <h2 style="font-size:17px;margin-bottom:8px;">${o?"Edit":"Add"} office opening</h2>
+    <label style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;">Position</label>${f("oo_pos","e.g. Accounting Assistant",o&&o.position)}
+    <label style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-top:8px;display:block;">Where</label>
+    <select id="oo_where" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;">${["Head Office","Warehouse"].map(w=>`<option${o&&o.worksite===w?" selected":""}>${w}</option>`).join("")}</select>
+    <div style="display:flex;gap:8px;margin-top:8px;"><div style="flex:1;"><label style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;">Need</label>${f("oo_count","1",o&&o.count_needed,"number")}</div>
+      <div style="flex:1;"><label style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;">Target date</label>${f("oo_target","",o&&o.target_fill_date,"date")}</div></div>
+    <label style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-top:8px;display:block;">Priority</label>
+    <select id="oo_prio" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;">${["Normal","Urgent"].map(p=>`<option value="${p}"${o&&o.priority===p?" selected":""}>${p}</option>`).join("")}</select>
+    <label style="font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-top:8px;display:block;">Notes</label><textarea id="oo_notes" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;box-sizing:border-box;">${esc((o&&o.notes)||"")}</textarea>
+    <div style="display:flex;gap:10px;margin-top:14px;"><button class="btn ghost" style="flex:1;" onclick="document.getElementById('offOpModal').remove()">Cancel</button><button class="btn" style="flex:1;" onclick="officeOpeningSave('${id||""}')">${o?"Save":"Add"}</button></div>
+  </div>`;
+  m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
+};
+window.officeOpeningSave=async(id)=>{
+  const v=x=>(document.getElementById(x)||{}).value||"";
+  const pos=v("oo_pos").trim(); if(!pos){ alert("Position is required."); return; }
+  const payload={ position:pos, worksite:v("oo_where"), count_needed:Number(v("oo_count"))||1, target_fill_date:v("oo_target")||null, priority:v("oo_prio"), notes:v("oo_notes")||null, diser_type:"Office", status:"Open" };
+  let res;
+  if(id){ res=await sb.from("manpower_requests").update(payload).eq("id",id); }
+  else { payload.date_posted=new Date().toISOString().slice(0,10); payload.posted_by=myEmail(); res=await sb.from("manpower_requests").insert(payload); }
+  if(res.error){ alert(res.error.message); return; }
+  const m=document.getElementById("offOpModal"); if(m) m.remove();
+  await loadEmployees(); renderPrehire();
+};
+window.officeOpeningFill=async(id)=>{
+  if(!confirm("Mark this office opening as filled? It drops off the pending list and the weekly email.")) return;
+  const {error}=await sb.from("manpower_requests").update({status:"Filled", updated_at:new Date().toISOString()}).eq("id",id);
+  if(error){ alert(error.message); return; }
+  await loadEmployees(); renderPrehire();
+};
 function phBodyPipeline(){
   const srcMatch=p=>!prehireSrc || (prehireSrc==="Direct"?(!p.hire_source||p.hire_source==="Direct"):p.hire_source===prehireSrc);
   // DRAFT = agency in-progress submissions (not yet shipped to RCC). Show as the leftmost lane so nothing is hidden.
@@ -13208,6 +13266,7 @@ function phBodyPipeline(){
     ${prehireSrc?`<div style="margin-top:12px;"><span class="pill ag" id="clrSrc" style="cursor:pointer;font-size:12px;">Showing ${esc(prehireSrc)} only · ✕ clear</span></div>`:""}
     <div class="psub" style="margin-top:12px;">Seven stages, left → right (Applied → Hired). Click any card to open the candidate and advance the stage. Onboarding is a separate phase.</div>
     <div class="pipe">${cols}</div>
+    ${officeOpeningsPanel()}
     ${(()=>{ const all=PREHIRE.filter(p=>p.sm_acceptance&&p.sm_acceptance!=="NA"); const acc=all.filter(p=>p.sm_acceptance==="Accepted").length; const pend=all.filter(p=>p.sm_acceptance!=="Accepted");
       return `<div class="panel"><details${pend.length?" open":""}><summary style="cursor:pointer;list-style:none;outline:none;">
         <span style="font-size:16px;font-weight:800;color:#12352a;">Store acceptance ${pend.length?`<span class="count-tag">${pend.length} waiting</span>`:`<span class="pill active">all clear</span>`}</span>

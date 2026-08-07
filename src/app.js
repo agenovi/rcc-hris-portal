@@ -8247,6 +8247,18 @@ window.mnToggleUrgent=async(store)=>{
   try{ await logChange("branch",b.id,b.name, on?"Opening marked urgent":"Opening urgency cleared",""); }catch(_){}
   renderManning();
 };
+// What an SC sees instead of HR's internal manning reminders: store updates in their own cluster — closures and merchandiser movements — so they can flag anything off.
+function scStoreUpdates(sc){
+  const myStores=new Set((BRANCHES||[]).filter(b=>b.sc===sc).map(b=>b.name));
+  const moves=(TRANSFERS||[]).filter(t=>!t.is_demo && (myStores.has(t.from_worksite)||myStores.has(t.to_worksite)) && ['Requested','InEffect','Completed'].includes(t.status)).slice(0,6);
+  const closed=(BRANCHES||[]).filter(b=>b.sc===sc && String(b.status||'').toLowerCase()==='closed');
+  if(!moves.length && !closed.length) return `<div class="panel" style="margin-top:0;"><h2>Store updates <span class="count-tag">your cluster</span></h2><div class="psub" style="margin:0;">No recent store closures or merchandiser movements in your cluster — they'll show here as they happen.</div></div>`;
+  return `<div class="panel" style="margin-top:0;"><h2>Store updates <span class="count-tag">your cluster</span></h2>
+    <div class="psub">Closures and merchandiser movements in your stores — raise it if anything looks off.</div>
+    ${closed.map(b=>`<div class="task"><div class="dot r"></div><div><div class="tt">Store closed — ${esc(b.name)}</div><div class="td">${esc(b.city||'')}${b.area?' · '+esc(b.area):''}</div></div></div>`).join('')}
+    ${moves.map(t=>`<div class="task"><div class="dot ${t.status==='Completed'?'g':'a'}"></div><div><div class="tt">${esc(t.emp_name||'Merchandiser')} — ${esc(t.from_worksite||'—')} → ${esc(t.to_worksite||'—')}</div><div class="td">${transferStatusPill(t.status)} · ${transferPeriod(t)}${t.sc_requested_by?' · by '+esc(t.sc_requested_by):''}</div></div></div>`).join('')}
+  </div>`;
+}
 function renderManning(){
   const pg=$("#page-manning"); if(!pg) return;
   // Sales Coordinator: lock the whole page to their own cluster — EXCEPT full-overview sales (Bryan), who sees all stores.

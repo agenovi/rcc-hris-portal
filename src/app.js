@@ -5248,16 +5248,34 @@ window.postRate=function(emp){
 };
 // Self-contained person view (info + live attendance) — works for SCs who can't open the full Employees page.
 function staffNoteRole(){ const r=userRole(); return ({admin:"Director",payroll:"HR (Payroll)",manager:"HR Manager",relations:"HR",recruiter:"Recruiter",sales:"SC"})[r]||"HR"; }
-function staffNotesThread(notes){ return (notes&&notes.length)?notes.slice().reverse().map(n=>`<div style="background:#f4f6f4;border-radius:8px;padding:8px 10px;margin-bottom:6px;"><div style="font-size:11px;color:var(--muted);"><b>${esc((n.by||"").split("@")[0]||"Someone")}</b>${n.role?" · "+esc(n.role):""}${n.at?" · "+fmtDate(n.at):""}</div><div style="font-size:13.5px;white-space:pre-wrap;">${esc(n.text||"")}</div></div>`).join(""):'<div class="psub" style="margin:0;">No notes yet.</div>'; }
+function staffSide(){ return userRole()==='sales'?'sc':'hr'; }
+function staffNoteList(notes){ return (notes&&notes.length)?notes.slice().reverse().map(n=>`<div style="background:#f4f6f4;border-radius:7px;padding:6px 9px;margin-bottom:5px;"><div style="font-size:10.5px;color:var(--muted);"><b>${esc((n.by||"").split("@")[0]||"Someone")}</b>${n.at?" · "+fmtDate(n.at):""}</div><div style="font-size:13px;white-space:pre-wrap;">${esc(n.text||"")}</div></div>`).join(""):'<div class="psub" style="margin:0;">None yet.</div>'; }
+function staffStarsHtml(id,side,val,editable){ return [1,2,3,4,5].map(n=>`<span ${editable?`onclick="setStaffStar('${id}','${side}',${n})" style="cursor:pointer;`:'style="'}color:${n<=(val||0)?'#e6a817':'#d5dbd7'};font-size:15px;line-height:1;">★</span>`).join(""); }
 function staffNotesPanel(e){
   const notes=Array.isArray(e.staff_notes)?e.staff_notes:[];
-  return `<div class="panel"><h2 style="margin:0 0 4px;">Notes &amp; reviews <span style="font-size:12px;font-weight:600;color:var(--muted);">— HR &amp; SC</span></h2>
-    <div class="psub">Running notes on this person from HR and the Sales Coordinator — both can see and add.</div>
-    <div id="snThread" style="margin-top:8px;">${staffNotesThread(notes)}</div>
-    <textarea id="snNote" rows="2" placeholder="Add a note or short review…" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;box-sizing:border-box;margin-top:8px;"></textarea>
-    <div style="text-align:right;margin-top:5px;"><button class="btn" onclick="postStaffNote('${e.id}')" style="font-size:12px;padding:4px 12px;">Add note</button></div>
+  const stars=(e.staff_stars&&typeof e.staff_stars==='object')?e.staff_stars:{};
+  const side=staffSide();
+  const scNotes=notes.filter(n=>(n.role||'')==='SC'), hrNotes=notes.filter(n=>(n.role||'')!=='SC');
+  return `<div class="panel"><h2 style="margin:0 0 2px;">Notes &amp; reviews <span style="font-size:12px;font-weight:600;color:var(--muted);">— HR &amp; SC kept separate</span></h2>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin:6px 0 10px;font-size:12px;color:var(--muted);align-items:center;">
+      <span>HR rating: <span id="snStarHr">${staffStarsHtml(e.id,'hr',stars.hr,side==='hr')}</span></span>
+      <span>SC rating: <span id="snStarSc">${staffStarsHtml(e.id,'sc',stars.sc,side==='sc')}</span></span>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:180px;"><div class="subhead" style="margin-bottom:4px;">HR notes</div><div id="snHr">${staffNoteList(hrNotes)}</div></div>
+      <div style="flex:1;min-width:180px;"><div class="subhead" style="margin-bottom:4px;">SC notes</div><div id="snSc">${staffNoteList(scNotes)}</div></div>
+    </div>
+    <textarea id="snNote" rows="2" placeholder="Add a ${side==='sc'?'SC':'HR'} note / short review…" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;box-sizing:border-box;margin-top:8px;"></textarea>
+    <div style="text-align:right;margin-top:5px;"><button class="btn" onclick="postStaffNote('${e.id}')" style="font-size:12px;padding:4px 12px;">Add ${side==='sc'?'SC':'HR'} note</button></div>
   </div>`;
 }
+window.setStaffStar=async(id,sideKey,n)=>{
+  if(staffSide()!==sideKey) return;   // you can only set your own side's rating
+  const e=(EMPLOYEES||[]).find(x=>String(x.id)===String(id)); if(!e) return;
+  const stars=Object.assign({},(e.staff_stars&&typeof e.staff_stars==='object')?e.staff_stars:{}); stars[sideKey]=n;
+  const {error}=await sb.from("employees").update({staff_stars:stars}).eq("id",id); if(error){ alert(error.message); return; }
+  e.staff_stars=stars; const el=document.getElementById(sideKey==='hr'?'snStarHr':'snStarSc'); if(el) el.innerHTML=staffStarsHtml(id,sideKey,n,true);
+};
 window.postStaffNote=async(id)=>{
   const ta=document.getElementById("snNote"); const val=ta?ta.value.trim():""; if(!val) return;
   const e=(EMPLOYEES||[]).find(x=>String(x.id)===String(id)); if(!e) return;
@@ -5265,7 +5283,10 @@ window.postStaffNote=async(id)=>{
   arr.push({by:myEmail(), role:staffNoteRole(), text:val, at:new Date().toISOString()});
   const {error}=await sb.from("employees").update({staff_notes:arr}).eq("id",id);
   if(error){ alert(error.message); return; }
-  e.staff_notes=arr; const th=document.getElementById("snThread"); if(th) th.innerHTML=staffNotesThread(arr); if(ta) ta.value="";
+  e.staff_notes=arr;
+  const h=document.getElementById("snHr"); if(h) h.innerHTML=staffNoteList(arr.filter(n=>(n.role||'')!=='SC'));
+  const s=document.getElementById("snSc"); if(s) s.innerHTML=staffNoteList(arr.filter(n=>(n.role||'')==='SC'));
+  if(ta) ta.value="";
 };
 window.openPersonCard=function(emp){
   const e = (typeof emp==='string') ? ((EMPLOYEES||[]).find(x=>String(x.id)===emp)||(EMPLOYEES||[]).find(x=>String(x.employee_id)===emp)) : emp;
@@ -8292,7 +8313,7 @@ function renderManning(){
   const railBtn=(sec,label,badge)=>`<button class="mrail${SEC===sec?' active':''}" data-sec="${sec}" style="display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;border:none;background:${SEC===sec?'#1E3A5F':'transparent'};color:${SEC===sec?'#fff':'#28313c'};font-weight:${SEC===sec?'700':'600'};font-size:13.5px;padding:10px 12px;border-radius:9px;cursor:pointer;margin-bottom:4px;">${esc(label)}${badge?`<span style="font-size:11px;background:${SEC===sec?'rgba(255,255,255,.2)':'#e6ecf3'};color:${SEC===sec?'#fff':'#41506b'};padding:1px 7px;border-radius:10px;">${badge}</span>`:''}</button>`;
   pg.innerHTML=`
     ${_sc?`<div class="panel" style="margin-top:0;background:var(--green-soft,#eef6f0);"><div style="font-weight:700;color:var(--green-dark);">Manning — ${esc(_sc)}'s stores</div><div class="psub" style="margin:2px 0 0;">Confirm the manning for your stores — tick ✓ Confirm on each once it's correct.</div></div>`:''}
-    ${remindersBar("manning")}
+    ${_sc?scStoreUpdates(_sc):remindersBar("manning")}
     <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
       <div id="mSecRail" style="flex:0 0 168px;min-width:148px;">
         ${railBtn('headcount','Headcount','')}

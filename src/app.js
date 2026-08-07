@@ -8948,7 +8948,7 @@ function openEvalForm(empId,type,due){
   m.style.cssText="position:fixed;inset:0;z-index:9998;background:rgba(14,50,25,.45);display:flex;justify-content:flex-end;";
   const dots=(k)=>`<span class="ev-circ" data-key="${k}" data-val="0" style="white-space:nowrap;">${[1,2,3,4,5].map(n=>`<i class="ev-dot" data-n="${n}" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:2px solid #cbd6cf;background:#fff;margin:0 3px;cursor:pointer;vertical-align:middle;font-size:12px;font-weight:700;font-style:normal;color:#93a29a;">${n}</i>`).join("")}</span>`;
   const critRow=(c)=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="font-size:13.5px;">${esc(c.label)}</span>${dots(c.k)}</div>`;
-  const OUTC=[["on_track","On track","#1f7a44"],["coaching","Needs coaching","#8a5a1c"],["at_risk","At risk / not for regularization","#a4322a"]];
+  const OUTC=[["regularize","For Regularization","#1f7a44"],["assess_5th","For Assessment on 5th month","#8a5a1c"],["eoc","EOC / Replacement","#a4322a"]];
   const outBtns=OUTC.map(o=>`<button type="button" class="ev-out" data-o="${o[0]}" style="border:1.5px solid #cbd6cf;background:#fff;color:#33413a;padding:8px 13px;border-radius:20px;font-size:12.5px;cursor:pointer;margin:0 6px 6px 0;">${o[1]}</button>`).join("");
   const ta=(id,ph)=>`<textarea id="${id}" rows="2" placeholder="${ph}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;box-sizing:border-box;"></textarea>`;
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:560px;height:100%;overflow-y:auto;">
@@ -8975,7 +8975,8 @@ function openEvalForm(empId,type,due){
         <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 4px;">What needs to improve</label>${ta("ev_imp","One real example")}
         <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 4px;">Any concern (attendance / honesty / conduct)</label>${ta("ev_con","Leave blank if none")}
       </div>
-      <div class="panel"><h2>Outcome</h2>
+      <div class="panel"><h2>Recommendation</h2>
+        <div class="psub" style="margin:-4px 0 8px;">The decision — <b>continue</b> (regularize / re-assess at 5th month) or <b>end of contract</b> (EOC / replacement).</div>
         <div id="ev_outrow">${outBtns}</div>
         <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 4px;">Evaluator(s) — pick a name, the email fills in</label>
         <div class="psub" style="margin:0 0 6px;">Add up to 3 to send the review / notice to.</div>
@@ -9021,7 +9022,7 @@ function openEvalForm(empId,type,due){
     const vals=Object.values(state.ratings); const avg=vals.length?vals.reduce((s,x)=>s+x,0)/vals.length:0;
     const band=state.att?state.att.band:null;
     const bandCol=band==="Good"?"#7ee0a8":band==="Bad"?"#f0c674":band==="Terrible"?"#f0928a":"#9fb0bf";
-    const outLbl=({on_track:"On track",coaching:"Needs coaching",at_risk:"At risk"})[state.outcome]||"—";
+    const outLbl=({regularize:"For Regularization",assess_5th:"For Assessment on 5th month",eoc:"EOC / Replacement"})[state.outcome]||"—";
     const el=document.getElementById("ev_score"); if(!el) return;
     el.innerHTML=`<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;">
       <div><div style="font-size:11px;opacity:.75;">Performance avg</div><div style="font-size:26px;font-weight:800;">${vals.length?avg.toFixed(1)+" / 5":"—"}</div></div>
@@ -9037,7 +9038,7 @@ function openEvalForm(empId,type,due){
   m.querySelectorAll(".ev-out").forEach(b=>b.addEventListener("click",()=>{
     state.outcome=b.dataset.o;
     m.querySelectorAll(".ev-out").forEach(x=>{ x.style.background="#fff"; x.style.color="#33413a"; x.style.borderColor="#cbd6cf"; });
-    const col=({on_track:"#1f7a44",coaching:"#8a5a1c",at_risk:"#a4322a"})[b.dataset.o]; b.style.background=col; b.style.color="#fff"; b.style.borderColor=col;
+    const col=({regularize:"#1f7a44",assess_5th:"#8a5a1c",eoc:"#a4322a"})[b.dataset.o]; b.style.background=col; b.style.color="#fff"; b.style.borderColor=col;
     paintScore(); if(typeof updateNoticeVis==="function") updateNoticeVis();
   }));
   paintScore();
@@ -9052,7 +9053,7 @@ function openEvalForm(empId,type,due){
   (()=>{ if(!_sc) return; const n2=m.querySelector('.ev-name[data-i="2"]'), e2=document.getElementById("ev_by2"); if(n2&&!n2.value){ n2.value=_sc; if(e2&&!e2.value&&_scEmail) e2.value=_scEmail; } })();
   // Notice-to-Improve panel: visible only for coaching / at-risk or weak attendance
   const noticePanel=document.getElementById("ev_notice_panel");
-  var updateNoticeVis=()=>{ if(!noticePanel) return; const bad=state.att&&(state.att.band==="Bad"||state.att.band==="Terrible"); const coach=state.outcome==="coaching"||state.outcome==="at_risk"; noticePanel.style.display=(bad||coach)?"":"none"; };
+  var updateNoticeVis=()=>{ if(!noticePanel) return; const bad=state.att&&(state.att.band==="Bad"||state.att.band==="Terrible"); const coach=state.outcome==="assess_5th"||state.outcome==="eoc"; noticePanel.style.display=(bad||coach)?"":"none"; };
   updateNoticeVis();
   (()=>{ const d=new Date(); d.setDate(d.getDate()+30); const el=document.getElementById("ev_notice_review"); if(el&&!el.value) el.value=d.toISOString().slice(0,10); })();
   let probNotice="none";
@@ -9112,9 +9113,12 @@ function openEvalForm(empId,type,due){
   document.getElementById("evClose").addEventListener("click",()=>m.remove());
   m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
   document.getElementById("evSave").addEventListener("click",async()=>{
-    const btn=document.getElementById("evSave"); btn.disabled=true; btn.textContent="Saving…";
+    const btn=document.getElementById("evSave");
+    const outLbl=({regularize:"For Regularization",assess_5th:"For Assessment on 5th month",eoc:"EOC / Replacement"})[state.outcome]||"Recorded";
+    // EOC = end of contract → the person is being let go and their position re-opens. Confirm before recording.
+    if(state.outcome==="eoc" && !confirm("This recommends END OF CONTRACT (EOC / Replacement) for "+e.full_name+".\n\nThat means not continuing them — their position will need to be re-opened in Manning. Record this recommendation?")) return;
+    btn.disabled=true; btn.textContent="Saving…";
     const vals=Object.values(state.ratings); const avg=vals.length?vals.reduce((s,x)=>s+x,0)/vals.length:null;
-    const outLbl=({on_track:"On track",coaching:"Needs coaching",at_risk:"At risk / not for regularization"})[state.outcome]||"Recorded";
     const row={ employee_ref:e.id, employee_name:e.full_name, position:e.position||e.department||null, eval_type:type, period_due:due, eval_scope:tpl0.key,
       overall_rating: avg?Math.round(avg):null, ratings:{criteria:state.ratings, attendance:state.att, concern:evVal("ev_con"), notice:(state._notice?state._notice():null), evaluators:[evVal("ev_by"),evVal("ev_by2"),evVal("ev_by3")].filter(Boolean), branch:e.worksite||null, sc:_sc||null, started:e.hire_date||null}, recommendation:outLbl,
       strengths:evVal("ev_str"), improvements:evVal("ev_imp"), evaluator:evVal("ev_by"), eval_date:evIso(new Date()), is_demo:!!e.is_demo };

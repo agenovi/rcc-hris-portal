@@ -8116,8 +8116,8 @@ function renderManning(){
       ${peopleShort>0?`<div style="margin:10px 0 2px;">
         <div class="psub" style="margin:0 0 6px;font-weight:600;">Shortfall by region <span style="font-weight:400;">— sums to ${peopleShort}</span></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          ${regOrder.map(a=>{ const n=regShort[a]||0; return `<span class="mn-reg" data-area="${esc(a)}" title="Tap to see ${esc(regNameOf(a))}'s short stores" style="cursor:pointer;display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:20px;border:1.5px solid ${n>0?'#f1c9c5':'#dbe7de'};background:${n>0?'#fdf1ef':'#eef6f0'};">
-            <b>${esc(a)}</b><span style="color:${n>0?'var(--red)':'var(--green-dark)'};font-weight:700;">${n}</span><span style="font-size:11px;color:var(--muted);">${n>0?(regStores[a]||0)+' store'+((regStores[a]||0)===1?'':'s'):'full'}</span>
+          ${regOrder.map(a=>{ const n=regShort[a]||0; return `<span class="mn-reg" data-area="${esc(a)}" title="Tap to see ${esc(regNameOf(a))}'s short stores" style="cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border-radius:20px;border:1.5px solid ${n>0?'#f1c9c5':'#dbe7de'};background:${n>0?'#fdf1ef':'#eef6f0'};">
+            <b>${esc(a)}</b><span style="color:${n>0?'var(--red)':'var(--green-dark)'};font-weight:800;">${n} short</span>${n>0?`<span style="font-size:11px;color:var(--muted);">· ${(regStores[a]||0)} store${(regStores[a]||0)===1?'':'s'}</span>`:`<span style="font-size:11px;color:var(--green-dark);">· full</span>`}
           </span>`; }).join("")}
         </div>
       </div>`:''}

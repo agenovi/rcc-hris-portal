@@ -95,11 +95,11 @@ function stepper(status){
   return `<div style="display:flex;align-items:flex-start;margin-top:12px;overflow-x:auto;padding-bottom:2px;">`+
     PIPELINE.map((p,i)=>{
       const done=i<cur, on=i===cur;
-      const bg=done||on?"#1c6b3f":"#fff", bd=done||on?"#1c6b3f":"#cdd5de", fg=done||on?"#fff":"#9aa5b1";
-      const line=i<PIPELINE.length-1?`<div style="width:20px;height:2px;background:${i<cur?"#1c6b3f":"#e3e8ef"};margin-top:11px;flex-shrink:0;"></div>`:"";
+      const bg=done||on?"var(--navy)":"#fff", bd=done||on?"var(--navy)":"#cdd5de", fg=done||on?"#fff":"#9aa5b1";
+      const line=i<PIPELINE.length-1?`<div style="width:20px;height:2px;background:${i<cur?"var(--navy)":"#e3e8ef"};margin-top:11px;flex-shrink:0;"></div>`:"";
       return `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:60px;">
           <div style="width:22px;height:22px;border-radius:50%;background:${bg};border:2px solid ${bd};color:${fg};font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;">${done?"✓":i+1}</div>
-          <div style="font-size:9.5px;text-align:center;margin-top:5px;color:${on?"#12352a":"#9aa5b1"};font-weight:${on?800:600};line-height:1.15;">${p.l}</div>
+          <div style="font-size:9.5px;text-align:center;margin-top:5px;color:${on?"var(--navy)":"#9aa5b1"};font-weight:${on?800:600};line-height:1.15;">${p.l}</div>
         </div>${line}`;
     }).join("")+`</div>`;
 }
@@ -146,10 +146,11 @@ window.postAgencyComment=function(id){
 };
 function candCard(x){
   const dt=x.submitted?new Date(x.submitted).toLocaleDateString(undefined,{month:"short",day:"numeric"}):"";
-  return `<div class="card" style="flex-direction:column;align-items:stretch;gap:0;${x.waiting_on==="agency"?"border-color:#e6a6a0;background:#fff7f6;":""}">
+  const lb=x.waiting_on==="agency"?"#c0392b":"var(--navy)";
+  return `<div class="card" style="flex-direction:column;align-items:stretch;gap:0;border-left:4px solid ${lb};${x.waiting_on==="agency"?"background:#fff7f6;":""}">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;">
       <div style="min-width:0;"><span class="nm">${esc(x.name)}</span> <span class="loc">${x.store?"· "+esc(x.store):""}${x.position?" · "+esc(x.position):""}</span></div>
-      <span class="chip open">${esc(stageLabel(x.status))}</span>
+      <span class="chip" style="background:#e7edf4;color:var(--navy);">${esc(stageLabel(x.status))}</span>
     </div>
     ${stepper(x.status)}
     ${dt?`<div class="dates" style="margin-top:8px;">Submitted ${dt}</div>`:""}

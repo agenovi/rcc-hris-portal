@@ -8035,7 +8035,12 @@ function openTransfer(t){
         ${row('Employee', (t.emp_name||'')+(t.emp_no?` · ${t.emp_no}`:''))}${row('From', t.from_worksite)}${row('To', t.to_worksite)}${row('Type', t.request_type)}${row('Period', transferPeriod(t))}${row('Requested by (SC)', t.sc_requested_by)}${row('Reason', t.reason)}
       </div>
       <div class="panel">
-        <h2>Store-head confirmation</h2>
+        <h2>HR confirmation</h2>
+        <div class="task" style="align-items:flex-start;"><div class="dot ${t.hr_confirmed_by?'g':'a'}"></div><div style="flex:1;"><div class="tt">HR confirms the movement</div><div class="td">${t.hr_confirmed_by?`✓ ${esc(t.hr_confirmed_by)} · ${fmtDate(t.hr_confirmed_at)}`:`Pending — HR reviews and confirms the SC's move request. (Later this auto-confirms from the destination store's biometrics.)`}</div></div></div>
+        ${(!t.hr_confirmed_by && ['Requested','InEffect'].includes(t.status) && userRole()!=='sales')?`<div style="margin-top:8px;"><button class="btn blue" id="trfHrConfirm">✓ Confirm movement (HR)</button></div>`:''}
+      </div>
+      <div class="panel">
+        <h2>Store-head confirmation <span class="psub" style="font-size:11px;">(on-the-ground proof)</span></h2>
         <div class="task" style="align-items:flex-start;"><div class="dot ${beforeDone?'g':'a'}"></div><div style="flex:1;"><div class="tt">Before — store head agrees to receive</div><div class="td">${beforeDone?`✓ ${esc(t.before_by||'')} · ${fmtDate(t.before_at)}${t.before_note?` — ${esc(t.before_note)}`:''}`:'Pending — the receiving store head confirms they will take the employee for the period.'}</div></div></div>
         <div class="task" style="align-items:flex-start;"><div class="dot ${afterDone?'g':'a'}"></div><div style="flex:1;"><div class="tt">After — store head attests presence</div><div class="td">${afterDone?`✓ ${esc(t.after_by||'')} · ${fmtDate(t.after_at)}${t.after_note?` — ${esc(t.after_note)}`:''}`:`Pending — after the period, the store head confirms <b>${esc(t.emp_name||'the employee')}</b> was at <b>${esc(t.to_worksite||'the store')}</b> for ${transferPeriod(t)}.`}</div></div></div>
       </div>
@@ -8051,6 +8056,7 @@ function openTransfer(t){
   document.getElementById("trfViewClose").addEventListener("click",()=>m.remove());
   const wireStep=(id,fn)=>{ const b=document.getElementById(id); if(b) b.addEventListener("click",fn); };
   wireStep("trfEdit",()=>{ m.remove(); transferForm(t); });
+  wireStep("trfHrConfirm",async()=>{ const nm=myName()||myEmail(); if(!confirm("Confirm this store movement as HR?\n\n"+(t.emp_name||"")+": "+(t.from_worksite||"—")+" → "+(t.to_worksite||"—")+"\n\nThis records HR's confirmation. Worksite stays owned by PayPlus — update it there once the move is permanent.")) return; const patch={hr_confirmed_by:nm, hr_confirmed_at:new Date().toISOString()}; if(t.status==='Requested') patch.status='InEffect'; await transferSet(t,patch,m,"HR confirmed movement: "+nm); });
   wireStep("trfBefore",()=>transferConfirm(t,'before',m));
   wireStep("trfAfter",()=>transferConfirm(t,'after',m));
   wireStep("trfDecline",async()=>{ if(!confirm("Mark this request as declined by the store head?")) return; await transferSet(t,{status:'Declined'},m,"Store head declined"); });

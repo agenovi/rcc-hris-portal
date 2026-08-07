@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1786099798";
+window.APP_BUILD="1786099861";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1786099798" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1786099861" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -10285,7 +10285,10 @@ function wireTransfers(){
 }
 function transferForm(t){
   t=t||{}; const isNew=!t.id;
-  const emps=(EMPLOYEES||[]).filter(e=>e.full_name).sort((a,b)=>(a.full_name||'').localeCompare(b.full_name||''));
+  // When a Store Coordinator creates the movement in-portal, scope it to their OWN staff and lock them as the requester.
+  const _scMe=(typeof userRole==='function'&&userRole()==='sales'&&typeof scForUser==='function')?scForUser():null;
+  const myStores=_scMe?new Set((BRANCHES||[]).filter(b=>b.sc===_scMe).map(b=>b.name)):null;
+  const emps=(EMPLOYEES||[]).filter(e=>e.full_name && (!myStores || myStores.has(normWorksite(e.worksite))) && (e.status||'Active')==='Active').sort((a,b)=>(a.full_name||'').localeCompare(b.full_name||''));
   const stores=[...new Set((BRANCHES||[]).filter(b=>b.status==="Open").map(b=>b.name))].sort();
   const scNames=[...new Set((BRANCHES||[]).map(b=>b.sc).filter(x=>x&&x!=='Unassigned'))].sort();
   const lbl=(s)=>`<label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin:10px 0 3px;">${s}</label>`;
@@ -10294,13 +10297,13 @@ function transferForm(t){
   let m=document.getElementById("trfModal"); if(!m){ m=document.createElement("div"); m.id="trfModal"; document.body.appendChild(m); }
   m.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(14,50,25,.5);display:flex;justify-content:flex-end;";
   m.innerHTML=`<div style="background:#f1f4f2;width:100%;max-width:520px;height:100%;overflow-y:auto;box-shadow:-6px 0 30px rgba(0,0,0,.18);">
-    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">${isNew?'New transfer request':'Edit transfer'}</div><div style="font-size:12.5px;opacity:.85;">Raised by the Store Coordinator · store head confirms before &amp; after</div></div>
+    <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">${isNew?'New store movement':'Edit store movement'}</div><div style="font-size:12.5px;opacity:.85;">${_scMe?'Move one of your staff to another store — HR confirms it':'Raised by the Store Coordinator · store head confirms before &amp; after'}</div></div>
     <div style="padding:18px 22px;"><div class="panel" style="margin-top:0;">
       ${lbl('Employee')}<input id="trf_emp" list="trf_emplist" value="${esc(t.emp_name||'')}" placeholder="Type a name…" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;">
       <datalist id="trf_emplist">${emps.map(e=>`<option value="${esc(e.full_name)}">`).join('')}</datalist>
       ${lbl('Current store (from)')}${inp('trf_from',t.from_worksite)}<div style="font-size:11px;color:var(--muted);margin-top:2px;">Auto-fills from the employee's record; edit if needed.</div>
       ${lbl('Transfer to (store)')}<select id="trf_to" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;"><option value="">Select store…</option>${opts(stores,t.to_worksite)}</select>
-      ${lbl('Requested by — Store Coordinator')}<input id="trf_sc" list="trf_sclist" value="${esc(t.sc_requested_by||'')}" placeholder="SC name" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;">
+      ${lbl('Requested by — Store Coordinator')}<input id="trf_sc" list="trf_sclist" value="${esc(t.sc_requested_by||_scMe||'')}" ${_scMe?'readonly style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#eef1f4;"':'placeholder="SC name" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;"'}>
       <datalist id="trf_sclist">${scNames.map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
       ${lbl('Type')}<select id="trf_type" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;">${opts(['Temporary','Permanent'],t.request_type||'Temporary')}</select>
       <div style="display:flex;gap:10px;">

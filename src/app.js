@@ -5167,6 +5167,26 @@ window.postRate=function(emp){
   });
 };
 // Self-contained person view (info + live attendance) — works for SCs who can't open the full Employees page.
+function staffNoteRole(){ const r=userRole(); return ({admin:"Director",payroll:"HR (Payroll)",manager:"HR Manager",relations:"HR",recruiter:"Recruiter",sales:"SC"})[r]||"HR"; }
+function staffNotesThread(notes){ return (notes&&notes.length)?notes.slice().reverse().map(n=>`<div style="background:#f4f6f4;border-radius:8px;padding:8px 10px;margin-bottom:6px;"><div style="font-size:11px;color:var(--muted);"><b>${esc((n.by||"").split("@")[0]||"Someone")}</b>${n.role?" · "+esc(n.role):""}${n.at?" · "+fmtDate(n.at):""}</div><div style="font-size:13.5px;white-space:pre-wrap;">${esc(n.text||"")}</div></div>`).join(""):'<div class="psub" style="margin:0;">No notes yet.</div>'; }
+function staffNotesPanel(e){
+  const notes=Array.isArray(e.staff_notes)?e.staff_notes:[];
+  return `<div class="panel"><h2 style="margin:0 0 4px;">Notes &amp; reviews <span style="font-size:12px;font-weight:600;color:var(--muted);">— HR &amp; SC</span></h2>
+    <div class="psub">Running notes on this person from HR and the Sales Coordinator — both can see and add.</div>
+    <div id="snThread" style="margin-top:8px;">${staffNotesThread(notes)}</div>
+    <textarea id="snNote" rows="2" placeholder="Add a note or short review…" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;box-sizing:border-box;margin-top:8px;"></textarea>
+    <div style="text-align:right;margin-top:5px;"><button class="btn" onclick="postStaffNote('${e.id}')" style="font-size:12px;padding:4px 12px;">Add note</button></div>
+  </div>`;
+}
+window.postStaffNote=async(id)=>{
+  const ta=document.getElementById("snNote"); const val=ta?ta.value.trim():""; if(!val) return;
+  const e=(EMPLOYEES||[]).find(x=>String(x.id)===String(id)); if(!e) return;
+  const arr=Array.isArray(e.staff_notes)?e.staff_notes.slice():[];
+  arr.push({by:myEmail(), role:staffNoteRole(), text:val, at:new Date().toISOString()});
+  const {error}=await sb.from("employees").update({staff_notes:arr}).eq("id",id);
+  if(error){ alert(error.message); return; }
+  e.staff_notes=arr; const th=document.getElementById("snThread"); if(th) th.innerHTML=staffNotesThread(arr); if(ta) ta.value="";
+};
 window.openPersonCard=function(emp){
   const e = (typeof emp==='string') ? ((EMPLOYEES||[]).find(x=>String(x.id)===emp)||(EMPLOYEES||[]).find(x=>String(x.employee_id)===emp)) : emp;
   if(!e){ alert("Couldn't find that person's record."); return; }
@@ -5191,6 +5211,7 @@ window.openPersonCard=function(emp){
         <div class="psub">Present / absent / late from PayPlus. Whether an absence was authorized isn't in the API — check the DTR.</div>
         <div id="pcAttendance" style="margin-top:8px;"><div class="psub">Loading attendance…</div></div>
       </div>
+      ${staffNotesPanel(e)}
     </div>
   </div>`;
   m.addEventListener("click",ev=>{ if(ev.target===m) m.remove(); });
@@ -8591,8 +8612,9 @@ function openForm(e){
         ${canSeePay()?`${fld("f_daily_rate","Daily rate (₱)",e.daily_rate,"number")}${fld("f_daily_allowance","Daily allowance (₱)",e.daily_allowance,"number")}`:`<div style="margin-bottom:10px;font-size:13px;color:#6a766f;">🔒 Pay (daily rate / allowance) is restricted to authorised payroll.</div>`}
         ${isNew?fld("f_hire_date","Hire date",e.hire_date,"date"):roField("Hire date",e.hire_date)}${isNew?fld("f_regularization_date","Regularization date",e.regularization_date,"date"):roField("Regularization date",e.regularization_date)}
         ${fld("f_end_date","End date",e.end_date,"date")}${sel("f_end_reason","End reason",END_REASONS,e.end_reason)}
-        <div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Notes</label><textarea id="f_notes" rows="3" style="width:100%;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;">${esc(e.notes||"")}</textarea></div>
+        <div style="margin-bottom:10px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:4px;">Private note (HR admin)</label><textarea id="f_notes" rows="3" style="width:100%;padding:9px 11px;border:1px solid #e2e7e4;border-radius:8px;font-size:14px;">${esc(e.notes||"")}</textarea></div>
       </div>
+      ${!isNew?staffNotesPanel(e):""}
       ${demoChk("f_isdemo",e.is_demo)}
       <div id="fMsg" style="font-size:13px;color:#a4322a;margin:6px 0;"></div>
       <div style="display:flex;gap:10px;">

@@ -232,7 +232,7 @@ async function load(){
     const at=document.getElementById("agTitle"); if(at) at.innerHTML=`${esc(d.agency||"Agency")} <span style="font-weight:500;opacity:.8;">— Agency Dashboard</span>`;
     document.getElementById("who").textContent=`${d.openings.length} stores hiring · ${slots} open positions · ${myActive} of your candidates in process`;
     const to=document.getElementById("tabOpen"); if(to) to.textContent=`Open positions (${slots})`;
-    const tm=document.getElementById("tabMine"); if(tm) tm.textContent=`My candidates (${(d.my_submissions||[]).filter(x=>!x.hidden).length})`;
+    const tm=document.getElementById("tabMine"); if(tm) tm.textContent=`My candidates (${(d.my_submissions||[]).filter(x=>!x.hidden && !["DRAFT","HIRED","REJECTED","POOLED"].includes(x.status)).length})`;
     render();
   }catch(e){ document.getElementById("body").innerHTML=`<div class="empty">Couldn't load right now. Please try again.</div>`; }
 }

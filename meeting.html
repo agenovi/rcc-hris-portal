@@ -64,7 +64,7 @@
       <option value="Jell-on">Jell-On agency</option>
       <option value="M&G">M&amp;G agency</option>
     </select>
-    <div class="hint">Choose whether you're a direct RCC hire or under an agency. This makes sure your reimbursement is booked to the right group.</div>
+    <div class="hint" id="hireTypeHint">Choose whether you're a direct RCC hire or under an agency. This makes sure your reimbursement is booked to the right group.</div>
 
     <div class="sec">Your reimbursement</div>
     <div class="row2">
@@ -181,15 +181,26 @@ const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
 function applyRosterMatch(){
   const hit=ROSTER.find(p=>norm(p.name)===norm($("name").value));
   const hint=$("nameHint");
+  const htSel=$("hire_type"), htHint=$("hireTypeHint");
   if(hit){
     if(hit.store && !$("store").value.trim()) $("store").value=hit.store;
     if(hit.emp_no && !$("emp_no").value.trim()) $("emp_no").value=String(hit.emp_no).replace(/\.0+$/,"").replace(/[^\d]/g,"");
-    if(hit.hire_type){ $("hire_type").value=hit.hire_type; }
+    if(hit.hire_type){
+      // Employment type comes from PayPlus — set it and lock it so it can't be changed.
+      htSel.value=hit.hire_type; htSel.disabled=true;
+      if(htHint){ htHint.textContent="Set automatically from your record ("+hit.hire_type+")."; htHint.style.color="#1e7d43"; }
+    }else{
+      htSel.disabled=false;
+      if(htHint){ htHint.textContent="Choose whether you're a direct RCC hire or under an agency."; htHint.style.color=""; }
+    }
     applyPayoutRule();
     if(hint){ hint.textContent="✓ Found you on the expected list — your store and group are filled in. Change them if anything's off."; hint.style.color="#1e7d43"; }
-  }else if(hint){
-    hint.textContent="Pick your name from the list so your store and group fill in for you. Not on the list? Just type your full name.";
-    hint.style.color="";
+  }else{
+    // Walk-in / not on the list — let them pick.
+    htSel.disabled=false;
+    if(htHint){ htHint.textContent="Choose whether you're a direct RCC hire or under an agency."; htHint.style.color=""; }
+    if(hint){ hint.textContent="Pick your name from the list so your store and group fill in for you. Not on the list? Just type your full name.";
+      hint.style.color=""; }
   }
   // The payout account must be under their own name — default the account holder to their name.
   if($("account_holder") && !$("account_holder").value.trim() && $("name").value.trim()) $("account_holder").value=$("name").value.trim();

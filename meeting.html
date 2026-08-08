@@ -165,7 +165,7 @@ function applyPayoutRule(){
 }
 $("hire_type").addEventListener("change", applyPayoutRule);
 // Employee number is always a plain integer — never a float/decimal.
-$("emp_no").addEventListener("input", e=>{ e.target.value=e.target.value.replace(/[^\d]/g,""); });
+$("emp_no").addEventListener("input", e=>{ e.target.value=e.target.value.replace(/\..*$/,"").replace(/[^\d]/g,""); });
 
 let ROSTER=[];
 const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");

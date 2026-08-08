@@ -81,7 +81,7 @@
     <div class="hint">Attach your bus/jeep pass, ride receipt, or LBC receipt.</div>
 
     <div class="sec">Where to send your money</div>
-    <div class="hint" style="margin-bottom:8px;">We can only pay out via <b>GCash</b> or <b>UnionBank</b>. Please choose one.</div>
+    <div class="hint" style="margin-bottom:8px;">Your payout method is set automatically: <b>Direct RCC hires → UnionBank</b>, <b>agency (Jell-On / M&amp;G) → GCash</b>. Just enter the number.</div>
     <label class="req">Account holder name</label>
     <input id="account_holder" placeholder="Name on the account">
     <div class="row2">
@@ -155,6 +155,17 @@ $("bank_name").addEventListener("change", e=>{
   else if(m==="UnionBank"){ lab.textContent="UnionBank account number"; inp.placeholder="12-digit account no."; inp.maxLength=12; }
   else { lab.textContent="Number"; inp.placeholder="Choose a method first"; inp.removeAttribute("maxlength"); }
 });
+// Payout method is fixed by hire type: Direct RCC hire → UnionBank, agency (Jell-On / M&G) → GCash. No manual choice.
+function applyPayoutRule(){
+  const ht=$("hire_type").value, sel=$("bank_name");
+  if(!ht){ sel.disabled=false; return; }
+  const method = ht==="Direct" ? "UnionBank" : "GCash";
+  if(sel.value!==method){ sel.value=method; sel.dispatchEvent(new Event("change")); }
+  sel.disabled=true;
+}
+$("hire_type").addEventListener("change", applyPayoutRule);
+// Employee number is always a plain integer — never a float/decimal.
+$("emp_no").addEventListener("input", e=>{ e.target.value=e.target.value.replace(/[^\d]/g,""); });
 
 let ROSTER=[];
 const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
@@ -164,8 +175,9 @@ function applyRosterMatch(){
   const hint=$("nameHint");
   if(hit){
     if(hit.store && !$("store").value.trim()) $("store").value=hit.store;
-    if(hit.emp_no && !$("emp_no").value.trim()) $("emp_no").value=hit.emp_no;
+    if(hit.emp_no && !$("emp_no").value.trim()) $("emp_no").value=String(hit.emp_no).replace(/\.0+$/,"").replace(/[^\d]/g,"");
     if(hit.hire_type){ $("hire_type").value=hit.hire_type; }
+    applyPayoutRule();
     if(hint){ hint.textContent="✓ Found you on the expected list — your store and group are filled in. Change them if anything's off."; hint.style.color="#1e7d43"; }
   }else if(hint){
     hint.textContent="Pick your name from the list so your store and group fill in for you. Not on the list? Just type your full name.";

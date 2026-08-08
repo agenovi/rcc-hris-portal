@@ -5143,7 +5143,8 @@ function storeForm(b){
     ${fld("st_email","Store email (for auto-sending NTEs)",b.email,"email")}
     <div class="form-grid">${sel("st_cat","Type",["CO","CN"],b.category||"CO")}${sel("st_status","Status",["Open","Closed","Under Renovation","No Manning","Pending"],b.status||"Open")}</div>
     <div class="form-grid">${fld("st_ahcs","Approved stationary",b.ahc_stationary??0,"number")}${fld("st_ahcr","Approved reliever",b.ahc_reliever??0,"number")}</div>
-    <div class="psub" style="margin:2px 0 6px;">CO = Boutique · CN = Concession. Approved headcount = how many this store should have.</div>
+    <div class="form-grid">${fld("st_since","Opening went live",b.opening_since,"date")}${fld("st_reqby","Needed by (new store)",b.opening_required_by,"date")}</div>
+    <div class="psub" style="margin:2px 0 6px;">CO = Boutique · CN = Concession. Approved headcount = how many this store should have. Opening dates drive the aging + "needed by" flags on the Openings list.</div>
     ${!admin?`<div style="margin:4px 0 4px;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Reason for change *</label>
       <input id="st_reason" placeholder="Why this change is needed — goes to Management for approval" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;font-size:13.5px;"></div>
       <div class="psub" style="margin:-2px 0 6px;color:#a4322a;">Store-list changes need Management approval — this is submitted as a request, not applied directly.</div>`:''}
@@ -5156,7 +5157,7 @@ function storeForm(b){
   document.getElementById("stSave").addEventListener("click",async()=>{
     const name=isNew?v("st_name"):b.name; if(!name){ document.getElementById("stMsg").textContent="Store name is required."; return; }
     const payload={ name, city:isNew?v("st_city"):b.city, area:isNew?v("st_area"):b.area, sc:v("st_sc"), email:v("st_email")||null, category:v("st_cat"), status:v("st_status"),
-      ahc_stationary:nv("st_ahcs")||0, ahc_reliever:nv("st_ahcr")||0, is_demo:demoChecked("st_isdemo") };
+      ahc_stationary:nv("st_ahcs")||0, ahc_reliever:nv("st_ahcr")||0, opening_since:v("st_since")||null, opening_required_by:v("st_reqby")||null, is_demo:demoChecked("st_isdemo") };
     if(!admin){
       const reason=v("st_reason");
       if(!reason){ document.getElementById("stMsg").textContent="A reason is required for a change request."; return; }
@@ -8349,7 +8350,7 @@ function renderManning(){
   open.forEach(b=>{ const s=storeShort(b.name); const a=superOf(b.area||"—"); regShort[a]=(regShort[a]||0)+s; if(s>0) regStores[a]=(regStores[a]||0)+1; });
   const regOrder=[...REGIONS.map(r=>r[0]),...Object.keys(regShort).filter(a=>!REGIONS.some(r=>r[0]===a))].filter(a=>regShort[a]!==undefined);
   // Openings DERIVE from the PayPlus shortfall — one figure everywhere (no hand-posted list). One row per short store.
-  const OPENINGS=open.filter(b=>(!_sc||b.sc===_sc)).map(b=>{ const sp=storeShortSplit(b.name); return { id:'gap-'+b.name, worksite:b.name, sc:b.sc, area:superOf(b.area||"—"), count_needed:sp.total, stationary_need:sp.stationary, reliever_need:sp.reliever, coveredBy:sp.coveredBy, urgent:!!b.opening_urgent, opening_since:b.opening_since||null, position:'Merchandiser', status:'Open', _derived:true }; }).filter(o=>o.count_needed>0);
+  const OPENINGS=open.filter(b=>(!_sc||b.sc===_sc)).map(b=>{ const sp=storeShortSplit(b.name); return { id:'gap-'+b.name, worksite:b.name, sc:b.sc, area:superOf(b.area||"—"), count_needed:sp.total, stationary_need:sp.stationary, reliever_need:sp.reliever, coveredBy:sp.coveredBy, urgent:!!b.opening_urgent, opening_since:b.opening_since||null, opening_required_by:b.opening_required_by||null, position:'Merchandiser', status:'Open', _derived:true }; }).filter(o=>o.count_needed>0);
   const opInReview=(store)=>PREHIRE.filter(p=>p.worksite===store && !["HIRED","REJECTED","DRAFT","POOLED"].includes(p.phase)).length;
   const nTrf=(TRANSFERS||[]).filter(t=>['Requested','InEffect'].includes(t.status)).length;
   const nPositions=OPENINGS.reduce((s,o)=>s+(Number(o.count_needed)||0),0);
@@ -8452,8 +8453,9 @@ function renderManning(){
       const revCell=nRev>0?`<a class="op-review" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;color:var(--green-dark);font-weight:700;text-decoration:underline;">${nRev} — review</a>`:`<span style="color:var(--muted);">0</span>`;
       const urgentPill=o.urgent?' <span class="pill awol">⚡ Urgent</span>':'';
       const sinceLine=o.opening_since?`<div style="font-size:10.5px;color:var(--muted);">open since ${fmtDate(o.opening_since)}</div>`:'';
+      const reqLine=(()=>{ if(!o.opening_required_by) return ''; const d=new Date(o.opening_required_by+"T00:00:00"); const t0=new Date(); t0.setHours(0,0,0,0); const over=!isNaN(d)&&d<t0; const days=isNaN(d)?null:Math.round((d-t0)/86400000); return `<div style="font-size:10.5px;color:${over?'#a4322a':'#8a5a1c'};font-weight:${over?700:600};">needed by ${fmtDate(o.opening_required_by)}${over?' · overdue':(days!=null&&days<=14?` · ${days}d`:'')}</div>`; })();
       const urgentBtn=canManageStores()?`<button class="op-urgent" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;font-size:11px;padding:3px 9px;border-radius:14px;border:1.5px solid ${o.urgent?'#e6a6a0':'#dbe4dd'};background:${o.urgent?'#fdeceb':'#fff'};color:${o.urgent?'#a4322a':'#41506b'};">${o.urgent?'⚡ Urgent ✓':'Mark urgent'}</button>`:'<span class="note">from PayPlus</span>';
-      html+=`<tr class="op-row" data-id="${o.id}" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;"><td><b>${esc(o.worksite)}</b>${urgentPill}${sinceLine}${noteLine}</td><td>${esc(o.sc||"—")}</td><td>${needCell(o)}</td><td>${revCell}</td>
+      html+=`<tr class="op-row" data-id="${o.id}" data-ws="${esc(o.worksite||'')}" style="cursor:pointer;"><td><b>${esc(o.worksite)}</b>${urgentPill}${sinceLine}${reqLine}${noteLine}</td><td>${esc(o.sc||"—")}</td><td>${needCell(o)}</td><td>${revCell}</td>
         <td style="text-align:right;white-space:nowrap;">${urgentBtn}</td></tr>`;
     });
     opRows.innerHTML=html;

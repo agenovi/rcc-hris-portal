@@ -8034,7 +8034,10 @@ function transferForm(t){
       sc_email:v("trf_scemail")||null, emp_email:v("trf_empemail")||null,
       start_date:v("trf_start")||null, end_date:perm?null:(v("trf_end")||null), updated_at:new Date().toISOString() };
     let res;
-    if(isNew){ payload.status='Requested'; payload.created_by=myEmail()||null; res=await sb.from("employee_transfers").insert(payload); }
+    if(isNew){ payload.status='Requested'; payload.created_by=myEmail()||null;
+      // Who keyed it: an SC filing for themselves, or HR on the SC's behalf. The SC named above stays accountable; this records the data-entry person.
+      payload.recorded_by=(typeof whoName==='function'?whoName(myEmail()):myEmail())||null; payload.recorded_by_role=_scMe?'SC':((userRole&&userRole())||'HR');
+      res=await sb.from("employee_transfers").insert(payload); }
     else res=await sb.from("employee_transfers").update(payload).eq("id",t.id);
     if(res.error){ document.getElementById("trfMsg").textContent=res.error.message; return; }
     await logChange("transfer",t.id||null,name, isNew?"Transfer requested":"Transfer edited", `${v("trf_from")||'—'} → ${v("trf_to")}`);
@@ -8054,7 +8057,7 @@ function openTransfer(t){
     </div>
     <div style="padding:18px 22px 60px;">
       <div class="panel" style="margin-top:0;">
-        ${row('Employee', (t.emp_name||'')+(t.emp_no?` · ${t.emp_no}`:''))}${row('From', t.from_worksite)}${row('To', t.to_worksite)}${row('Type', t.request_type)}${row('Period', transferPeriod(t))}${row('Requested by (SC)', t.sc_requested_by)}${row('Reason', t.reason)}
+        ${row('Employee', (t.emp_name||'')+(t.emp_no?` · ${t.emp_no}`:''))}${row('From', t.from_worksite)}${row('To', t.to_worksite)}${row('Type', t.request_type)}${row('Period', transferPeriod(t))}${row('Requested by (SC)', t.sc_requested_by)}${row('Recorded by', t.recorded_by?(t.recorded_by+(t.recorded_by_role?` · ${t.recorded_by_role}`:'')):(t.created_by==='sc-link'?'SC (self-service link)':null))}${row('Reason', t.reason)}
       </div>
       <div class="panel">
         <h2>HR confirmation</h2>
@@ -11995,17 +11998,26 @@ async function smidMarkRenewed(empId){
   await loadSmid(); renderOnboarding();
 }
 window.smidMarkRenewed=smidMarkRenewed;
+window.smidCopyNames=(btn)=>{ const n=btn.getAttribute("data-names")||""; if(navigator.clipboard) navigator.clipboard.writeText(n); const t=btn.textContent; btn.textContent="Copied ✓ — paste into your list / message"; setTimeout(()=>btn.textContent=t,1600); };
 function smidPanelHtml(){
   const list=smidList(); if(!list.length) return "";
-  const overdue=list.filter(x=>x.bucket==="overdue"), due=list.filter(x=>x.bucket==="due"), upcoming=list.filter(x=>x.bucket==="upcoming");
-  const flagged=overdue.concat(due);
-  const chip=(x)=>{ const c = x.bucket==="overdue" ? ["#a4322a","#fdecea",(-x.days)+"d overdue"] : ["#8a5a1c","#fdf6e3",x.days+"d left"]; return `<span class="pill" style="background:${c[1]};color:${c[0]};font-weight:700;">${c[2]}</span>`; };
+  const flagged=list.filter(x=>x.bucket!=="upcoming").length;
+  const chip=(x)=>{ const c = x.bucket==="overdue" ? ["#a4322a","#fdecea",(-x.days)+"d overdue"] : (x.bucket==="due"?["#8a5a1c","#fdf6e3",x.days+"d left"]:["#3a6b52","#e6f1ea","in "+x.days+"d"]); return `<span class="pill" style="background:${c[1]};color:${c[0]};font-weight:700;">${c[2]}</span>`; };
   const row=(x)=>`<tr><td><b>${esc(x.e.full_name)}</b> <span class="psub" style="margin:0;">· ${x.renewals?("renewed "+x.renewals+"×"):"first ID"}</span></td><td>${esc(x.e.worksite||"—")}</td><td style="white-space:nowrap;">${fmtDate(x.validUntil.toISOString().slice(0,10))}</td><td>${chip(x)}</td><td style="text-align:right;"><button class="btn ghost" style="padding:4px 10px;font-size:12px;" onclick="smidMarkRenewed('${x.e.id}')">Mark renewed</button></td></tr>`;
-  return `<div class="panel"><details${flagged.length?" open":""}><summary style="cursor:pointer;list-style:none;outline:none;"><span style="font-size:16px;font-weight:800;color:#12352a;">SMID renewals <span class="count-tag">${flagged.length} due</span></span> <span class="psub" style="font-size:12px;">▸ SM department-store IDs · renew in the 11th month (45-day notice)</span></summary>
+  // Group by the month the ID expires — Vina works a month at a time (all January renewals, etc.).
+  const byMonth={}; list.forEach(x=>{ const d=x.validUntil; const k=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); (byMonth[k]=byMonth[k]||[]).push(x); });
+  const mLabel=(k)=>{ const p=k.split("-"); return new Date(Number(p[0]),Number(p[1])-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"}); };
+  const today=new Date(); const curKey=today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0");
+  const monthBlock=(k)=>{ const rows=byMonth[k].sort((a,b)=>a.validUntil-b.validUntil); const names=rows.map(r=>r.e.full_name).join(", ");
+    const tag=k<curKey?' <span class="pill" style="background:#fdecea;color:#a4322a;font-size:9.5px;">lapsed</span>':(k===curKey?' <span class="pill" style="background:#fdf6e3;color:#8a5a1c;font-size:9.5px;">this month</span>':'');
+    return `<details ${k<=curKey?"open":""} style="margin-top:8px;"><summary style="cursor:pointer;list-style:none;outline:none;font-weight:800;color:#12352a;font-size:13.5px;">${mLabel(k)} <span class="count-tag">${rows.length}</span>${tag}</summary>
+      <table style="margin-top:6px;"><thead><tr><th>Employee</th><th>Store</th><th>ID expires</th><th>Status</th><th></th></tr></thead><tbody>${rows.map(row).join("")}</tbody></table>
+      <button class="btn ghost" style="padding:4px 10px;font-size:12px;margin-top:6px;" data-names="${esc(names)}" onclick="smidCopyNames(this)">Copy the ${rows.length} name${rows.length===1?"":"s"} for this month</button></details>`;
+  };
+  return `<div class="panel"><details${flagged?" open":""}><summary style="cursor:pointer;list-style:none;outline:none;"><span style="font-size:16px;font-weight:800;color:#12352a;">SMID renewals <span class="count-tag">${flagged} due</span></span> <span class="psub" style="font-size:12px;">▸ SM department-store IDs · renew yearly (45-day notice)</span></summary>
     <div style="margin-top:8px;">
-    <div class="psub">SM store IDs are valid ~1 year; the renewal window opens <b>45 days before expiry</b> (about the 11th month from the start date). ${overdue.length?`<b style="color:var(--red);">${overdue.length} lapsed</b> · `:""}${due.length?`<b style="color:#8a5a1c;">${due.length} due soon</b> · `:""}${upcoming.length} upcoming. Click <b>Mark renewed</b> when the ID is reissued — it sets the next expiry +12 months.</div>
-    ${flagged.length?`<table><thead><tr><th>Employee</th><th>Store</th><th>ID expires</th><th>Status</th><th></th></tr></thead><tbody>${flagged.map(row).join("")}</tbody></table>`:`<div class="psub" style="margin-top:6px;">No SMIDs due in the next 45 days ✓</div>`}
-    ${upcoming.length?`<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:12.5px;color:var(--muted);list-style:none;outline:none;">▸ Upcoming (${upcoming.length}) — not due yet</summary><table style="margin-top:6px;"><thead><tr><th>Employee</th><th>Store</th><th>ID expires</th><th>Status</th><th></th></tr></thead><tbody>${upcoming.map(row).join("")}</tbody></table></details>`:""}
+    <div class="psub">SM store IDs renew <b>yearly</b> (~1 year from the last issue); the window opens 45 days before expiry. <b>Grouped by the month the ID expires</b> so the ID owner (Vina) can work a month at a time — open a month, share the names, then <b>Mark renewed</b> as each is confirmed (sets the next expiry +12 months).</div>
+    ${Object.keys(byMonth).sort().map(monthBlock).join("")}
     </div></details></div>`;
 }
 function renderOnboarding(){

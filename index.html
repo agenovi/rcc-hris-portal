@@ -12,12 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="RCC HRIS">
 <meta name="theme-color" content="#1f6b3a">
 <script>
-window.APP_BUILD="1786160804";
+window.APP_BUILD="1786191714";
 (function(){
   try{
     fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null;}).then(function(v){
       if(!v) return; v=v.trim();
-      if(v && window.APP_BUILD && v!=="1786160804" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
+      if(v && window.APP_BUILD && v!=="1786191714" && v!==window.APP_BUILD && !sessionStorage.getItem("vbust_"+v)){
         sessionStorage.setItem("vbust_"+v,"1");
         var u=new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
@@ -56,8 +56,8 @@ window.APP_BUILD="1786160804";
     width:34px;height:34px;border-radius:9px;background:var(--green);
     display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:16px;
   }
-  .brand .nm{font-weight:700;color:#fff;font-size:15px;margin-top:8px;}
-  .brand .tag{font-size:11px;opacity:.6;letter-spacing:.5px;}
+  .brand .nm{font-weight:800;color:#fff;font-size:19px;margin-top:8px;letter-spacing:.2px;line-height:1.15;}
+  .brand .tag{font-size:9.5px;opacity:.55;letter-spacing:.6px;margin-top:1px;}
   nav{padding:8px 0; flex:1;}
   .nav-sec{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;opacity:.45;padding:13px 20px 5px;}
   .nav-item{
@@ -10085,8 +10085,9 @@ function newMemo(){
     <div style="background:linear-gradient(135deg,#0f1f33,#1E3A5F);color:#fff;padding:18px 22px;"><div style="font-size:20px;font-weight:800;">New memo / notice</div><div style="font-size:12.5px;opacity:.85;">Generates DOLE-aware text on RCC letterhead. Edit before issuing.</div></div>
     <div style="padding:18px 22px;">
       <div class="panel" style="margin-top:0;">
-        ${sel("mm_type","Memo type",MEMO_TYPES.map(t=>t.k),"")}
-        ${sel("mm_emp","Employee",names,"")}
+        ${sel("mm_type","Document type",MEMO_TYPES.map(t=>t.k),"")}
+        <div style="margin:8px 0;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Document title <span style="font-weight:400;text-transform:none;">(optional — for a custom document; overrides the type as the heading)</span></label><input id="mm_title" placeholder="e.g. Advisory on store hours" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;"></div>
+        ${sel("mm_emp","Addressed to (optional)",names,"")}
         ${fld("mm_date","Relevant date (incident / effective / last day)","","date")}
         <div style="margin:8px 0;"><label style="display:block;font-size:11px;font-weight:700;color:#6a766f;text-transform:uppercase;margin-bottom:3px;">Details / specifics</label><textarea id="mm_details" rows="3" style="width:100%;padding:8px 10px;border:1px solid #e2e7e4;border-radius:7px;" placeholder="The facts, ground, or specifics to weave into the letter"></textarea></div>
         <button class="btn ghost" id="mm_gen">↻ Generate letter text</button>
@@ -10106,7 +10107,7 @@ function newMemo(){
     let body=document.getElementById("mm_body").value.trim(); if(!body){ gen(); body=document.getElementById("mm_body").value.trim(); }
     const stamp=new Date().toISOString().slice(0,10).replace(/-/g,"");
     const ref="M-"+stamp+"-"+String(Math.abs((v("mm_emp")||type).split("").reduce((a,c)=>a*31+c.charCodeAt(0),7))%1000).padStart(3,"0");
-    const row={ ref_no:ref, memo_type:type, subject_name:v("mm_emp"), title:type, body, relevant_date:v("mm_date"), status:"Draft", is_demo:EMPLOYEES.some(x=>x.full_name===v("mm_emp")&&x.is_demo), created_by:(CURRENT_USER&&CURRENT_USER.email)||"HR" };
+    const row={ ref_no:ref, memo_type:type, subject_name:v("mm_emp"), title:v("mm_title")||type, body, relevant_date:v("mm_date"), status:"Draft", is_demo:EMPLOYEES.some(x=>x.full_name===v("mm_emp")&&x.is_demo), created_by:(CURRENT_USER&&CURRENT_USER.email)||"HR" };
     const { data, error } = await sb.from("memos").insert(row).select().single();
     if(error){ document.getElementById("mmMsg").textContent=error.message; return; }
     m.remove();
@@ -10200,7 +10201,7 @@ function viewMemo(id){
   let el=document.getElementById("memoView"); if(!el){ el=document.createElement("div"); el.id="memoView"; document.body.appendChild(el); }
   el.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(14,30,50,.55);display:flex;align-items:center;justify-content:center;padding:20px;";
   el.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow-y:auto;padding:22px;">
-    <h2 style="font-size:18px;color:#1E3A5F;margin-bottom:2px;">${esc(m.memo_type)}${m.subject_name?" — "+esc(m.subject_name):""}</h2>
+    <h2 style="font-size:18px;color:#1E3A5F;margin-bottom:2px;">${esc(m.title&&m.title!==m.memo_type?m.title:m.memo_type)}${m.subject_name?" — "+esc(m.subject_name):""}</h2>
     <div class="psub">${esc(m.ref_no||"")} · ${esc(m.status)}${m.created_at?" · "+fmtDate(m.created_at):""}</div>
     <div style="background:#fff;border:1px solid #E3E8EF;border-radius:10px;padding:16px 18px;margin:12px 0;white-space:pre-wrap;font-size:13.5px;line-height:1.6;">${esc(m.body||"")}</div>
     <div class="note">↳ This renders on RCC letterhead when printed/served. Twin-notice flow + counsel review apply for real disciplinary use.</div>
@@ -10227,6 +10228,7 @@ function printMemo(m){
     <div class="lh"><div class="co">ROSHAN COMMERCIAL CORPORATION</div><div class="addr">104 Shaw Blvd, Pasig City · +632 8638 6556</div></div>
     <div class="date">${today}</div>
     <div class="ref"><b>Ref:</b> ${E(m.ref_no||"—")} · ${E(m.memo_type||"")}${m.subject_name?" · "+E(m.subject_name):""}</div>
+    ${(m.title&&m.title!==m.memo_type)?`<div style="text-align:center;font-size:15px;font-weight:800;color:#1E3A5F;margin:14px 0 4px;text-transform:uppercase;letter-spacing:.5px;">${E(m.title)}</div>`:""}
     <div class="body">${E(m.body||"")}</div>
     <div class="foot">Generated from the RCC HRIS · ${E(m.status||"")}. This is an official RCC communication.</div>
     <scr`+`ipt>window.onload=function(){setTimeout(function(){window.print();},150);}</scr`+`ipt>

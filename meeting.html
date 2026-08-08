@@ -97,7 +97,8 @@
     <div class="hint" style="margin:8px 0;padding:9px 11px;background:#fff7ed;border:1px solid #f0d9a6;border-radius:8px;color:#8a5a12;">
       ⚠ <b>Double-check your number.</b> Your reimbursement is sent to <b>exactly</b> what you type here. RCC cannot recover money sent to a wrong or mistyped number, and the account must be under <b>your own name</b>. GCash = 11 digits starting 09; UnionBank = 12-digit account number.
     </div>
-    <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;margin-top:4px;"><input type="checkbox" id="payout_confirm" style="width:16px;height:16px;margin-top:1px;flex-shrink:0;"> <span>I confirm the payout method, number, and account name above are <b>correct and under my name</b>.</span></label>
+    <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;margin-top:4px;"><input type="checkbox" id="payout_confirm" style="width:16px;height:16px;margin-top:1px;flex-shrink:0;"> <span>I confirm the payout method and number above are <b>correct</b>. My reimbursement goes to exactly what I typed.</span></label>
+    <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;margin-top:6px;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:8px;"><input type="checkbox" id="name_confirm" style="width:16px;height:16px;margin-top:1px;flex-shrink:0;"> <span>This account is <b>my own</b> — registered under my name, not a family member's or anyone else's.</span></label>
 
     <div id="selfieBlock" style="display:none;">
       <div class="sec">Quick selfie</div>
@@ -232,6 +233,7 @@ $("submit").addEventListener("click", async ()=>{
     if(overlap<1){ bad("The GCash account must be under YOUR OWN name. The account holder name has to match your name — RCC can only send your reimbursement to a GCash account in your name."); return; }
   }
   if(!$("payout_confirm").checked){ bad("Please tick the box confirming your payout details are correct."); return; }
+  if(!$("name_confirm").checked){ bad("Please tick the box confirming the account is under your own name."); return; }
   const btn=$("submit"); btn.disabled=true; btn.textContent="Signing in…";
   const payload={
     name, hire_type:hireType, emp_no:$("emp_no").value.trim(), store:$("store").value.trim(),

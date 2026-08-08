@@ -12298,7 +12298,7 @@ const CONTRACT_STEPS=[
   {key:"se",label:"SE signs (sets deployment date)",actor:"Sales Coordinator",done:c=>!!c.se_date},
   {key:"supervisor",label:"Supervisor",actor:"Supervisor",done:c=>!!c.supervisor_date},
   {key:"management",label:"Management (Griselle)",actor:"Management",done:c=>!!c.mgmt_date},
-  {key:"employee_id",label:"Employee ID assignment",actor:"HR",done:c=>!!c.employee_id_assigned}
+  {key:"employee_id",label:"Entry in PayPlus (Employee ID)",actor:"HR",done:c=>!!c.employee_id_assigned}
 ];
 function contractCurrentStep(c){ const i=CONTRACT_STEPS.findIndex(s=>!s.done(c)); return i<0?CONTRACT_STEPS.length:i; }
 function contractDoneCount(c){ return CONTRACT_STEPS.filter(s=>s.done(c)).length; }

@@ -7972,7 +7972,6 @@ function manningTransfersPanel(){
   return `<div class="panel">
      <h2>Store movement <span class="count-tag">${active.length} active</span></h2>
      <div class="psub">Move an employee to another store for a set period. <b>The SC raises the request → the store head confirms before (agrees to receive) → after the period the store head confirms the person was there</b> — that attestation is the proof for payroll / reliever credit. Worksite stays owned by PayPlus; once completed, update the assignment in PayPlus.</div>
-     <details open style="margin:8px 0;"><summary style="cursor:pointer;font-size:12.5px;color:var(--green-dark);font-weight:600;">Each SC's private move-request link — Copy &amp; send to them</summary>${scLinksBlock()}</details>
      <div class="actionbar"><button class="btn" id="trfNew">+ New store movement</button> <span class="psub" style="margin:0;align-self:center;">${userRole()==='sales'?'move one of your staff to another store — HR confirms it':"or record one on the SC's behalf"}</span></div>
      ${active.length?`<table><thead><tr><th>Employee</th><th>From → To</th><th>Period</th><th>Requested by (SC)</th><th>Status</th></tr></thead><tbody>${rowsHtml(active)}</tbody></table>`:`<div class="psub" style="margin-top:6px;">No active store movements. Click “New store movement”.</div>`}
      ${done.length?`<div class="subhead" style="margin-top:16px;">Recent — completed / closed</div><table><thead><tr><th>Employee</th><th>From → To</th><th>Period</th><th>Requested by (SC)</th><th>Status</th></tr></thead><tbody>${rowsHtml(done)}</tbody></table>`:''}
@@ -8021,7 +8020,10 @@ function transferForm(t){
   m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
   document.getElementById("trfCancel").addEventListener("click",()=>m.remove());
   const empEl=document.getElementById("trf_emp");
-  empEl.addEventListener("input",()=>{ const e=emps.find(x=>(x.full_name||'').toLowerCase()===empEl.value.trim().toLowerCase()); if(e){ const fe=document.getElementById("trf_from"); if(fe&&!fe.value) fe.value=e.worksite||''; } });
+  // Pick a name → auto-fill the current store from their PayPlus worksite (reliably overwrites on each pick).
+  const trfFill=()=>{ const e=emps.find(x=>(x.full_name||'').toLowerCase()===empEl.value.trim().toLowerCase()); const fe=document.getElementById("trf_from"); if(e&&fe&&e.worksite) fe.value=e.worksite; const ee=document.getElementById("trf_empemail"); if(e&&ee&&!ee.value&&e.email) ee.value=e.email; };
+  empEl.addEventListener("input",trfFill);
+  empEl.addEventListener("change",trfFill);
   document.getElementById("trfSave").addEventListener("click",async()=>{
     const name=v("trf_emp").trim(); if(!name){ document.getElementById("trfMsg").textContent="Employee is required."; return; }
     if(!v("trf_to")){ document.getElementById("trfMsg").textContent="Choose the store to transfer to."; return; }
@@ -12023,7 +12025,7 @@ function renderOnboarding(){
         <div class="kpi" style="cursor:pointer;" onclick="drillOnboarding('done')"><div class="k-l">Completed</div><div class="k-n">${done}</div></div>
         <div class="kpi warn" style="cursor:pointer;" onclick="drillOnboarding('tasks')"><div class="k-l">Open Tasks</div><div class="k-n">${pendingTasks}</div><div class="k-s">across all cases</div></div>
       </div>
-      ${ONBOARDING.length? `<table><thead><tr><th>New hire</th><th>Group · Worksite</th><th>Employee ID</th><th>Progress</th><th>Status</th></tr></thead>
+      ${ONBOARDING.length? `<table><thead><tr><th>New hire</th><th>Group · Worksite</th><th>Employee ID</th><th>Start date</th><th>Progress</th><th>Status</th></tr></thead>
         <tbody id="onbRows"></tbody></table>`
         : `<div class="placeholder"><div class="pi"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1E3A5F" stroke-width="2"><path d="M3 12l5 5L21 5"/></svg></div><h2>No onboarding cases yet</h2><p>Click “Start onboarding” to create a case from a pre-hire who has reached the contract stage.</p></div>`}
     </div>
@@ -12052,6 +12054,7 @@ function renderOnboarding(){
       return `<tr class="clickable" data-id="${c.id}"><td><b>${esc(c.employee_name)}</b><div class="esub">${esc(c.position||"")}</div></td>
         <td>${esc(c.group_name||"—")}${c.worksite?" · "+esc(c.worksite):""}</td>
         <td>${c.assigned_employee_id?`<span class="pill di">${esc(c.assigned_employee_id)}</span>`:'<span class="note" style="color:var(--muted);">unassigned</span>'}</td>
+        <td style="white-space:nowrap;">${c.deployment_date?fmtDate(c.deployment_date):'<span class="note" style="color:var(--muted);">not set</span>'}${(()=>{ if(!c.deployment_date||c.status==="Complete") return ""; const d=new Date(c.deployment_date+"T00:00:00"); const t0=new Date(); t0.setHours(0,0,0,0); if(isNaN(d)) return ""; if(d<=t0) return ' <span class="pill awol" style="font-size:9.5px;">started · pending</span>'; const days=Math.round((d-t0)/86400000); return days<=7?` <span class="pill probation" style="font-size:9.5px;">starts in ${days}d</span>`:""; })()}</td>
         <td><div class="barrow"><div class="bartrack"><div class="bar${pct===100?'':' def'}" style="width:${pct}%"></div></div><span style="font-size:11.5px;color:var(--muted);">${p.done}/${p.total}</span></div></td>
         <td>${c.status==="Complete"?'<span class="pill active">Complete</span>':'<span class="pill probation">In Progress</span>'}</td></tr>`;
     }).join("");

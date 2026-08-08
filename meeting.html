@@ -81,7 +81,7 @@
     <div class="hint">Attach your bus/jeep pass, ride receipt, or LBC receipt.</div>
 
     <div class="sec">Where to send your money</div>
-    <div class="hint" style="margin-bottom:8px;">Your payout method is set automatically: <b>Direct RCC hires → UnionBank</b>, <b>agency (Jell-On / M&amp;G) → GCash</b>. Just enter the number.</div>
+    <div class="hint" id="payoutHint" style="margin-bottom:8px;">Direct RCC hires → UnionBank (or GCash if you have no UB account) · agency (Jell-On / M&amp;G) → GCash. Set from your answer above.</div>
     <label class="req">Account holder name</label>
     <input id="account_holder" placeholder="Name on the account">
     <div class="row2">
@@ -158,10 +158,17 @@ $("bank_name").addEventListener("change", e=>{
 // Payout method is fixed by hire type: Direct RCC hire → UnionBank, agency (Jell-On / M&G) → GCash. No manual choice.
 function applyPayoutRule(){
   const ht=$("hire_type").value, sel=$("bank_name");
-  if(!ht){ sel.disabled=false; return; }
-  const method = ht==="Direct" ? "UnionBank" : "GCash";
-  if(sel.value!==method){ sel.value=method; sel.dispatchEvent(new Event("change")); }
-  sel.disabled=true;
+  const hint=$("payoutHint");
+  if(!ht){ sel.disabled=false; if(hint) hint.textContent=""; return; }
+  if(ht==="Direct"){
+    if(sel.value!=="UnionBank" && sel.value!=="GCash"){ sel.value="UnionBank"; sel.dispatchEvent(new Event("change")); }
+    sel.disabled=false;   // Direct defaults to UnionBank but may switch to GCash if they have no UB account
+    if(hint) hint.textContent="Direct hires are paid via UnionBank. No UB account? Switch to GCash.";
+  } else {
+    if(sel.value!=="GCash"){ sel.value="GCash"; sel.dispatchEvent(new Event("change")); }
+    sel.disabled=true;    // agency is always GCash
+    if(hint) hint.textContent="Agency merchandisers are paid via GCash.";
+  }
 }
 $("hire_type").addEventListener("change", applyPayoutRule);
 // Employee number is always a plain integer — never a float/decimal.

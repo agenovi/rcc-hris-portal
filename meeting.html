@@ -190,6 +190,8 @@ function applyRosterMatch(){
     hint.textContent="Pick your name from the list so your store and group fill in for you. Not on the list? Just type your full name.";
     hint.style.color="";
   }
+  // The payout account must be under their own name — default the account holder to their name.
+  if($("account_holder") && !$("account_holder").value.trim() && $("name").value.trim()) $("account_holder").value=$("name").value.trim();
 }
 
 async function init(){
@@ -223,6 +225,12 @@ $("submit").addEventListener("click", async ()=>{
   const bad=(t)=>{ msg.className="msg err"; msg.textContent=t; msg.style.display="block"; };
   if(bank==="GCash" && !/^09\d{9}$/.test(acct)){ bad("GCash number must be exactly 11 digits starting with 09 (e.g. 09171234567). Please check it."); return; }
   if(bank==="UnionBank" && !/^\d{12}$/.test(acct)){ bad("A UnionBank account number is exactly 12 digits. Please check yours."); return; }
+  if(bank==="GCash"){
+    const toks=s=>s.toLowerCase().replace(/[^a-z0-9 ]/g," ").split(/\s+/).filter(w=>w.length>1);
+    const nt=toks(name), ht=toks(holder);
+    const overlap=nt.filter(w=>ht.includes(w)).length;
+    if(overlap<1){ bad("The GCash account must be under YOUR OWN name. The account holder name has to match your name — RCC can only send your reimbursement to a GCash account in your name."); return; }
+  }
   if(!$("payout_confirm").checked){ bad("Please tick the box confirming your payout details are correct."); return; }
   const btn=$("submit"); btn.disabled=true; btn.textContent="Signing in…";
   const payload={
